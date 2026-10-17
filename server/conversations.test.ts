@@ -39,6 +39,16 @@ describe('Claude Code conversations on disk', () => {
     assert.deepEqual(await listConversations('/nowhere', new Set(), home), []);
   });
 
+  it('puts the name of an Open Space session (its custom title) before what it was asked', async () => {
+    const named = '/Users/me/code/named';
+    mkdirSync(projectFolder(named, home), { recursive: true });
+    writeFileSync(path.join(projectFolder(named, home), `${A}.jsonl`), [
+      line({ type: 'custom-title', customTitle: 'Charline', sessionId: A }),
+      line({ type: 'user', message: { role: 'user', content: 'Corrige le bug du login' } }),
+    ].join('\n'));
+    assert.deepEqual((await listConversations(named, new Set(), home)).map(({ title }) => title), ['Charline · Corrige le bug du login']);
+  });
+
   it('reads the last exchanges, what the user said and what Claude answered', async () => {
     assert.deepEqual(await lastExchanges(cwd, A, 8, home), [
       { who: 'user', text: 'Compare les deux flows Kiin' },

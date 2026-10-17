@@ -55,7 +55,6 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   const ready = useSessions((s) => s.claude !== null);
   const selectedId = useSessions((s) => s.selectedId);
   const select = useSessions((s) => s.select);
-  const openNewSession = useSessions((s) => s.openNewSession);
   const crew = useSessions((s) => s.crew);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -67,6 +66,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival));
   const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
   const doorHovered = useRef(false);
+  const hoveredId = useRef<string | null>(null);
   // the user wears their own look; a session or sub-agent named like a crew member wears that member's look
   const lookFor = useMemo(() => (personId: string): Look => {
     if (personId === PLAYER_ID) return crewRef.current.find((member) => member.self)?.look ?? DEFAULT_LOOK;
@@ -113,7 +113,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       scene.step(Math.min(100, now - last));
       last = now;
       const hour = useSessions.getState().preview.hour ?? currentHour();
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, doorHovered: doorHovered.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, doorHovered: doorHovered.current, hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
@@ -193,7 +193,8 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
           <div className="cp-room__zoom" ref={zoom}>
             <canvas
               ref={canvas} className="cp-room__canvas" width={CANVAS_WIDTH * RENDER_SCALE} height={CANVAS_HEIGHT * RENDER_SCALE} onClick={onClick}
-              onMouseMove={(event) => { doorHovered.current = floor.isDoorAt(roomPoint(event)); }} onMouseLeave={() => { doorHovered.current = false; }}
+              onMouseMove={(event) => { const point = roomPoint(event); doorHovered.current = floor.isDoorAt(point); hoveredId.current = scene.personAt(point); }}
+              onMouseLeave={() => { doorHovered.current = false; hoveredId.current = null; }}
               role="img" aria-label={description}
             />
           </div>
@@ -219,9 +220,6 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
           )}
         </div>
       </div>
-      {ready && inRoom.length === 0 && room === 'office' && (
-        <p className="cp-room__hint">Personne au bureau. <button type="button" className="cp-button" onClick={() => openNewSession({})}>Nouvelle session</button></p>
-      )}
     </div>
   );
   if (!pip) return view;

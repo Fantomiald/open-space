@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
+import { JOBS, JOB_LABELS, type Job } from '../../shared/jobs.ts';
 import { BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
 import { HAT_ROWS, chibiHead, chibiSprite } from '../room/chibi.ts';
@@ -7,6 +8,10 @@ import type { Pose } from '../room/sprites.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
 import { PetPicker } from './PreferenceFields.tsx';
+import { SaveNote } from './SaveNote.tsx';
+import { useAutosave } from './useAutosave.ts';
+
+const NO_SERVER = 'Pas de connexion au serveur : pas encore enregistré.';
 
 const LABELS = {
   eyes: { round: 'Ronds', wide: 'Grands', sleepy: 'Mi-clos', lashes: 'Avec cils', happy: 'Rieurs' },
@@ -36,9 +41,9 @@ type Tab = (typeof TABS)[number];
 /** The four directions of the room, turned one after the other by the preview's arrows. */
 const DIRECTIONS: Pose['direction'][] = ['down-right', 'down-left', 'up-left', 'up-right'];
 
-type Draft = { previousName: string | null; name: string; look: Look; self: boolean; birthday: string };
-const draftOf = (member: CrewMember): Draft => ({ previousName: member.name, name: member.name, look: member.look ?? DEFAULT_LOOK, self: member.self === true, birthday: member.birthday ?? '' });
-const NEW_MEMBER: Draft = { previousName: null, name: '', look: DEFAULT_LOOK, self: false, birthday: '' };
+type Draft = { previousName: string | null; name: string; look: Look; self: boolean; birthday: string; jobs: readonly Job[] };
+const draftOf = (member: CrewMember): Draft => ({ previousName: member.name, name: member.name, look: member.look ?? DEFAULT_LOOK, self: member.self === true, birthday: member.birthday ?? '', jobs: member.jobs ?? [] });
+const NEW_MEMBER: Draft = { previousName: null, name: '', look: DEFAULT_LOOK, self: false, birthday: '', jobs: [] };
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 export function CrewDialog() {
@@ -62,44 +67,56 @@ function CrewEditor() {
   );
 }
 
-/** The office pet, saved with the settings (Preferences.pet). */
+/** The office pet, saved with the settings (Preferences.pet) as soon as it changes. */
 function PetTab({ close }: { close: () => void }) {
   const saved = useSessions((s) => s.preferences.pet);
   const setPreferences = useSessions((s) => s.setPreferences);
-  const toast = useSessions((s) => s.toast);
   const [pet, setPet] = useState(saved);
-  const save = () => {
-    if (!setPreferences({ pet })) { toast('error', 'Pas de connexion au serveur, réessaie.'); return; }
-    toast('info', 'Ton animal est enregistré.');
-  };
+  const { status } = useAutosave(pet, (next) => (setPreferences({ pet: next }) ? null : NO_SERVER));
   return (
     <>
       <div className="cp-onboarding__page"><PetPicker pet={pet} onPet={setPet} /></div>
       <div className="cp-form__actions">
+        <SaveNote status={status} />
         <button type="button" className="cp-button" onClick={close}>Fermer</button>
-        <button type="button" className="cp-button" data-variant="primary" onClick={save}>Enregistrer</button>
       </div>
     </>
   );
 }
 
+/** What decides a save of a member: the person themselves, not who the draft was loaded from. */
+const memberKey = ({ previousName: _from, ...member }: Draft) => JSON.stringify(member);
+/** A first name being typed waits longer: each save renames the member, so not after every letter. */
+const RENAME_DELAY_MS = 1500;
+
 function PeopleTab({ close }: { close: () => void }) {
   const crew = useSessions((s) => s.crew);
   const saveMember = useSessions((s) => s.saveMember);
   const removeMember = useSessions((s) => s.removeMember);
-  const toast = useSessions((s) => s.toast);
   const first = crew.find((member) => member.self) ?? crew[0];
   const [draft, setDraft] = useState<Draft>(() => (first ? draftOf(first) : NEW_MEMBER));
   const [confirmRemove, setConfirmRemove] = useState(false);
 
-  const pick = (member: Draft) => { setDraft(member); setConfirmRemove(false); };
+  // saved as it is edited: a rename moves the member, so the draft then comes from its new name
+  const save = (current: Draft): string | null => {
+    const name = current.name.trim();
+    if (!name) return 'Donne un prénom pour enregistrer.';
+    if (crew.some((member) => member.name === name && member.name !== current.previousName)) return `${name} existe déjà dans l’équipe.`;
+    if (!saveMember(current.previousName, name, current.look, current.birthday || undefined, current.self ? [] : current.jobs)) return NO_SERVER;
+    setDraft((latest) => ({ ...latest, previousName: name }));
+    return null;
+  };
+  // a new member is created with the name typed so far: it waits as much
+  const renaming = draft.name.trim() !== (draft.previousName ?? '');
+  const { status, flush, start } = useAutosave(draft, save, memberKey, renaming ? RENAME_DELAY_MS : undefined);
 
-  const save = () => {
-    const name = draft.name.trim();
-    if (!name) { toast('error', 'Donne un prénom.'); return; }
-    if (!saveMember(draft.previousName, name, draft.look, draft.birthday || undefined)) { toast('error', 'Pas de connexion au serveur, réessaie.'); return; }
-    toast('info', `${name} est enregistré.`);
-    setDraft((current) => ({ ...current, previousName: name, name }));
+  const pick = (member: Draft) => { flush(); start(member); setDraft(member); setConfirmRemove(false); };
+  const remove = (name: string) => {
+    const next = first && first.name !== name ? draftOf(first) : NEW_MEMBER;
+    start(next);
+    removeMember(name);
+    setDraft(next);
+    setConfirmRemove(false);
   };
 
   return (
@@ -120,15 +137,16 @@ function PeopleTab({ close }: { close: () => void }) {
           look={draft.look} onLook={(look) => setDraft((current) => ({ ...current, look }))}
           name={draft.name} onName={(name) => setDraft((current) => ({ ...current, name }))}
           birthday={draft.birthday} onBirthday={(birthday) => setDraft((current) => ({ ...current, birthday }))}
+          jobs={draft.self ? undefined : { chosen: draft.jobs, onChange: (jobs) => setDraft((current) => ({ ...current, jobs })) }}
         />
       </div>
 
       <div className="cp-form__actions">
+        <SaveNote status={status} />
         {draft.previousName !== null && !draft.self && (confirmRemove
-          ? <button type="button" className="cp-button" data-variant="danger" onClick={() => { removeMember(draft.previousName!); pick(first && first.name !== draft.previousName ? draftOf(first) : NEW_MEMBER); }}>Confirmer la suppression</button>
+          ? <button type="button" className="cp-button" data-variant="danger" onClick={() => remove(draft.previousName!)}>Confirmer la suppression</button>
           : <button type="button" className="cp-button" onClick={() => setConfirmRemove(true)}>Supprimer</button>)}
         <button type="button" className="cp-button" onClick={close}>Fermer</button>
-        <button type="button" className="cp-button" data-variant="primary" onClick={save}>Enregistrer</button>
       </div>
     </>
   );
@@ -136,10 +154,11 @@ function PeopleTab({ close }: { close: () => void }) {
 
 /**
  * A person's look, turned around in a preview, with their first name and birthday, and the wardrobe to dress them:
- * in the crew editor and at the first start.
+ * in the crew editor and at the first start. `jobs`: what they do, for the crew's other members (not the user).
  */
-export function LookEditor({ look, onLook, name, onName, birthday, onBirthday }: {
+export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, jobs }: {
   look: Look; onLook: (look: Look) => void; name: string; onName: (name: string) => void; birthday: string; onBirthday: (birthday: string) => void;
+  jobs?: { chosen: readonly Job[]; onChange: (jobs: Job[]) => void };
 }) {
   const [direction, setDirection] = useState(0);
   const [tab, setTab] = useState<Tab>('Visage');
@@ -172,6 +191,17 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday }:
               </select>
             </div>
           </div>
+          {jobs && (
+            <div className="cp-crew__name" role="group" aria-label="Métier">
+              <span>Métier <small className="cp-muted">(une demande qui en parle lui revient)</small></span>
+              <div className="cp-crew__choices">
+                {JOBS.map((job) => {
+                  const chosen = jobs.chosen.includes(job);
+                  return <button key={job} type="button" aria-pressed={chosen} onClick={() => jobs.onChange(JOBS.filter((other) => (other === job ? !chosen : jobs.chosen.includes(other))))}>{JOB_LABELS[job]}</button>;
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="cp-crew__wardrobe">

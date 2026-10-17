@@ -3,6 +3,7 @@
 import { isPermissionMode, type ClientMessage, type ImageUpload, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { parseBirthday } from '../shared/festivals.ts';
+import { parseJobs } from '../shared/jobs.ts';
 import { parseLook } from '../shared/look.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
 import { CONVERSATION_ID } from './conversations.ts';
@@ -166,7 +167,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const look = parseLook(raw.look);
       const previousName = raw.previousName === null ? null : boundedString(raw.previousName, MAX_NAME);
       const birthday = parseBirthday(raw.birthday);
-      return name !== null && look !== null && (previousName !== null || raw.previousName === null) ? { t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}) } : null;
+      const jobs = parseJobs(raw.jobs);
+      return name !== null && look !== null && (previousName !== null || raw.previousName === null)
+        ? { t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs } : {}) } : null;
     }
     case 'removeMember': {
       const name = boundedString(raw.name, MAX_NAME);

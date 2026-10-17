@@ -1,5 +1,14 @@
 # Versions
 
+## 1.0.1
+
+- Les sessions se parlent : chacune est lancée sous son prénom (`claude --name`), les autres la trouvent par lui. Un message reçu d'une autre session s'affiche dans le fil, avec la tête de l'expéditeur.
+- Un métier par membre de l'équipe (Tech, Cyber, DevOps, Produit, Design, Data, Marketing, RH). Une session lancée sans personne choisie va à quelqu'un de libre dont le métier colle à la demande.
+- Un sélecteur dans le lanceur pour choisir qui s'en occupe, avec qui est déjà au bureau ou au repos.
+- Équipe, Animal et Réglages s'enregistrent tout seuls, sans bouton.
+- Le nombre de sessions de chaque pièce à côté de son icône. Les noms dans la salle sont discrets tant que la souris n'est pas dessus.
+- Les lumières du serveur ne passent plus devant les persos.
+
 ## 1.0.0
 
 Première version publique d'Open Space.

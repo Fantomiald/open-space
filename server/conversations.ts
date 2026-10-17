@@ -77,7 +77,10 @@ export async function listConversations(cwd: string, exclude: ReadonlySet<string
         preview ||= userText(record) ?? '';
       }
       if (!preview && !aiTitle && !customTitle) continue;
-      conversations.push({ id, title: customTitle || aiTitle || preview.slice(0, 80), preview: preview.slice(0, 200), updatedAt });
+      // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
+      // "Charline · what it was asked"
+      const about = aiTitle || preview.slice(0, 80);
+      conversations.push({ id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt });
     } catch { /* unreadable: skipped */ }
   }
   return conversations;

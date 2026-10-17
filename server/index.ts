@@ -123,12 +123,12 @@ function onConnection(socket: WebSocket) {
 async function handle(message: ClientMessage, send: (message: ServerMessage) => void) {
   switch (message.t) {
     case 'create': {
-      // unnamed sessions take someone of the crew without a session, at random; someone asked for by name who already
-      // has a session (at work or resting) is not free: another free one comes instead, and once the crew is all
-      // taken, a stranger with a name drawn from the pool (and a look of their own)
+      // unnamed sessions take someone of the crew without a session, whose job fits the first message if possible;
+      // someone asked for by name who already has a session (at work or resting) is not free: another free one comes
+      // instead, and once the crew is all taken, a stranger with a name drawn from the pool (and a look of their own)
       const taken = new Set(sessions.list().map((session) => session.name));
       const asked = message.options.name?.trim();
-      const name = asked && !taken.has(asked) ? asked : crew.randomFreeName(taken);
+      const name = asked && !taken.has(asked) ? asked : crew.freeNameFor(message.options.text ?? '', taken);
       let session: SessionInfo;
       try {
         session = await sessions.create(name ? { ...message.options, name } : { ...message.options, name: undefined });
@@ -176,7 +176,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'directories': send({ t: 'directories', directories: sessions.directories() }); break;
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
     case 'saveMember':
-      await crew.save(message.previousName, message.name, message.look, message.birthday);
+      await crew.save(message.previousName, message.name, message.look, message.birthday, message.jobs);
       broadcast({ t: 'crew', crew: crew.list() });
       break;
     case 'removeMember':

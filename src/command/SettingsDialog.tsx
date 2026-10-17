@@ -3,13 +3,15 @@ import type { Preferences } from '../../shared/protocol.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
 import { FoldersPicker, HabitsFields } from './PreferenceFields.tsx';
+import { SaveNote } from './SaveNote.tsx';
+import { useAutosave } from './useAutosave.ts';
 
 export function SettingsDialog() {
   const open = useSessions((s) => s.settingsOpen);
   return open ? <SettingsEditor /> : null;
 }
 
-/** The settings chosen at the first start, to change: the folders, and how the user likes to work. Saved together. */
+/** The settings chosen at the first start, to change: the folders, and how the user likes to work. Saved as they change. */
 function SettingsEditor() {
   const preferences = useSessions((s) => s.preferences);
   const rootsLocked = useSessions((s) => s.rootsLocked);
@@ -18,18 +20,15 @@ function SettingsEditor() {
   const send = useSessions((s) => s.send);
   const setPreferences = useSessions((s) => s.setPreferences);
   const openSettings = useSessions((s) => s.openSettings);
-  const toast = useSessions((s) => s.toast);
   const [draft, setDraft] = useState<Preferences>(() => ({ ...preferences, roots: rootsLocked ? roots : preferences.roots }));
 
   useEffect(() => { send({ t: 'suggestRoots' }); }, [send]);
 
   const close = () => openSettings(false);
-  const save = () => {
-    if (!draft.roots.length) { toast('error', 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.'); return; }
-    if (!setPreferences(draft)) { toast('error', 'Pas de connexion au serveur, réessaie.'); return; }
-    toast('info', 'Réglages enregistrés.');
-    close();
-  };
+  const { status } = useAutosave(draft, (next) => {
+    if (!next.roots.length) return 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.';
+    return setPreferences(next) ? null : 'Pas de connexion au serveur : pas encore enregistré.';
+  });
 
   return (
     <Modal title="Réglages" onClose={close} wide>
@@ -45,8 +44,8 @@ function SettingsEditor() {
         <p className="cp-muted">Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec <code>python3 scripts/macos-app.py</code>.</p>
       </div>
       <div className="cp-form__actions">
-        <button type="button" className="cp-button" onClick={close}>Annuler</button>
-        <button type="button" className="cp-button" data-variant="primary" onClick={save}>Enregistrer</button>
+        <SaveNote status={status} />
+        <button type="button" className="cp-button" onClick={close}>Fermer</button>
       </div>
     </Modal>
   );

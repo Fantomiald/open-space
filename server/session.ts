@@ -31,6 +31,8 @@ export interface SessionDeps {
   idleMs: number;
   /** the user's first name and the note for every new agent (Preferences.agentNote), read when a conversation starts */
   identity?: () => { user: string; note: string };
+  /** the name of the session a SendMessage call goes to (see Normalizer) */
+  peerName?: (address: string) => string;
   /** time source, replaceable in tests */
   now?: () => number;
 }
@@ -68,6 +70,8 @@ export class Session {
   /** the text being written not sent yet, by who writes it */
   private partials = new Map<string, string>();
   private partialTimer: NodeJS.Timeout | null = null;
+  /** where other Claude Code sessions reach the current process (see InitInfo), '' before its init */
+  private socket = '';
 
   constructor(info: StoredInfo, deps: SessionDeps) {
     this.info = info;
@@ -77,6 +81,8 @@ export class Session {
 
   get id() { return this.info.id; }
   get alive() { return !!this.process?.alive; }
+  /** True when a SendMessage address ("uds:/tmp/…" or the path alone) is this session's live process. */
+  answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq };
   }
@@ -210,6 +216,7 @@ export class Session {
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       names: this.subagentNames,
+      peerName: this.deps.peerName,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
       { cwd, sessionId: this.info.id, resume: this.info.resumable, model: this.info.model, permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
@@ -229,6 +236,7 @@ export class Session {
   }
 
   private onInit(init: InitInfo) {
+    this.socket = init.socket;
     this.info.activeModel = init.model;
     this.info.resumable = true;
     this.deps.onInitCommands(init.commands);
