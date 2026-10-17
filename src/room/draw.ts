@@ -159,7 +159,7 @@ interface Light { at: Point; radius: number; colour: string; strength: number }
 /** The chair behind a desk (whoever works at it), or -1. */
 const seatAt = (layout: Layout, piece: FurniturePiece) => layout.seats.findIndex((seat) => seat.y === piece.y - 1 && seat.x === piece.x);
 
-function lightsOf(layout: Layout, occupied: ReadonlySet<number>, working: ReadonlySet<number>, bossAtDesk: boolean, lighting: Lighting, options: FrameOptions): Light[] {
+function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boolean, lighting: Lighting, options: FrameOptions): Light[] {
   const glasses = glassesOf(layout);
   const lights: Light[] = [];
   const above = (x: number, y: number, height: number) => raise(toScreen({ x, y }), height);
@@ -174,10 +174,9 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, working: Readon
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
     if (piece.kind === 'cooler' || piece.kind === 'server') lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {
-      // a screen in use lights the face of whoever works at it; a screen left on glows faintly
-      const seat = seatAt(layout, piece);
-      if (working.has(seat)) lights.push({ at: above(x + 0.6, y + 0.2, 30), radius: 90, colour: P.light.screen, strength: 1 });
-      else if (occupied.has(seat)) lights.push({ at: above(x + 0.6, y + 0.2, 30), radius: 60, colour: P.light.screenIdle, strength: 0.55 });
+      // the screen of whoever sits at a desk is on and lights their face, at work or not (their hands and their status
+      // already tell which)
+      if (occupied.has(seatAt(layout, piece))) lights.push({ at: above(x + 0.6, y + 0.2, 30), radius: 90, colour: P.light.screen, strength: 1 });
     }
   }
   lights.push({ at: above(0.3, layout.door.y + 0.65, 26), radius: 120, colour: P.light.corridor, strength: 1 });
@@ -461,7 +460,6 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const characters = [...scene.characters.values()];
   const seated = characters.filter((character) => character.phase === 'seated');
   const occupied = new Set(seated.map((character) => character.seat));
-  const working = new Set(seated.filter((character) => character.person.status === 'working').map((character) => character.seat));
   const isSelected = (character: Character) => character.person.sessionId === options.selectedSessionId;
   const layers: { depth: number; paint: () => void }[] = [];
   const bossAtDesk = scene.playerSpot?.atDesk === true;
@@ -496,7 +494,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   layers.push({ depth: depthOf(scene.player.position), paint: () => paintPerson(context, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
   for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint();
 
-  paintLight(context, lighting, lightsOf(layout, occupied, working, bossAtDesk, lighting, options));
+  paintLight(context, lighting, lightsOf(layout, occupied, bossAtDesk, lighting, options));
   const time = options.reducedMotion ? 0 : options.time;
   const figures = [
     figureOf(scene.player, playerLift, sprites.height(playerPose, PLAYER_ID)),
