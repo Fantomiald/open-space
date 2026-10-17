@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.ts';
 import { homeRelative } from '../lib/format.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
@@ -11,32 +12,33 @@ export function TrustDialog() {
   const answerTrust = useSessions((s) => s.answerTrust);
   if (!request) return null;
   const { cwd, code } = request;
+  const words = t.composer.trust;
   return (
-    <Modal title="Ce dossier fait tourner du code à lui" onClose={() => answerTrust(null)} wide>
+    <Modal title={words.title} onClose={() => answerTrust(null)} wide>
       <div className="cp-trust">
         <p>
-          <strong>{homeRelative(cwd)}</strong> n’a jamais été approuvé, ni ici ni dans Claude Code. Avec une session, il lancerait de lui-même :
+          <strong>{homeRelative(cwd)}</strong> {words.neverTrusted}
         </p>
         {code.hooks.length > 0 && (
           <section>
-            <h3>Des hooks</h3>
+            <h3>{words.hooks}</h3>
             <ul>{code.hooks.map((hook) => <li key={hook}><code>{hook}</code></li>)}</ul>
           </section>
         )}
         {code.mcpServers.length > 0 && (
           <section>
-            <h3>Des serveurs MCP</h3>
+            <h3>{words.mcpServers}</h3>
             <ul>{code.mcpServers.map((server) => <li key={server}><code>{server}</code></li>)}</ul>
           </section>
         )}
         <p className="cp-muted">
-          Sans ses réglages, la session garde les tiens (tes serveurs MCP, tes autorisations) mais rien de ce dossier ne démarre.
-          {code.instructions ? ' Son CLAUDE.md est lu dans les deux cas.' : ''}
+          {words.withoutSettings}
+          {code.instructions ? words.instructionsRead : ''}
         </p>
         <div className="cp-form__actions">
-          <button type="button" className="cp-button" onClick={() => answerTrust(null)}>Annuler</button>
-          <button type="button" className="cp-button" onClick={() => answerTrust('folder')}>Je lui fais confiance</button>
-          <button type="button" className="cp-button" data-variant="primary" autoFocus onClick={() => answerTrust('restricted')}>Lancer sans ses réglages</button>
+          <button type="button" className="cp-button" onClick={() => answerTrust(null)}>{words.cancel}</button>
+          <button type="button" className="cp-button" onClick={() => answerTrust('folder')}>{words.trustFolder}</button>
+          <button type="button" className="cp-button" data-variant="primary" autoFocus onClick={() => answerTrust('restricted')}>{words.startRestricted}</button>
         </div>
       </div>
     </Modal>

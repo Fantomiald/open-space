@@ -8,7 +8,8 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { ImageUpload, PermissionMode } from '../shared/protocol.ts';
-import { isJson, type Json } from './json.ts';
+import { st } from './i18n/index.ts';
+import { asJson, asString, isJson, type Json } from './json.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -85,17 +86,11 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
 export function identityPrompt(name: string, user = '', note = ''): string {
-  const who = user.trim() || 'l’utilisateur';
-  return `Dans l'Open Space de ${who}, tu es l'agent « ${name} ». Si on te demande ton nom ou qui tu es, réponds « ${name} » ` +
-    `(tu restes Claude, le modèle d'Anthropic). Plusieurs agents travaillent en parallèle, chacun sous son propre nom. ` +
-    `${user.trim() || 'L’utilisateur'} suit plusieurs sessions à la fois : sois concis. Pas de préambule ni de récapitulatif de ce que tu viens de faire, ` +
-    `pas de narration de chaque étape ; quelques phrases courtes suffisent, et tu ne détailles que si on te le demande. ` +
-    `Cette consigne porte sur tes messages, pas sur la qualité ni la complétude du travail.` +
-    (note.trim() ? `\n\nCe que ${who} demande à tous ses agents : ${note.trim()}` : '');
+  return st.prompt.identity(name, user.trim(), note.trim());
 }
 
 /** Told in the next message when a session was renamed, or started before sessions had names. */
-export const renameNote = (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`;
+export const renameNote = (name: string) => st.prompt.rename(name);
 
 export interface ExitInfo { code: number | null; signal: NodeJS.Signals | null; stderr: string }
 
@@ -114,6 +109,8 @@ export interface ProcessHandle {
   answerPermission: (requestId: string, answer: PermissionAnswer) => void;
   refuseControl: (requestId: string) => void;
   interrupt: () => void;
+  /** Turns Remote Control on or off (claude.ai/code and the Claude app reach the session); on: resolves with the session's link. */
+  remoteControl: (enabled: boolean) => Promise<string>;
   /** Ends stdin, then SIGTERM to the process group after `graceMs`, SIGKILL 3 s later. Resolves once the process is gone. */
   stop: (graceMs: number) => Promise<void>;
 }
@@ -132,6 +129,8 @@ class ClaudeProcess implements ProcessHandle {
   private exited = false;
   private exitWaiters: (() => void)[] = [];
   private handlers: ProcessHandlers;
+  /** our own control requests waiting for their control_response, by request id */
+  private replies = new Map<string, { resolve: (response: Json) => void; reject: (error: Error) => void }>();
 
   constructor(binary: ClaudeBinary, environment: NodeJS.ProcessEnv, launch: LaunchOptions, handlers: ProcessHandlers) {
     this.handlers = handlers;
@@ -141,7 +140,10 @@ class ClaudeProcess implements ProcessHandle {
       if (!line.trim()) return;
       let message: unknown;
       try { message = JSON.parse(line); } catch { return; }
-      if (isJson(message)) handlers.onMessage(message);
+      if (!isJson(message)) return;
+      const reply = message.type === 'control_response' ? this.replies.get(asString(asJson(message.response).request_id)) : undefined;
+      if (reply) this.settleReply(asJson(message.response), reply);
+      else handlers.onMessage(message);
     });
     child.stderr.on('data', (chunk: Buffer) => { this.stderr = (this.stderr + chunk.toString()).slice(-4000); });
     // "close" fires once the output has been fully read (unlike "exit")
@@ -158,6 +160,8 @@ class ClaudeProcess implements ProcessHandle {
     this.exited = true;
     // whatever the Bash tool left running in the group goes with its parent
     this.signalGroup('SIGTERM');
+    for (const { reject } of this.replies.values()) reject(new Error(st.process.stopped));
+    this.replies.clear();
     this.handlers.onExit({ code, signal, stderr: this.stderr });
     for (const resolve of this.exitWaiters.splice(0)) resolve();
   }
@@ -190,6 +194,28 @@ class ClaudeProcess implements ProcessHandle {
 
   interrupt() {
     this.write({ type: 'control_request', request_id: `interrupt-${Date.now()}`, request: { subtype: 'interrupt' } });
+  }
+
+  /**
+   * Remote Control works in -p as a control request, not as the /remote-control command nor the --remote-control flag
+   * (both do nothing there). Checked with 2.1.302: the answer carries session_url, then system/bridge_state messages
+   * follow ("ready", "connected").
+   */
+  remoteControl(enabled: boolean): Promise<string> {
+    const requestId = `remote-${Date.now()}`;
+    return new Promise((resolve, reject) => {
+      this.replies.set(requestId, { resolve: (response) => resolve(asString(response.session_url)), reject });
+      if (!this.write({ type: 'control_request', request_id: requestId, request: { subtype: 'remote_control', enabled } })) {
+        this.replies.delete(requestId);
+        reject(new Error(st.process.stopped));
+      }
+    });
+  }
+
+  private settleReply(response: Json, reply: { resolve: (response: Json) => void; reject: (error: Error) => void }) {
+    this.replies.delete(asString(response.request_id));
+    if (response.subtype === 'success') reply.resolve(asJson(response.response));
+    else reply.reject(new Error(asString(response.error) || st.process.refused));
   }
 
   private signalGroup(signal: NodeJS.Signals) {

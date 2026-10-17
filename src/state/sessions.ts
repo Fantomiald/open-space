@@ -2,12 +2,14 @@
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
 import { create } from 'zustand';
 import type { Festival } from '../../shared/festivals.ts';
+import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
-import type { Aside, ClaudeInfo, ClientMessage, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, LoggedEvent, PermissionDecision, Quota, ServerMessage, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
+import type { Aside, ClaudeInfo, ClientMessage, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, LoggedEvent, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
+import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
@@ -20,7 +22,8 @@ export type View = 'salle' | 'repos';
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
 /** What the palette or the "new session" dialog starts with. */
-export interface NewSessionDraft { command?: string }
+/** What the launcher starts with: a command in its field, someone of the crew to take it (a click on a visitor). */
+export interface NewSessionDraft { command?: string; person?: string }
 
 interface CommandPostState {
   connection: Connection;
@@ -31,6 +34,8 @@ interface CommandPostState {
   crewOpen: boolean;
   settingsOpen: boolean;
   directories: string[];
+  /** what each session changed in its files, as last asked for */
+  changes: Record<string, SessionChanges>;
   /** the Claude Code conversations found for a folder, to resume one (the last folder asked for) */
   conversations: { cwd: string; list: Conversation[] } | null;
   sessions: Record<string, SessionInfo>;
@@ -50,6 +55,8 @@ interface CommandPostState {
   enteredThroughDoor: boolean;
   /** the user's settings (kept by the server) */
   preferences: Preferences;
+  /** the language the page is shown in: the one chosen in the settings, else the browser's (the App is mounted again when it changes) */
+  language: Language;
   /** false until the user went through the first start: the onboarding shows */
   onboarded: boolean;
   /** the folders are set by OFFICE_ROOTS: the page cannot change them */
@@ -92,6 +99,8 @@ interface CommandPostState {
   /** `birthday`: "MM-DD", or undefined for none */
   saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
   removeMember: (name: string) => boolean;
+  /** someone of the crew becomes the user (their perso in the room) */
+  becomeSelf: (name: string) => boolean;
   openNewSession: (draft: NewSessionDraft | null) => void;
   toast: (kind: Toast['kind'], text: string) => void;
 
@@ -120,6 +129,13 @@ function answerAllowed(): boolean {
 
 const isVisible = () => typeof document !== 'undefined' && document.visibilityState === 'visible';
 
+/** The language of the settings, or the browser's: the words are switched before the page renders again. */
+function languageState(preferences: Preferences): { language: Language } {
+  const language = preferences.language ?? languageOf(navigator.languages);
+  setLanguage(language);
+  return { language };
+}
+
 export const useSessions = create<CommandPostState>((set, get) => ({
   connection: 'connecting',
   claude: null,
@@ -128,6 +144,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   crewOpen: false,
   settingsOpen: false,
   directories: [],
+  changes: {},
   conversations: null,
   sessions: {},
   logs: {},
@@ -142,8 +159,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, pet: DEFAULT_PET },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET },
   onboarded: true,
+  language: initialLanguage,
   rootsLocked: false,
   rootSuggestions: null,
   sound: readPreference('sound', true),
@@ -168,7 +186,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     switch (message.t) {
       case 'hello': {
         const sessions = Object.fromEntries(message.sessions.map((session) => [session.id, session]));
+        // the browser's language becomes the setting until the user picks one: the server speaks it too
+        if (!message.preferences.language) s.send({ t: 'preferences', preferences: { language: languageOf(navigator.languages) } });
         set({
+          ...languageState(message.preferences),
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked,
           selectedId: s.selectedId && sessions[s.selectedId] ? s.selectedId : null,
@@ -189,7 +210,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         if (s.sound && previous[message.session.id] && previous[message.session.id].state !== 'error' && message.session.state === 'error') errorChime();
         break;
       }
-      case 'preferences': set({ preferences: message.preferences, roots: message.roots, onboarded: message.onboarded }); break;
+      case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded }); break;
       case 'rootSuggestions': set({ rootSuggestions: message.suggestions }); break;
       case 'trustNeeded': if (lastCreate) set({ trustRequest: { cwd: message.cwd, code: message.code, options: lastCreate } }); break;
       case 'forgotten': {
@@ -232,6 +253,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         break;
       case 'commands': set({ commands: message.commands }); break;
       case 'directories': set({ directories: message.directories }); break;
+      case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
       case 'conversations': set({ conversations: { cwd: message.cwd, list: message.conversations } }); break;
       case 'crew': set({ crew: message.crew }); break;
       case 'quota': set({ quota: message.quota }); break;
@@ -278,6 +300,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openSettings: (open) => set({ settingsOpen: open }),
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),
+  becomeSelf: (name) => get().send({ t: 'becomeSelf', name }),
   /** The launcher shows when no session is open: a draft closes the open one and goes to the launcher's field. */
   openNewSession: (draft) => {
     if (draft) get().select(null);

@@ -15,6 +15,8 @@ describe('settings', () => {
     });
     assert.deepEqual(parsePreferences({ model: 'claude-opus-5-5', permissionMode: 'plan', defaultFolder: '' }), { model: 'claude-opus-5-5', permissionMode: 'plan', defaultFolder: '' });
     assert.deepEqual(parsePreferences('nope'), {});
+    assert.deepEqual(parsePreferences({ language: 'en' }), { language: 'en' });
+    assert.deepEqual(parsePreferences({ language: 'de' }), {}, 'a language Open Space does not speak');
     assert.deepEqual(parsePreferences({ pet: { kind: 'dog', variant: 'pug', colors: { fur: '#7fd36a', belly: 'red', eyes: 3 } } }).pet, { kind: 'dog', variant: 'pug', colors: { fur: '#7fd36a' } }, 'only valid colours');
     assert.deepEqual(parsePreferences({ pet: { kind: 'rocky', colors: {} } }).pet, { kind: 'rocky' });
     assert.equal(parsePreferences({ pet: { kind: 'dragon' } }).pet, undefined);

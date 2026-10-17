@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import type { ImageUpload } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { MAX_IMAGES, isPicture, prepareImage } from '../lib/images.ts';
 import { useSessions } from '../state/sessions.ts';
 
@@ -23,16 +24,16 @@ export function useAttachments() {
 
   const add = useCallback((files: readonly File[]) => {
     const pictures = files.filter(isPicture);
-    if (pictures.length < files.length) toast('error', 'Seules les images peuvent être jointes à un message.');
+    if (pictures.length < files.length) toast('error', t.composer.attachments.onlyImages);
     const room = Math.max(0, MAX_IMAGES - count.current);
-    if (pictures.length > room) toast('error', `${MAX_IMAGES} images au plus par message.`);
+    if (pictures.length > room) toast('error', t.composer.attachments.tooMany(MAX_IMAGES));
     for (const file of pictures.slice(0, room)) {
       // numbered now, so the pictures stay in the order they were added whichever is ready first
       const id = ++nextId;
       setPreparing((value) => value + 1);
       prepareImage(file)
-        .then((upload) => setItems((list) => [...list, { id, name: file.name || 'capture', preview: URL.createObjectURL(file), upload }].sort((a, b) => a.id - b.id)))
-        .catch(() => toast('error', `Impossible de lire ${file.name || 'cette image'}.`))
+        .then((upload) => setItems((list) => [...list, { id, name: file.name || t.composer.attachments.screenshotName, preview: URL.createObjectURL(file), upload }].sort((a, b) => a.id - b.id)))
+        .catch(() => toast('error', t.composer.attachments.unreadable(file.name)))
         .finally(() => setPreparing((value) => value - 1));
     }
   }, [toast]);

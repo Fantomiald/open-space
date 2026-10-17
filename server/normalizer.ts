@@ -3,6 +3,7 @@
 // started a sub-agent (every message of that sub-agent carries it as parent_tool_use_id).
 import { actDetail, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
 import type { OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
 export interface TurnResult { ok: boolean; text: string; ms: number }
@@ -26,6 +27,8 @@ export interface NormalizerOptions {
   onCancel: (requestId: string) => void;
   /** the text of a message still being written, so far (it then arrives whole as a `say` event) */
   onPartial: (who: string, text: string) => void;
+  /** where Remote Control is at, once turned on (system/bridge_state: "ready", "connected", "failed"…) */
+  onRemoteState?: (state: string) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
@@ -50,7 +53,7 @@ export class Normalizer {
 
   private pickName() {
     const { names } = this.options;
-    const name = SUBAGENT_NAMES.find((candidate) => !names.has(candidate)) ?? `Renfort ${names.size + 1}`;
+    const name = SUBAGENT_NAMES.find((candidate) => !names.has(candidate)) ?? st.normalizer.extraSubagent(names.size + 1);
     names.add(name);
     return name;
   }
@@ -65,7 +68,7 @@ export class Normalizer {
       case 'result': {
         // a turn started by another session's message: Claude Code only says so here, at its end
         const origin = asJson(message.origin);
-        if (origin.kind === 'peer' && asString(origin.body).trim()) this.options.emit({ k: 'peer', from: asString(origin.name) || 'Une autre session', text: asString(origin.body).slice(0, 20000) });
+        if (origin.kind === 'peer' && asString(origin.body).trim()) this.options.emit({ k: 'peer', from: asString(origin.name) || st.normalizer.peerUnknown, text: asString(origin.body).slice(0, 20000) });
         this.options.onResult({
           ok: !message.is_error && message.subtype === 'success', text: asString(message.result), ms: asNumber(message.duration_ms),
         });
@@ -121,6 +124,9 @@ export class Normalizer {
           socket: asString(message.messaging_socket_path),
         });
         this.options.emit({ k: 'init', model: asString(message.model) });
+        break;
+      case 'bridge_state':
+        this.options.onRemoteState?.(asString(message.state));
         break;
       case 'commands_changed':
         this.options.onCommands(asArray(message.commands).map(asJson).filter((c) => asString(c.name)).map((c) => ({
@@ -182,9 +188,9 @@ export class Normalizer {
     } else if (name === 'SendMessage') {
       const to = asString(input.to);
       const recipient = this.options.peerName?.(to) ?? to;
-      this.options.emit({ k: 'act', who, id, tool: name, detail: cut(`→ ${recipient || 'une autre session'} : ${asString(input.summary) || asString(input.message)}`, 160) });
+      this.options.emit({ k: 'act', who, id, tool: name, detail: cut(st.normalizer.sentTo(recipient || st.normalizer.recipientUnknown, asString(input.summary) || asString(input.message)), 160) });
     } else {
-      this.options.emit({ k: 'act', who, id, tool: name, detail: actDetail(name, input) });
+      this.options.emit({ k: 'act', who, id, tool: name, detail: actDetail(name, input, st.normalizer.searchIn) });
     }
   }
 
@@ -236,11 +242,11 @@ export function parseQuestions(input: Record<string, unknown>): Question[] | nul
  * with what comes before; a rule without content covers the whole tool.
  */
 export function ruleText(rule: Json): string {
-  const tool = asString(rule.toolName) || 'cet outil';
+  const tool = asString(rule.toolName) || st.normalizer.thisTool;
   const content = asString(rule.ruleContent);
-  if (!content) return `${tool}, pour tout`;
-  if (tool === 'Bash') return content.endsWith(':*') ? `les commandes qui commencent par « ${content.slice(0, -2).trim()} »` : `la commande « ${content} »`;
-  return `${tool} sur « ${content} »`;
+  if (!content) return st.normalizer.ruleWholeTool(tool);
+  if (tool === 'Bash') return content.endsWith(':*') ? st.normalizer.ruleCommandsStartingWith(content.slice(0, -2).trim()) : st.normalizer.ruleCommand(content);
+  return st.normalizer.ruleToolOn(tool, content);
 }
 
 /** The `ask` event shown for a request. An AskUserQuestion call with readable questions becomes a question, anything else a yes/no. */

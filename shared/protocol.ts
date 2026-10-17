@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { Look } from './look.ts';
@@ -95,6 +96,14 @@ export type ImageType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 /** A picture sent with a message (a pasted or dropped screenshot), in base64. */
 export interface ImageUpload { mediaType: ImageType; data: string }
 
+/**
+ * A file a session wrote, against the last commit of its repository. `outside`: not in a git repository, so without a
+ * diff. `patch`: its unified diff from the first hunk on, empty when binary, or cut (`truncated`) when too long.
+ */
+export interface FileChange { path: string; status: 'modified' | 'added' | 'deleted' | 'outside'; added: number; removed: number; patch: string; binary?: true; truncated?: true }
+/** What a session changed: the files with changes not committed yet, the latest first; `touched`: all the files it wrote. */
+export interface SessionChanges { files: FileChange[]; added: number; removed: number; touched: number }
+
 export interface SessionInfo {
   /** also the Claude Code session id (the same UUID is used for --session-id and --resume) */
   id: string;
@@ -135,7 +144,11 @@ export interface SessionInfo {
   resumable: boolean;
   /** highest event sequence number recorded for this session */
   lastSeq: number;
+  /** Remote Control is on: the session is also reachable from claude.ai/code and the Claude app, at `url` ('' until known) */
+  remote?: RemoteControl;
 }
+
+export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
 
 export interface SlashCommand { name: string; description?: string; argumentHint?: string }
 
@@ -183,8 +196,12 @@ export interface Preferences {
   agentNote: string;
   /** the rooms dress up for the festivals */
   festivals: boolean;
+  /** the crew without a session drops by the office now and then (src/room/visitors.ts) */
+  officeLife: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
+  /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
+  language?: Language;
 }
 
 /** A folder offered at the onboarding as a place for sessions to run in: how many projects it holds (-1: not looked into). */
@@ -227,9 +244,17 @@ export type ClientMessage =
   /** events of a session after a sequence number (0 = from the start) */
   | { t: 'log'; sessionId: string; after: number }
   | { t: 'directories' }
+  /** what a session changed in its files */
+  | { t: 'changes'; sessionId: string }
+  /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
+  | { t: 'remoteControl'; sessionId: string; enabled: boolean }
+  /** opens a terminal window on the user's computer, in the default folder */
+  | { t: 'openTerminal' }
   /** adds a crew member (previousName null) or updates the one called previousName */
   | { t: 'saveMember'; previousName: string | null; name: string; look: Look; birthday?: string; jobs?: Job[] }
-  | { t: 'removeMember'; name: string };
+  | { t: 'removeMember'; name: string }
+  /** someone of the crew becomes the user */
+  | { t: 'becomeSelf'; name: string };
 
 export type ServerMessage =
   | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
@@ -250,6 +275,7 @@ export type ServerMessage =
   | { t: 'log'; sessionId: string; events: LoggedEvent[]; truncated: boolean }
   | { t: 'commands'; commands: SlashCommand[] }
   | { t: 'directories'; directories: string[] }
+  | { t: 'changes'; sessionId: string; changes: SessionChanges }
   | { t: 'quota'; quota: Quota }
   | { t: 'toast'; kind: 'info' | 'error'; text: string };
 

@@ -209,6 +209,58 @@ textarea { resize: vertical; width: 100%; }
 button.cp-tag:hover { border-color: var(--color-accent); }
 /* stopping a session: two choices, each with what it does */
 .cp-detail__meta { color: var(--color-text-muted); font-size: var(--text-sm); }
+/* ── What a session changed: a chip in its header, a view in place of the thread ── */
+.cp-line-counts { font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
+.cp-line-counts [data-sign='add'] { color: var(--diff-add); }
+.cp-line-counts [data-sign='remove'] { color: var(--diff-remove); }
+.cp-changes-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); padding: 0.1rem var(--space-2); border-radius: 999px; white-space: nowrap;
+  border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text-muted); font-size: var(--text-xs);
+}
+.cp-changes-chip:hover, .cp-changes-chip[aria-pressed='true'] { border-color: var(--color-accent); color: var(--color-text); }
+/* Remote Control on: a link to the session on claude.ai, with where the connection is at */
+.cp-remote-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); padding: 0.1rem var(--space-2); border-radius: 999px; white-space: nowrap;
+  border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); font-size: var(--text-xs); text-decoration: none;
+}
+a.cp-remote-chip:hover { border-color: var(--color-accent); }
+.cp-remote-chip__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--tone-work); }
+.cp-remote-chip[data-state='connected'] .cp-remote-chip__dot { background: var(--tone-reply); }
+.cp-remote-chip[data-state='failed'] .cp-remote-chip__dot { background: var(--tone-error); }
+.cp-detail > .cp-changes { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.cp-changes__head { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-changes__summary { margin: 0 auto 0 0; font-size: var(--text-sm); color: var(--color-text-muted); }
+.cp-changes__body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.cp-changes__more { font-size: var(--text-xs); }
+.cp-change { min-width: 0; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
+.cp-change > summary {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); cursor: pointer; list-style: none; font-size: var(--text-sm);
+}
+.cp-change > summary::-webkit-details-marker { display: none; }
+.cp-change[open] > summary { border-bottom: var(--border-width) solid var(--color-border); }
+.cp-change__status {
+  flex: none; display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: var(--weight-bold); background: var(--tone-work-soft); color: var(--tone-work);
+}
+.cp-change__status[data-status='added'] { background: var(--diff-add-soft); color: var(--diff-add); }
+.cp-change__status[data-status='deleted'] { background: var(--diff-remove-soft); color: var(--diff-remove); }
+.cp-change__status[data-status='outside'] { background: var(--tone-idle-soft); color: var(--tone-idle); }
+.cp-change__path { min-width: 0; flex: 1; display: flex; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); }
+/* a long path loses its folders, never the file's name */
+.cp-change__path > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cp-change__path > span:last-child { flex: none; }
+.cp-change__note { margin: 0; padding: var(--space-2) var(--space-3); color: var(--color-text-muted); font-size: var(--text-xs); }
+.cp-diff { overflow-x: auto; }
+.cp-diff table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.5; }
+.cp-diff td { padding: 0 var(--space-2); vertical-align: top; }
+.cp-diff__number { width: 1%; text-align: right; color: var(--color-text-muted); user-select: none; opacity: 0.7; }
+.cp-diff__line { white-space: pre; }
+.cp-diff__line > span { display: inline-block; width: 1.2ch; color: var(--color-text-muted); user-select: none; }
+.cp-diff tr[data-kind='add'] { background: var(--diff-add-soft); }
+.cp-diff tr[data-kind='add'] .cp-diff__line > span { color: var(--diff-add); }
+.cp-diff tr[data-kind='remove'] { background: var(--diff-remove-soft); }
+.cp-diff tr[data-kind='remove'] .cp-diff__line > span { color: var(--diff-remove); }
+.cp-diff tr[data-kind='hunk'] td { padding: var(--space-1) var(--space-2); background: var(--diff-hunk-soft); color: var(--color-text-muted); }
 .cp-detail__error { color: var(--tone-error); font-size: var(--text-sm); }
 .cp-detail > .cp-permission, .cp-detail > .cp-question { margin: var(--space-3) var(--space-4) 0; }
 
@@ -286,17 +338,39 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-detail > .cp-thread { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .cp-thread > .cp-feed { flex: 1 1 0; min-height: 0; }
 /* one tab for the conversation, one per sub-agent */
-.cp-thread__tabs { flex: none; display: flex; gap: var(--space-1); padding: var(--space-2) var(--space-4) 0; overflow-x: auto; border-bottom: var(--border-width) solid var(--color-border); }
+.cp-thread__bar { flex: none; display: flex; align-items: flex-end; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; border-bottom: var(--border-width) solid var(--color-border); }
+.cp-thread__tabs { min-width: 0; display: flex; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; }
 .cp-thread__tabs button {
   display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 0; border-bottom: 2px solid transparent;
   background: none; color: var(--color-text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); white-space: nowrap;
 }
 .cp-thread__tabs button:hover { color: var(--color-text); }
 .cp-thread__tabs button[aria-selected='true'] { color: var(--color-text); border-bottom-color: var(--color-accent); }
+/* the sub-agents done: a menu at the end of the tabs (they stay readable without filling the bar) */
+.cp-thread__finished { position: relative; flex: none; margin-left: auto; }
+.cp-thread__finished > button {
+  display: inline-flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--space-2); border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--color-text-muted); font-size: var(--text-sm); white-space: nowrap;
+}
+.cp-thread__finished > button:hover, .cp-thread__finished > button[aria-expanded='true'] { color: var(--color-text); }
+.cp-thread__finished-list {
+  position: absolute; z-index: 6; right: 0; top: calc(100% + var(--space-1)); display: grid; width: max-content; min-width: 16rem; max-width: min(26rem, 80vw);
+  max-height: 22rem; overflow-y: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay);
+}
+.cp-thread__finished-list button {
+  width: 100%; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2);
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-text); text-align: left; font-size: var(--text-sm);
+}
+.cp-thread__finished-list button:hover, .cp-thread__finished-list button[aria-current='true'] { background: var(--color-surface); }
+/* a sub-agent's face, its status in a dot at the corner */
+.cp-agent-face { position: relative; flex: none; display: inline-flex; width: 22px; height: 22px; }
+.cp-agent-face img { width: 22px; height: 22px; image-rendering: pixelated; }
+.cp-agent-face .cp-feed__agent-dot { position: absolute; right: -2px; bottom: -1px; width: 0.5rem; height: 0.5rem; border: 2px solid var(--color-surface); box-sizing: content-box; }
 .cp-feed__agent-dot { flex: none; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--tone-work); }
 [data-status='done'] > .cp-feed__agent-dot, [data-status='done'] .cp-feed__agent-dot { background: var(--tone-reply); }
 [data-status='failed'] > .cp-feed__agent-dot, [data-status='failed'] .cp-feed__agent-dot { background: var(--tone-error); }
-[data-status='working'] > .cp-feed__agent-dot, [data-status='working'] .cp-feed__agent-dot { box-shadow: 0 0 0 3px var(--tone-work-soft); }
+[data-status='working'] > .cp-feed__agent-dot, [data-status='working'] .cp-feed__agent-dot { box-shadow: 0 0 0 2px var(--tone-work-soft); }
 .cp-feed { overflow-x: hidden; overflow-y: auto; padding: var(--space-3) var(--space-4); }
 .cp-feed ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
 .cp-feed__item { font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
@@ -443,6 +517,10 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-crew__member:hover { background: var(--color-surface-sunken); }
 .cp-crew__member[aria-current='true'] { border-color: var(--color-accent); background: var(--color-surface-sunken); }
 .cp-crew__member img { image-rendering: pixelated; flex: none; }
+.cp-crew__member[aria-checked='true'] { border-color: var(--color-accent); background: var(--color-surface-sunken); }
+/* at the first start, the crew copied in before it, to pick oneself from */
+.cp-onboarding__crew { display: grid; gap: var(--space-2); }
+.cp-onboarding__crew > div { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .cp-crew__stage { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
 .cp-crew__preview { width: 156px; height: 216px; image-rendering: pixelated; }
 .cp-crew__turn { display: flex; gap: var(--space-1); }

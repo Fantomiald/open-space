@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SlashCommand } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { findCommands } from '../state/commands.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
@@ -47,18 +48,19 @@ function PaletteContent() {
     else if (e.key === 'Enter' && shown[active]) { e.preventDefault(); run(shown[active]); }
   };
 
+  const words = t.common.palette;
   return (
-    <Modal title="Commandes" onClose={close} wide>
+    <Modal title={words.title} onClose={close} wide>
       <div className="cp-palette" onKeyDown={onKeyDown}>
-        <div className="cp-palette__target" role="radiogroup" aria-label="Envoyer à">
-          <label><input type="radio" name="palette-target" checked={target === 'selected'} disabled={!selected} onChange={() => setTarget('selected')} /> {selected ? `Session ${selected.name}` : 'Aucune session sélectionnée'}</label>
-          <label><input type="radio" name="palette-target" checked={target === 'new' || !selected} onChange={() => setTarget('new')} /> Nouvelle session</label>
+        <div className="cp-palette__target" role="radiogroup" aria-label={words.sendTo}>
+          <label><input type="radio" name="palette-target" checked={target === 'selected'} disabled={!selected} onChange={() => setTarget('selected')} /> {selected ? words.selectedSession(selected.name) : words.noSelection}</label>
+          <label><input type="radio" name="palette-target" checked={target === 'new' || !selected} onChange={() => setTarget('new')} /> {words.newSession}</label>
         </div>
-        <label className="cp-sr-only" htmlFor="palette-query">Chercher une commande</label>
-        <input id="palette-query" value={query} onChange={(e) => { setQuery(e.target.value); setActive(0); }} placeholder="Chercher une commande (kit, design, seo…)" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={shown[active] ? `palette-${shown[active].name}` : undefined} autoFocus />
-        <label className="cp-sr-only" htmlFor="palette-args">Arguments</label>
-        <input id="palette-args" value={args} onChange={(e) => setArgs(e.target.value)} placeholder="Arguments (facultatif)" />
-        <ul id="palette-list" ref={list} role="listbox" className="cp-palette__list" aria-label="Commandes disponibles">
+        <label className="cp-sr-only" htmlFor="palette-query">{words.search}</label>
+        <input id="palette-query" value={query} onChange={(e) => { setQuery(e.target.value); setActive(0); }} placeholder={words.searchPlaceholder} role="combobox" aria-expanded="true" aria-controls="palette-list" aria-activedescendant={shown[active] ? `palette-${shown[active].name}` : undefined} autoFocus />
+        <label className="cp-sr-only" htmlFor="palette-args">{words.arguments}</label>
+        <input id="palette-args" value={args} onChange={(e) => setArgs(e.target.value)} placeholder={words.argumentsPlaceholder} />
+        <ul id="palette-list" ref={list} role="listbox" className="cp-palette__list" aria-label={words.available}>
           {shown.map((command, index) => (
             <li key={command.name} id={`palette-${command.name}`} role="option" aria-selected={index === active} data-active={index === active} onMouseEnter={() => setActive(index)} onClick={() => run(command)}>
               <strong>/{command.name}</strong>
@@ -66,9 +68,9 @@ function PaletteContent() {
               {command.description && <span className="cp-palette__description">{command.description}</span>}
             </li>
           ))}
-          {shown.length === 0 && <li className="cp-muted">{commands.length === 0 ? 'Aucune commande connue : elles apparaissent dès qu’une session a démarré.' : 'Aucun résultat.'}</li>}
+          {shown.length === 0 && <li className="cp-muted">{commands.length === 0 ? words.noneKnown : words.noResult}</li>}
         </ul>
-        {found.length > shown.length && <p className="cp-muted" role="status">{shown.length} commandes affichées sur {found.length} : précise la recherche pour voir les autres.</p>}
+        {found.length > shown.length && <p className="cp-muted" role="status">{words.truncated(shown.length, found.length)}</p>}
       </div>
     </Modal>
   );

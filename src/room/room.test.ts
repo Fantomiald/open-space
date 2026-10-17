@@ -9,8 +9,9 @@ import { LOUNGE, OFFICE, ROOM, blockedTiles } from '../../shared/room-layout.ts'
 import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/festivals.ts';
 import { outfitFor } from './outfits.ts';
 import { Floor } from './floor.ts';
-import { distance, toScreen, toTile, type Point } from './geometry.ts';
+import { distance, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { Scene, directionOf } from './scene.ts';
+import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
 import { parseLook } from '../../shared/look.ts';
@@ -331,6 +332,17 @@ describe('scene', () => {
     assert.equal(arriving.playerWentOut, false);
   });
 
+  it('finds the user’s laptop under the pointer, on their desk in the office only', () => {
+    const laptop = OFFICE_FLOOR.userScreen!;
+    const at = (x: number, y: number, height: number) => { const base = toScreen({ x, y }); return { x: base.x, y: base.y - height }; };
+    const middleX = (laptop.fromX + laptop.toX) / 2;
+    assert.equal(OFFICE_FLOOR.isUserScreenAt(at(middleX, laptop.toY, (laptop.low + laptop.high) / 2)), true, 'the lid');
+    assert.equal(OFFICE_FLOOR.isUserScreenAt(at(middleX, (laptop.fromY + laptop.toY) / 2, laptop.low)), true, 'the keyboard');
+    assert.equal(OFFICE_FLOOR.isUserScreenAt(at(middleX, laptop.toY, 2)), false, 'the desk under it');
+    assert.equal(OFFICE_FLOOR.isUserScreenAt(at(laptop.fromX - 1, laptop.toY, laptop.low)), false, 'the rest of the desk');
+    assert.equal(LOUNGE_FLOOR.userScreen, null);
+  });
+
   it('has no cat in the break room', () => {
     const scene = new Scene(LOUNGE_FLOOR, { withPet: false });
     assert.equal(scene.pet, null);
@@ -431,5 +443,101 @@ describe('looks', () => {
     assert.equal(parseLook({ ...look, glasses: '#121419' })?.glasses, '#121419');
     const { watch: _watch, ...missing } = look;
     assert.equal(parseLook(missing), null);
+  });
+});
+
+describe('aisles', () => {
+  it('reaches every seat from the door without walking over another chair or sofa, festivals included', () => {
+    for (const [layout, name] of [[OFFICE, 'office'], [LOUNGE, 'lounge']] as const) {
+      for (const festival of [null, ...FESTIVALS]) {
+        const floor = new Floor(layout, festival);
+        const seatTiles = new Set(floor.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined)
+          .flatMap((piece) => { const tiles: string[] = []; for (let x = Math.floor(piece.x); x < Math.ceil(piece.x + piece.width); x++) for (let y = Math.floor(piece.y); y < Math.ceil(piece.y + piece.depth); y++) tiles.push(`${x},${y}`); return tiles; }));
+        floor.layout.seats.forEach((seat, index) => {
+          const path = floor.pathToSeat(floor.door, index);
+          const goal = `${seat.x},${seat.y}`;
+          const crossed = path.map((point) => `${Math.floor(point.x)},${Math.floor(point.y)}`).filter((tile) => tile !== goal && seatTiles.has(tile));
+          assert.deepEqual(crossed, [], `${name} ${festival} seat ${goal}`);
+          const end = path.at(-1)!;
+          assert.equal(`${Math.floor(end.x)},${Math.floor(end.y)}`, goal, `${name} ${festival} seat ${goal} reached`);
+        });
+      }
+    }
+  });
+});
+
+describe('office life', () => {
+  /** A visit stepped until it is over: `ms` at a time, with everyone free and the morning's rhythm. */
+  const stepVisits = (visits: Visits, ms: number, options: Partial<Parameters<Visits['step']>[1]> = {}) => {
+    for (let elapsed = 0; elapsed < ms; elapsed += 100) visits.step(100, { free: ['Ana', 'Bo', 'Cy'], hour: 9, enabled: true, blocked: null, ...options });
+  };
+
+  it('has its places to drop by on free tiles the door leads to, festivals included', () => {
+    for (const festival of [null, ...FESTIVALS]) {
+      const floor = new Floor(OFFICE, festival);
+      for (const spot of floor.layout.visitSpots ?? []) {
+        const tile = { x: Math.floor(spot.at.x), y: Math.floor(spot.at.y) };
+        assert.ok(spot.lift !== undefined || floor.isFreeTile(tile.x, tile.y), `${festival} ${spot.activity} at ${tile.x},${tile.y}`);
+        const path = floor.route(floor.door, spot.at);
+        assert.ok(close(tileCenter(path.at(-1)!), tileCenter(spot.at)), `${festival} ${spot.activity} reachable`);
+      }
+    }
+    assert.ok(new Floor(OFFICE, 'birthday').layout.visitSpots!.some((spot) => spot.activity === 'party'));
+    assert.equal(LOUNGE_FLOOR.layout.visitSpots, undefined);
+  });
+
+  it('brings two people for a coffee, one behind the other, side by side and turned to each other, then lets them go', () => {
+    const visits = new Visits(OFFICE_FLOOR, () => 0);
+    assert.equal(visits.start('coffee', ['Ana', 'Bo'], { together: true }).length, 2);
+    // they never walk on each other: coming in, standing there, going out
+    let closest = Infinity;
+    for (let elapsed = 0; elapsed < 60_000 && visits.visitors.size; elapsed += 100) {
+      visits.step(100, { free: ['Ana', 'Bo'], hour: 3, enabled: true, blocked: null });
+      const inside = [...visits.visitors.values()].filter((visitor) => visitor.outside <= 0 && distance(visitor.position, OFFICE_FLOOR.door) > 1);
+      if (inside.length === 2) closest = Math.min(closest, distance(inside[0].position, inside[1].position));
+      if (elapsed === 15_000) {
+        const [left, right] = [...visits.visitors.values()].sort((a, b) => a.position.x - b.position.x);
+        assert.deepEqual([left.phase, right.phase], ['staying', 'staying']);
+        assert.deepEqual([directionOf(left.heading), directionOf(right.heading)], ['down-right', 'down-left'], 'turned to each other, both faces showing');
+      }
+    }
+    assert.ok(closest >= 1.2, `${closest} tiles apart at the closest`);
+    assert.equal(visits.visitors.size, 0, 'gone through the door');
+  });
+
+  it('never has more than two visitors, and sends away one who got a session, or everyone when it is off', () => {
+    const visits = new Visits(OFFICE_FLOOR, () => 0);
+    visits.start('water', ['Ana']);
+    visits.start('window', ['Bo']);
+    assert.deepEqual(visits.start('books', ['Cy']), []);
+    stepVisits(visits, 200, { free: ['Bo', 'Cy'], hour: 3 });
+    assert.notEqual(visits.visitors.get(visitorId('Ana'))?.phase ?? 'gone', 'coming', 'on her way out (or already gone, from the door)');
+    assert.equal(visits.visitors.get(visitorId('Bo'))?.phase, 'coming');
+    stepVisits(visits, 200, { enabled: false });
+    assert.ok([...visits.visitors.values()].every((visitor) => visitor.phase === 'leaving'));
+  });
+
+  it('keeps the sofa the user sits on for them', () => {
+    const visits = new Visits(OFFICE_FLOOR, () => 0);
+    const [first, second] = OFFICE_FLOOR.layout.visitSpots!.filter((spot) => spot.activity === 'sofa');
+    visits.start('sofa', ['Ana'], { blocked: first.at });
+    assert.equal(visits.visitors.get(visitorId('Ana'))?.spot, second);
+  });
+
+  it('comes now and then in the morning, rarely in the evening, never at night', () => {
+    /** How many people came in during an hour. */
+    const visitsIn = (hour: number) => {
+      const visits = new Visits(OFFICE_FLOOR, () => 0.5);
+      const seen = new Set<object>();
+      for (let elapsed = 0; elapsed < 60 * 60_000; elapsed += 100) {
+        visits.step(100, { free: ['Ana', 'Bo', 'Cy'], hour, enabled: true, blocked: null });
+        for (const visitor of visits.visitors.values()) seen.add(visitor);
+      }
+      return seen.size;
+    };
+    const morning = visitsIn(9), evening = visitsIn(20);
+    assert.ok(morning >= 15 && morning <= 30, `${morning} in a morning hour`);
+    assert.ok(evening >= 3 && evening <= 6, `${evening} in an evening hour`);
+    assert.equal(visitsIn(2), 0);
   });
 });

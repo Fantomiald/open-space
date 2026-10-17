@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
 import { asideQuestion, commandSuggestions, findCommands } from './commands.ts';
+import { diffRows } from './diff.ts';
 import { buildFeed, threadOf, toolSummary } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
@@ -166,6 +167,20 @@ describe('who of the crew is free for a new session', () => {
     assert.equal(stillFree('Lina', people), null);
     assert.equal(stillFree('Max', people), null, 'the user never takes a session');
     assert.equal(stillFree(null, people), null);
+  });
+});
+
+describe('a file\'s diff', () => {
+  it('numbers the lines kept, added and removed, hunk by hunk', () => {
+    assert.deepEqual(diffRows('@@ -3,2 +3,3 @@ function main\n keep\n-old\n+new\n+more\n\\ No newline at end of file\n@@ -10 +11 @@\n-x\n'), [
+      { kind: 'hunk', before: 3, after: 3, text: 'function main' },
+      { kind: 'context', before: 3, after: 3, text: 'keep' },
+      { kind: 'remove', before: 4, after: null, text: 'old' },
+      { kind: 'add', before: null, after: 4, text: 'new' },
+      { kind: 'add', before: null, after: 5, text: 'more' },
+      { kind: 'hunk', before: 10, after: 11, text: '' },
+      { kind: 'remove', before: 10, after: null, text: 'x' },
+    ]);
   });
 });
 

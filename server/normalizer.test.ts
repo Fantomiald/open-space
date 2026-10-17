@@ -128,6 +128,20 @@ describe('Normalizer on a real permission request (denied by the host)', () => {
   });
 });
 
+describe('Normalizer on a real sub-agent sent to the background', () => {
+  const { events, results } = replay('subagent-background');
+  const agentId = 'toolu_01XoChX6kX9cKzHZPRYVCWGe';
+
+  it('keeps it at work past the placeholder its launch returns, and lets it leave with its real report', () => {
+    assert.deepEqual(events.filter((event) => event.k === 'hire' || event.k === 'report' || event.k === 'leave').map((event) => event.k), ['hire', 'report', 'leave']);
+    const report = events.find((event) => event.k === 'report');
+    assert.equal(report?.k === 'report' && report.text, 'ok');
+    const leave = events.find((event) => event.k === 'leave');
+    assert.ok(leave?.k === 'leave' && leave.who === agentId && leave.ok && leave.tokens > 0);
+    assert.equal(results.length, 2, 'its end starts a turn of the main agent of its own');
+  });
+});
+
 describe('Normalizer on a real sub-agent with its text forwarded', () => {
   const { events } = replay('subagent-forwarded');
   const agentId = 'toolu_01MWpLFovyxfk3GDNCiFkgs1';

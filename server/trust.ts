@@ -8,6 +8,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { FolderCode } from '../shared/protocol.ts';
+import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson } from './json.ts';
 
 const readJson = (file: string) => { try { return asJson(JSON.parse(readFileSync(file, 'utf8'))); } catch { return null; } };
@@ -20,14 +21,14 @@ export function folderCode(cwd: string): FolderCode {
     if (!settings) continue;
     for (const [event, groups] of Object.entries(asJson(settings.hooks))) {
       for (const group of asArray(groups).map(asJson)) {
-        for (const hook of asArray(group.hooks).map(asJson)) hooks.push(`${event} : ${asString(hook.command) || asString(hook.type)}`);
+        for (const hook of asArray(group.hooks).map(asJson)) hooks.push(st.trust.entry(event, asString(hook.command) || asString(hook.type)));
       }
     }
   }
   const servers = asJson(readJson(path.join(cwd, '.mcp.json'))?.mcpServers);
   const mcpServers = Object.entries(servers).map(([name, server]) => {
     const { command, args, url } = asJson(server);
-    return `${name} : ${asString(url) || [asString(command), ...asArray(args).map((arg) => asString(arg))].join(' ').trim()}`;
+    return st.trust.entry(name, asString(url) || [asString(command), ...asArray(args).map((arg) => asString(arg))].join(' ').trim());
   });
   const instructions = existsSync(path.join(cwd, 'CLAUDE.md')) || existsSync(path.join(cwd, '.claude', 'CLAUDE.md'));
   return { hooks, mcpServers, instructions };

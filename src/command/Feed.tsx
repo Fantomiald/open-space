@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
+import { t } from '../i18n/index.ts';
 import { formatDuration } from '../lib/format.ts';
-import { chibiHead } from '../room/chibi.ts';
-import { PeerIcon, SendIcon } from './Icons.tsx';
+import { chibiHead, lookOfStranger } from '../room/chibi.ts';
+import { ChevronDownIcon, PeerIcon, SendIcon } from './Icons.tsx';
+import { useDismiss } from './useDismiss.ts';
 import { Prose } from './Prose.tsx';
 import { threadOf, toolSummary, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -19,9 +21,47 @@ export function copyCodeOnClick(target: EventTarget | null) {
   }, () => { /* refused: nothing copied, the button stays as it is */ });
 }
 
-const PERMISSION_STATUS = { pending: 'en attente', allowed: 'autorisé', denied: 'refusé', cancelled: 'annulé' } as const;
-const QUESTION_STATUS = { pending: 'en attente', allowed: 'répondu', denied: 'refusé', cancelled: 'annulé' } as const;
-const SUBAGENT_STATUS = { working: 'au travail', done: 'terminé', failed: 'échec' } as const;
+type Subagent = FeedItem & { kind: 'subagent' };
+
+/** A sub-agent's face, the one it has in the room (next to its session's name), with how it is doing. */
+function AgentFace({ sessionId, agent }: { sessionId: string; agent: Subagent }) {
+  const head = useMemo(() => chibiHead(lookOfStranger(`${sessionId}/${agent.agentId}`)), [sessionId, agent.agentId]);
+  return (
+    <span className="cp-agent-face" data-status={agent.status}>
+      <img src={head} alt="" width={22} height={22} />
+      <span className="cp-feed__agent-dot" aria-hidden="true" />
+    </span>
+  );
+}
+
+/** The sub-agents done with their work, out of the tabs: in a menu at their end, the last one first. */
+function FinishedAgents({ sessionId, agents, shown, onOpen }: { sessionId: string; agents: readonly Subagent[]; shown: string | null; onOpen: (agentId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(open, box, close);
+  return (
+    <div className="cp-thread__finished" ref={box}>
+      <button type="button" aria-expanded={open} aria-controls="finished-agents" onClick={() => setOpen(!open)}>
+        {t.session.feed.finished(agents.length)}<ChevronDownIcon />
+      </button>
+      {open && (
+        <ul className="cp-thread__finished-list" id="finished-agents" aria-label={t.session.feed.finishedList}>
+          {[...agents].reverse().map((agent) => (
+            <li key={agent.agentId}>
+              <button type="button" aria-current={shown === agent.agentId} onClick={() => { onOpen(agent.agentId); close(); }}>
+                <AgentFace sessionId={sessionId} agent={agent} />
+                <span className="cp-feed__agent-name">{agent.name}</span>
+                <span className="cp-feed__agent-task">{agent.task}</span>
+                <span className="cp-feed__agent-status">{t.session.feed.subagentStatus[agent.status]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /** A run of tool calls as one line ("8 actions · Read ×3, Bash ×2"), opening on the calls themselves. */
 function Tools({ run }: { run: ToolRun }) {
@@ -31,9 +71,9 @@ function Tools({ run }: { run: ToolRun }) {
     <li className="cp-feed__item" data-kind="tools">
       <details>
         <summary>
-          <span className="cp-feed__count">{run.tools.length === 1 ? '1 action' : `${run.tools.length} actions`}</span>
-          <span className="cp-feed__detail">{running ? `en cours : ${running.tool} ${running.detail}` : toolSummary(run.tools)}</span>
-          {failed > 0 && <span className="cp-feed__flag">{failed === 1 ? '1 échec' : `${failed} échecs`}</span>}
+          <span className="cp-feed__count">{t.session.feed.actions(run.tools.length)}</span>
+          <span className="cp-feed__detail">{running ? t.session.feed.running(running.tool, running.detail) : toolSummary(run.tools)}</span>
+          {failed > 0 && <span className="cp-feed__flag">{t.session.feed.failures(failed)}</span>}
         </summary>
         <ul>
           {run.tools.map((tool) => (
@@ -48,19 +88,19 @@ function Tools({ run }: { run: ToolRun }) {
 }
 
 /** `speaker`: the session's name, shown on what its main agent says. `openAgent`: shows a sub-agent's own thread. */
-function Item({ item, speaker, openAgent }: { item: ThreadEntry; speaker: string; openAgent: (agentId: string) => void }) {
+function Item({ item, sessionId, speaker, openAgent }: { item: ThreadEntry; sessionId: string; speaker: string; openAgent: (agentId: string) => void }) {
   switch (item.kind) {
     case 'tools':
       return <Tools run={item} />;
     case 'user':
       return (
         <li className="cp-feed__item" data-kind="user">
-          <span className="cp-feed__who">Toi</span>
+          <span className="cp-feed__who">{t.session.feed.you}</span>
           {item.images.length > 0 && (
             <div className="cp-feed__images">
               {item.images.map((name) => (
-                <a key={name} href={`/attachments/${name}`} target="_blank" rel="noopener noreferrer" title="Voir l’image en grand">
-                  <img src={`/attachments/${name}`} alt="Jointe à ton message" loading="lazy" />
+                <a key={name} href={`/attachments/${name}`} target="_blank" rel="noopener noreferrer" title={t.session.feed.imageTitle}>
+                  <img src={`/attachments/${name}`} alt={t.session.feed.imageAlt} loading="lazy" />
                 </a>
               ))}
             </div>
@@ -79,25 +119,25 @@ function Item({ item, speaker, openAgent }: { item: ThreadEntry; speaker: string
       return (
         <li className="cp-feed__item" data-kind="subagent" data-status={item.status}>
           <button type="button" className="cp-feed__agent" onClick={() => openAgent(item.agentId)}>
-            <span className="cp-feed__agent-dot" aria-hidden="true" />
+            <AgentFace sessionId={sessionId} agent={item} />
             <span className="cp-feed__agent-name">{item.name}</span>
             <span className="cp-feed__agent-task">{item.task}</span>
-            <span className="cp-feed__agent-status">{SUBAGENT_STATUS[item.status]}</span>
+            <span className="cp-feed__agent-status">{t.session.feed.subagentStatus[item.status]}</span>
           </button>
         </li>
       );
     case 'permission':
       return (
         <li className="cp-feed__item" data-kind="permission" data-status={item.status}>
-          <code>{item.author ? `${item.author} · ` : ''}{item.question ? 'Question' : item.tool}</code>
+          <code>{item.author ? `${item.author} · ` : ''}{item.question ? t.session.feed.question : item.tool}</code>
           <span className="cp-feed__detail">{item.detail}</span>
-          <span className="cp-feed__flag">{(item.question ? QUESTION_STATUS : PERMISSION_STATUS)[item.status]}</span>
+          <span className="cp-feed__flag">{(item.question ? t.session.feed.questionStatus : t.session.feed.permissionStatus)[item.status]}</span>
         </li>
       );
     case 'peer':
       return <PeerMessage item={item} speaker={speaker} />;
     case 'turn':
-      return <li className="cp-feed__item" data-kind="turn">{item.stopped ? 'Tour interrompu' : item.ok ? 'Tour terminé' : 'Tour en échec'} · {formatDuration(item.ms)}</li>;
+      return <li className="cp-feed__item" data-kind="turn">{item.stopped ? t.session.feed.turnStopped : item.ok ? t.session.feed.turnDone : t.session.feed.turnFailed} · {formatDuration(item.ms)}</li>;
     case 'notice':
       return <li className="cp-feed__item" data-kind="notice">{item.text}</li>;
   }
@@ -126,9 +166,12 @@ function PeerMessage({ item, speaker }: { item: FeedItem & { kind: 'peer' }; spe
  * `working`: the session is at it, so its thread ends on a typing indicator until something arrives. `drafts`: the
  * messages still being written, by who writes them ("chef" or a sub-agent id), shown as they grow.
  */
-export function Feed({ feed, loading, speaker, working, drafts }: { feed: FeedData; loading: boolean; speaker: string; working: boolean; drafts: Readonly<Record<string, string>> }) {
+export function Feed({ feed, sessionId, loading, speaker, working, drafts }: { feed: FeedData; sessionId: string; loading: boolean; speaker: string; working: boolean; drafts: Readonly<Record<string, string>> }) {
   const [agent, setAgent] = useState<string | null>(null);
-  const agents = useMemo(() => feed.items.filter((item): item is FeedItem & { kind: 'subagent' } => item.kind === 'subagent'), [feed.items]);
+  const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed.items]);
+  // the tabs: those at work, and one done while it is open; the others wait in the menu
+  const finished = agents.filter((item) => item.status !== 'working');
+  const tabs = agents.filter((item) => item.status === 'working' || item.agentId === agent);
   const shownAgent = agents.find((candidate) => candidate.agentId === agent);
   const entries = useMemo(() => threadOf(feed.items, shownAgent ? shownAgent.agentId : null), [feed.items, shownAgent]);
   const scroller = useRef<HTMLDivElement>(null);
@@ -143,23 +186,26 @@ export function Feed({ feed, loading, speaker, working, drafts }: { feed: FeedDa
     <div className="cp-thread">
       {searching && <FeedSearch thread={scroller} version={entries} />}
       {agents.length > 0 && (
-        <div className="cp-thread__tabs" role="tablist" aria-label="Fil">
-          <button type="button" role="tab" aria-selected={!shownAgent} onClick={() => setAgent(null)}>Conversation</button>
-          {agents.map((item) => (
-            <button key={item.agentId} type="button" role="tab" aria-selected={shownAgent === item} data-status={item.status} onClick={() => setAgent(item.agentId)}>
-              <span className="cp-feed__agent-dot" aria-hidden="true" />{item.name}
-            </button>
-          ))}
+        <div className="cp-thread__bar">
+          <div className="cp-thread__tabs" role="tablist" aria-label={t.session.feed.tabs}>
+            <button type="button" role="tab" aria-selected={!shownAgent} onClick={() => setAgent(null)}>{t.session.feed.conversation}</button>
+            {tabs.map((item) => (
+              <button key={item.agentId} type="button" role="tab" aria-selected={shownAgent === item} onClick={() => setAgent(item.agentId)}>
+                <AgentFace sessionId={sessionId} agent={item} />{item.name}
+              </button>
+            ))}
+          </div>
+          {finished.length > 0 && <FinishedAgents sessionId={sessionId} agents={finished} shown={agent} onOpen={setAgent} />}
         </div>
       )}
-      <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onScroll={(e) => { const el = e.currentTarget; stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }} tabIndex={0} role="region" aria-label="Fil de la session">
-        {loading ? <p className="cp-muted">Chargement…</p> : entries.length === 0 && !shownAgent ? <p className="cp-muted">Rien pour l'instant. Envoie un premier message.</p> : (
+      <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onScroll={(e) => { const el = e.currentTarget; stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }} tabIndex={0} role="region" aria-label={t.session.feed.region}>
+        {loading ? <p className="cp-muted">{t.session.feed.loading}</p> : entries.length === 0 && !shownAgent ? <p className="cp-muted">{t.session.feed.empty}</p> : (
           <ul>
             {shownAgent && (
-              <li className="cp-feed__item" data-kind="brief"><span className="cp-feed__who">Sa mission</span><p>{shownAgent.task}</p></li>
+              <li className="cp-feed__item" data-kind="brief"><span className="cp-feed__who">{t.session.feed.mission}</span><p>{shownAgent.task}</p></li>
             )}
             {/* the last 300 entries, all of them while searching so nothing escapes the search */}
-            {(searching ? entries : entries.slice(-300)).map((item) => <Item key={item.id} item={item} speaker={speaker} openAgent={setAgent} />)}
+            {(searching ? entries : entries.slice(-300)).map((item) => <Item key={item.id} item={item} sessionId={sessionId} speaker={speaker} openAgent={setAgent} />)}
             {draft ? (
               <li className="cp-feed__item" data-kind="assistant" data-draft="true">
                 <span className="cp-feed__who">{shownAgent ? shownAgent.name : speaker}</span>
@@ -168,12 +214,12 @@ export function Feed({ feed, loading, speaker, working, drafts }: { feed: FeedDa
             ) : working && !shownAgent && (
               <li className="cp-feed__item" data-kind="typing" aria-live="polite">
                 <span className="cp-feed__who">{speaker}</span>
-                <span className="cp-feed__typing" role="img" aria-label={`${speaker} réfléchit`}><span /><span /><span /></span>
+                <span className="cp-feed__typing" role="img" aria-label={t.session.feed.thinking(speaker)}><span /><span /><span /></span>
               </li>
             )}
             {shownAgent?.report && (
               <li className="cp-feed__item" data-kind="assistant">
-                <span className="cp-feed__who">Son rapport</span>
+                <span className="cp-feed__who">{t.session.feed.report}</span>
                 <Prose className="cp-feed__text" text={shownAgent.report} />
               </li>
             )}

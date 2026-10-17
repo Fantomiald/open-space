@@ -57,6 +57,16 @@ export function outline(canvas: HTMLCanvasElement, colour: string): HTMLCanvasEl
   return canvas;
 }
 
+/** Only a one-pixel line around what is on the canvas, the rest cleared: the outline of something under the pointer. */
+export function ring(canvas: HTMLCanvasElement, colour: string): HTMLCanvasElement {
+  const context = canvas.getContext('2d', { willReadFrequently: true })!;
+  const { width, height } = canvas;
+  const inside = context.getImageData(0, 0, width, height).data.slice();
+  outline(canvas, colour);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (inside[(y * width + x) * 4 + 3] > 40) context.clearRect(x, y, 1, 1);
+  return canvas;
+}
+
 /** A shaded ball of pixels, lit from the top left; `paint` fills one pixel. */
 export function shadedBall(paint: (x: number, y: number, colour: string) => void, cx: number, cy: number, rx: number, ry: number, colours: Tones) {
   for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {

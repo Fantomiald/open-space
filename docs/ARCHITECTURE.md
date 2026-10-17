@@ -30,6 +30,9 @@ Mets **http://127.0.0.1:4848** en favori. Cette adresse ne change jamais et ne c
 | `session-log.ts` | JSONL par session, écriture ordonnée, numéro de séquence, réouverture après une erreur d'écriture |
 | `sessions.ts` | collection, persistance `sessions.json` (fichier temporaire unique), commandes slash, arrêt |
 | `crew.ts` | l'équipe (`crew.json`) : prénoms et looks, validés par `shared/look.ts` |
+| `changes.ts` | ce qu'une session a changé : les fichiers écrits par ses outils d'édition (transcripts de Claude Code, sous-agents compris) et leur diff git |
+| `terminal.ts` | ouvre un terminal (macOS) depuis la salle |
+| `i18n/` | les textes du serveur en français (référence) et en anglais, `st` suit `Preferences.language` |
 
 Données (`OFFICE_DIR`, défaut `~/.open-space`, hors `~/Documents`) : `secret` (0600), `sessions.json` (écrit de façon atomique, 0600), `logs/<id>.jsonl` (0600), `crew.json` (l'équipe, 0600).
 
@@ -42,6 +45,7 @@ Données (`OFFICE_DIR`, défaut `~/.open-space`, hors `~/Documents`) : `secret` 
 - **`--permission-prompt-tool stdio` est indispensable** : avec `--permission-prompts host` seul, l'appel d'outil est refusé et le CLI émet `system/permission_denied` (testé). Cette option n'apparaît pas dans `claude --help` : à surveiller lors des mises à jour du CLI.
 - **Options retirées** : pas de `--tools`. L'option « restreinte » (`--restricted`) est supprimée, car elle retire Bash. Les anciennes sessions qui la portent se rechargent sans elle.
 - **Cycle de vie** : le CLI n'émet `init` qu'après le premier message. Le processus est donc lancé à l'envoi, puis relâché après `OFFICE_IDLE_MINUTES` d'inactivité (la session reste `wait` et se reprend avec `--resume`). À la fermeture, il est tué avec tout son groupe (SIGTERM puis SIGKILL). Pendant l'arrêt du serveur, aucun processus ne démarre.
+- **Remote Control** (vérifié en 2.1.302) : en `-p`, ni `--remote-control` ni `/remote-control` ne font rien (« isn't available in this environment »). Ce qui marche, c'est une requête de contrôle sur stdin, `{type: "control_request", request: {subtype: "remote_control", enabled: true}}` : la réponse porte `session_url` (claude.ai/code), puis des `system/bridge_state` suivent (`ready`, `connected`). `enabled: false` la coupe. Si la session n'a pas de processus, il est lancé sans message (entrée `attach` de la machine d'états) et n'est pas relâché tant que Remote Control est actif. Non vérifié : comment un message envoyé depuis le téléphone apparaît dans le flux (le tour et la réponse de Claude s'affichent, la ligne du message lui-même reste à capturer).
 - **Environnement transmis** : liste blanche (PATH, HOME, USER, LANG, TERM, TMPDIR, XDG_*, SSH_AUTH_SOCK, CLAUDE_CONFIG_DIR, CLAUDE_CODE_OAUTH_TOKEN, proxys). Aucune clé API. PATH perd les entrées que `npm start` ajoute (`*/node_modules/.bin` du projet et des dossiers parents, `node-gyp-bin`), sinon un `tsc` nu dans un autre projet prendrait celui d'office. `OFFICE_ENV_PASSTHROUGH=NOM,...` ajoute d'autres variables (les `ANTHROPIC_*` sont refusées).
 
 ### États
@@ -117,6 +121,7 @@ Tout est dessiné en code, en pixel art (aucune image externe, aucun appel rése
 | `cast.ts` | sessions → personnages, par pièce. Bureau : priorité « à toi », puis au travail, puis en attente. Salle de repos : les sessions mises au repos et les fermées (sauf une erreur pas encore vue, qui reste au bureau). « +N » déroule celles sans place. Les sous-agents ne s'assoient pas : leurs têtes s'affichent à côté de l'étiquette de leur session ; ce qu'ils écrivent reste dans leur onglet, sans bulle |
 | `scene.ts` | la simulation (entrées, sorties, marche, clic), sans DOM ; l'utilisateur est assis au bureau du boss (son écran s'allume), s'en va quand on clique le sol, et s'assoit là où on clique une place (`playerSpots` : son bureau, le canapé du coin lecture ; dans la salle de repos, n'importe quel canapé) ; cliquer quelqu'un ouvre sa session sans le faire bouger |
 | `pet.ts` | l'animal du bureau, choisi dans Équipe (onglet Animal) ou au premier lancement (`Preferences.pet`, `shared/pets.ts`) : un chat (motif uni, tigré, tricolore ou smoking), un chien (7 races : forme, oreilles, queue, marques, collier), un canard en plastique, un capybara, un axolotl, Rocky de *Projet Dernière Chance*, ou aucun ; une seule couleur au choix (et les yeux d'un chat), qui part de celle du motif, de la race ou de l'espèce (`furOf`). Il se promène, s'assoit, fait sa toilette (le chien halète, Rocky bricole), dort, et parle à sa façon (`petWords`) ; cliqué, il s'arrête, parle, et des cœurs s'envolent. Les premiers pelages nommés d'après leur couleur deviennent un chat uni de cette couleur (`parsePet`) |
+| `visitors.ts` | la vie au bureau (`Preferences.officeLife`) : de temps en temps, un membre de l'équipe sans session entre, s'arrête à une place de `visitSpots` (café au comptoir, parfois à deux tournés l'un vers l'autre, fontaine, imprimante, fenêtre, livres, canapé, table de la fête du jour) puis repart. Deux au plus en même temps, jamais à un poste, sans statut, nom au survol seulement. Le rythme suit l'heure (`rhythmAt` : souvent le matin et à midi, rarement le soir, jamais la nuit). Un clic sur l'un d'eux ouvre le lanceur avec cette personne. À un anniversaire, ceux qui viennent à la fête le souhaitent (`birthdayWish`) |
 | `bubbles.ts` | texte des bulles et pile qui remonte |
 | `pixel-art.ts` | outils : remplissage net de polygones, contour d'un pixel, boule ombrée, tons dérivés d'une couleur |
 | `chibi.ts` | les personnages (16 × 25 pixels d'art) dessinés d'après un `Look` ; chaque pose est dessinée une fois puis gardée ; look stable pour un inconnu (`lookOfStranger`) ; tête pour les bulles |
@@ -179,7 +184,7 @@ Tout est dessiné en code, en pixel art (aucune image externe, aucun appel rése
 ## Reste à faire
 
 - `npm audit` régulier et Dependabot.
-- Séparer la donnée du libellé dans les événements `act` et `ask`, stockés avec leurs textes français déjà rendus : c'est le préalable à une traduction de l'interface.
+- Séparer la donnée du libellé dans les événements `act` et `ask` : ils sont stockés avec leurs textes déjà rendus, dans la langue du moment. Changer de langue ne retraduit pas les anciens fils.
 - Commandes slash par dossier.
 - Interface mobile, au-delà de la salle recadrée.
 

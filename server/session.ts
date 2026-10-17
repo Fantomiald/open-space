@@ -3,8 +3,9 @@
 // the user; everything it does is published as events with a sequence number.
 import { randomUUID } from 'node:crypto';
 import { tail } from '../shared/activity.ts';
-import type { AttentionKind, ImageUpload, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, ServerMessage, SessionInfo, SlashCommand } from '../shared/protocol.ts';
+import type { AttentionKind, ImageUpload, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand } from '../shared/protocol.ts';
 import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { st } from './i18n/index.ts';
 import type { Json } from './json.ts';
 import { Normalizer, describeRequest, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
 import type { SessionLog } from './session-log.ts';
@@ -44,7 +45,7 @@ type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
 interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt }
 
 /** Session fields that are computed, not stored. */
-export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq'>;
+export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote'>;
 
 const LAST_MESSAGE_LENGTH = 400;
 /** The text being written is sent at most this often: one message per chunk would flood the clients. */
@@ -72,6 +73,8 @@ export class Session {
   private partialTimer: NodeJS.Timeout | null = null;
   /** where other Claude Code sessions reach the current process (see InitInfo), '' before its init */
   private socket = '';
+  /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
+  private remote: RemoteControl | undefined;
 
   constructor(info: StoredInfo, deps: SessionDeps) {
     this.info = info;
@@ -84,7 +87,7 @@ export class Session {
   /** True when a SendMessage address ("uds:/tmp/…" or the path alone) is this session's live process. */
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq };
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -96,9 +99,9 @@ export class Session {
 
   /** Puts the last exchanges of a resumed conversation in the thread, under a note, so the user sees where it was. */
   showHistory(title: string, exchanges: readonly { who: 'user' | 'assistant'; text: string }[]) {
-    this.record({ k: 'note', text: exchanges.length ? `Reprise de « ${title} » : ses derniers échanges.` : `Reprise de « ${title} ».` });
+    this.record({ k: 'note', text: exchanges.length ? st.sessions.resumedWithHistory(title) : st.sessions.resumed(title) });
     for (const { who, text } of exchanges) this.record(who === 'user' ? { k: 'start', text } : { k: 'say', who: 'chef', text });
-    this.record({ k: 'note', text: 'Ton prochain message continue la conversation.' });
+    this.record({ k: 'note', text: st.sessions.nextMessageContinues });
   }
 
   /** Records an event in the log and sends it to the clients. */
@@ -123,7 +126,7 @@ export class Session {
   /** Called at startup for sessions found in a running state: their process died with the previous server. */
   markInterrupted() {
     if (this.info.state === 'starting' || this.info.state === 'work' || this.info.state === 'perm') {
-      this.apply({ type: 'exit', reason: 'closed' }, 'The server stopped while this session was running.');
+      this.apply({ type: 'exit', reason: 'closed' }, st.sessions.stopped.serverStopped);
     }
   }
 
@@ -139,7 +142,7 @@ export class Session {
   send(text: string, images: readonly ImageUpload[] = []) {
     const clean = text.trim();
     if (!clean && !images.length) return;
-    if (this.stopRequest) throw new Error('Cette session est en train de se fermer, réessaie dans un instant.');
+    if (this.stopRequest) throw new Error(st.sessions.closing);
     const id = randomUUID();
     if (images.length) this.queuedImages.set(id, images);
     this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}) }];
@@ -203,9 +206,9 @@ export class Session {
   }
 
   private startProcess() {
-    if (this.deps.liveCount() >= this.deps.maxLive) throw new Error(`Trop de sessions actives (${this.deps.maxLive} au maximum). Ferme-en une.`);
+    if (this.deps.liveCount() >= this.deps.maxLive) throw new Error(st.sessions.tooMany(this.deps.maxLive));
     const cwd = this.deps.allowedDirectory(this.info.cwd);
-    if (!cwd) throw new Error('Le dossier de cette session n’est plus dans les racines autorisées.');
+    if (!cwd) throw new Error(st.sessions.folderGone);
     const normalizer = new Normalizer({
       emit: (ev) => this.onEvent(ev),
       onInit: (init) => this.onInit(init),
@@ -215,6 +218,7 @@ export class Session {
       onRequest: (request) => this.onRequest(request),
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
+      onRemoteState: (state) => this.onRemoteState(state),
       names: this.subagentNames,
       peerName: this.deps.peerName,
     });
@@ -241,6 +245,48 @@ export class Session {
     this.info.resumable = true;
     this.deps.onInitCommands(init.commands);
     this.apply({ type: 'init' });
+  }
+
+  /**
+   * Turns Remote Control on (the process starts without a message when there is none, and stays) or off (the process
+   * may then be released as usual).
+   */
+  async setRemote(enabled: boolean) {
+    if (!enabled) {
+      if (!this.remote) return;
+      this.remote = undefined;
+      this.publish();
+      if (this.process?.alive) await this.process.remoteControl(false).catch(() => {});
+      if (this.context.state === 'wait') this.armIdleTimer();
+      return;
+    }
+    if (this.remote) return;
+    if (this.stopRequest) throw new Error(st.sessions.closing);
+    this.clearIdleTimer();
+    if (!this.process?.alive) {
+      this.info.resting = undefined;
+      this.info.error = undefined;
+      this.startProcess();
+    }
+    const process = this.process!;
+    this.remote = { url: '', state: 'connecting' };
+    this.apply({ type: 'attach' });
+    try {
+      const url = await process.remoteControl(true);
+      if (this.remote && this.process === process) this.remote = { ...this.remote, url };
+    } catch (error) {
+      this.remote = undefined;
+      if (this.context.state === 'wait') this.armIdleTimer();
+      throw new Error(st.sessions.remoteFailed(error instanceof Error ? error.message : String(error)));
+    } finally {
+      this.publish();
+    }
+  }
+
+  private onRemoteState(state: string) {
+    if (!this.remote) return;
+    this.remote = { ...this.remote, state: state === 'connected' ? 'connected' : state === 'failed' || state.endsWith('disabled') ? 'failed' : 'connecting' };
+    this.publish();
   }
 
   private onPartial(who: string, text: string) {
@@ -307,13 +353,13 @@ export class Session {
 
   private pending(requestId: string): PendingRequest {
     const request = this.requests.get(requestId);
-    if (!this.process?.alive || !request) throw new Error('Cette demande n’existe plus.');
+    if (!this.process?.alive || !request) throw new Error(st.sessions.requestGone);
     return request;
   }
 
   answer(requestId: string, decision: PermissionDecision) {
     const request = this.pending(requestId);
-    if (request.prompt.questions) throw new Error('Cette question attend une réponse, pas un oui ou un non.');
+    if (request.prompt.questions) throw new Error(st.sessions.questionNotYesNo);
     if (decision === 'deny') this.process!.answerPermission(requestId, { allow: false });
     else {
       // "always" sends back the rules Claude Code suggested, scoped to this session only (nothing is written to settings files)
@@ -326,9 +372,9 @@ export class Session {
   /** Answers an AskUserQuestion call: the original input plus `answers` (question text -> chosen labels or own text). */
   reply(requestId: string, answers: Record<string, string>) {
     const request = this.pending(requestId);
-    if (!request.prompt.questions) throw new Error('Cette demande attend un oui ou un non.');
+    if (!request.prompt.questions) throw new Error(st.sessions.requestYesNo);
     const kept = Object.fromEntries(request.prompt.questions.flatMap(({ question }) => (answers[question]?.trim() ? [[question, answers[question].trim()]] : [])));
-    if (Object.keys(kept).length === 0) throw new Error('Choisis une réponse avant d’envoyer.');
+    if (Object.keys(kept).length === 0) throw new Error(st.sessions.chooseAnswer);
     this.process!.answerPermission(requestId, { allow: true, input: { ...request.input, answers: kept }, updates: [] });
     this.settle(requestId, { k: 'ask_done', requestId, allow: true });
   }
@@ -361,10 +407,10 @@ export class Session {
   async close() {
     this.clearIdleTimer();
     if (this.process?.alive) {
-      this.stopRequest = { reason: 'closed', note: 'Closed by the user.' };
+      this.stopRequest = { reason: 'closed', note: st.sessions.stopped.byUser };
       await this.process.stop(0);
     } else if (this.context.state !== 'closed') {
-      this.apply({ type: 'exit', reason: 'closed' }, 'Closed by the user.');
+      this.apply({ type: 'exit', reason: 'closed' }, st.sessions.stopped.byUser);
     }
   }
 
@@ -373,17 +419,17 @@ export class Session {
     this.clearIdleTimer();
     if (!this.process?.alive) return;
     const waiting = this.context.state === 'wait';
-    this.stopRequest = waiting ? { reason: 'idle', note: 'Process released when the server stopped.' } : { reason: 'closed', note: 'The server stopped while this session was running.' };
+    this.stopRequest = waiting ? { reason: 'idle', note: st.sessions.stopped.released } : { reason: 'closed', note: st.sessions.stopped.serverStopped };
     await this.process.stop(waiting ? 500 : 0);
   }
 
   private armIdleTimer() {
     this.clearIdleTimer();
-    // sub-agents still at work in the background would die with the process: it stays until they are done
-    if (!this.process?.alive || this.info.subagents.length) return;
+    // sub-agents still at work in the background would die with the process, and Remote Control with it: it stays
+    if (!this.process?.alive || this.info.subagents.length || this.remote) return;
     this.idleTimer = setTimeout(() => {
       if (this.context.state !== 'wait' || !this.process?.alive) return;
-      this.stopRequest = { reason: 'idle', note: 'Process released after inactivity.' };
+      this.stopRequest = { reason: 'idle', note: st.sessions.stopped.idle };
       void this.process.stop(2000);
     }, this.deps.idleMs);
     this.idleTimer.unref();
@@ -403,6 +449,7 @@ export class Session {
     this.partials.clear();
     this.process = null;
     this.normalizer = null;
+    this.remote = undefined;
     this.cancelRequests();
     // sub-agents that will not report
     for (const id of normalizer?.present ?? []) this.onEvent({ k: 'leave', who: id, ok: false, tokens: 0, tools: 0, ms: 0 });
@@ -410,9 +457,9 @@ export class Session {
     const requested = this.stopRequest;
     this.stopRequest = null;
     if (requested) return this.apply({ type: 'exit', reason: requested.reason }, requested.note);
-    if (code === 0 && signal === null) return this.apply({ type: 'exit', reason: 'clean' }, 'Claude Code ended.');
+    if (code === 0 && signal === null) return this.apply({ type: 'exit', reason: 'clean' }, st.sessions.stopped.ended);
     const message = stderr.split('\n').map((line) => line.trim()).filter(Boolean).slice(-3).join(' ')
-      || (signal ? `Claude Code a été arrêté (${signal}).` : `Claude Code s’est arrêté (code ${code}).`);
+      || (signal ? st.sessions.killed(signal) : st.sessions.exited(code));
     this.info.error = message;
     this.record({ k: 'error', message });
     this.apply({ type: 'exit', reason: 'failed' }, message);

@@ -15,6 +15,12 @@
   .cp-room__zoom { width: 140%; left: -20%; }
 }
 .cp-room__bubbles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+/* what a click on the door or the user's screen does, next to the pointer */
+.cp-room__hint-card {
+  position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; white-space: nowrap;
+  padding: 3px 8px; border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text);
+  border: var(--border-width) solid var(--color-border-strong); box-shadow: var(--shadow-overlay); font: var(--weight-medium) var(--text-sm) var(--font-pixel);
+}
 
 .cp-room__bubble {
   position: absolute; left: 0; top: 0; max-width: 80%; padding: 5px 12px 6px; border-radius: 8px;

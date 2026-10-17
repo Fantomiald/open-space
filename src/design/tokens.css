@@ -79,5 +79,10 @@
   /* A message from another session: neither the user's nor this agent's own words */
   --tone-peer: #f29bd2;
   --tone-peer-soft: #2c1626;
+  --diff-add: #6fdc9b;
+  --diff-add-soft: #0f2a1a;
+  --diff-remove: #ff8f8a;
+  --diff-remove-soft: #331614;
+  --diff-hunk-soft: #12263d;
 }
 

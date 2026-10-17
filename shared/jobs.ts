@@ -2,13 +2,9 @@
 // started without a name goes to someone free whose job fits the request (see Crew.freeNameFor). The job never
 // enters the session's prompt, it only chooses who comes.
 
-/** The more specialised jobs first: a request as much about both goes to them ("un audit de sécurité" is cyber). */
+/** The more specialised jobs first: a request as much about both goes to them ("a security audit" is cyber). */
 export const JOBS = ['cyber', 'devops', 'tech', 'product', 'design', 'data', 'marketing', 'hr'] as const;
 export type Job = (typeof JOBS)[number];
-
-export const JOB_LABELS: Record<Job, string> = {
-  cyber: 'Cyber', devops: 'DevOps', tech: 'Tech', product: 'Produit', design: 'Design', data: 'Data', marketing: 'Marketing', hr: 'RH',
-};
 
 /**
  * Word beginnings, without accents and in lower case: "recrut" matches "recruter", "recrutement". Words of two letters

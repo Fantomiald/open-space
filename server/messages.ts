@@ -158,6 +158,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'log': return sessionId ? { t: 'log', sessionId, after: Math.max(0, Math.floor(asNumber(raw.after))) } : null;
     case 'directories': return { t: 'directories' };
+    case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
+    case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
+    case 'openTerminal': return { t: 'openTerminal' };
     case 'conversations': {
       const cwd = boundedString(raw.cwd, 4096);
       return cwd ? { t: 'conversations', cwd } : null;
@@ -174,6 +177,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'removeMember': {
       const name = boundedString(raw.name, MAX_NAME);
       return name !== null ? { t: 'removeMember', name } : null;
+    }
+    case 'becomeSelf': {
+      const name = boundedString(raw.name, MAX_NAME);
+      return name !== null ? { t: 'becomeSelf', name } : null;
     }
     default: return null;
   }

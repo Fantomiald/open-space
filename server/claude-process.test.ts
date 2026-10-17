@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildClaudeArgs, identityPrompt } from './claude-process.ts';
+import { buildClaudeArgs, identityPrompt, renameNote } from './claude-process.ts';
+import { setServerLanguage } from './i18n/index.ts';
 
 describe('buildClaudeArgs', () => {
   const base = { sessionId: '11111111-2222-3333-4444-555555555555', resume: false, model: '', permissionMode: 'auto' as const, name: 'Iris' };
@@ -35,5 +36,18 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs({ ...base, model: 'haiku' });
     assert.equal(args[args.indexOf('--model') + 1], 'haiku');
     for (const forbidden of ['--tools', '--restricted', '--dangerously-skip-permissions', '--allowedTools', '--permission-prompts']) assert.ok(!args.includes(forbidden));
+  });
+});
+
+describe('server language', () => {
+  it('gives new agents their instructions in the language of the settings', () => {
+    setServerLanguage('en');
+    try {
+      assert.match(identityPrompt('Iris', 'Max', 'call me Max'), /^In Max's Open Space, you are the agent "Iris"[\s\S]*be concise[\s\S]*What Max asks of all their agents: call me Max$/);
+      assert.equal(renameNote('Iris'), '(Note from Open Space: your name is now "Iris". Keep this name.)\n\n');
+    } finally {
+      setServerLanguage('fr');
+    }
+    assert.match(identityPrompt('Iris'), /sois concis/);
   });
 });

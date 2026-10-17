@@ -2,23 +2,44 @@
 // The office and the break room each have their own (see shared/room-layout.ts).
 import type { Festival } from '../../shared/festivals.ts';
 import { blockedTiles, layoutOn, type Layout, type PlayerSpot } from '../../shared/room-layout.ts';
-import { DOOR_SIZE, ROOM, facingVector, onLeftWall, tileCenter, type Point } from './geometry.ts';
+import { DOOR_SIZE, ROOM, boxOutline, facingVector, insideConvex, onLeftWall, tileCenter, type Box, type Point } from './geometry.ts';
 import { route } from './paths.ts';
 
 /** Clicks closer than this to the walls are ignored. */
 const WALL_MARGIN = 0.2;
+/**
+ * The laptop on the user's desk (bossDesk in pixel-furniture.ts), keyboard and lid: in tiles from the desk's corner,
+ * and from the desk's top to the lid's, in room pixels above the floor.
+ */
+const LAPTOP = { fromX: 1.1, toX: 1.9, fromY: 0.15, toY: 0.61, low: 22, high: 34 };
+/** The laptop is small: the pointer finds it a bit around it too (tiles, room pixels). */
+const LAPTOP_MARGIN = { across: 0.15, up: 4 };
+
+/** Grows a box by `across` tiles on each side and `up` room pixels above and below. */
+const grown = (box: Box, across: number, up: number): Box => ({
+  fromX: box.fromX - across, toX: box.toX + across, fromY: box.fromY - across, toY: box.toY + across, low: box.low - up, high: box.high + up,
+});
 
 export class Floor {
   readonly layout: Layout;
   /** where people stand in the doorway, coming in or going out */
   readonly door: Point;
   private readonly blocked: Set<string>;
+  /** what can be walked on but not walked across: chairs, sofas, things on the floor (only where someone goes or leaves from) */
+  private readonly avoided: Set<string>;
+  /** the user's laptop, where a click opens a terminal: in the room with their desk (the office) */
+  readonly userScreen: Box | null;
 
   /** `festival`: its decorations join the furniture. */
   constructor(layout: Layout, festival: Festival | null = null) {
     this.layout = layoutOn(layout, festival);
     this.door = { x: 0.4, y: layout.door.y + 0.6 };
     this.blocked = blockedTiles(this.layout.furniture);
+    this.avoided = blockedTiles(this.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined).map((piece) => ({ ...piece, blocks: true })));
+    const desk = this.layout.furniture.find((piece) => piece.kind === 'bossDesk');
+    this.userScreen = desk
+      ? { fromX: desk.x + LAPTOP.fromX, toX: desk.x + LAPTOP.toX, fromY: desk.y + LAPTOP.fromY, toY: desk.y + LAPTOP.toY, low: LAPTOP.low, high: LAPTOP.high }
+      : null;
   }
 
   get seatCount() { return this.layout.seats.length; }
@@ -38,7 +59,11 @@ export class Floor {
     return inside && this.isFreeTile(Math.floor(tile.x), Math.floor(tile.y));
   }
 
-  route(from: Point, to: Point): Point[] { return route(from, to, this.isFreeTile); }
+  /** A route through the aisles: past the chairs and sofas, never over them, except the one it starts or ends on. */
+  route(from: Point, to: Point): Point[] {
+    const ends = new Set([`${Math.floor(from.x)},${Math.floor(from.y)}`, `${Math.floor(to.x)},${Math.floor(to.y)}`]);
+    return route(from, to, (x, y) => this.isFreeTile(x, y) && (!this.avoided.has(`${x},${y}`) || ends.has(`${x},${y}`)));
+  }
   /** From anywhere (the door, or halfway out) to a seat, sitting down at its own spot. */
   pathToSeat(from: Point, seat: number): Point[] {
     const place = this.layout.seats[seat];
@@ -56,6 +81,11 @@ export class Floor {
     const { along, height } = onLeftWall(screen);
     const from = this.layout.door.y - 0.15;
     return along >= from && along <= from + DOOR_SIZE.width + 0.3 && height >= 0 && height <= DOOR_SIZE.height + 4;
+  }
+
+  /** True for a canvas point on the user's laptop, or just around it. */
+  isUserScreenAt(screen: Point): boolean {
+    return !!this.userScreen && insideConvex(screen, boxOutline(grown(this.userScreen, LAPTOP_MARGIN.across, LAPTOP_MARGIN.up)));
   }
 
   /** The spot where the user can sit whose area holds a floor point, if any. */

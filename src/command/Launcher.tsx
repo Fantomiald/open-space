@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
 import { defaultFolder, formatDuration, homeRelative } from '../lib/format.ts';
-import { MODELS, PERMISSION_MODE_LABELS, SHORT_MODE_LABELS as MODES } from '../state/labels.ts';
+import { modeLabel, models } from '../state/labels.ts';
 import { availability, stillFree } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
+import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
 import { SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
@@ -54,6 +55,7 @@ export function Launcher() {
     if (!draft) return;
     setResuming(false);
     if (draft.command) setText(draft.command);
+    if (draft.person) setAsked(draft.person);
     field.current?.focus();
     openNewSession(null);
   }, [draft, openNewSession]);
@@ -78,36 +80,37 @@ export function Launcher() {
     setAsked(null);
   };
 
+  const words = t.composer.launcher;
   return (
-    <aside className="cp-launcher" aria-label="Nouvelle session" {...attachments.dropTarget}>
+    <aside className="cp-launcher" aria-label={words.label} {...attachments.dropTarget}>
       <DropOverlay attachments={attachments} />
       <div className="cp-launcher__head">
-        <div className="cp-segmented" role="group" aria-label="Conversation">
-          <button type="button" aria-pressed={!resuming} onClick={() => setResuming(false)}>Nouvelle conversation</button>
-          <button type="button" aria-pressed={resuming} onClick={() => setResuming(true)}>Reprendre</button>
+        <div className="cp-segmented" role="group" aria-label={words.conversation}>
+          <button type="button" aria-pressed={!resuming} onClick={() => setResuming(false)}>{words.newConversation}</button>
+          <button type="button" aria-pressed={resuming} onClick={() => setResuming(true)}>{words.resume}</button>
         </div>
       </div>
 
       <div className="cp-launcher__body">
         {!resuming ? (
           <div className="cp-launcher__intro">
-            <h2>Qu’est-ce qu’on lance ?</h2>
-            <p>Écris ta demande en bas : une session démarre dans le dossier choisi, avec un prénom de ton équipe, et s’ouvre ici.</p>
+            <h2>{words.title}</h2>
+            <p>{words.intro}</p>
             <ul className="cp-launcher__keys">
-              <li><kbd className="cp-kbd">N</kbd> écrire une nouvelle demande</li>
-              <li><kbd className="cp-kbd">Maj N</kbd> lancer tout de suite une session dans {homeRelative(defaultFolder(roots, preferences.defaultFolder))}</li>
-              <li><kbd className="cp-kbd">/</kbd> en début de message pour une commande</li>
+              <li><kbd className="cp-kbd">N</kbd> {words.newRequest}</li>
+              <li><kbd className="cp-kbd">{words.shiftN}</kbd> {words.startNow(homeRelative(defaultFolder(roots, preferences.defaultFolder)))}</li>
+              <li><kbd className="cp-kbd">/</kbd> {words.commandKey}</li>
             </ul>
           </div>
-        ) : !conversations ? <p className="cp-muted">Recherche des conversations de {homeRelative(cwd)}…</p>
-          : conversations.length === 0 ? <p className="cp-muted">Aucune conversation Claude Code dans {homeRelative(cwd)} (ou elles sont déjà ouvertes ici).</p>
+        ) : !conversations ? <p className="cp-muted">{words.searching(homeRelative(cwd))}</p>
+          : conversations.length === 0 ? <p className="cp-muted">{words.noConversation(homeRelative(cwd))}</p>
             : (
-              <ul className="cp-resume__list" aria-label={`Conversations de ${homeRelative(cwd)}`}>
+              <ul className="cp-resume__list" aria-label={words.conversationsOf(homeRelative(cwd))}>
                 {conversations.map((conversation) => (
                   <li key={conversation.id}>
                     <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); field.current?.focus(); }}>
                       <span className="cp-resume__title">{conversation.title}</span>
-                      <span className="cp-resume__when">il y a {formatDuration(Date.now() - conversation.updatedAt)}</span>
+                      <span className="cp-resume__when">{words.ago(formatDuration(Date.now() - conversation.updatedAt))}</span>
                       {conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}
                     </button>
                   </li>
@@ -120,25 +123,25 @@ export function Launcher() {
         <div className="cp-launcher__box">
         <AttachmentStrip attachments={attachments} />
         <CommandField
-          ref={field} id="launcher-field" label="Première demande" value={text} onChange={setText} onSubmit={() => { if (text.trim() || attachments.items.length) start(); }}
+          ref={field} id="launcher-field" label={words.fieldLabel} value={text} onChange={setText} onSubmit={() => { if (text.trim() || attachments.items.length) start(); }}
           onPaste={attachments.onPaste}
-          placeholder={resuming ? (resumeId ? 'Un message pour reprendre (facultatif)…' : 'Choisis d’abord une conversation au-dessus') : 'Qu’est-ce qu’on fait ? (Entrée lance, / pour une commande)'}
+          placeholder={resuming ? (resumeId ? words.placeholderResume : words.placeholderPickFirst) : words.placeholder}
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
           <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
           <label className="cp-chip" data-select>
-            <span className="cp-sr-only">Modèle</span>
-            <select value={model} onChange={(e) => setModel(e.target.value)}>{MODELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+            <span className="cp-sr-only">{words.model}</span>
+            <select value={model} onChange={(e) => setModel(e.target.value)}>{models().map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
           </label>
-          <label className="cp-chip" data-select title={PERMISSION_MODE_LABELS[permissionMode]}>
-            <span className="cp-sr-only">Autorisations</span>
+          <label className="cp-chip" data-select title={modeLabel(permissionMode)}>
+            <span className="cp-sr-only">{words.permissions}</span>
             <select value={permissionMode} onChange={(e) => setPermissionMode(e.target.value as PermissionMode)}>
-              {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{MODES[mode]}</option>)}
+              {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
             </select>
           </label>
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
-          <button type="submit" className="cp-launcher__send" disabled={!ready}>{resuming ? 'Reprendre' : 'Lancer'}<SendIcon /></button>
+          <button type="submit" className="cp-launcher__send" disabled={!ready}>{resuming ? words.resume : words.start}<SendIcon /></button>
         </div>
         </div>
       </form>

@@ -2,6 +2,7 @@
 // pants, or tinkers), sleeps, and says something now and then (or when it is clicked), each in its own way. The logic
 // is pure and steps with the room; the pet is drawn in pixel art like the people.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
+import { t } from '../i18n/index.ts';
 import type { CatPattern, DogBreed, PetChoice, PetColors } from '../../shared/pets.ts';
 import type { Floor } from './floor.ts';
 import { ROOM, tileCenter, type Point } from './geometry.ts';
@@ -42,19 +43,9 @@ function somewhereFree(floor: Floor, random: () => number): Point {
   return { x: 7.5, y: 10.5 };
 }
 
-/** What each kind says: a cat meows, a dog barks, the rubber duck listens to your bug, Rocky speaks like Rocky (in chords, his words three times over). */
-const LINES: Readonly<Record<Exclude<PetChoice['kind'], 'none'>, readonly string[]>> = {
-  cat: ['Miaou !', 'Mrrrr…', 'Miaou ?', 'Mraou !'],
-  dog: ['Ouaf ouaf !', 'Wouf !', 'Ouaf ?', 'Ouaf ouaf ouaf !'],
-  duck: ['Coin coin !', 'Coin ?', 'Explique-moi ton bug.', 'Coin.'],
-  capybara: ['Tranquille.', 'Mmh.', 'Zen.', '…'],
-  axolotl: ['Blub !', 'Bloup.', 'Blub blub ?'],
-  rocky: ['♫ Amaze! Amaze! Amaze!', '♫ Fist my bump.', '♫ Good good good.', '♫ Happy happy happy!', '♫ You are friend, question?'],
-};
-
 /** What the pet says now, for its kind. */
 export function petWords(pet: Pet, kind: Exclude<PetChoice['kind'], 'none'>): string {
-  const lines = LINES[kind];
+  const lines = t.room.petLines[kind];
   return lines[pet.line % lines.length];
 }
 

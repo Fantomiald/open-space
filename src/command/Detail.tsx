@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { RemoteControl } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { folderName, homeRelative } from '../lib/format.ts';
 import { buildFeed } from '../state/feed.ts';
 import { isRunning } from '../state/labels.ts';
@@ -6,9 +8,10 @@ import { attentionKind } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import { DropOverlay } from './Attachments.tsx';
 import { AsidePanel } from './AsidePanel.tsx';
+import { ChangesView, LineCounts } from './Changes.tsx';
 import { Composer } from './Composer.tsx';
 import { Feed } from './Feed.tsx';
-import { CloseIcon, PauseIcon, PencilIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { CloseIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
@@ -30,6 +33,14 @@ export function Detail() {
   const openSearch = useSessions((s) => s.openSearch);
   const seen = useSessions((s) => s.seen);
   const feed = useMemo(() => buildFeed(events), [events]);
+  const changes = useSessions((s) => (s.selectedId ? s.changes[s.selectedId] : undefined));
+  const live = useSessions((s) => s.connection === 'live');
+  const [showChanges, setShowChanges] = useState(false);
+  // what it changed, asked again at the end of each of its turns and when a sub-agent comes or goes
+  const turns = session?.turns, helpers = session?.subagents.length;
+  useEffect(() => {
+    if (selectedId && live && turns !== undefined) send({ t: 'changes', sessionId: selectedId });
+  }, [selectedId, live, turns, helpers, send]);
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
@@ -37,7 +48,7 @@ export function Detail() {
   const attachments = useAttachments();
   if (!selectedId || !session) return null;
 
-  const model = session.activeModel || session.model || 'modèle par défaut';
+  const model = session.activeModel || session.model || t.session.detail.defaultModel;
   const [first, ...others] = session.permissions;
   /** The name or the tag, edited in place: Enter saves, Escape or leaving the field cancels. */
   const field = (kind: 'name' | 'tag') => (
@@ -48,54 +59,69 @@ export function Detail() {
       if (kind === 'tag') send({ t: 'tag', sessionId: session.id, tag: value });
       setEditing(null);
     }}>
-      <label className="cp-sr-only" htmlFor={`${kind}-field`}>{kind === 'name' ? 'Nouveau prénom' : 'Tag de la session'}</label>
+      <label className="cp-sr-only" htmlFor={`${kind}-field`}>{kind === 'name' ? t.session.detail.newName : t.session.detail.tag}</label>
       <input
         id={`${kind}-field`} name="value" defaultValue={kind === 'name' ? session.name : session.tag ?? ''} maxLength={kind === 'name' ? 40 : 24} autoFocus
-        placeholder={kind === 'tag' ? 'urgent, perso, Jarvis…' : undefined}
+        placeholder={kind === 'tag' ? t.session.detail.tagPlaceholder : undefined}
         onBlur={() => setEditing(null)} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}
       />
     </form>
   );
 
   return (
-    <aside className="cp-detail" aria-label={`Session ${session.name}`} {...attachments.dropTarget}>
+    <aside className="cp-detail" aria-label={t.session.detail.label(session.name)} {...attachments.dropTarget}>
       <DropOverlay attachments={attachments} />
       <header className="cp-detail__head">
         <div className="cp-detail__title">
           {editing === 'name' ? field('name') : (
             <h2>
               {session.name}
-              <button type="button" className="cp-icon-button" data-size="small" aria-label={`Renommer ${session.name}`} title="Renommer" onClick={() => setEditing('name')}><PencilIcon /></button>
+              <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
             </h2>
           )}
           <StateBadge session={session} kind={attentionKind(session, seen)} />
           <div className="cp-detail__controls">
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label="Chercher dans la conversation" aria-pressed={searchOpen} title="Chercher dans la conversation (Cmd F)" onClick={() => openSearch(!searchOpen)}><SearchIcon /></button>
+            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.search} aria-pressed={searchOpen} title={t.session.detail.searchTitle} onClick={() => openSearch(!searchOpen)}><SearchIcon /></button>
             {isRunning(session) && (
-              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label="Interrompre" title="Interrompre ce qu’elle fait (la session reste ouverte)" disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
+              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle} disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
             )}
+            <button
+              type="button" className="cp-icon-button" data-variant="outlined" aria-label="Remote Control" aria-pressed={!!session.remote}
+              title={session.remote ? t.session.detail.remoteOff : t.session.detail.remoteOn}
+              onClick={() => send({ t: 'remoteControl', sessionId: session.id, enabled: !session.remote })}
+            ><PhoneIcon /></button>
             {!session.resting && (
-              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label="Repos" title="En salle de repos : Claude Code s’arrête, un message la rappelle" onClick={() => send({ t: 'rest', sessionId: session.id })}><RestIcon /></button>
+              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.rest} title={t.session.detail.restTitle} onClick={() => send({ t: 'rest', sessionId: session.id })}><RestIcon /></button>
             )}
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label="Éteindre" title="Éteindre : elle disparaît d’Open Space" onClick={() => setSwitchingOff(true)}><PowerIcon /></button>
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label="Masquer le panneau" title="Masquer ce panneau, la session continue" onClick={() => select(null)}><CloseIcon /></button>
+            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.switchOff} title={t.session.detail.switchOffTitle} onClick={() => setSwitchingOff(true)}><PowerIcon /></button>
+            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => select(null)}><CloseIcon /></button>
           </div>
         </div>
         <div className="cp-detail__line">
           {editing === 'tag' ? field('tag') : session.tag
-            ? <button type="button" className="cp-tag" title="Changer le tag (vide pour l’enlever)" onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
-            : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />Ajouter un tag</button>}
+            ? <button type="button" className="cp-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
+            : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
+          {session.remote && <RemoteChip remote={session.remote} />}
+          {changes && changes.files.length > 0 && (
+            <button
+              type="button" className="cp-changes-chip" aria-pressed={showChanges} title={t.session.detail.changesTitle}
+              onClick={() => setShowChanges(!showChanges)}
+            >
+              <LineCounts added={changes.added} removed={changes.removed} />
+              <span>{t.session.files(changes.files.length)}</span>
+            </button>
+          )}
           <p className="cp-detail__meta" title={session.cwd}>
             {folderName(session.cwd)} <span className="cp-muted">({homeRelative(session.cwd)})</span> · {model}
-            {session.untrusted && <span className="cp-detail__untrusted" title="Ce dossier n’a pas été approuvé : ses hooks et ses serveurs MCP ne démarrent pas"> · sans les réglages du dossier</span>}
+            {session.untrusted && <span className="cp-detail__untrusted" title={t.session.detail.untrustedTitle}> · {t.session.detail.untrusted}</span>}
           </p>
         </div>
         {switchingOff && (
-          <Modal title={`Éteindre ${session.name} ?`} onClose={() => setSwitchingOff(false)}>
-            <p className="cp-muted">Elle disparaît d’Open Space, avec son fil. La conversation de Claude Code reste sur ton disque : tu peux la reprendre depuis « Reprendre ».</p>
+          <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
+            <p className="cp-muted">{t.session.detail.switchOffText}</p>
             <div className="cp-form__actions">
-              <button type="button" className="cp-button" autoFocus onClick={() => setSwitchingOff(false)}>Annuler</button>
-              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); select(null); }}>Éteindre</button>
+              <button type="button" className="cp-button" autoFocus onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
+              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); select(null); }}>{t.session.detail.switchOff}</button>
             </div>
           </Modal>
         )}
@@ -106,13 +132,23 @@ export function Detail() {
         : <PermissionPrompt key={first.requestId} sessionId={session.id} prompt={first} more={others.length} />)}
       {feed.plan.length > 0 && (
         <details className="cp-plan">
-          <summary>Plan ({feed.plan.filter((item) => item.status === 'completed').length}/{feed.plan.length})</summary>
+          <summary>{t.session.detail.plan(feed.plan.filter((item) => item.status === 'completed').length, feed.plan.length)}</summary>
           <ul>{feed.plan.map((item) => <li key={item.text} data-status={item.status}>{item.text}</li>)}</ul>
         </details>
       )}
-      <Feed feed={feed} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} />
+      {showChanges ? (
+        <ChangesView cwd={session.cwd} changes={changes} onBack={() => setShowChanges(false)} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
+      ) : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} />}
       <AsidePanel session={session} />
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>
   );
+}
+
+/** Remote Control is on: where it is at, and its page on claude.ai (the Claude app lists it too, under the session's name). */
+function RemoteChip({ remote }: { remote: RemoteControl }) {
+  const label = <><span className="cp-remote-chip__dot" aria-hidden="true" />Remote Control · {t.session.remote.states[remote.state]}</>;
+  return remote.url
+    ? <a className="cp-remote-chip" data-state={remote.state} href={remote.url} target="_blank" rel="noreferrer" title={t.session.remote.open}>{label}</a>
+    : <span className="cp-remote-chip" data-state={remote.state}>{label}</span>;
 }

@@ -1,12 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
-import { JOB_LABELS } from '../../shared/jobs.ts';
+import { t } from '../i18n/index.ts';
 import { chibiHead } from '../room/chibi.ts';
 import type { Availability } from '../state/availability.ts';
 import { ChevronsUpDownIcon, ShuffleIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
-
-const PLACE = { desk: 'au bureau', rest: 'au repos' } as const;
 
 /**
  * Who takes the new session: someone of the crew who is free, or "Auto" (null), the server's choice by the request's
@@ -19,32 +17,33 @@ export function PersonPicker({ people, chosen, onChoose }: { people: readonly Av
   useDismiss(open, box, close);
   const current = people.find((person) => person.member.name === chosen)?.member;
   const pick = (name: string | null) => { onChoose(name); setOpen(false); };
+  const words = t.composer.personPicker;
 
   return (
     <div className="cp-person" ref={box}>
       <button
         type="button" className="cp-person__trigger" aria-expanded={open} aria-controls="person-picker"
-        aria-label={`Qui s’en occupe : ${current ? current.name : 'auto'}`} title={current ? current.name : 'Auto : selon la demande'} onClick={() => setOpen(!open)}
+        aria-label={words.triggerLabel(current ? current.name : words.autoLower)} title={current ? current.name : words.autoTitle} onClick={() => setOpen(!open)}
       >
         {current ? <img src={chibiHead(current.look ?? DEFAULT_LOOK)} alt="" /> : <ShuffleIcon />}
         <ChevronsUpDownIcon />
       </button>
       {open && (
-        <div className="cp-person__panel" id="person-picker" role="radiogroup" aria-label="Qui s’en occupe">
+        <div className="cp-person__panel" id="person-picker" role="radiogroup" aria-label={words.label}>
           {people.map(({ member, place }) => (
             <button
               key={member.name} type="button" role="radio" aria-checked={chosen === member.name} disabled={place !== 'free'}
               className="cp-person__option" onClick={() => pick(member.name)}
             >
               <img src={chibiHead(member.look ?? DEFAULT_LOOK)} alt="" />
-              <span className="cp-person__name">{member.name}{place !== 'free' && <small> ({PLACE[place]})</small>}</span>
-              {member.jobs?.length ? <span className="cp-person__jobs">{member.jobs.map((job) => JOB_LABELS[job]).join(', ')}</span> : null}
+              <span className="cp-person__name">{member.name}{place !== 'free' && <small> ({words.places[place]})</small>}</span>
+              {member.jobs?.length ? <span className="cp-person__jobs">{member.jobs.map((job) => t.settings.jobs[job]).join(', ')}</span> : null}
             </button>
           ))}
           <button type="button" role="radio" aria-checked={chosen === null} className="cp-person__option" onClick={() => pick(null)}>
             <ShuffleIcon />
-            <span className="cp-person__name">Auto</span>
-            <span className="cp-person__jobs">selon la demande, sinon au hasard</span>
+            <span className="cp-person__name">{words.auto}</span>
+            <span className="cp-person__jobs">{words.autoHint}</span>
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 import { copyCodeOnClick } from './Feed.tsx';
 import { Prose } from './Prose.tsx';
@@ -13,17 +14,17 @@ export function AsidePanel({ session }: { session: SessionInfo }) {
   const send = useSessions((s) => s.send);
   if (!aside) return null;
   return (
-    <section className="cp-aside" data-state={aside.state} aria-label="Question à côté" aria-live="polite" onClick={(e) => copyCodeOnClick(e.target)}>
+    <section className="cp-aside" data-state={aside.state} aria-label={t.session.aside.label} aria-live="polite" onClick={(e) => copyCodeOnClick(e.target)}>
       <header className="cp-aside__head">
-        <span className="cp-aside__label">À côté</span>
+        <span className="cp-aside__label">{t.session.aside.title}</span>
         <p className="cp-aside__question">{aside.question}</p>
-        <button type="button" className="cp-icon-button" aria-label="Fermer la question à côté" title={aside.state === 'asking' ? 'Retirer la question' : 'Fermer'} onClick={() => send({ t: 'asideClose', sessionId: session.id })}>
+        <button type="button" className="cp-icon-button" aria-label={t.session.aside.close} title={aside.state === 'asking' ? t.session.aside.withdraw : t.session.aside.closeTitle} onClick={() => send({ t: 'asideClose', sessionId: session.id })}>
           <CloseIcon />
         </button>
       </header>
       {aside.answer
         ? <Prose className="cp-aside__answer" text={aside.answer} />
-        : <span className="cp-feed__typing" role="img" aria-label={`${session.name} réfléchit`}><span /><span /><span /></span>}
+        : <span className="cp-feed__typing" role="img" aria-label={t.session.feed.thinking(session.name)}><span /><span /><span /></span>}
     </section>
   );
 }
