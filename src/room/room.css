@@ -1,0 +1,69 @@
+/*
+ * The meeting room view (src/room/). The room itself is pixel art with its own palette (src/design/room-palette.ts,
+ * read through the --room-* variables set by RoomView). Spacing and fonts come from tokens.css.
+ * No animated blur or filter: the room must stay cheap to draw.
+ */
+.cp-room { height: 100%; min-height: 18rem; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-void); }
+/* the stage keeps the canvas ratio (4:3) and takes the largest size that fits */
+.cp-room__fit { min-height: 0; container-type: size; display: grid; place-items: center; }
+.cp-room__stage { position: relative; width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; container-type: inline-size; background: var(--room-backdrop); border-radius: var(--radius-md); overflow: hidden; }
+.cp-room__zoom { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 4 / 3; }
+.cp-room__canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: pointer; }
+/* narrow screens: the empty corners of the room are cropped (the door stays in view), so people and tags stay readable */
+@media (max-width: 40rem) {
+  .cp-room__stage { width: min(100cqw, 107cqh); aspect-ratio: 15 / 14; }
+  .cp-room__zoom { width: 140%; left: -20%; }
+}
+.cp-room__bubbles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+.cp-room__bubble {
+  position: absolute; left: 0; top: 0; max-width: 80%; padding: 5px 12px 6px; border-radius: 8px;
+  background: var(--room-bubble); color: var(--room-bubble-ink); border: 2px solid var(--room-bubble-ink); box-shadow: 0 2px 0 var(--room-bubble-shadow);
+  /* the words in the UI font, for reading; the speaker's name stays in pixel letters (see b below) */
+  font: var(--weight-medium) clamp(13px, 1.75cqi, 17px) / 1.35 var(--font-ui);
+  visibility: hidden; transition: none;
+  display: flex; align-items: center; gap: 4px; padding-left: 4px;
+}
+/* a click opens the speaker's session */
+.cp-room__bubble[data-placed] { pointer-events: auto; cursor: pointer; }
+.cp-room__bubble[data-fading='true'] { pointer-events: none; }
+/* the speaker's head */
+.cp-room__bubble-head { flex: none; width: 2.2em; height: auto; margin: -0.2em 0; image-rendering: pixelated; }
+.cp-room__bubble[data-placed] { visibility: visible; transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.6s; }
+.cp-room__bubble[data-fading='true'] { opacity: 0; }
+.cp-room__bubble[data-from-user='true'] { --room-bubble: var(--room-bubble-from-user); }
+.cp-room__bubble > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; min-width: 0; overflow: hidden; }
+.cp-room__bubble b { font: var(--weight-bold) 1.05em / 1 var(--font-pixel); letter-spacing: 0.02em; }
+.cp-room__bubble::after {
+  content: ''; position: absolute; left: var(--tail, 50%); bottom: -7px; width: 8px; height: 8px; background: var(--room-bubble);
+  border-right: 2px solid var(--room-bubble-ink); border-bottom: 2px solid var(--room-bubble-ink); transform: translateX(-50%) rotate(45deg);
+}
+
+.cp-room__more { position: absolute; top: var(--space-2); right: var(--space-2); display: grid; justify-items: end; gap: var(--space-1); }
+.cp-room__more > button {
+  padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm);
+  background: var(--room-more); color: var(--room-more-text); font: var(--weight-medium) var(--text-sm) var(--font-pixel);
+}
+.cp-room__more ul {
+  list-style: none; margin: 0; padding: var(--space-1); display: grid; max-height: 16rem; overflow: auto;
+  background: var(--color-surface-raised); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay);
+}
+.cp-room__more li button { width: 100%; text-align: left; padding: var(--space-1) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text); font-size: var(--text-sm); }
+.cp-room__more li button:hover { background: var(--color-surface-sunken); }
+.cp-room__pip { position: absolute; right: var(--space-2); bottom: var(--space-2); background: var(--room-more); color: var(--room-more-text); }
+/* the small window: the whole room, centred and scaled to the window (no cropping for narrow screens: it is small on
+   purpose), and nothing else */
+body.cp-pip { margin: 0; background: var(--color-void); }
+body.cp-pip .cp-room { position: fixed; inset: 0; padding: 0; min-height: 0; gap: 0; grid-template-rows: minmax(0, 1fr); }
+body.cp-pip .cp-room__hint { display: none; }
+body.cp-pip .cp-room__stage { width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; border-radius: 0; }
+body.cp-pip .cp-room__zoom { width: 100%; left: 0; }
+.cp-room[data-away] { place-items: center; grid-template-rows: auto; }
+.cp-room__hint { justify-self: center; text-align: center; color: var(--color-text-muted); font-size: var(--text-sm); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-room__bubble[data-placed] { transition: none; }
+}
+/* the hour of the room's light: a slider, the time it shows, and a way back to the real time */
+
+
