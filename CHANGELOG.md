@@ -1,5 +1,9 @@
 # Versions
 
+## 1.1.1
+
+- L'écran de chaque session assise à son bureau reste allumé, qu'elle travaille ou non. Sa main et sa bulle disent déjà si elle travaille.
+
 ## 1.1.0
 
 - Open Space parle anglais. La langue se choisit au premier lancement et dans les Réglages ; au départ, c'est celle du navigateur. Les messages du serveur et les consignes données aux nouveaux agents suivent la langue choisie.
