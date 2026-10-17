@@ -8,6 +8,7 @@ import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
 import { useAttachments } from './useAttachments.ts';
 import { SendIcon } from './Icons.tsx';
+import { FolderPicker } from './FolderPicker.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 
 
@@ -125,11 +126,7 @@ export function Launcher() {
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
-          <label className="cp-chip" data-folder title="Dossier de la session (laisse vide pour ton dossier par défaut)">
-            <span className="cp-sr-only">Dossier</span>
-            <input list="launcher-directories" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
-            <datalist id="launcher-directories">{directories.map((directory) => <option key={directory} value={directory}>{homeRelative(directory)}</option>)}</datalist>
-          </label>
+          <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
           <label className="cp-chip" data-select>
             <span className="cp-sr-only">Modèle</span>
             <select value={model} onChange={(e) => setModel(e.target.value)}>{MODELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>

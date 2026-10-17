@@ -88,6 +88,13 @@ describe('resolveAllowedDirectory', () => {
     assert.equal(resolveAllowedDirectory(path.join(root, 'missing'), [root]), null);
   });
 
+  it('reads "~" as the home, the way the page shows paths, and nothing else starting with it', () => {
+    assert.equal(resolveAllowedDirectory('~/project', [root], root), path.join(root, 'project'));
+    assert.equal(resolveAllowedDirectory('~', [root], root), root);
+    assert.equal(resolveAllowedDirectory('~project', [root], root), null);
+    assert.equal(resolveAllowedDirectory('~/../outside', [root], root), null);
+  });
+
   it('ignores roots that do not exist', () => {
     assert.equal(resolveAllowedDirectory(path.join(root, 'project'), [path.join(base, 'ghost'), root]), path.join(root, 'project'));
   });

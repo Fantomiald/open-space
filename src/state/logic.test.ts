@@ -4,6 +4,7 @@ import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, Sla
 import { availability, stillFree } from './availability.ts';
 import { asideQuestion, commandSuggestions, findCommands } from './commands.ts';
 import { buildFeed, threadOf, toolSummary } from './feed.ts';
+import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
 import { afterEvent, withPartial } from './partials.ts';
@@ -165,6 +166,21 @@ describe('who of the crew is free for a new session', () => {
     assert.equal(stillFree('Lina', people), null);
     assert.equal(stillFree('Max', people), null, 'the user never takes a session');
     assert.equal(stillFree(null, people), null);
+  });
+});
+
+describe('folders offered for a new session', () => {
+  const directories = ['/Users/max/Projects', '/Users/max/Projects/api', '/Users/max/Projects/my-api', '/Users/max/apiary', '/Users/max/Notes'];
+
+  it('offers every folder when nothing is typed, and those holding the text otherwise, the ones named by it first', () => {
+    assert.deepEqual(matchFolders(directories, '  '), directories);
+    assert.deepEqual(matchFolders(directories, 'API'), ['/Users/max/Projects/api', '/Users/max/apiary', '/Users/max/Projects/my-api']);
+    assert.deepEqual(matchFolders(directories, 'nothing'), []);
+  });
+
+  it('reads a path typed with "~" or in full the same way', () => {
+    assert.deepEqual(matchFolders(directories, '~/Projects/a'), ['/Users/max/Projects/api']);
+    assert.deepEqual(matchFolders(directories, '/Users/max/Projects/a'), ['/Users/max/Projects/api']);
   });
 });
 
