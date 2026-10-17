@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FESTIVALS, FESTIVAL_NAMES, festivalDay, type Festival } from '../../shared/festivals.ts';
 import { useSessions } from '../state/sessions.ts';
 import { CalendarIcon } from './Icons.tsx';
+import { useDismiss } from './useDismiss.ts';
 
 const hourLabel = (hour: number) => `${Math.floor(hour)} h ${String(Math.round((hour % 1) * 60)).padStart(2, '0')}`;
 const nowHour = () => { const now = new Date(); return now.getHours() + now.getMinutes() / 60; };
@@ -19,14 +20,8 @@ export function PreviewMenu() {
   const today = festivalDay(new Date(), crew).festival;
   const active = preview.festival !== undefined || preview.hour !== undefined;
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (event: PointerEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false); };
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); } };
-    document.addEventListener('pointerdown', onPointer);
-    document.addEventListener('keydown', onKey, true);
-    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey, true); };
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(open, box, close);
 
   const festivalValue = preview.festival === undefined ? 'today' : preview.festival ?? 'none';
   const chooseFestival = (value: string) => {

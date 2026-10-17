@@ -76,5 +76,8 @@
   --tone-error-soft: #3a1614;
   --tone-idle: #a0a5b3;
   --tone-idle-soft: #1d2333;
+  /* A message from another session: neither the user's nor this agent's own words */
+  --tone-peer: #f29bd2;
+  --tone-peer-soft: #2c1626;
 }
 

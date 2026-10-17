@@ -10,6 +10,8 @@ export type FeedItem =
   | { id: number; kind: 'subagent'; at: number; agentId: string; name: string; task: string; status: 'working' | 'done' | 'failed'; report: string }
   /** question: an AskUserQuestion call (allowed = answered) */
   | { id: number; kind: 'permission'; at: number; requestId: string; tool: string; detail: string; author: string | null; agent: string | null; question: boolean; status: 'pending' | 'allowed' | 'denied' | 'cancelled' }
+  /** a message from another Claude Code session (`from`: its name) */
+  | { id: number; kind: 'peer'; at: number; from: string; text: string }
   | { id: number; kind: 'turn'; at: number; ok: boolean; stopped: boolean; ms: number }
   | { id: number; kind: 'notice'; at: number; text: string };
 
@@ -21,12 +23,15 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
   const tools = new Map<string, FeedItem & { kind: 'tool' }>();
   const permissions = new Map<string, FeedItem & { kind: 'permission' }>();
   let plan: PlanItem[] = [];
+  /** where the running turn's items start: a message from another session is told at the end of the turn it started */
+  let turnStart = 0;
   const author = (who: string) => (who === 'chef' ? null : subagents.get(who)?.name ?? 'Sous-agent');
   const agent = (who: string) => (who === 'chef' ? null : who);
 
   for (const { seq, at, ev } of events) {
     switch (ev.k) {
-      case 'start': items.push({ id: seq, kind: 'user', at, text: ev.text, images: ev.images ?? [] }); break;
+      case 'start': items.push({ id: seq, kind: 'user', at, text: ev.text, images: ev.images ?? [] }); turnStart = items.length; break;
+      case 'peer': items.splice(turnStart, 0, { id: seq, kind: 'peer', at, from: ev.from, text: ev.text }); break;
       case 'say': items.push({ id: seq, kind: 'assistant', at, text: ev.text, author: author(ev.who), agent: agent(ev.who) }); break;
       case 'plan': plan = ev.items; break;
       case 'hire': {
@@ -67,7 +72,7 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
         if (item) item.status = ev.cancelled ? 'cancelled' : ev.allow ? 'allowed' : 'denied';
         break;
       }
-      case 'end': items.push({ id: seq, kind: 'turn', at, ok: ev.ok, stopped: ev.stopped === true, ms: ev.ms }); break;
+      case 'end': items.push({ id: seq, kind: 'turn', at, ok: ev.ok, stopped: ev.stopped === true, ms: ev.ms }); turnStart = items.length; break;
       case 'error': items.push({ id: seq, kind: 'notice', at, text: ev.message }); break;
       case 'note': items.push({ id: seq, kind: 'notice', at, text: ev.text }); break;
       case 'state':

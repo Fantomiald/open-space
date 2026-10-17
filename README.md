@@ -14,6 +14,7 @@ Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, 
 - **Répondre sans terminal** : les autorisations (Oui, Non, Toujours) et les questions de Claude, une par onglet comme dans Claude Code.
 - **Écrire pendant qu'une session travaille** : ton message attend la fin du tour, ou part tout de suite avec « Envoyer maintenant ». Et `/btw ta question` pose une question à côté, sans interrompre ni polluer la conversation.
 - **Coller une capture d'écran** (Cmd+V), la glisser sur le panneau, ou passer par le trombone.
+- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Charline où elle en est »). Leurs messages s'affichent dans le fil.
 - **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet chacun avec ce qu'ils écrivent et leur rapport.
 - **Être prévenu** par un son et une notification macOS quand une session a fini ou t'attend, même onglet fermé.
 - **Mettre une session au repos** dans la salle de repos, ou garder le bureau dans une mini-fenêtre au-dessus de tes autres apps.
@@ -21,7 +22,7 @@ Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, 
 
 ## Ton équipe, ton bureau
 
-Tu crées ton perso au premier lancement, puis toute ton équipe dans **Équipe** : 16 coiffures, 9 barbes, 14 hauts, des chapeaux, des lunettes de soleil, des peaux de toutes les couleurs. Une session qui porte le prénom d'un membre prend son look.
+Tu crées ton perso au premier lancement, puis toute ton équipe dans **Équipe** : 16 coiffures, 9 barbes, 14 hauts, des chapeaux, des lunettes de soleil, des peaux de toutes les couleurs. Une session qui porte le prénom d'un membre prend son look. Donne-leur un métier (Tech, Cyber, Produit, RH…) : une demande lancée sans choisir la personne va à quelqu'un de libre dont le métier colle, ou choisis-la toi-même dans le lanceur.
 
 Un animal se balade dans le bureau : un chat, un chien (7 races), un canard en plastique pour le débogage, un capybara, un axolotl, ou Rocky de *Projet Dernière Chance*. Clique dessus, il te répond à sa façon.
 

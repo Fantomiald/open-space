@@ -55,11 +55,9 @@
    purpose), and nothing else */
 body.cp-pip { margin: 0; background: var(--color-void); }
 body.cp-pip .cp-room { position: fixed; inset: 0; padding: 0; min-height: 0; gap: 0; grid-template-rows: minmax(0, 1fr); }
-body.cp-pip .cp-room__hint { display: none; }
 body.cp-pip .cp-room__stage { width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; border-radius: 0; }
 body.cp-pip .cp-room__zoom { width: 100%; left: 0; }
 .cp-room[data-away] { place-items: center; grid-template-rows: auto; }
-.cp-room__hint { justify-self: center; text-align: center; color: var(--color-text-muted); font-size: var(--text-sm); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); }
 
 @media (prefers-reduced-motion: reduce) {
   .cp-room__bubble[data-placed] { transition: none; }

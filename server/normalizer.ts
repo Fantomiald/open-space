@@ -7,7 +7,8 @@ import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
 export interface TurnResult { ok: boolean; text: string; ms: number }
 
-export interface InitInfo { model: string; commands: string[] }
+/** `socket`: where other Claude Code sessions reach this one ("/tmp/cc-socks/<pid>.sock"; their SendMessage calls write "uds:" before it). */
+export interface InitInfo { model: string; commands: string[]; socket: string }
 
 /** A can_use_tool control request: a tool call (or an AskUserQuestion call) waiting for the user. */
 export interface ToolRequest { requestId: string; who: string; tool: string; input: Record<string, unknown>; suggestions: Json[] }
@@ -27,6 +28,8 @@ export interface NormalizerOptions {
   onPartial: (who: string, text: string) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
+  /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
+  peerName?: (address: string) => string;
 }
 
 export class Normalizer {
@@ -59,11 +62,15 @@ export class Normalizer {
       case 'assistant': this.assistant(message); break;
       case 'user': this.user(message); break;
       case 'stream_event': this.partial(message); break;
-      case 'result':
+      case 'result': {
+        // a turn started by another session's message: Claude Code only says so here, at its end
+        const origin = asJson(message.origin);
+        if (origin.kind === 'peer' && asString(origin.body).trim()) this.options.emit({ k: 'peer', from: asString(origin.name) || 'Une autre session', text: asString(origin.body).slice(0, 20000) });
         this.options.onResult({
           ok: !message.is_error && message.subtype === 'success', text: asString(message.result), ms: asNumber(message.duration_ms),
         });
         break;
+      }
       case 'rate_limit_event': {
         const windows = Object.entries(asJson(asJson(message.rate_limit_info).unifiedWindows)).map(([name, raw]) => {
           const window = asJson(raw);
@@ -111,6 +118,7 @@ export class Normalizer {
         this.options.onInit({
           model: asString(message.model),
           commands: asArray(message.slash_commands).filter((name): name is string => typeof name === 'string'),
+          socket: asString(message.messaging_socket_path),
         });
         this.options.emit({ k: 'init', model: asString(message.model) });
         break;
@@ -171,6 +179,10 @@ export class Normalizer {
         status: todo.status === 'completed' ? 'completed' : todo.status === 'in_progress' ? 'in_progress' : 'pending',
       }));
       this.options.emit({ k: 'plan', items });
+    } else if (name === 'SendMessage') {
+      const to = asString(input.to);
+      const recipient = this.options.peerName?.(to) ?? to;
+      this.options.emit({ k: 'act', who, id, tool: name, detail: cut(`→ ${recipient || 'une autre session'} : ${asString(input.summary) || asString(input.message)}`, 160) });
     } else {
       this.options.emit({ k: 'act', who, id, tool: name, detail: actDetail(name, input) });
     }

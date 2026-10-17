@@ -5,14 +5,14 @@ import type { OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
 import { asJson } from './json.ts';
 import { Normalizer, describeRequest, ruleText, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
 
-function createNormalizer() {
+function createNormalizer(peerName?: (address: string) => string) {
   const seen = { events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
-    names: new Set(),
+    names: new Set(), peerName,
   });
   return { normalizer, ...seen };
 }
@@ -33,7 +33,7 @@ describe('Normalizer on a real simple turn', () => {
   const { events, results, quotas, inits, partials } = replay('simple-turn');
 
   it('reads model and slash commands from the init message', () => {
-    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'] }]);
+    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'], socket: '' }], 'recorded before Claude Code had sockets');
     assert.deepEqual(events[0], { k: 'init', model: 'claude-haiku-5-5' });
   });
 
@@ -147,6 +147,29 @@ describe('Normalizer on a real sub-agent with its text forwarded', () => {
     assert.deepEqual(events.filter((event) => event.k === 'leave').map((event) => event.k === 'leave' && event.ok), [true]);
     assert.ok(!events.some((event) => event.k === 'act' && event.tool === 'SubagentHandback'));
     assert.ok(!events.some((event) => event.k === 'act_done' && event.id === agentId));
+  });
+});
+
+describe('Normalizer on a real message between two sessions (SendMessage)', () => {
+  const { events, inits, order } = replay('peer-message');
+
+  it('keeps the socket other sessions reach this one at', () => {
+    assert.equal(inits[0].socket, '/tmp/cc-socks/22286.sock');
+  });
+
+  it('shows who a message goes to and what it is about', () => {
+    assert.ok(events.some((event) => event.k === 'act' && event.tool === 'SendMessage' && event.detail === '→ Bob Test : ping'));
+  });
+
+  it('shows the message that started a turn, told at its end, before the end', () => {
+    assert.deepEqual(events.filter((event) => event.k === 'peer'), [{ k: 'peer', from: 'Bob Test', text: 'Pong de Bob : ping bien reçu.' }]);
+    assert.ok(order.indexOf('peer') > order.lastIndexOf('init'), 'with the second turn, the one it started');
+  });
+
+  it('names a session answered at its socket after the session living there', () => {
+    const { normalizer, events: seen } = createNormalizer((address) => (address === 'uds:/tmp/cc-socks/1.sock' ? 'Charline' : address));
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'SendMessage', input: { to: 'uds:/tmp/cc-socks/1.sock', message: 'Je vais bien', summary: '' } }] } });
+    assert.deepEqual(seen.map((event) => event.k === 'act' && event.detail), ['→ Charline : Je vais bien']);
   });
 });
 

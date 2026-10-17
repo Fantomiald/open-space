@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { formatDuration } from '../lib/format.ts';
+import { chibiHead } from '../room/chibi.ts';
+import { PeerIcon, SendIcon } from './Icons.tsx';
 import { Prose } from './Prose.tsx';
 import { threadOf, toolSummary, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -91,11 +94,27 @@ function Item({ item, speaker, openAgent }: { item: ThreadEntry; speaker: string
           <span className="cp-feed__flag">{(item.question ? QUESTION_STATUS : PERMISSION_STATUS)[item.status]}</span>
         </li>
       );
+    case 'peer':
+      return <PeerMessage item={item} speaker={speaker} />;
     case 'turn':
       return <li className="cp-feed__item" data-kind="turn">{item.stopped ? 'Tour interrompu' : item.ok ? 'Tour terminé' : 'Tour en échec'} · {formatDuration(item.ms)}</li>;
     case 'notice':
       return <li className="cp-feed__item" data-kind="notice">{item.text}</li>;
   }
+}
+
+/** A message another session sent this one: the sender's face when they are of the crew, and who it went to. */
+function PeerMessage({ item, speaker }: { item: FeedItem & { kind: 'peer' }; speaker: string }) {
+  const member = useSessions((s) => s.crew.find((candidate) => candidate.name === item.from));
+  return (
+    <li className="cp-feed__item" data-kind="peer">
+      <span className="cp-feed__peer">
+        {member ? <img src={chibiHead(member.look ?? DEFAULT_LOOK)} alt="" /> : <PeerIcon />}
+        {item.from}<SendIcon /><span className="cp-feed__peer-to">{speaker}</span>
+      </span>
+      <Prose className="cp-feed__text" text={item.text} />
+    </li>
+  );
 }
 
 /**

@@ -1,8 +1,8 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, Command, Image, Monitor, Moon, Paperclip, Pause, Pencil,
-  PictureInPicture2, Play, Plus, Power, Search, Settings, SkipForward, Sofa, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
+  ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, Command, Image, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
+  PictureInPicture2, Play, Plus, Power, Search, Settings, Shuffle, SkipForward, Sofa, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -39,3 +39,8 @@ export const SendIcon = icon(ArrowRight);
 /** The festivals and the hour of the room, to try them. */
 export const CalendarIcon = icon(CalendarHeart);
 export const SettingsIcon = icon(Settings);
+/** A message from another session, when its sender is not someone of the crew. */
+export const PeerIcon = icon(MessagesSquare);
+/** Whoever is free: the person picker's choice when nobody is asked for. */
+export const ShuffleIcon = icon(Shuffle);
+export const ChevronsUpDownIcon = icon(ChevronsUpDown);

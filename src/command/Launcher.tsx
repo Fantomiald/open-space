@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
 import { defaultFolder, formatDuration, homeRelative } from '../lib/format.ts';
 import { MODELS, PERMISSION_MODE_LABELS, SHORT_MODE_LABELS as MODES } from '../state/labels.ts';
+import { availability, stillFree } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
 import { useAttachments } from './useAttachments.ts';
 import { SendIcon } from './Icons.tsx';
+import { PersonPicker } from './PersonPicker.tsx';
 
 
 /**
@@ -23,6 +25,12 @@ export function Launcher() {
   const createSession = useSessions((s) => s.createSession);
   const send = useSessions((s) => s.send);
   const live = useSessions((s) => s.connection === 'live');
+  const crew = useSessions((s) => s.crew);
+  const sessions = useSessions((s) => s.sessions);
+  const people = useMemo(() => availability(crew, Object.values(sessions)), [crew, sessions]);
+  // someone asked for who got a session meanwhile is not asked for any more
+  const [asked, setAsked] = useState<string | null>(null);
+  const person = stillFree(asked, people);
 
   const [resuming, setResuming] = useState(false);
   const [folder, setFolder] = useState('');
@@ -62,10 +70,11 @@ export function Launcher() {
     if (!ready || !cwd) return;
     const message = text.trim();
     const images = attachments.uploads;
-    createSession({ cwd, model, permissionMode, ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
+    createSession({ cwd, model, permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
     setText('');
     attachments.clear();
     setResumeId(null);
+    setAsked(null);
   };
 
   return (
@@ -115,6 +124,7 @@ export function Launcher() {
           placeholder={resuming ? (resumeId ? 'Un message pour reprendre (facultatif)…' : 'Choisis d’abord une conversation au-dessus') : 'Qu’est-ce qu’on fait ? (Entrée lance, / pour une commande)'}
         />
         <div className="cp-launcher__options">
+          {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
           <label className="cp-chip" data-folder title="Dossier de la session (laisse vide pour ton dossier par défaut)">
             <span className="cp-sr-only">Dossier</span>
             <input list="launcher-directories" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />

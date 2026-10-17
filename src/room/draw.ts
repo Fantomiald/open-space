@@ -20,6 +20,8 @@ import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 /** Pixelify Sans only draws clean glyphs at some sizes; 11 room pixels is the smallest crisp one. */
 export const TAG_FONT = '500 11px "Pixelify Sans", monospace';
 const TAG_HEIGHT = 13;
+/** A name tag away from the pointer and from the open session: there to read, without hiding the room. */
+const FAINT_TAG_ALPHA = 0.45;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;
 
@@ -35,6 +37,8 @@ export interface FrameOptions {
   dozing: boolean;
   /** the pointer is on the door: it is outlined, as something to click */
   doorHovered: boolean;
+  /** the person under the pointer (a person id, or PLAYER_ID): their name tag shows in full, the others are faint */
+  hoveredId: string | null;
   /** the festival the room is dressed for and who it is for (see festivalDay), and which room it is */
   festival: Festival | null;
   guests: readonly string[];
@@ -244,17 +248,30 @@ function paintSteam(context: Context, time: number, pieces: readonly FurniturePi
   context.globalAlpha = 1;
 }
 
-/** The server's lights blink, and stay bright in the dark. */
-function paintServerLights(context: Context, time: number, pieces: readonly FurniturePiece[]) {
+/** Where someone stands on screen, for what is painted over the room afterwards. */
+interface Figure { depth: number; left: number; right: number; top: number; bottom: number }
+
+/**
+ * The server's lights blink, and stay bright in the dark: they are painted after the light, so over the people. A light
+ * hidden by someone standing or sitting in front of the server is left out.
+ */
+function paintServerLights(context: Context, time: number, pieces: readonly FurniturePiece[], figures: readonly Figure[]) {
   for (const piece of pieces) {
     if (piece.kind !== 'server') continue;
+    const inFront = figures.filter((figure) => figure.depth > furnitureDepth(piece));
     for (let row = 0; row < 6; row++) for (let column = 0; column < 3; column++) {
       const seed = hash(`${row}:${column}`);
       if ((Math.floor(time / (300 + (seed % 700))) + seed) % 3 === 0) continue;
       const point = raise(toScreen({ x: piece.x + 0.25 + column * 0.18, y: piece.y + 0.9 }), (6 + row * 4) * ART_SCALE);
+      if (inFront.some((figure) => point.x + 2 > figure.left && point.x < figure.right && point.y + 2 > figure.top && point.y < figure.bottom)) continue;
       rect(context, point.x, point.y, 2, 2, seed % 2 ? P.furniture.ledGreen : P.furniture.ledBlue);
     }
   }
+}
+
+function figureOf(walker: Walker, lift: number, height: number): Figure {
+  const feet = raise(toScreen(walker.position), lift);
+  return { depth: depthOf(walker.position), left: feet.x - 14, right: feet.x + 14, top: feet.y - height, bottom: feet.y + 2 };
 }
 
 /* People */
@@ -460,7 +477,11 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
 
   paintLight(context, lighting, lightsOf(layout, occupied, working, bossAtDesk, lighting, options));
   const time = options.reducedMotion ? 0 : options.time;
-  paintServerLights(context, time, layout.furniture);
+  const figures = [
+    figureOf(scene.player, playerLift, sprites.height(playerPose, PLAYER_ID)),
+    ...characters.map((character) => figureOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(characterPose(character, options), character.person.id))),
+  ];
+  paintServerLights(context, time, layout.furniture, figures);
   paintSteam(context, time, layout.furniture);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
@@ -478,10 +499,12 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const feet = raise(toScreen(character.position), lift);
     const head = feet.y - sprites.height(characterPose(character, options), character.person.id);
     if (options.dozing && character.phase === 'seated') paintZzz(context, feet.x, head - 4, options.reducedMotion ? 0 : options.time, character.blinkOffset);
+    context.globalAlpha = isSelected(character) || options.hoveredId === character.person.id ? 1 : FAINT_TAG_ALPHA;
     const tag = paintTag(context, character.person.name, feet.x, head - 2, P.tagText, isSelected(character));
     if (character.phase === 'seated') paintAgents(context, sprites, character.person.sessionId, character.person.agents, tag.right + 2, tag.top, options.time, options.reducedMotion);
-    // the session's tag right above its name, then what it waits for above both
+    // the session's tag right above its name, then what it waits for above both (the status at full strength: it calls the user)
     const labelTop = character.person.tag ? paintTag(context, character.person.tag, feet.x, tag.top - 2, P.sessionTagText, false, P.sessionTag).top : tag.top;
+    context.globalAlpha = 1;
     if (character.phase === 'seated' && character.person.status) paintStatus(context, character.person.status, feet.x, labelTop - 16, options.time, options.reducedMotion);
   }
   if (pet && choice) {
@@ -490,5 +513,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (isSpeaking(pet)) paintPetSpeech(context, petWords(pet, choice.kind), paws.x, paws.y - PET_HEIGHT);
   }
   const playerFeet = toScreen(scene.player.position);
+  context.globalAlpha = options.hoveredId === PLAYER_ID ? 1 : FAINT_TAG_ALPHA;
   paintTag(context, options.playerName, playerFeet.x, playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - 2, P.playerTagText, false);
+  context.globalAlpha = 1;
 }

@@ -3,6 +3,7 @@
 // member's look in the room. Empty on a new install.
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { parseBirthday } from '../shared/festivals.ts';
+import { jobOf, parseJobs, type Job } from '../shared/jobs.ts';
 import { parseLook, type Look } from '../shared/look.ts';
 import type { CrewMember } from '../shared/protocol.ts';
 import { asArray, asString, isJson } from './json.ts';
@@ -25,7 +26,8 @@ export class Crew {
         const name = asString(entry.name).trim().slice(0, MAX_NAME);
         // members saved before looks existed keep their name and get the default look
         const birthday = parseBirthday(entry.birthday);
-        return name ? [{ name, look: parseLook(entry.look), ...(entry.self === true ? { self: true } : {}), ...(birthday ? { birthday } : {}) }] : [];
+        const jobs = parseJobs(entry.jobs);
+        return name ? [{ name, look: parseLook(entry.look), ...(entry.self === true ? { self: true } : {}), ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs } : {}) }] : [];
       });
     } catch { this.members = []; }
   }
@@ -45,16 +47,16 @@ export class Crew {
   list(): CrewMember[] { return this.members.map((member) => ({ ...member })); }
 
   /** Adds a member, or updates the one called `previousName` (the user's own avatar can be renamed, not removed). */
-  async save(previousName: string | null, name: string, look: Look, birthday?: string) {
+  async save(previousName: string | null, name: string, look: Look, birthday?: string, jobs: readonly Job[] = []) {
     const clean = name.trim().slice(0, MAX_NAME);
     if (!clean) throw new Error('Donne un prénom.');
     const existing = previousName === null ? -1 : this.members.findIndex((member) => member.name === previousName);
     if (this.members.some((member, index) => member.name === clean && index !== existing)) throw new Error(`${clean} existe déjà dans l’équipe.`);
-    const born = birthday ? { birthday } : {};
-    if (existing === -1) this.members.push({ name: clean, look, ...born });
+    const optional = { ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) };
+    if (existing === -1) this.members.push({ name: clean, look, ...optional });
     else {
-      const { birthday: _old, ...kept } = this.members[existing];
-      this.members[existing] = { ...kept, name: clean, look, ...born };
+      const { birthday: _birthday, jobs: _jobs, ...kept } = this.members[existing];
+      this.members[existing] = { ...kept, name: clean, look, ...optional };
     }
     await this.store();
   }
@@ -67,15 +69,17 @@ export class Crew {
     await this.store();
   }
 
-  /** The crew's first names that no session uses yet, in the crew's order (the user's own name excluded). */
-  private freeNames(taken: ReadonlySet<string>): string[] {
-    return this.members.filter((member) => !member.self && !taken.has(member.name)).map((member) => member.name);
-  }
-
-  /** Someone of the crew without a session, drawn at random (not always the same ones first), or undefined when all are taken. */
-  randomFreeName(taken: ReadonlySet<string>, random: () => number = Math.random): string | undefined {
-    const free = this.freeNames(taken);
-    return free.length ? free[Math.floor(random() * free.length)] : undefined;
+  /**
+   * Someone of the crew without a session (the user excluded), for a session started without a name: among those whose
+   * job fits the first message when there are some (see jobOf), else among all of them, drawn at random so it is not
+   * always the same ones first. Undefined when the whole crew is taken.
+   */
+  freeNameFor(text: string, taken: ReadonlySet<string>, random: () => number = Math.random): string | undefined {
+    const free = this.members.filter((member) => !member.self && !taken.has(member.name));
+    const job = jobOf(text);
+    const fitting = job ? free.filter((member) => member.jobs?.includes(job)) : [];
+    const pool = fitting.length ? fitting : free;
+    return pool.length ? pool[Math.floor(random() * pool.length)].name : undefined;
   }
 
   private async store() {

@@ -61,12 +61,16 @@ export interface LaunchOptions {
  *   it only forwards text they write anyway (fixtures/subagent-forwarded.jsonl).
  * - `--append-system-prompt` is recorded with a new conversation and kept as is by every later --resume, so the
  *   name is only passed when the conversation starts (renames are told in a message, see Session.send).
+ * - `--name` is how other Claude Code sessions of the machine see this one (ListAgents, SendMessage "to"), accents and
+ *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
+ *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
 export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
     options.resume ? '--resume' : '--session-id', options.sessionId,
+    '--name', options.name,
   ];
   if (options.model) args.push('--model', options.model);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)

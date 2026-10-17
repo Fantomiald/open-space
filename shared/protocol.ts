@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { Look } from './look.ts';
 
@@ -31,6 +32,11 @@ export type OfficeEvent =
   /** a turn ended */
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean }
   | { k: 'error'; message: string }
+  /**
+   * a message from another Claude Code session (its SendMessage tool), `from`: that session's name. It started the turn
+   * it comes with, but Claude Code only tells it at the turn's end: the thread shows it at the top of that turn.
+   */
+  | { k: 'peer'; from: string; text: string }
   /** a note of Open Space in the thread ("the last exchanges of the conversation it resumes") */
   | { k: 'note'; text: string }
   /** the session changed state (see SessionState) */
@@ -159,8 +165,8 @@ export interface SessionOptions {
 export interface Conversation { id: string; title: string; preview: string; updatedAt: number }
 
 /** Someone of the user's crew: sessions named like them wear their look; `self` is the user's own avatar. Null: the default look. */
-/** `birthday`: "MM-DD", the day the rooms throw them a party. */
-export interface CrewMember { name: string; look: Look | null; self?: boolean; birthday?: string }
+/** `birthday`: "MM-DD", the day the rooms throw them a party. `jobs`: what they do, to send them the requests that fit (shared/jobs.ts). */
+export interface CrewMember { name: string; look: Look | null; self?: boolean; birthday?: string; jobs?: Job[] }
 
 /** The user's settings, chosen at the first start (the onboarding) and changed later in the page. */
 export interface Preferences {
@@ -173,7 +179,7 @@ export interface Preferences {
   /** the model and permission mode a new session starts with ('' : Claude Code's default model) */
   model: string;
   permissionMode: PermissionMode;
-  /** a few words for every new session's agent, after its name ("tutoie-moi", "réponds en anglais") */
+  /** a few words for every new session's agent, after its name (how to address the user, which language to answer in) */
   agentNote: string;
   /** the rooms dress up for the festivals */
   festivals: boolean;
@@ -222,7 +228,7 @@ export type ClientMessage =
   | { t: 'log'; sessionId: string; after: number }
   | { t: 'directories' }
   /** adds a crew member (previousName null) or updates the one called previousName */
-  | { t: 'saveMember'; previousName: string | null; name: string; look: Look; birthday?: string }
+  | { t: 'saveMember'; previousName: string | null; name: string; look: Look; birthday?: string; jobs?: Job[] }
   | { t: 'removeMember'; name: string };
 
 export type ServerMessage =

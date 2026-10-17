@@ -2,6 +2,7 @@
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
 import { create } from 'zustand';
 import type { Festival } from '../../shared/festivals.ts';
+import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { Aside, ClaudeInfo, ClientMessage, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, LoggedEvent, PermissionDecision, Quota, ServerMessage, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
@@ -89,7 +90,7 @@ interface CommandPostState {
   openSettings: (open: boolean) => void;
   /** false when the message could not leave (not connected) */
   /** `birthday`: "MM-DD", or undefined for none */
-  saveMember: (previousName: string | null, name: string, look: Look, birthday?: string) => boolean;
+  saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
   removeMember: (name: string) => boolean;
   openNewSession: (draft: NewSessionDraft | null) => void;
   toast: (kind: Toast['kind'], text: string) => void;
@@ -275,7 +276,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   setPreview: (preview) => set({ preview }),
   openCrew: (open) => set({ crewOpen: open }),
   openSettings: (open) => set({ settingsOpen: open }),
-  saveMember: (previousName, name, look, birthday) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}) }),
+  saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),
   /** The launcher shows when no session is open: a draft closes the open one and goes to the launcher's field. */
   openNewSession: (draft) => {

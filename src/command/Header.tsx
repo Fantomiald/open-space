@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
+import { roomSessions } from '../room/cast.ts';
 import { useSessions, selectAttentionCount, type View } from '../state/sessions.ts';
 import { BellIcon, CommandIcon, CrewIcon, DeskIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
 import { PreviewMenu } from './PreviewMenu.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 
-const VIEWS = [['salle', 'Bureau', DeskIcon], ['repos', 'Salle de repos', SofaIcon]] as const satisfies readonly (readonly [View, string, () => unknown])[];
+const VIEWS = [['salle', 'Bureau', DeskIcon, 'office'], ['repos', 'Salle de repos', SofaIcon, 'lounge']] as const satisfies readonly (readonly [View, string, () => unknown, string])[];
 /** The palette opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both). */
 const PALETTE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K';
 
@@ -20,6 +22,13 @@ export function Header() {
   const openPalette = useSessions((s) => s.openPalette);
   const openCrew = useSessions((s) => s.openCrew);
   const openSettings = useSessions((s) => s.openSettings);
+  const sessions = useSessions((s) => s.sessions);
+  const seen = useSessions((s) => s.seen);
+  // how many sessions each room holds, the way the rooms themselves place them
+  const counts = useMemo(() => {
+    const list = Object.values(sessions);
+    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length };
+  }, [sessions, seen]);
 
   return (
     <header className="cp-header">
@@ -29,8 +38,10 @@ export function Header() {
         {attention > 0 && <span className="cp-count" role="status" aria-label={`${attention} en attente`}>{attention}</span>}
       </div>
       <nav className="cp-segmented" data-icons aria-label="Pièce">
-        {VIEWS.map(([id, label, ViewIcon]) => (
-          <button key={id} type="button" aria-pressed={view === id} aria-label={label} title={label} onClick={() => setView(id)}><ViewIcon /></button>
+        {VIEWS.map(([id, label, ViewIcon, room]) => (
+          <button key={id} type="button" aria-pressed={view === id} aria-label={`${label} : ${counts[room]} session${counts[room] > 1 ? 's' : ''}`} title={label} onClick={() => setView(id)}>
+            <ViewIcon /><span className="cp-header__room-count" aria-hidden="true">({counts[room]})</span>
+          </button>
         ))}
       </nav>
       <div className="cp-header__tools">

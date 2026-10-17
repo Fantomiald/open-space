@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
+import { availability, stillFree } from './availability.ts';
 import { asideQuestion, commandSuggestions, findCommands } from './commands.ts';
 import { buildFeed, threadOf, toolSummary } from './feed.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
@@ -134,9 +135,36 @@ describe('buildFeed', () => {
     assert.deepEqual(feed.plan, [{ text: 'a', status: 'in_progress' }]);
   });
 
+  it('puts a message from another session at the top of the turn it started, though it comes with its end', () => {
+    const turns: OfficeEvent[] = [
+      { k: 'start', text: 'Salut' }, { k: 'say', who: 'chef', text: 'Salut !' }, { k: 'end', ok: true, text: '', ms: 1 },
+      { k: 'init', model: 'm' }, { k: 'act', who: 'chef', id: 'c1', tool: 'SendMessage', detail: '→ Charline : ça va' }, { k: 'say', who: 'chef', text: 'Je lui ai répondu.' },
+      { k: 'peer', from: 'Charline', text: 'Comment tu vas ?' }, { k: 'end', ok: true, text: '', ms: 1 },
+    ];
+    const items = buildFeed(turns.map((ev, index) => logged(index + 1, ev))).items;
+    assert.deepEqual(items.map((item) => item.kind), ['user', 'assistant', 'turn', 'peer', 'tool', 'assistant', 'turn']);
+    assert.deepEqual(threadOf(items, null).map((entry) => entry.kind), ['user', 'assistant', 'turn', 'peer', 'tools', 'assistant', 'turn']);
+  });
+
   it('survives an empty log and events about unknown sub-agents', () => {
     assert.deepEqual(buildFeed([]), { items: [], plan: [] });
     assert.doesNotThrow(() => buildFeed([logged(1, { k: 'report', who: 'ghost', text: 'x' }), logged(2, { k: 'act_done', who: 'chef', id: 'nope', ok: true })]));
+  });
+});
+
+describe('who of the crew is free for a new session', () => {
+  const crew = [{ name: 'Max', look: null, self: true }, { name: 'Lina', look: null }, { name: 'Tom', look: null }, { name: 'Zoé', look: null }];
+  const people = availability(crew, [session('Lina', 'work'), session('Tom', 'wait', { resting: true })]);
+
+  it('lists the crew without the user, each at their desk, resting or free', () => {
+    assert.deepEqual(people.map(({ member, place }) => [member.name, place]), [['Lina', 'desk'], ['Tom', 'rest'], ['Zoé', 'free']]);
+  });
+
+  it('forgets someone asked for once they have a session', () => {
+    assert.equal(stillFree('Zoé', people), 'Zoé');
+    assert.equal(stillFree('Lina', people), null);
+    assert.equal(stillFree('Max', people), null, 'the user never takes a session');
+    assert.equal(stillFree(null, people), null);
   });
 });
 

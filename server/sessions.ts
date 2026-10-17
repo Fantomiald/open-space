@@ -137,11 +137,21 @@ export class SessionManager {
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       identity: this.deps.identity,
+      peerName: (address) => this.peerName(address),
       liveCount: () => [...this.sessions.values()].filter((session) => session.alive).length,
       maxLive: this.deps.config.maxLive,
       idleMs: this.deps.config.idleMs,
       now: this.deps.now,
     });
+  }
+
+  /**
+   * Who a SendMessage call writes to, for the thread: a session named by Claude Code ("Charline", "futur-d6") as is,
+   * one of ours answered at its socket by its name, any other socket as "une autre session".
+   */
+  private peerName(address: string): string {
+    if (!address.startsWith('uds:') && !address.startsWith('/')) return address;
+    return [...this.sessions.values()].find((session) => session.answersAt(address))?.snapshot().name ?? 'une autre session';
   }
 
   // ── read side ──

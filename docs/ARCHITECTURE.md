@@ -35,7 +35,7 @@ Données (`OFFICE_DIR`, défaut `~/.open-space`, hors `~/Documents`) : `secret` 
 
 ### Processus `claude`
 
-`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --forward-subagent-text --permission-prompt-tool stdio --permission-mode <mode> (--session-id <uuid> | --resume <uuid>) [--model m] [--setting-sources user] [--append-system-prompt …]` (voir `buildClaudeArgs`)
+`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --forward-subagent-text --permission-prompt-tool stdio --permission-mode <mode> (--session-id <uuid> | --resume <uuid>) --name <prénom> [--model m] [--setting-sources user] [--append-system-prompt …]` (voir `buildClaudeArgs`)
 
 - **Identifiant** : c'est celui de Claude Code (`--session-id` à la création, `--resume` ensuite), soit un seul UUID aléatoire.
 - **Mode d'autorisation** : il est choisi par session. Les choix sont `auto` (par défaut), `acceptEdits`, `manual` et `plan` (`PERMISSION_MODES`). Les anciennes sessions sauvegardées sans mode repartent en `manual`.
@@ -158,6 +158,9 @@ Tout est dessiné en code, en pixel art (aucune image externe, aucun appel rése
 - **Son** (icône haut-parleur de l'en-tête, activé par défaut) : `src/lib/chime.ts` synthétise un ding (Web Audio, aucun fichier) quand une session a fini son tour, deux quand elle attend une autorisation ou une réponse ; « Basso » de macOS quand elle passe en erreur (converti en WAV au démarrage dans `OFFICE_DIR/sounds/` par `server/sounds.ts`, servi sous `/sounds/` ; ailleurs, un son grave synthétisé). Mêmes déclencheurs que les notifications (`newlyWaiting`) : rien pour la session ouverte sous tes yeux, déjà vue. Le navigateur ne joue rien avant le premier clic ou la première touche dans la page.
 - Les bulles viennent de `src/state/speech.ts` (textes d'assistant et messages envoyés, en direct).
 - **Noms des agents** : à la création d'une conversation, `--append-system-prompt` donne à Claude le nom de sa session (`identityPrompt`) et lui demande d'être concis (pas de préambule ni de récapitulatif). Les conversations déjà commencées gardent leur ancien texte. Claude Code garde ce texte tel quel aux reprises, donc après un renommage le nom est rappelé une fois en tête du prochain message ordinaire (`renameNote`, champ `introducedAs`) ; jamais devant une commande slash.
+
+- **Sessions qui se parlent** (vérifié sur 2.1.302, `server/fixtures/peer-message.jsonl`) : `--name` est le nom sous lequel les autres sessions de la machine voient celle-ci (`ListAgents`, `to` de `SendMessage`), accents et espaces compris, à la reprise aussi ; c'est aussi le titre de la conversation dans le `/resume` de Claude Code (« Reprendre » montre « Prénom · première demande »). Un message reçu lance un tour sans ligne `user` dans le flux : il n'arrive qu'à la fin, dans `result.origin` (`kind: "peer"`, `name`, `body`). Le normaliseur en fait un événement `peer`, que le fil remonte en tête du tour. L'`init` donne `messaging_socket_path`, qui permet de nommer une session répondue à sa socket (`uds:/tmp/cc-socks/<pid>.sock`). Une session dont le processus est relâché n'est pas joignable.
+- **Métiers** (`shared/jobs.ts`) : une session lancée sans prénom va à un membre libre dont le métier correspond aux mots-clés de la première demande (`Crew.freeNameFor`), sinon au hasard. Le métier n'entre pas dans le prompt.
 
 ## Limites connues
 

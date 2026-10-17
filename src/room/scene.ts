@@ -34,6 +34,12 @@ export function directionOf(heading: Point): Direction {
 /** Moves a walker along its path at walking speed. Returns true when it reached the end of its path. */
 const advance = (walker: Walker, ms: number) => advanceAlong(walker, WALK_SPEED * ms / 1000);
 
+/** A canvas point on someone, roughly their sprite's box above their feet. */
+function covers(walker: Walker, point: Point): boolean {
+  const feet = toScreen(walker.position);
+  return Math.abs(point.x - feet.x) <= 14 && point.y >= feet.y - 50 && point.y <= feet.y + 4;
+}
+
 export class Scene {
   readonly floor: Floor;
   readonly characters = new Map<string, Character>();
@@ -119,13 +125,16 @@ export class Scene {
 
   /** The person under a canvas point (the one in front when several overlap); people walking out cannot be picked. */
   characterAt(point: Point): Character | null {
-    const hits = [...this.characters.values()].filter((character) => {
-      if (character.phase === 'leaving') return false;
-      const feet = toScreen(character.position);
-      return Math.abs(point.x - feet.x) <= 14 && point.y >= feet.y - 50 && point.y <= feet.y + 4;
-    });
+    const hits = [...this.characters.values()].filter((character) => character.phase !== 'leaving' && covers(character, point));
     hits.sort((a, b) => depthOf(b.position) - depthOf(a.position));
     return hits[0] ?? null;
+  }
+
+  /** Who is under a canvas point, the user included (PLAYER_ID): their name tag shows in full. */
+  personAt(point: Point): string | null {
+    const character = this.characterAt(point);
+    if (character && !(covers(this.player, point) && depthOf(this.player.position) > depthOf(character.position))) return character.person.id;
+    return covers(this.player, point) ? PLAYER_ID : null;
   }
 
   walkPlayerTo(tile: Point) {
