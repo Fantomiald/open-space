@@ -1,0 +1,188 @@
+# Architecture
+
+Comment Open Space marche à l'intérieur : le serveur, le protocole, la salle, et ce qui a été vérifié avec un vrai Claude Code. Pour l'installer et s'en servir, lis le [README](../README.md).
+
+Open Space est parti de [devlikemasta/bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) v0.1.0 (MIT). Le serveur, le protocole et l'interface ont été réécrits ; le copyright d'origine reste dans `LICENSE`.
+
+## Retrouver ses sessions
+
+Mets **http://127.0.0.1:4848** en favori. Cette adresse ne change jamais et ne contient aucun jeton.
+
+- La première fois, un navigateur doit être autorisé avec le lien « Autoriser un navigateur » affiché par le serveur (`/pair?secret=…`). `npm start` l'ouvre tout seul si aucun onglet ne s'est reconnecté dans les 3 s.
+- Ce lien pose un cookie de session valable 400 jours, et le secret reste le même d'un lancement à l'autre. Le favori marche donc après chaque redémarrage.
+- Les onglets restés ouverts se reconnectent seuls (au plus 2 s entre deux essais). Tant que le serveur ne répond pas, ils affichent « Serveur arrêté ». Si le serveur répond mais que ce navigateur n'a pas de cookie valide, ils affichent « pas encore autorisé ».
+
+## Architecture du serveur
+
+| Fichier | Rôle |
+|---|---|
+| `index.ts` | câblage : config, secret, serveur, WebSocket, refus des messages pendant l'arrêt, arrêt propre (SIGINT/TERM/HUP), filets `unhandledRejection`/`uncaughtException` |
+| `http.ts` | fichiers statiques (realpath), `/pair`, upgrade `/ws` ; contrôle du Host, puis de l'Origin, puis du cookie |
+| `security.ts` | secret persistant, cookie, comparaison à temps constant, parseur d'URL qui ne lève jamais, politique Host/Origin |
+| `paths.ts` | `resolveInside`, `resolveAllowedDirectory` (realpath), liste des dossiers proposés |
+| `environment.ts` | liste blanche des variables transmises à `claude`, PATH nettoyé |
+| `config.ts` | variables `OFFICE_*`, `PORT` |
+| `messages.ts` | validation stricte des messages du client |
+| `claude-process.ts` | découverte du binaire, arguments (`buildClaudeArgs`), processus dans son propre groupe |
+| `normalizer.ts` | flux stream-json de `claude` vers `OfficeEvent` ; il ne garde aucune demande en mémoire |
+| `session-state.ts` | machine d'états pure, sans compteur |
+| `session.ts` | une session : processus, machine, journal, et la seule table des demandes en attente |
+| `session-log.ts` | JSONL par session, écriture ordonnée, numéro de séquence, réouverture après une erreur d'écriture |
+| `sessions.ts` | collection, persistance `sessions.json` (fichier temporaire unique), commandes slash, arrêt |
+| `crew.ts` | l'équipe (`crew.json`) : prénoms et looks, validés par `shared/look.ts` |
+
+Données (`OFFICE_DIR`, défaut `~/.open-space`, hors `~/Documents`) : `secret` (0600), `sessions.json` (écrit de façon atomique, 0600), `logs/<id>.jsonl` (0600), `crew.json` (l'équipe, 0600).
+
+### Processus `claude`
+
+`claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --forward-subagent-text --permission-prompt-tool stdio --permission-mode <mode> (--session-id <uuid> | --resume <uuid>) [--model m] [--setting-sources user] [--append-system-prompt …]` (voir `buildClaudeArgs`)
+
+- **Identifiant** : c'est celui de Claude Code (`--session-id` à la création, `--resume` ensuite), soit un seul UUID aléatoire.
+- **Mode d'autorisation** : il est choisi par session. Les choix sont `auto` (par défaut), `acceptEdits`, `manual` et `plan` (`PERMISSION_MODES`). Les anciennes sessions sauvegardées sans mode repartent en `manual`.
+- **`--permission-prompt-tool stdio` est indispensable** : avec `--permission-prompts host` seul, l'appel d'outil est refusé et le CLI émet `system/permission_denied` (testé). Cette option n'apparaît pas dans `claude --help` : à surveiller lors des mises à jour du CLI.
+- **Options retirées** : pas de `--tools`. L'option « restreinte » (`--restricted`) est supprimée, car elle retire Bash. Les anciennes sessions qui la portent se rechargent sans elle.
+- **Cycle de vie** : le CLI n'émet `init` qu'après le premier message. Le processus est donc lancé à l'envoi, puis relâché après `OFFICE_IDLE_MINUTES` d'inactivité (la session reste `wait` et se reprend avec `--resume`). À la fermeture, il est tué avec tout son groupe (SIGTERM puis SIGKILL). Pendant l'arrêt du serveur, aucun processus ne démarre.
+- **Environnement transmis** : liste blanche (PATH, HOME, USER, LANG, TERM, TMPDIR, XDG_*, SSH_AUTH_SOCK, CLAUDE_CONFIG_DIR, CLAUDE_CODE_OAUTH_TOKEN, proxys). Aucune clé API. PATH perd les entrées que `npm start` ajoute (`*/node_modules/.bin` du projet et des dossiers parents, `node-gyp-bin`), sinon un `tsc` nu dans un autre projet prendrait celui d'office. `OFFICE_ENV_PASSTHROUGH=NOM,...` ajoute d'autres variables (les `ANTHROPIC_*` sont refusées).
+
+### États
+
+- `starting` : processus lancé, pas encore d'`init`.
+- `work` : un tour est en cours.
+- `perm` : un appel d'outil attend une réponse (oui/non, ou les réponses d'une question).
+- `wait` : rien ne tourne (tour fini, ou session neuve).
+- `done` : le processus s'est arrêté seul, avec le code 0.
+- `closed` : fermée par toi, ou serveur arrêté pendant le travail.
+- `error`.
+
+Un `result` ramène toujours la session en `wait`. Un message envoyé pendant un tour n'est pas écrit au CLI : il attend dans `queued` (gardé dans `sessions.json`, visible au-dessus du champ de saisie, retirable ou à modifier) et part à la fin du tour, les messages ordinaires ensemble, une commande slash seule. « Envoyer maintenant » (`sendNow`) interrompt le tour, puis envoie la file. Une sortie pendant `wait` (tâche de fond) repasse quand même la session en `work`. Les demandes en attente vivent dans une seule table, dans `Session`. Elles sont annulées à la fin du tour et à la sortie du processus.
+
+### « À toi » (côté client, `src/state/queue.ts`)
+
+- **Autorisation** : `perm` avec une demande oui/non.
+- **Question pour toi** : `perm` avec un appel `AskUserQuestion`.
+- **Terminé, à voir** : fin de tour pas encore vue.
+- **Erreur** : erreur pas encore vue.
+
+« Vu » se règle par navigateur, en `localStorage` : c'est le dernier `seq` affiché quand la session est ouverte et l'onglet visible. Une session vue passe dans « Prêtes » (ou « Fermées » pour une erreur). Le titre de l'onglet ne compte que ce qui est dans « À toi ». Le serveur garde la fin du dernier message (400 derniers caractères) : c'est le texte des notifications.
+
+### Questions (`AskUserQuestion`)
+
+Elles sont disponibles en `-p` avec `--permission-prompt-tool stdio` (vérifié en 2.1.301, y compris en mode `auto`). Une question arrive comme `control_request` `can_use_tool` avec `tool_name: "AskUserQuestion"` et `input.questions[]` (`question`, `header`, `options[{label, description}]`, `multiSelect`).
+
+- **Panneau détail** : il affiche chaque question avec ses options en boutons (plusieurs choix si `multiSelect`) et un champ « Autre ».
+- **Réponse** : elle part en `control_response` `allow` avec `updatedInput: { ...input, answers: { "<texte de la question>": "<label>" } }`. Plusieurs labels sont joints par « , ». C'est la forme de la doc Agent SDK (« Handle approvals and user input »), confirmée par un test réel : la réponse « Blue » est revenue au modèle.
+- **Limites (doc)** : de 1 à 4 questions, de 2 à 4 options chacune, indisponible dans les sous-agents.
+
+### Protocole (`shared/protocol.ts`)
+
+- **Transport** : une WebSocket `/ws`, sans paramètre (l'authentification passe par le cookie).
+- **Client** : `create`, `send`, `answer` (`allow|deny|always`), `reply` (réponses à une question), `interrupt`, `close`, `rename`, `forget`, `log {after}`, `directories`.
+- **Serveur** : `hello` (sessions, commandes, racines, quota, `crew` = l'équipe et son look), `crew` (l'équipe après un changement), `session` (mise à jour d'une session), `ev {sessionId, seq, at, ev}`, `log`, `commands`, `quota`, `forgotten`, `directories`, `toast`.
+- **Quota** : chaque `rate_limit_event` de Claude Code donne ses fenêtres d'usage (`unifiedWindows` : `five_hour`, `seven_day`, et d'autres le cas échéant) ; le serveur les garde toutes (`Quota.windows`) et les retient d'un lancement à l'autre tant que la fenêtre de 5 h n'est pas repartie à zéro. L'en-tête montre la fenêtre de 5 h ; au survol, toutes les fenêtres et l'heure à laquelle chacune repart à zéro.
+- **Session** : `subagents` est la liste des sous-agents au travail (`{id, name, type}`, vidée à la sortie du processus) ; `command` est la dernière commande slash envoyée, sans le `/` (`plugin:commande`), conservée jusqu'à la suivante.
+- **Événements** : ils ne portent plus de libellés français ni de « métier » (`hire.role`, `act.kind`/`act.label`, `ask.label`/`ask.full` retirés avec le bureau pixel). Les anciens journaux qui les contiennent se relisent sans problème (champs ignorés).
+
+**Resynchronisation** :
+- Chaque événement porte un `seq` propre à sa session. Le client garde le dernier `seq` reçu des sessions suivies. Après une reconnexion, ou si un `seq` saute, il demande `log {after}`.
+- Le serveur garde 5000 événements par session en mémoire. Au-delà, il renvoie `truncated: true`, et le fichier JSONL reste complet.
+
+**« Toujours »** : c'est une autorisation, plus la règle `addRules` proposée par le CLI, forcée à la destination `session`. Rien n'est écrit dans tes réglages.
+
+### Sécurité
+
+- **Réseau** : le serveur est lié à `127.0.0.1`. Le Host doit être exact sur toute requête, l'Origin exact pour le WebSocket. `//` et `/\` sont rejetés, un `%` malformé donne 400.
+- **Cookie** : il est HttpOnly et SameSite=Strict, et sa valeur est le secret de `OFFICE_DIR/secret`. Seul `/pair` avec ce secret le pose. Le WebSocket exige Host, Origin et cookie.
+  - Pourquoi pas un cookie distribué à chaque chargement de page : tout processus local, y compris un autre compte de la machine, pourrait l'obtenir par un simple `GET /` avec le bon Host. Il pourrait alors piloter des sessions qui lancent des commandes sous ton compte. Avec le secret, seul ce qui peut lire `~/.open-space` (ton compte) ou ton historique de navigation peut s'autoriser.
+- **Chemins** : realpath partout (dossier d'une session, fichiers statiques).
+- **Messages et ressources** : les messages du client sont validés. Le nombre de processus est limité (`OFFICE_MAX_LIVE`). Un heartbeat WebSocket tourne, et un client qui ne lit pas est coupé. Les fichiers de données sont en 0600.
+
+## Changer le design
+
+- **Icônes** : Lucide (`lucide-react`, version épinglée), toutes passées par `src/command/Icons.tsx` (même taille, même trait).
+- **Panneaux** : les couleurs, typographies et espacements sont dans `src/design/tokens.css` (un seul thème, sombre), la mise en forme dans `src/design/components.css`. Les composants `src/command/*.tsx` ne portent que des `className` et des `data-*`. Un nouvel habillage se fait donc entièrement en CSS.
+- **Refonte de structure** : la disposition, les textes et les sections vivent dans les composants. Changer la structure demande de réécrire `src/command/*.tsx`. La frontière propre est `src/state/` + `src/net/`.
+- **Salle** : exception assumée aux tokens. Toutes ses couleurs sont dans `src/design/room-palette.ts` (pièce, meubles, lumière, bulles) et `src/design/people-palette.ts` (personnages, pastilles de l'éditeur) ; `src/room/room.css` les lit par des variables `--room-*` posées par `RoomView`. Elle ne suit pas le thème clair/sombre.
+
+## Salle (`src/room/`)
+
+Tout est dessiné en code, en pixel art (aucune image externe, aucun appel réseau). Un pixel d'art vaut deux pixels de salle (`ART_SCALE`), et la salle est dessinée en 640 × 480 sur un canvas deux fois plus grand (`RENDER_SCALE`).
+
+| Fichier | Rôle |
+|---|---|
+| `shared/room-layout.ts` | les deux plans (20 × 14 cases chacun, type `Layout`). `OFFICE`, façon bureau-des-agents : trois fenêtres et une horloge au mur du fond ; trois îlots de postes sur des tapis (12 places, face à nous) ; le bureau de l'utilisateur au centre ; fontaine, imprimante et baie serveur ; coin lecture et coin café. `LOUNGE`, la salle de repos : cinq canapés face à nous et un canapé mural (23 places, une sur deux d'abord), un fauteuil pour l'utilisateur, tables basses, télé au mur. `layoutOn` ajoute le mobilier de la fête du jour (`FESTIVAL_PIECES` : sapin, piscine, enceintes, kumquats, œufs… et des objets posés sur les bureaux et les tables basses, au champ `top`) |
+| `floor.ts` | le sol d'une pièce (`Floor`) : places, porte, cases libres, trajets vers une place ou la porte, places où l'utilisateur peut s'asseoir |
+| `geometry.ts` | grille isométrique (tuile ↔ pixel) |
+| `paths.ts` | trajets case par case en huit directions, autour des meubles et sans couper leurs coins |
+| `seats.ts` | attribution stable des places, dans l'ordre du plan ; la place de l'utilisateur est réservée |
+| `cast.ts` | sessions → personnages, par pièce. Bureau : priorité « à toi », puis au travail, puis en attente. Salle de repos : les sessions mises au repos et les fermées (sauf une erreur pas encore vue, qui reste au bureau). « +N » déroule celles sans place. Les sous-agents ne s'assoient pas : leurs têtes s'affichent à côté de l'étiquette de leur session ; ce qu'ils écrivent reste dans leur onglet, sans bulle |
+| `scene.ts` | la simulation (entrées, sorties, marche, clic), sans DOM ; l'utilisateur est assis au bureau du boss (son écran s'allume), s'en va quand on clique le sol, et s'assoit là où on clique une place (`playerSpots` : son bureau, le canapé du coin lecture ; dans la salle de repos, n'importe quel canapé) ; cliquer quelqu'un ouvre sa session sans le faire bouger |
+| `pet.ts` | l'animal du bureau, choisi dans Équipe (onglet Animal) ou au premier lancement (`Preferences.pet`, `shared/pets.ts`) : un chat (motif uni, tigré, tricolore ou smoking), un chien (7 races : forme, oreilles, queue, marques, collier), un canard en plastique, un capybara, un axolotl, Rocky de *Projet Dernière Chance*, ou aucun ; une seule couleur au choix (et les yeux d'un chat), qui part de celle du motif, de la race ou de l'espèce (`furOf`). Il se promène, s'assoit, fait sa toilette (le chien halète, Rocky bricole), dort, et parle à sa façon (`petWords`) ; cliqué, il s'arrête, parle, et des cœurs s'envolent. Les premiers pelages nommés d'après leur couleur deviennent un chat uni de cette couleur (`parsePet`) |
+| `bubbles.ts` | texte des bulles et pile qui remonte |
+| `pixel-art.ts` | outils : remplissage net de polygones, contour d'un pixel, boule ombrée, tons dérivés d'une couleur |
+| `chibi.ts` | les personnages (16 × 25 pixels d'art) dessinés d'après un `Look` ; chaque pose est dessinée une fois puis gardée ; look stable pour un inconnu (`lookOfStranger`) ; tête pour les bulles |
+| `pixel-furniture.ts` | les meubles en volumes sur la grille, dessinés une fois par état (écran allumé ou non) |
+| `backdrop.ts` | sol en lattes, tapis, murs lambrissés, porte ; fenêtres (ciel et ville de l'heure) et horloge, repeintes au quart d'heure |
+| `lighting.ts` | la lumière d'une heure (teinte, soleil, ciel, étoiles, intensité des lampes) |
+| `draw.ts` | une image : décor, soleil par les fenêtres, meubles et gens par profondeur, puis la carte de lumière (teinte de l'heure + lampes, écrans, couloir, ville) multipliée sur tout, un léger halo, les voyants de la baie, les étiquettes |
+| `RoomView.tsx` | une pièce (`room`), remontée quand on change de pièce ; boucle à 15 images/s, arrêtée quand l'onglet est caché ; clics ; bulles en HTML (deux lignes), un clic sur une bulle ouvre la session. La lumière suit l'heure réelle |
+| `shared/festivals.ts` | le calendrier : 14 fêtes (Nouvel An, Épiphanie, Nouvel An chinois (dates listées jusqu'en 2035), Chandeleur, Saint-Valentin, Songkran, Pâques (calculée), 1er mai, Fête de la musique, 14 juillet, été, l'anniversaire de chaque membre de l'équipe qui a donné sa date (la bannière prend son prénom), Halloween, Noël). Une fête par jour : celles d'un jour passent devant les longues |
+| `festivals.ts`, `halloween.ts`, `wall-art.ts` | ce que chaque fête peint aux murs, différent dans le bureau et la salle de repos (bannières en police 3 × 5, fanions, guirlandes, lanternes…), l'image de la télé de la salle de repos, les confettis au sol, les lumières de la nuit et ce qui bouge (ampoules, bougies, neige et feux d'artifice aux fenêtres, notes, cœurs, jets d'eau) |
+| `outfits.ts` | les tenues de fête par-dessus le look : bonnet, chapeau pointu, couronne (les « invités » du jour, voir `festivalDay` : à l'Épiphanie l'utilisateur et un membre de l'équipe tiré pour l'année, à un anniversaire celui ou celle dont c'est l'anniversaire ; les autres ont un chapeau pointu), oreilles de lapin, béret, casque, lunettes de soleil, maillot, pistolet à eau (l'utilisateur à Songkran). `chibi.ts` pose les chapeaux sur le haut de chaque coiffure (`HAIR_TOP`) ; le sprite a 8 rangées de plus en haut pour eux (`HAT_ROWS`) |
+
+- **La porte** : au survol, elle s'entoure de blanc ; cliquée, l'utilisateur y marche et l'autre pièce s'ouvre (`Scene.walkPlayerOut`, `playerWentOut`). Dès qu'on change de pièce (porte ou icônes de l'en-tête), l'utilisateur y entre par la porte, debout (`enteredThroughDoor`) ; au premier chargement, il est assis à sa place.
+- **Salle de repos** (icône canapé de l'en-tête) : « Repos » (icône ZZ du panneau) libère le processus de la session (`rest`, champ `resting`) ; elle va s'asseoir sur un canapé et dort (yeux fermés, Z). Un message la rappelle au bureau (la conversation reprend par `--resume`). « Éteindre » (icône marche/arrêt, avec confirmation) l'oublie : elle disparaît du poste, avec son fil ; la conversation Claude Code reste sur le disque.
+- Aux bureaux, les gens sont assis un peu surélevés (`DESK_SEAT_LIFT`) : épaules et torse dépassent du plateau, derrière le capot argenté du portable posé devant eux (ils regardent vers +y, donc en bas à gauche à l'écran). Vus de trois quarts (ils regardent en bas à gauche), le côté droit de l'écran est le plus proche : en tapant, le bras proche descend jusqu'au coude dans le sprite, puis son avant-bras court et épais et sa main en moufle sont dessinés après le bureau, posés sur la partie du clavier visible à droite du capot (`drawTypingHand`) ; l'autre bras reste derrière le capot.
+- Le fil affiche tout le Markdown de GitHub (`src/lib/markdown.ts` + `.cp-prose`) : tableaux (qui défilent sur le côté s'ils sont larges), titres, listes et cases à cocher, citations, code, séparateurs ; le HTML brut reste échappé.
+- Assis, une session qui travaille tape au clavier ; une qui attend une autorisation ou une réponse lève le bras sous un « ! » plus gros. Les écrans en service se voient à leur lumière, le café du coin cuisine fume.
+- **Question à côté (`/btw`)**, comme dans Claude Code : `/btw <question>` dans le champ d'une session part tout de suite, même pendant un tour, sans passer par la file. Le `/btw` de Claude Code est interactif (absent en `-p`) : le poste lance un second `claude -p --resume <id> --fork-session --no-session-persistence` qui répond à partir de la conversation (vérifié : ~5 s, aucun fichier de session laissé) ; sans `--permission-prompt-tool`, tout ce qui demande une autorisation est refusé. La réponse s'affiche au-dessus du champ (`AsidePanel`), n'entre ni dans la conversation ni dans le journal ; la fermer retire la question en cours (`server/aside.ts`).
+- **Premier lancement et réglages** : tant que `settings.json` n'a pas `onboarded: true`, la page n'affiche que `Onboarding.tsx` : bienvenue (Claude Code trouvé ou non), « Toi » (prénom, perso, anniversaire : le membre `self` de l'équipe, qui commence vide), « Tes dossiers » (`suggestRoots` propose les dossiers du home qui contiennent des projets, sans ouvrir Desktop ni Documents pour ne pas déclencher la demande d'accès de macOS), « Tes habitudes » (modèle et mode par défaut, son, notifications, fêtes, un mot ajouté au prompt de chaque nouvel agent). Les dossiers choisis sont les racines (`config.roots`), sauf si `OFFICE_ROOTS` est définie. Ensuite : l'engrenage du bandeau (`SettingsDialog.tsx`, mêmes champs via `PreferenceFields.tsx`). Le prénom de l'utilisateur vient du membre `self` (étiquette, prompt d'identité) ; aucun prénom n'est écrit en dur.
+- **Aperçu des fêtes** : l'icône calendrier du bandeau (`src/command/PreviewMenu.tsx`) choisit une fête et une heure à la place d'aujourd'hui et de maintenant (store `preview`, rien n'est gardé). La salle est remontée quand la fête change (`key` dans `App.tsx`, `useFestival`).
+- **Fil d'une session** (`src/command/Feed.tsx`, logique dans `src/state/feed.ts`) : un onglet « Conversation » (toi, l'agent de la session, les questions et autorisations de tous, une ligne par sous-agent) et un onglet par sous-agent (sa mission, ce qu'il a dit et fait, son rapport). Les actions à la suite sont regroupées en une ligne qui se déplie. Le message en cours d'écriture s'affiche au fur et à mesure (`--include-partial-messages`) : le serveur relaie le texte reçu jusque-là au plus toutes les 80 ms (message `partial`, hors journal), et le message complet le remplace (`src/state/partials.ts`).
+- **Checklist** (`src/command/TodoList.tsx`) : épinglé en bas à gauche de l'écran dans les deux vues, une ligne par session qui attend (répondre, autoriser, lire, voir une erreur), la plus urgente d'abord.
+- **Lancer une session** (`src/command/Launcher.tsx`) : tant qu'aucune session n'est ouverte, la colonne de droite est un champ de saisie avec son dossier (facultatif : le dossier par défaut des réglages), « Qui ? » (un membre de l'équipe ; s'il a déjà une session, le suivant libre s'en charge et un message le dit ; l'équipe épuisée, un prénom de la réserve), son modèle et ses autorisations ; Entrée lance la session, qui s'ouvre à sa place. `N` y met le curseur ; `Maj+N` lance tout de suite une session dans le dossier par défaut (modèle et mode des réglages, sans message). `Échap` interrompt la session ouverte quand elle travaille (même depuis le champ de saisie), sinon masque le panneau.
+- **Radio** (`src/command/Radio.tsx`) : en haut à gauche, trois webradios lo-fi en direct (MP3, noms tirés de leurs en-têtes ICY, vérifiées le 2026-10-16), lues par le navigateur (le serveur reste sans appel sortant ; la CSP `media-src` autorise `https:`). Station et volume retenus.
+- **Reprendre une conversation** (onglet « Reprendre » du lanceur) : `server/conversations.ts` liste les conversations Claude Code du dossier, celles de `~/.claude/projects/<dossier, tout sauf lettres et chiffres changé en « - »>/<id>.jsonl`, avec leur titre (`customTitle` ou `aiTitle`) et ton premier message. La session ouverte garde l'id de la conversation et la continue par `--resume` ; ses derniers échanges, lus à la fin du fichier, sont recopiés dans le fil sous une note. Ce format est celui de Claude Code, non documenté : seuls quelques champs sont lus, et ce qui ne colle pas est ignoré. `/resume` lui-même n'existe pas en `-p`.
+- **Tags** : un libellé court par session (`tag`, message `tag`, gardé dans `sessions.json`), modifiable dans le panneau, affiché au-dessus du prénom dans la salle. L'oubli (« Éteindre ») ferme d'abord la session si elle tourne.
+
+- La carte de lumière est calculée en basse résolution et gardée tant que l'heure et les écrans allumés ne changent pas : la nuit ne coûte presque rien de plus que le jour.
+- **Équipe** (bouton « Équipe ») : les personnes de l'utilisateur, chacune un prénom, un `Look` et une date d'anniversaire facultative (peau, dont des peaux fantaisie, yeux, 16 coiffures, 9 barbes, lunettes ou lunettes de soleil, chapeau, dont ceux des fêtes, casque, 14 hauts dont la robe, 4 bas dont la jupe, 7 chaussures, montre, et leurs couleurs, voir `shared/look.ts` ; les traits venus après les premiers looks sont facultatifs dans le fichier, `LATER_TRAITS`, pour qu'un look ancien reste valable ; le chapeau d'une fête passe par-dessus celui du look, `wornOutfit`), dans `OFFICE_DIR/crew.json` (`server/crew.ts`) ; l'utilisateur y est l'entrée `self`, créée au premier lancement (l'équipe commence vide). Un membre enregistré avant les looks (ancienne figure Habbo) garde son prénom et prend le look par défaut. L'éditeur (`src/command/CrewDialog.tsx`) montre le personnage qui marche sur place, dans les quatre directions. Une session sans prénom prend au hasard quelqu'un de l'équipe qui n'a pas de session (`randomFreeName`), puis, l'équipe épuisée, un prénom tiré au hasard de la réserve (`server/names.ts`) avec un look à lui ; une session ou un sous-agent qui porte le prénom d'un membre porte son look.
+- **Images** : coller une capture (Cmd+V), la glisser-déposer sur le panneau ou le lanceur, ou le trombone. La page les réduit à 1568 px de côté (`src/lib/images.ts`, PNG, JPEG au-delà de 2,5 Mo) avant de les envoyer en base64 ; le serveur les valide (`MAX_IMAGES` = 8, 5 Mo chacune, PNG/JPEG/GIF/WebP), les garde dans `OFFICE_DIR/attachments/` sous leur empreinte SHA-256 et les sert sous `/attachments/` aux seuls navigateurs appairés ; elles partent à Claude Code comme blocs `image` à côté du texte (vérifié avec un vrai `claude -p`). Dans la file d'attente, elles restent en mémoire : un redémarrage garde le texte, pas l'image.
+- **Notifications macOS** (la cloche) : le serveur prévient quand une session a fini son tour (sauf un tour interrompu par l'utilisateur ou aussitôt suivi de la file), demande une autorisation, pose une question ou plante, et seulement si aucun onglet du poste n'est au premier plan (chaque onglet le signale : message `presence`). Réglage gardé dans `OFFICE_DIR/settings.json`. L'app macOS les affiche (`showNotification`, à son nom et à son icône) quand elle tourne, sinon `osascript` ; un clic doit rouvrir le poste sur la session (`#session=<id>`, géré par `App.tsx`) : non vérifié, faute de clic pendant les tests. Les notifications du navigateur ont été retirées.
+- **Recherche** (loupe du panneau, ou Cmd+F) : dans le fil ouvert, sans tenir compte des majuscules ni des accents (`src/lib/search.ts`), surlignée par l'API CSS Custom Highlight (aucun élément ajouté au fil) ; Entrée et Maj+Entrée vont au suivant et au précédent, un résultat dans des actions repliées les déplie, Échap ferme sans interrompre la session. Pendant la recherche, tout le fil est affiché (pas seulement les 300 dernières lignes).
+- **Questions** (AskUserQuestion) : une à la fois comme dans Claude Code, un onglet par question et un dernier pour envoyer ; un choix unique passe à la suivante, Précédent / Suivant ou les flèches ← → naviguent, le dernier onglet récapitule.
+- **« Toujours »** : la carte d'autorisation dit en clair ce que la règle suggérée par Claude Code autorise jusqu'à la fin de la session (`ruleText`).
+- **Artifacts** : `claude -p` n'a pas les outils Artifact (publier une page sur claude.ai) sauf avec `CLAUDE_CODE_ARTIFACT=1`, variable non documentée vérifiée sur 2.1.301 ; `server/environment.ts` la pose pour chaque session.
+- **Dossiers qui font tourner du code à eux** (`server/trust.ts`) : avec `claude -p`, Claude Code saute sa question de confiance, et les hooks de `.claude/settings*.json` comme les serveurs de `.mcp.json` d'un dossier inconnu démarrent (vérifié sur un dossier piégé). Le poste refuse donc de lancer une session dans un tel dossier tant que l'utilisateur n'a pas répondu (`trustNeeded`) : lui faire confiance (gardé dans `OFFICE_DIR/trusted-folders.json`), ou lancer sans ses réglages (`--setting-sources user` : ni ses hooks ni ses serveurs, les siens restent ; vérifié ; `untrusted` sur la session). Seule compte l'approbation du dossier exact dans Claude Code (`~/.claude.json`), pas celle d'un parent. Le `CLAUDE.md` du dossier est lu dans tous les cas.
+- **Mini-fenêtre** (icône en bas à droite de la salle, navigateurs Chromium : Chrome, Arc, Edge) : la salle dans une fenêtre qui reste au-dessus des autres (Document Picture-in-Picture, `src/room/pip.ts`). Les styles de la page y sont recopiés et `RoomView` y rend la pièce par un portail, donc les clics et les bulles marchent ; l'animation suit l'horloge de cette fenêtre (l'onglet, caché, a ses minuteurs ralentis). Toute la pièce y est montrée, sans le recadrage des petits écrans. Elle reste ouverte d'une pièce à l'autre (gardée par `App`, `useSmallWindow`). Elle se ferme quand on revient sur l'onglet. L'ouverture automatique en quittant l'onglet (action `enterpictureinpicture` de la Media Session) a été essayée puis retirée : Arc ne l'offre pas à cette page.
+- **App macOS** : `python3 scripts/macos-app.py` crée `~/Applications/Open Space.app`, une applet AppleScript qui reste ouverte dans le Dock (`osacompile -s`). L'ouvrir lance `npm start` en arrière-plan si le serveur ne tourne pas (sortie dans `~/.open-space/server.log`, avec le PATH du shell de connexion et Node 22 devant, car une app du Dock reçoit un PATH nu), sinon ouvre la page ; la recliquer rouvre la page. Si Arc est installé, la page s'ouvre dans sa fenêtre au premier plan, dans l'onglet du poste s'il existe (`scripts/open-in-arc.applescript`, aussi utilisé par `npm start` ; macOS demande une fois d'autoriser le contrôle d'Arc ; repli sur le navigateur par défaut) ; la quitter envoie SIGTERM au serveur sur le port 4848, même s'il a été lancé d'un terminal. Icône : le buste de l'utilisateur sur fond de nuit. La page le dessine depuis son look (`chibiBust`), en fait le favicon de l'onglet (`chibiIcon`) et l'envoie au serveur, qui le garde dans `OFFICE_DIR/avatar.png` ; le script le prend (à relancer après un changement de look), sinon `scripts/icon-head.png`, le buste du look par défaut. Il faut Pillow. `public/favicon.svg` est le favicon par défaut, avant que la page connaisse l'utilisateur. Le script retire l'`Assets.car` de l'applet (il passerait devant l'icône) et la resigne en ad hoc. À relancer si le projet ou Node change de place.
+- **Son** (icône haut-parleur de l'en-tête, activé par défaut) : `src/lib/chime.ts` synthétise un ding (Web Audio, aucun fichier) quand une session a fini son tour, deux quand elle attend une autorisation ou une réponse ; « Basso » de macOS quand elle passe en erreur (converti en WAV au démarrage dans `OFFICE_DIR/sounds/` par `server/sounds.ts`, servi sous `/sounds/` ; ailleurs, un son grave synthétisé). Mêmes déclencheurs que les notifications (`newlyWaiting`) : rien pour la session ouverte sous tes yeux, déjà vue. Le navigateur ne joue rien avant le premier clic ou la première touche dans la page.
+- Les bulles viennent de `src/state/speech.ts` (textes d'assistant et messages envoyés, en direct).
+- **Noms des agents** : à la création d'une conversation, `--append-system-prompt` donne à Claude le nom de sa session (`identityPrompt`) et lui demande d'être concis (pas de préambule ni de récapitulatif). Les conversations déjà commencées gardent leur ancien texte. Claude Code garde ce texte tel quel aux reprises, donc après un renommage le nom est rappelé une fois en tête du prochain message ordinaire (`renameNote`, champ `introducedAs`) ; jamais devant une commande slash.
+
+## Limites connues
+
+- Commandes slash : liste globale (la dernière vue), pas par dossier. Dans la palette et l'autocomplétion du champ de saisie, les commandes des plugins (`plugin:commande`) passent en tête, puis `/btw`. Sont masquées : `__*`, `mcp__*`, ainsi que `clear`, `color`, `focus` et `heapdump` (inutilisables ici, d'après la référence des commandes).
+- Une session dont la reprise échoue (conversation purgée par Claude Code) passe en `error`. Il n'y a pas de repli automatique vers une session neuve.
+- Un onglet en arrière-plan depuis longtemps peut voir ses minuteurs ralentis par le navigateur. S'il ne revient pas dans les 3 s, `npm start` ouvre un onglet de plus.
+- « Vu » est enregistré par navigateur, pas sur le serveur.
+- Sous-agents (vérifié avec un vrai `claude -p`, `server/fixtures/subagent-forwarded.jsonl`) : `--forward-subagent-text` envoie ce qu'ils écrivent et pensent, sous leur `parent_tool_use_id`, sans rien leur faire écrire de plus. Chaque sous-agent finit par une `task_notification`, au premier plan comme en arrière-plan, avant le résultat de l'appel Agent : son rapport est `handback_report.text` (le `summary` dit alors seulement qu'il a été remis), sinon le `summary`. Un agent lancé en arrière-plan rend tout de suite un résultat `async_launched` : il reste au travail jusqu'à sa notification, et le processus n'est pas relâché tant qu'il en reste un.
+- Salle : 12 places au bureau, 23 en salle de repos. Les sessions passent avant les sous-agents ; un sous-agent sans place n'est pas montré. Le titre d'une session garde la dernière commande de plugin tant qu'une autre commande slash ne la remplace pas. Les réponses données depuis un autre onglet ne font pas de bulle. On répond aux autorisations et aux questions dans le panneau Detail.
+- L'environnement ne gère que macOS/Linux (pas de variables Windows).
+- Accessibilité :
+  - la navigation au clavier et les `<dialog>` sont natifs, et les nouvelles attentes sont annoncées au lecteur d'écran ;
+  - l'interface n'a pas été auditée avec un lecteur d'écran ;
+  - la salle (canvas) n'est pas accessible au lecteur d'écran : seuls la checklist, le « +N » et le panneau le sont.
+
+## Reste à faire
+
+- `npm audit` régulier et Dependabot.
+- Séparer la donnée du libellé dans les événements `act` et `ask`, stockés avec leurs textes français déjà rendus : c'est le préalable à une traduction de l'interface.
+- Commandes slash par dossier.
+- Interface mobile, au-delà de la salle recadrée.
+
+## Non vérifié
+
+- Le clic sur une notification macOS qui rouvre la page sur sa session (`#session=<id>`) : écrit, jamais cliqué pendant les essais.
+- `npm start` avec un onglet déjà connecté : le cas « aucun onglet » a ouvert le lien comme prévu (testé avec un faux `open`). Le cas où un onglet se reconnecte avant 3 s n'a pas été lancé en réel.
+- Navigateurs : utilisé au quotidien avec le vrai CLI dans Arc et testé dans Chromium (Playwright) ; ni Firefox, ni Safari, ni lecteur d'écran.
+- Comportement après une mise à jour du CLI : le format stream-json n'est pas versionné, et les tests rejouent des captures de la 2.1.301.

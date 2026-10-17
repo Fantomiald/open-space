@@ -1,0 +1,43 @@
+// The linter: Biome's recommended rules, minus a few that fight choices made on purpose (each one says why).
+// The formatter is off: the code keeps its own layout.
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": ["server/**", "shared/**", "src/**", "scripts/**/*.{ts,mjs}", "!src/zz-*", "!server/fixtures"]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        // canvas, dialog and element references that exist by construction
+        "noNonNullAssertion": "off"
+      },
+      "correctness": {
+        // extra dependencies are deliberate triggers (scroll to the end when the thread grows); missing ones still fail
+        "useExhaustiveDependencies": { "level": "error", "options": { "reportUnnecessaryDependencies": false } }
+      },
+      "a11y": {
+        // dialogs put the focus in their first field when they open, as the WAI-ARIA dialog pattern asks
+        "noAutofocus": "off",
+        // the command suggestions are a listbox of options driven from the text field (aria-activedescendant)
+        "noNoninteractiveElementToInteractiveRole": "off",
+        "useFocusableInteractive": "off",
+        // clicks caught by a container (copy buttons, a dialog's backdrop, the speech bubbles) have real buttons for the keyboard
+        "useKeyWithClickEvents": "off",
+        "noStaticElementInteractions": "off",
+        // the thread is a scrollable region: it takes the focus so the keyboard can scroll it
+        "noNoninteractiveTabindex": "off",
+        // roles on purpose: tab lists and groups styled as segmented controls, not fieldsets
+        "useSemanticElements": "off"
+      }
+    }
+  },
+  "css": { "linter": { "enabled": true } },
+  "overrides": [
+    // the stylesheets are ordered by component, not by specificity
+    { "includes": ["src/design/*.css", "src/room/*.css"], "linter": { "rules": { "style": { "noDescendingSpecificity": "off" } } } }
+  ]
+}

@@ -1,0 +1,59 @@
+# Dependencies and build output (npm install and npm run build make them again)
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.vite/
+.cache/
+
+# Secrets and local environment. Open Space's own data (pairing secret, sessions, crew) lives in
+# ~/.open-space, outside the project; keep it there. The lines after .env catch it if OFFICE_DIR ever points inside.
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secret
+.open-space/
+/data/
+crew.json
+sessions.json
+settings.json
+logs/
+attachments/
+*.sqlite
+*.sqlite3
+*.db
+
+# Python bytecode (scripts/macos-app.py)
+__pycache__/
+*.pyc
+
+# Logs and temporary files
+*.log
+*.tmp
+*.local.*
+
+# Local tools: editors, Claude Code's per-machine files, Playwright captures and reports, the temporary preview pages
+# used to check the room by hand (src/zz-*), screenshots dropped at the root (docs/images is where real ones go)
+.vscode/
+.idea/
+*.swp
+*~
+.claude/
+.playwright-mcp/
+playwright-report/
+test-results/
+src/zz-*
+/*.png
+/*.jpg
+/*.jpeg
+
+# Operating system files
+.DS_Store
+Thumbs.db

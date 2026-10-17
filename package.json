@@ -1,0 +1,54 @@
+{
+  "name": "open-space",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis le navigateur.",
+  "author": "Fantomiald",
+  "license": "MIT",
+  "homepage": "https://github.com/Fantomiald/open-space#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fantomiald/open-space.git"
+  },
+  "bugs": "https://github.com/Fantomiald/open-space/issues",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "agents",
+    "pixel-art",
+    "dashboard"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node scripts/check-node.mjs && vite build --logLevel warn && node server/index.ts --open",
+    "dev": "node scripts/dev.ts",
+    "build": "vite build",
+    "serve": "node server/index.ts",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "lint": "biome lint",
+    "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/pixelify-sans": "^5.3.0",
+    "lucide-react": "1.50.0",
+    "marked": "^18.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "ws": "^8.22.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
