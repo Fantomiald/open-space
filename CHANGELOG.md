@@ -1,5 +1,10 @@
 # Versions
 
+## 1.0.2
+
+- Le choix du dossier dans le lanceur s'ouvre au-dessus du champ, assez large pour lire les chemins. Sous Safari, la liste du navigateur était trop étroite et sortait de la fenêtre.
+- Un dossier tapé avec `~` (`~/Projects/truc`) est accepté.
+
 ## 1.0.1
 
 - Les sessions se parlent : chacune est lancée sous son prénom (`claude --name`), les autres la trouvent par lui. Un message reçu d'une autre session s'affiche dans le fil, avec la tête de l'expéditeur.

@@ -1,6 +1,7 @@
 // Path guards. Everything is compared on real paths (symlinks resolved), never on lexical ones:
 // a symlink created inside an allowed folder must not be able to lead outside of it.
 import { readdirSync, realpathSync, statSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 /** True when `child` is `parent` or inside it. Both must already be real paths. */
@@ -21,11 +22,12 @@ export function resolveInside(root: string, candidate: string): string | null {
   }
 }
 
-/** The real path of an existing directory that lies inside one of the allowed roots, otherwise null. */
-export function resolveAllowedDirectory(directory: string, roots: readonly string[]): string | null {
-  if (!path.isAbsolute(directory)) return null;
+/** The real path of an existing directory that lies inside one of the allowed roots, otherwise null. "~" is the home, as the page shows it. */
+export function resolveAllowedDirectory(directory: string, roots: readonly string[], home = os.homedir()): string | null {
+  const expanded = directory === '~' || directory.startsWith('~/') ? path.join(home, directory.slice(1)) : directory;
+  if (!path.isAbsolute(expanded)) return null;
   try {
-    const real = realpathSync(directory);
+    const real = realpathSync(expanded);
     if (!statSync(real).isDirectory()) return null;
     for (const root of roots) {
       let realRoot: string;

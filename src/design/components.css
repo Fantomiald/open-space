@@ -607,6 +607,19 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-person__name { font-weight: var(--weight-medium); }
 .cp-person__name small { font-weight: var(--weight-regular); color: var(--color-text-muted); }
 .cp-person__jobs { font-size: var(--text-xs); color: var(--color-text-muted); }
+/* the session's folder: the folders found under the roots, in a panel above the field, wider than it */
+.cp-folder__panel {
+  position: absolute; z-index: 6; left: 0; bottom: calc(100% + var(--space-2)); display: grid; width: max-content; min-width: 100%; max-width: min(28rem, 80vw);
+  max-height: 22rem; overflow-y: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay);
+}
+.cp-folder__option {
+  display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
+  font-size: var(--text-sm); cursor: pointer; white-space: nowrap;
+}
+.cp-folder__option[aria-selected='true'] { background: var(--color-surface); }
+.cp-folder__name { font-weight: var(--weight-medium); color: var(--color-text); }
+.cp-folder__parent { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-xs); color: var(--color-text-muted); }
 
 /* ── The typing indicator at the end of a working session's thread ── */
 .cp-feed__typing { display: inline-flex; gap: 4px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-sunken); justify-self: start; }
