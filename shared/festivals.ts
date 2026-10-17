@@ -1,18 +1,12 @@
 // The days the rooms dress up for: each festival's dates, and which one a day belongs to. Shared because the room
-// layout (what furniture a festival adds) is tested without a browser; what they look like is in src/room/festivals.
+// layout (what furniture a festival adds) is tested without a browser; what they look like is in src/room/festivals,
+// their names in the page's dictionary (t.room.festivals).
 
 export const FESTIVALS = [
   'newYear', 'epiphany', 'chineseNewYear', 'candlemas', 'valentine', 'songkran', 'easter', 'mayDay', 'music', 'bastille',
   'summer', 'birthday', 'halloween', 'christmas',
 ] as const;
 export type Festival = (typeof FESTIVALS)[number];
-
-/** Their names in the preview menu, in the order of the year. */
-export const FESTIVAL_NAMES: Readonly<Record<Festival, string>> = {
-  newYear: 'Nouvel An', epiphany: 'Épiphanie', chineseNewYear: 'Nouvel An chinois', candlemas: 'Chandeleur', valentine: 'Saint-Valentin',
-  songkran: 'Songkran', easter: 'Pâques', mayDay: '1er mai', music: 'Fête de la musique', bastille: '14 juillet', summer: 'Été',
-  birthday: 'Anniversaire', halloween: 'Halloween', christmas: 'Noël',
-};
 
 /** The first day of the Chinese New Year (lunar), by year: there is no simple rule, so the next years are listed. */
 const CHINESE_NEW_YEAR: Readonly<Record<number, [number, number]>> = {

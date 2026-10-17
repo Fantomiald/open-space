@@ -1,5 +1,15 @@
 # Versions
 
+## 1.1.0
+
+- Open Space parle anglais. La langue se choisit au premier lancement et dans les Réglages ; au départ, c'est celle du navigateur. Les messages du serveur et les consignes données aux nouveaux agents suivent la langue choisie.
+- Remote Control : un bouton dans l'en-tête d'une session la rend joignable depuis claude.ai/code et l'app Claude. Elle reste allumée tant qu'il est actif, même sans rien faire.
+- Ce qu'une session a changé : un compteur `+X −Y` dans son en-tête ouvre la liste des fichiers qu'elle et ses sous-agents ont écrits, avec leur diff par rapport au dernier commit.
+- Vie au bureau : les membres de l'équipe sans session passent de temps en temps. Ils prennent un café (parfois à deux), un verre à la fontaine, passent à l'imprimante, regardent par la fenêtre, lisent, s'assoient sur le canapé ou vont à la table de fête. Il y a plus de monde le matin et à midi, presque personne le soir, personne la nuit. Un clic sur l'un d'eux lance une session avec lui. Ça se coupe dans les Réglages.
+- Un clic sur l'écran de ton bureau ouvre un terminal (iTerm s'il est installé, sinon Terminal) dans ton dossier par défaut. La porte et l'écran s'entourent de blanc au survol, avec une étiquette qui dit ce que fait le clic.
+- « C'est moi » dans l'Équipe fait d'un membre ton perso ; au premier lancement, tu peux te choisir dans une équipe déjà importée.
+- Seuls les sous-agents au travail ont un onglet ; les autres passent dans le menu « Terminés », avec leur tête et leur statut. Leurs têtes dans la salle sont de nouveau bien visibles.
+
 ## 1.0.2
 
 - Le choix du dossier dans le lanceur s'ouvre au-dessus du champ, assez large pour lire les chemins. Sous Safari, la liste du navigateur était trop étroite et sortait de la fenêtre.

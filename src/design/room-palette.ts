@@ -69,6 +69,8 @@ export const ROOM_PALETTE = {
     boss: '#3a2a20',
     bossStripe: '#ff8a3d',
     outline: '#0a0b0f',
+    /** around what a click opens (the user's laptop), under the pointer, like the door */
+    highlight: '#ffffff',
   },
   /** Halloween's decorations (src/room/halloween.ts, and the pumpkins of pixel-furniture.ts) */
   halloween: {
@@ -142,6 +144,11 @@ export const ROOM_PALETTE = {
     working: '#4d8dff',
     finished: '#45c46b',
     error: '#e5534b',
+  },
+  /** what a visitor of the crew is doing, in a thought bubble above their head (src/room/activity-icons.ts) */
+  activity: {
+    bubble: '#ffffff', ink: '#1b1f2c', mug: '#e2774a', coffee: '#5a3420', steam: '#a9afc0', water: '#4d9dff', waterLight: '#b9dcff',
+    paper: '#eef0f5', bird: '#4d8dff', beak: '#f4a72a', cover: '#d8454b', pages: '#fbf3df', screen: '#7cc6ff', balloon: '#ff5f7e', shine: '#ffd0da',
   },
   tag: 'rgba(15, 20, 35, 0.72)',
   tagText: '#f4f1e8',

@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
-import { FESTIVALS, FESTIVAL_NAMES, festivalDay, type Festival } from '../../shared/festivals.ts';
+import { FESTIVALS, festivalDay, type Festival } from '../../shared/festivals.ts';
+import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 import { CalendarIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
 
-const hourLabel = (hour: number) => `${Math.floor(hour)} h ${String(Math.round((hour % 1) * 60)).padStart(2, '0')}`;
+const hourLabel = (hour: number) => t.common.preview.hourLabel(Math.floor(hour), String(Math.round((hour % 1) * 60)).padStart(2, '0'));
 const nowHour = () => { const now = new Date(); return now.getHours() + now.getMinutes() / 60; };
 
 /**
@@ -29,30 +30,31 @@ export function PreviewMenu() {
     setPreview(value === 'today' ? rest : { ...rest, festival: value === 'none' ? null : value as Festival });
   };
   const hour = preview.hour ?? nowHour();
+  const words = t.common.preview;
 
   return (
     <div className="cp-preview" ref={box}>
       <button
         type="button" className="cp-icon-button" aria-expanded={open} aria-controls="preview-menu" data-active={active}
-        aria-label="Essayer les fêtes et les heures de la salle" title="Essayer les fêtes et les heures de la salle" onClick={() => setOpen(!open)}
+        aria-label={words.open} title={words.open} onClick={() => setOpen(!open)}
       >
         <CalendarIcon />
       </button>
       {open && (
-        <div className="cp-preview__panel" id="preview-menu" role="group" aria-label="Aperçu de la salle">
+        <div className="cp-preview__panel" id="preview-menu" role="group" aria-label={words.panel}>
           <label className="cp-preview__field">
-            <span>Fête</span>
+            <span>{words.festival}</span>
             <select value={festivalValue} onChange={(e) => chooseFestival(e.target.value)}>
-              <option value="today">Aujourd’hui ({today ? FESTIVAL_NAMES[today] : 'aucune'})</option>
-              <option value="none">Aucune</option>
-              {FESTIVALS.map((festival) => <option key={festival} value={festival}>{FESTIVAL_NAMES[festival]}</option>)}
+              <option value="today">{words.today(today ? t.room.festivals[today] : words.todayNone)}</option>
+              <option value="none">{words.none}</option>
+              {FESTIVALS.map((festival) => <option key={festival} value={festival}>{t.room.festivals[festival]}</option>)}
             </select>
           </label>
           <label className="cp-preview__field">
-            <span>Heure <output>{preview.hour === undefined ? `maintenant (${hourLabel(hour)})` : hourLabel(hour)}</output></span>
+            <span>{words.hour} <output>{preview.hour === undefined ? words.now(hourLabel(hour)) : hourLabel(hour)}</output></span>
             <input type="range" min={0} max={23.75} step={0.25} value={hour} onChange={(e) => setPreview({ ...preview, hour: Number(e.target.value) })} />
           </label>
-          <button type="button" className="cp-button" disabled={!active} onClick={() => setPreview({})}>Revenir au vrai jour et à l’heure</button>
+          <button type="button" className="cp-button" disabled={!active} onClick={() => setPreview({})}>{words.reset}</button>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { parseBirthday } from '../shared/festivals.ts';
 import { jobOf, parseJobs, type Job } from '../shared/jobs.ts';
 import { parseLook, type Look } from '../shared/look.ts';
 import type { CrewMember } from '../shared/protocol.ts';
+import { st } from './i18n/index.ts';
 import { asArray, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
 
@@ -35,12 +36,26 @@ export class Crew {
   /** The user's own first name, or null before the first start. */
   get selfName(): string | null { return this.members.find((member) => member.self)?.name ?? null; }
 
-  /** The user's own avatar, made at the first start: replaces the one there was, if any. */
+  /**
+   * The user's own avatar, made at the first start: replaces the one there was, if any. A first name already in the crew
+   * (one imported before the first start) is that member becoming the user: it keeps its birthday unless one is given.
+   */
   async setSelf(name: string, look: Look, birthday?: string) {
     const clean = name.trim().slice(0, MAX_NAME);
-    if (!clean) throw new Error('Donne ton prénom.');
-    if (this.members.some((member) => member.name === clean && !member.self)) throw new Error(`${clean} existe déjà dans l’équipe : choisis un autre prénom.`);
-    this.members = [{ name: clean, look, self: true, ...(birthday ? { birthday } : {}) }, ...this.members.filter((member) => !member.self)];
+    if (!clean) throw new Error(st.crew.giveYourName);
+    const adopted = this.members.find((member) => member.name === clean && !member.self);
+    const kept = birthday ?? adopted?.birthday;
+    this.members = [{ name: clean, look, self: true, ...(kept ? { birthday: kept } : {}) }, ...this.members.filter((member) => !member.self && member !== adopted)];
+    await this.store();
+  }
+
+  /** Someone of the crew becomes the user, with their look; the user until now stays in the crew as anyone else. */
+  async becomeSelf(name: string) {
+    const member = this.members.find((candidate) => candidate.name === name);
+    if (!member) throw new Error(st.crew.notInCrew(name));
+    if (member.self) return;
+    const { jobs: _jobs, ...chosen } = member;
+    this.members = [{ ...chosen, self: true }, ...this.members.filter((candidate) => candidate !== member).map(({ self: _self, ...other }) => other)];
     await this.store();
   }
 
@@ -49,9 +64,9 @@ export class Crew {
   /** Adds a member, or updates the one called `previousName` (the user's own avatar can be renamed, not removed). */
   async save(previousName: string | null, name: string, look: Look, birthday?: string, jobs: readonly Job[] = []) {
     const clean = name.trim().slice(0, MAX_NAME);
-    if (!clean) throw new Error('Donne un prénom.');
+    if (!clean) throw new Error(st.crew.giveName);
     const existing = previousName === null ? -1 : this.members.findIndex((member) => member.name === previousName);
-    if (this.members.some((member, index) => member.name === clean && index !== existing)) throw new Error(`${clean} existe déjà dans l’équipe.`);
+    if (this.members.some((member, index) => member.name === clean && index !== existing)) throw new Error(st.crew.alreadyInCrew(clean));
     const optional = { ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) };
     if (existing === -1) this.members.push({ name: clean, look, ...optional });
     else {
@@ -64,7 +79,7 @@ export class Crew {
   async remove(name: string) {
     const member = this.members.find((candidate) => candidate.name === name);
     if (!member) return;
-    if (member.self) throw new Error('Ton propre avatar ne se supprime pas, change plutôt son look.');
+    if (member.self) throw new Error(st.crew.selfNotRemovable);
     this.members = this.members.filter((candidate) => candidate !== member);
     await this.store();
   }

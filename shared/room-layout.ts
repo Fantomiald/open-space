@@ -53,6 +53,15 @@ export interface PlayerSpot {
   atDesk: boolean;
 }
 
+/** What someone of the crew without a session drops by the office for (src/room/visitors.ts). */
+export type Activity = 'coffee' | 'water' | 'printer' | 'window' | 'books' | 'sofa' | 'party';
+
+/**
+ * Where a visitor stops: the floor point they stand on (or sit on, raised by `lift`) and the direction they face. Two
+ * spots of an activity with `together` take two people at once, who then turn to each other (`together` instead of `facing`).
+ */
+export interface VisitSpot { activity: Activity; at: { x: number; y: number }; facing: number; lift?: number; together?: number }
+
 export interface Layout {
   furniture: readonly FurniturePiece[];
   /** taken in this order, so the first people to come in spread over the room */
@@ -62,6 +71,8 @@ export interface Layout {
   /** the door, on the left wall: people come in on this tile */
   door: { x: number; y: number };
   playerSpots: readonly PlayerSpot[];
+  /** where the crew without a session drops by (the office only) */
+  visitSpots?: readonly VisitSpot[];
 }
 
 const piece = (kind: PieceKind, x: number, y: number, width = 1, depth = 1, blocks = true, extra: Partial<FurniturePiece> = {}): FurniturePiece =>
@@ -119,7 +130,8 @@ export const OFFICE: Layout = {
     piece('floorLamp', 0, 11),
     ...READING_SOFA.pieces,
     piece('bookshelf', 4.5, 13, 2),
-    piece('plant', 7, 13),
+    // left of the bookshelf: its right side is where someone of the crew stands to pick a book (visitSpots)
+    piece('plant', 3, 13),
     piece('plant', 14, 13),
     piece('counter', 15, 13, 3),
     piece('bigPlant', 19, 13),
@@ -142,6 +154,21 @@ export const OFFICE: Layout = {
   playerSpots: [
     { seat: { x: 9, y: 5, facing: 4 }, at: { x: 9.5, y: 5.5 }, lift: 0, area: { fromX: 8, toX: 11, fromY: 5, toY: 7 }, atDesk: true },
     ...sofaSpots(READING_SOFA.seats),
+  ],
+  visitSpots: [
+    // a coffee at the counter, alone facing it, or with someone, turned to each other (both faces show: the left one
+    // looks down-right, the right one down-left)
+    { activity: 'coffee', at: { x: 15.3, y: 12.3 }, facing: 4, together: 2 },
+    { activity: 'coffee', at: { x: 17, y: 12.3 }, facing: 4, together: 4 },
+    { activity: 'water', at: { x: 8.5, y: 1.3 }, facing: 0 },
+    { activity: 'printer', at: { x: 10.2, y: 1.3 }, facing: 0 },
+    // at the windows, where no row of desks stands in front
+    { activity: 'window', at: { x: 7.2, y: 1.2 }, facing: 0 },
+    { activity: 'window', at: { x: 18.4, y: 1.3 }, facing: 0 },
+    // against the bookshelf's right side, turned to it: it stands on the room's front edge, and hides whoever is
+    // behind or left of it
+    { activity: 'books', at: { x: 6.75, y: 12.75 }, facing: 5 },
+    ...READING_SOFA.seats.map((seat): VisitSpot => ({ activity: 'sofa', at: seat.at!, facing: seat.facing, lift: seat.lift })),
   ],
 };
 
@@ -244,10 +271,22 @@ const FESTIVAL_PIECES: Readonly<Record<Festival, Readonly<Record<'office' | 'lou
   },
 };
 
-/** A room as it is for a festival (or none): its furniture, plus the festival's. */
+/** Where the crew drops by for a festival, in the office: around its table, its tree, its pool. */
+const FESTIVAL_VISITS: Partial<Record<Festival, readonly VisitSpot[]>> = {
+  birthday: [{ activity: 'party', at: { x: 8.4, y: 10.4 }, facing: 0, together: 2 }, { activity: 'party', at: { x: 9.8, y: 10.4 }, facing: 0, together: 4 }],
+  christmas: [{ activity: 'party', at: { x: 12.3, y: 6.4 }, facing: 0, together: 2 }, { activity: 'party', at: { x: 13.7, y: 6.4 }, facing: 0, together: 4 }],
+  songkran: [{ activity: 'party', at: { x: 9.5, y: 9.6 }, facing: 0 }],
+};
+
+/** A room as it is for a festival (or none): its furniture, plus the festival's, and the festival's places to drop by. */
 export function layoutOn(layout: Layout, festival: Festival | null): Layout {
   if (!festival) return layout;
-  return { ...layout, furniture: [...layout.furniture, ...FESTIVAL_PIECES[festival][layout === LOUNGE ? 'lounge' : 'office']] };
+  const office = layout !== LOUNGE;
+  return {
+    ...layout,
+    furniture: [...layout.furniture, ...FESTIVAL_PIECES[festival][office ? 'office' : 'lounge']],
+    ...(office && layout.visitSpots ? { visitSpots: [...layout.visitSpots, ...(FESTIVAL_VISITS[festival] ?? [])] } : {}),
+  };
 }
 
 /** "x,y" of every tile nobody can walk on. */

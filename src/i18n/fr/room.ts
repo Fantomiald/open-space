@@ -1,0 +1,44 @@
+import type { Festival } from '../../../shared/festivals.ts';
+import type { PetKind } from '../../../shared/pets.ts';
+import { plural } from '../index.ts';
+
+export const room = {
+  /** the user's name tag when the crew has no name for them */
+  you: 'Toi',
+  /** what the crew says at a birthday party (src/room/visitors.ts) */
+  birthdayWish: (names: readonly string[]) => `Joyeux anniversaire ${names.join(' et ')} !`,
+  subagent: 'Sous-agent',
+  /** the card following the pointer over the door or the user's screen */
+  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', startWith: (name: string) => `Lancer une session avec ${name}` },
+  description: {
+    lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
+    office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,
+  },
+  pip: {
+    open: 'Mini-fenêtre',
+    openTitle: 'La salle dans une petite fenêtre au-dessus des autres',
+    away: 'La salle est dans sa mini-fenêtre.',
+    bringBack: 'La remettre ici',
+  },
+  hidden: {
+    more: (count: number) => `${plural(count, 'autre session', 'autres sessions')} sans place`,
+    list: 'Sessions sans place',
+  },
+  /** before someone's words in a speech bubble */
+  speaker: (label: string) => `${label} :`,
+  /** what each pet says: a cat meows, a dog barks, the rubber duck listens to your bug, Rocky speaks in chords */
+  petLines: {
+    cat: ['Miaou !', 'Mrrrr…', 'Miaou ?', 'Mraou !'],
+    dog: ['Ouaf ouaf !', 'Wouf !', 'Ouaf ?', 'Ouaf ouaf ouaf !'],
+    duck: ['Coin coin !', 'Coin ?', 'Explique-moi ton bug.', 'Coin.'],
+    capybara: ['Tranquille.', 'Mmh.', 'Zen.', '…'],
+    axolotl: ['Blub !', 'Bloup.', 'Blub blub ?'],
+    rocky: ['♫ Amaze! Amaze! Amaze!', '♫ Fist my bump.', '♫ Good good good.', '♫ Happy happy happy!', '♫ You are friend, question?'],
+  } satisfies Record<Exclude<PetKind, 'none'>, readonly string[]>,
+  /** the festivals' names, in the preview menu */
+  festivals: {
+    newYear: 'Nouvel An', epiphany: 'Épiphanie', chineseNewYear: 'Nouvel An chinois', candlemas: 'Chandeleur', valentine: 'Saint-Valentin',
+    songkran: 'Songkran', easter: 'Pâques', mayDay: '1er mai', music: 'Fête de la musique', bastille: '14 juillet', summer: 'Été',
+    birthday: 'Anniversaire', halloween: 'Halloween', christmas: 'Noël',
+  } satisfies Record<Festival, string>,
+};

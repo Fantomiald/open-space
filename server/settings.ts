@@ -2,12 +2,13 @@
 // and changed later in the page. Before the onboarding, the file only holds the notifications, or does not exist.
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, pet: DEFAULT_PET,
+  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET,
 };
 
 export const MAX_AGENT_NOTE = 600;
@@ -19,6 +20,7 @@ export function parsePreferences(raw: unknown): Partial<Preferences> {
   const found: Partial<Preferences> = {};
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
+  if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && path.isAbsolute(root)).map((root) => path.resolve(root)))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
@@ -26,6 +28,7 @@ export function parsePreferences(raw: unknown): Partial<Preferences> {
   if (typeof raw.agentNote === 'string') found.agentNote = raw.agentNote.trim().slice(0, MAX_AGENT_NOTE);
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;
+  if (isLanguage(raw.language)) found.language = raw.language;
   return found;
 }
 

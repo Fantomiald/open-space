@@ -368,7 +368,7 @@ function flames(layout: Layout): Point[] {
 }
 
 /** The baubles of the Christmas trees that twinkle (see christmasTree in pixel-furniture.ts). */
-const TREE_LIGHTS = [[-13, 8], [12, 9], [-5, 12], [4, 18], [9, 22], [-9, 25], [-2, 28], [6, 32], [-6, 36], [2, 40], [-3, 44], [4, 47], [0, 20], [-11, 15], [8, 14]] as const;
+const TREE_LIGHTS = [[-11, 16], [10, 18], [-4, 14], [3, 22], [-9, 23], [8, 27], [-3, 26], [6, 33], [-6, 34], [1, 36], [-3, 42], [4, 43], [0, 48], [-12, 20], [12, 13]] as const;
 
 export function festivalGlows(festival: Festival, room: Room, layout: Layout): Glow[] {
   const glows: Glow[] = [];

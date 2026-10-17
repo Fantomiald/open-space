@@ -17,6 +17,7 @@ class FakeProcess implements ProcessHandle {
   sentImages: number[] = [];
   answers: { requestId: string; answer: PermissionAnswer }[] = [];
   interrupts = 0;
+  remoteCalls: boolean[] = [];
   stopCalls: number[] = [];
   launch: LaunchOptions;
   handlers: ProcessHandlers;
@@ -30,6 +31,7 @@ class FakeProcess implements ProcessHandle {
   answerPermission(requestId: string, answer: PermissionAnswer) { this.answers.push({ requestId, answer }); }
   refuseControl() { /* not needed by these tests */ }
   interrupt() { this.interrupts++; }
+  remoteControl(enabled: boolean) { this.remoteCalls.push(enabled); return Promise.resolve(enabled ? 'https://claude.ai/code/session_test' : ''); }
   stop(graceMs: number) {
     this.stopCalls.push(graceMs);
     this.exit(0, null, '');
@@ -558,6 +560,27 @@ describe('process life cycle', () => {
     manager.send(id, 'more');
     assert.equal(processes.length, 2);
     assert.equal(processes[1].launch.resume, true);
+    await manager.shutdown();
+  });
+
+  it('keeps the process of a session under Remote Control, started without a message, and lets it go once turned off', async () => {
+    const { manager, processes, find } = setup({ idleMs: 30 });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    await manager.remoteControl(id, true);
+    assert.equal(processes.length, 1);
+    assert.deepEqual(processes[0].sent, [], 'no message is needed to reach it from the phone');
+    assert.deepEqual(find(id).remote, { url: 'https://claude.ai/code/session_test', state: 'connecting' });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'bridge_state', state: 'connected' });
+    assert.equal(find(id).remote?.state, 'connected');
+    processes[0].feed('simple-turn');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, true, 'not released while idle');
+    await manager.remoteControl(id, false);
+    assert.deepEqual(processes[0].remoteCalls, [true, false]);
+    assert.equal(find(id).remote, undefined);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, false);
     await manager.shutdown();
   });
 

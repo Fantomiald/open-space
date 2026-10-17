@@ -2,16 +2,18 @@
 // going where it is sent (or back to a seat of theirs), and, in the office, the pet. No drawing and no DOM here;
 // RoomView steps it and draw.ts paints it.
 import type { PlayerSpot } from '../../shared/room-layout.ts';
+import { t } from '../i18n/index.ts';
 import type { Person, RoomPlan } from './cast.ts';
 import { createPet, cuddle, stepPet, type Pet } from './pet.ts';
 import type { Floor } from './floor.ts';
 import { depthOf, facingVector, tileCenter, toScreen, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
 import { blinkOffsetOf, type Direction } from './sprites.ts';
+import { Visits } from './visitors.ts';
 
 export const PLAYER_ID = 'player';
 /** The user's first name, on their tag: the one of their own avatar in the crew. */
-export const selfName = (crew: readonly { name: string; self?: boolean }[]) => crew.find((member) => member.self)?.name ?? 'Toi';
+export const selfName = (crew: readonly { name: string; self?: boolean }[]) => crew.find((member) => member.self)?.name ?? t.room.you;
 
 /** Tiles per second. */
 const WALK_SPEED = 4.2;
@@ -53,9 +55,11 @@ export class Scene {
   /** set once the user reached the door: the view moves to the other room */
   playerWentOut = false;
   readonly pet: Pet | null;
+  /** the crew without a session dropping by (the office only) */
+  readonly visits: Visits | null;
 
   /** `atDoor`: the user comes in through the door (from the other room) instead of sitting at the room's first spot. */
-  constructor(floor: Floor, { withPet, atDoor = false }: { withPet: boolean; atDoor?: boolean }) {
+  constructor(floor: Floor, { withPet, atDoor = false, withVisitors = false }: { withPet: boolean; atDoor?: boolean; withVisitors?: boolean }) {
     this.floor = floor;
     const start = floor.layout.playerSpots[0];
     this.player = atDoor
@@ -63,6 +67,12 @@ export class Scene {
       : { position: { ...start.at }, heading: facingVector(start.seat.facing), path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) };
     this.playerSpot = atDoor ? null : start;
     this.pet = withPet ? createPet() : null;
+    this.visits = withVisitors ? new Visits(floor) : null;
+  }
+
+  /** The first name of whoever a person id is: a session's, or a visitor's. */
+  nameOf(personId: string): string {
+    return this.characters.get(personId)?.person.name ?? this.visits?.visitors.get(personId)?.name ?? '';
   }
 
   /** The room seat the user sits on or walks to (a sofa of the break room), kept free of sessions. */

@@ -1,13 +1,14 @@
 // Markdown displayed safely (assistant messages): raw HTML is escaped, only http(s)/mailto links (opened in a new tab),
 // remote images are replaced by their alt text. Code blocks get a copy button (Feed.tsx copies them).
 import { Marked } from 'marked';
+import { t } from '../i18n/index.ts';
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** A clipboard, then a tick once copied (components.css swaps them). */
-const COPY_BUTTON = '<button type="button" class="cp-code__copy" data-copy aria-label="Copier le code" title="Copier">'
+const copyButton = () => `<button type="button" class="cp-code__copy" data-copy aria-label="${escapeHtml(t.common.code.copy)}" title="${escapeHtml(t.common.code.copyTitle)}">`
   + '<svg class="cp-icon" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
   + '<g class="cp-code__clipboard"><rect x="4.5" y="3" width="8" height="10.5" rx="1.5"/><path d="M6.5 3V2h4v1"/></g>'
   + '<path class="cp-code__done" d="M3.5 8.5l3 3 6-7"/></svg></button>';
@@ -25,7 +26,7 @@ marked.use({
     code({ text, lang, escaped }) {
       const language = /^[\w+-]+$/.test(lang ?? '') ? ` class="language-${lang}"` : '';
       const body = `${text.replace(/\n$/, '')}\n`;
-      return `<div class="cp-code"><pre><code${language}>${escaped ? body : escapeHtml(body)}</code></pre>${COPY_BUTTON}</div>\n`;
+      return `<div class="cp-code"><pre><code${language}>${escaped ? body : escapeHtml(body)}</code></pre>${copyButton()}</div>\n`;
     },
   },
 });

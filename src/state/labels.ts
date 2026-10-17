@@ -1,5 +1,6 @@
 // Words and tones for session states. One place, so the design can restyle the tones without touching logic.
 import type { PermissionMode, SessionInfo } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import type { AttentionKind } from './queue.ts';
 
 /** Drives the colour of badges and cards (see --tone-* in design/tokens.css). */
@@ -17,30 +18,23 @@ export function toneOf(session: SessionInfo, kind: AttentionKind | null): Tone {
 }
 
 /** The models offered for a session: the alias Claude Code takes, and its name ('' : Claude Code's default). */
-export const MODELS: readonly (readonly [string, string])[] = [['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku'], ['fable', 'Fable'], ['', 'Par défaut']];
+export const models = (): readonly (readonly [string, string])[] => [
+  ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku'], ['fable', 'Fable'], ['', t.session.models.default],
+];
 
-export const SHORT_MODE_LABELS = { auto: 'Auto', acceptEdits: 'Accepte les modifs', manual: 'Demande tout', plan: 'Plan seulement' } as const satisfies Record<PermissionMode, string>;
-
-export const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
-  auto: 'Auto (Claude décide, demande si risqué)',
-  acceptEdits: 'Accepte les modifications de fichiers',
-  manual: 'Demande à chaque fois',
-  plan: 'Plan seulement (aucune modification)',
-};
-
-const ATTENTION_LABEL: Record<AttentionKind, string> = {
-  permission: 'Autorisation', question: 'Question pour toi', finished: 'Terminé, à voir', error: 'Erreur',
-};
+/** A permission mode in a word or two (`short`, for a chip), or in a sentence. */
+export const modeLabel = (mode: PermissionMode, length: 'short' | 'long' = 'long') => t.session.modes[length][mode];
 
 export function stateLabel(session: SessionInfo, kind: AttentionKind | null): string {
-  if (kind) return ATTENTION_LABEL[kind];
+  const words = t.session.states;
+  if (kind) return words.attention[kind];
   switch (session.state) {
-    case 'starting': return 'Démarre';
-    case 'work': return 'Au travail';
-    case 'wait': return 'Prête';
-    case 'closed': return 'Fermée';
-    case 'done': return 'Finie';
-    case 'error': return 'Erreur';
+    case 'starting': return words.starting;
+    case 'work': return words.work;
+    case 'wait': return words.wait;
+    case 'closed': return words.closed;
+    case 'done': return words.done;
+    case 'error': return words.error;
     default: return session.state;
   }
 }
@@ -51,9 +45,9 @@ export const isRunning = (session: SessionInfo) => session.state === 'starting' 
 /** What the user has to do for a session, as a to-do line ("Répondre à Lina", "Autoriser Bash pour Iris"). */
 export function todoLabel(session: SessionInfo, kind: AttentionKind): string {
   switch (kind) {
-    case 'permission': return `Autoriser ${session.permissions[0]?.tool ?? 'une action'} pour ${session.name}`;
-    case 'question': return `Répondre à ${session.name}`;
-    case 'finished': return `Lire ce qu’a fait ${session.name}`;
-    case 'error': return `Voir l’erreur de ${session.name}`;
+    case 'permission': return t.session.todo.allow(session.permissions[0]?.tool, session.name);
+    case 'question': return t.session.todo.answer(session.name);
+    case 'finished': return t.session.todo.read(session.name);
+    case 'error': return t.session.todo.error(session.name);
   }
 }

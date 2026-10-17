@@ -6,13 +6,10 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AttentionKind, SessionInfo } from '../shared/protocol.ts';
+import { st } from './i18n/index.ts';
 
 const APP = path.join(os.homedir(), 'Applications', 'Open Space.app');
 const APP_ID = 'local.open-space';
-
-const TITLES: Record<AttentionKind, string> = {
-  finished: 'a terminé', permission: 'demande une autorisation', question: 'te pose une question', error: 'a rencontré une erreur',
-};
 
 /** The words of a notification: who and what, then what they said or ask (shortened). */
 export function notificationText(session: SessionInfo, kind: AttentionKind): { title: string; body: string } {
@@ -20,7 +17,7 @@ export function notificationText(session: SessionInfo, kind: AttentionKind): { t
   const body = kind === 'error' ? session.error ?? ''
     : kind === 'finished' ? session.lastMessage
       : asked?.questions?.[0]?.question ?? asked?.detail ?? '';
-  return { title: `${session.name} ${TITLES[kind]}`, body: body.replace(/\s+/g, ' ').trim().slice(0, 180) };
+  return { title: `${session.name} ${st.notifier[kind]}`, body: body.replace(/\s+/g, ' ').trim().slice(0, 180) };
 }
 
 // the texts go as arguments, never inside the script, so nothing in them can be read as AppleScript; an app built

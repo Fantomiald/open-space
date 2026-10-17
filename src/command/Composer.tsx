@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
-import { plural } from '../lib/format.ts';
+import { t } from '../i18n/index.ts';
 import { asideQuestion } from '../state/commands.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
@@ -42,31 +42,32 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
     setText((current) => (current.trim() ? `${message}\n${current}` : message));
   };
 
-  const placeholder = stopped ? 'Écris un message pour reprendre cette session…'
-    : session.state === 'perm' ? 'Une autorisation attend ta réponse ci-dessus (un message ici attendra la fin du tour)…'
-      : busy ? `${session.name} travaille : ton message attendra la fin du tour…`
-        : 'Écris à cette session, ou / pour une commande (Entrée envoie, Maj+Entrée saute une ligne)';
+  const words = t.composer.composer;
+  const placeholder = stopped ? words.placeholderStopped
+    : session.state === 'perm' ? words.placeholderPermission
+      : busy ? words.placeholderBusy(session.name)
+        : words.placeholder;
 
   return (
     <form className="cp-composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {queued.length > 0 && (
-        <section className="cp-queue" aria-label="Messages en attente">
+        <section className="cp-queue" aria-label={words.queueLabel}>
           <div className="cp-queue__head">
-            <span>{plural(queued.length, 'message en attente', 'messages en attente')}{busy ? ', partent à la fin du tour' : ''}</span>
+            <span>{words.queued(queued.length)}{busy ? words.leaveAtTurnEnd : ''}</span>
             <button
               type="button" className="cp-button" data-variant="primary" onClick={() => send({ t: 'sendNow', sessionId: session.id })}
-              title={busy ? 'Interrompt le tour en cours, puis envoie la file' : undefined}
+              title={busy ? words.sendNowTitle : undefined}
             >
-              {busy ? 'Envoyer maintenant' : 'Envoyer'}
+              {busy ? words.sendNow : words.send}
             </button>
           </div>
           <ol className="cp-queue__list">
             {queued.map((message) => (
               <li key={message.id} className="cp-queue__item">
                 <span className="cp-queue__text">{message.text}</span>
-                {message.images ? <span className="cp-queue__images" title={plural(message.images, 'image jointe', 'images jointes')}><ImageIcon />{message.images}</span> : null}
-                <button type="button" className="cp-icon-button" aria-label="Modifier ce message" title="Modifier" onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
-                <button type="button" className="cp-icon-button" aria-label="Retirer ce message" title="Retirer" onClick={() => unqueue(message.id)}><CloseIcon /></button>
+                {message.images ? <span className="cp-queue__images" title={words.images(message.images)}><ImageIcon />{message.images}</span> : null}
+                <button type="button" className="cp-icon-button" aria-label={words.editLabel} title={words.edit} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
+                <button type="button" className="cp-icon-button" aria-label={words.removeLabel} title={words.remove} onClick={() => unqueue(message.id)}><CloseIcon /></button>
               </li>
             ))}
           </ol>
@@ -74,15 +75,15 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       )}
       <AttachmentStrip attachments={attachments} />
       <CommandField
-        id="composer-field" label={`Message pour ${session.name}`} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
+        id="composer-field" label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
         onPaste={attachments.onPaste}
       />
       <div className="cp-composer__actions">
         <div className="cp-composer__tools">
-          <button type="button" className="cp-button" onClick={() => openPalette(true)}>Commandes</button>
+          <button type="button" className="cp-button" onClick={() => openPalette(true)}>{words.commands}</button>
           <AttachButton attachments={attachments} />
         </div>
-        <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{asideQuestion(text) !== null ? 'Demander à côté' : stopped ? 'Reprendre et envoyer' : busy ? 'Mettre en file' : 'Envoyer'}</button>
+        <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : busy ? words.queue : words.send}</button>
       </div>
     </form>
   );

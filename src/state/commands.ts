@@ -1,5 +1,6 @@
 // Which slash commands the palette offers, in which order. Pure functions.
 import type { SlashCommand } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 
 /**
  * Built-in commands that make no sense when Claude Code is driven from this page (checked against the
@@ -29,14 +30,13 @@ export function findCommands(commands: readonly SlashCommand[], query: string): 
 }
 
 /** Open Space's own commands, offered with Claude Code's in a session's field. */
-const OWN_COMMANDS: readonly SlashCommand[] = [
-  { name: 'btw', description: 'Une question à côté : la session répond sans s’interrompre, et ça n’entre pas dans sa conversation', argumentHint: '<ta question>' },
-];
+const ownCommands = (): readonly SlashCommand[] => [{ name: 'btw', ...t.common.ownCommands.btw }];
 
 /** While `text` is a command name being typed ("/ki", before any space): the commands to suggest, else none. */
 export function commandSuggestions(commands: readonly SlashCommand[], text: string): SlashCommand[] {
   const typing = /^\/(\S*)$/.exec(text);
-  const all = [...OWN_COMMANDS, ...commands.filter((command) => !OWN_COMMANDS.some((own) => own.name === command.name))];
+  const own = ownCommands();
+  const all = [...own, ...commands.filter((command) => !own.some((ownCommand) => ownCommand.name === command.name))];
   return typing ? findCommands(all, typing[1]) : [];
 }
 

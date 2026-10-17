@@ -1,9 +1,9 @@
 // The office's furniture in pixel art: each piece is a few boxes on the isometric grid (a lit top and the two faces
 // turned to the viewer), with its details, drawn once at art resolution on its own canvas, outlined, and kept.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
-import type { FurniturePiece } from '../../shared/room-layout.ts';
+import type { FurniturePiece, PieceKind } from '../../shared/room-layout.ts';
 import { toScreen, type Point } from './geometry.ts';
-import { ART_SCALE, artCanvas, fillPolygon, outline, shadedBall, tones } from './pixel-art.ts';
+import { ART_SCALE, artCanvas, fillPolygon, outline, ring, shadedBall, tones } from './pixel-art.ts';
 
 const C = ROOM_PALETTE.furniture;
 const H = ROOM_PALETTE.halloween;
@@ -26,6 +26,15 @@ interface Painter {
   upright(across: number, z: number, colour: string, middle?: { x: number; y: number }): void;
 }
 
+/** The user's laptop on their desk, keyboard and lid (floor.ts finds the same box under the pointer). */
+function paintLaptop(p: Painter) {
+  p.box(1.1, 0.15, 0.8, 0.45, 11, 1, C.lightMetal);
+  p.box(1.1, 0.55, 0.8, 0.06, 12, 5, C.monitor);
+}
+
+/** What a click opens on a piece, outlined in white under the pointer: the user's laptop on their desk. */
+const CLICKABLE: Partial<Record<PieceKind, (paint: Painter) => void>> = { bossDesk: paintLaptop };
+
 /** `fine`: thin details painted after the outline, so they stay one pixel wide (strings). */
 interface Design { height: number; paint: (paint: Painter, piece: FurniturePiece) => void; fine?: (paint: Painter, piece: FurniturePiece) => void }
 
@@ -34,6 +43,9 @@ function propSpot(piece: FurniturePiece) {
   if (piece.width === 3) return { x: 0.55, y: 0.55 };
   return piece.top === 11 ? { x: 1.45, y: 0.3 } : { x: 1.35, y: 0.5 };
 }
+
+/** The Christmas tree's tiers, from the bottom: centre height, half width and half height, in art pixels. */
+const TREE_TIERS = [[17, 14, 8], [28, 11, 7], [38, 8, 6], [46, 5, 4]] as const;
 
 /** A gift box with a ribbon across its top and down its two visible faces. */
 function gift(p: Painter, x: number, y: number, size: number, height: number, z: number, colour: string) {
@@ -105,8 +117,7 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
   bossDesk: { height: 22, paint(p) {
     p.box(0, 0, 3, 0.95, 0, 11, C.boss);
     p.onFront(0.95, 0.1, 2.9, 4, 6, C.bossStripe);
-    p.box(1.1, 0.15, 0.8, 0.45, 11, 1, C.lightMetal);
-    p.box(1.1, 0.55, 0.8, 0.06, 12, 5, C.monitor);
+    paintLaptop(p);
     p.onFront(0.61, 1.45, 1.55, 14, 15, C.lightMetal);
     p.box(2.3, 0.4, 0.2, 0.2, 11, 4, C.lampShade);
     p.box(0.3, 0.5, 0.5, 0.3, 11, 1, C.paper);
@@ -193,20 +204,28 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
     p.box(0.25, 0.25, 0.5, 0.5, 23, 7, C.lampShade);
   } },
   // a fir tree on a stump: three tiers, lit from the left, baubles and a star (its lights twinkle, see festivals.ts)
-  christmasTree: { height: 64, paint(p) {
-    p.shadow(1, 1, 16, 7);
-    p.box(0.85, 0.85, 0.3, 0.3, 0, 6, F.trunk);
-    const tiers = [[6, 24, 17], [20, 38, 13], [34, 52, 9]] as const;
-    for (const [from, to, wide] of tiers) for (let z = from; z <= to; z++) {
-      const half = Math.round(1 + (wide - 1) * (to - z) / (to - from));
-      for (let across = -half; across <= half; across++) p.upright(across, z, across < -half / 3 ? F.pine : across > half / 2 ? F.pineDark : tones(F.pine).shade);
+  // round, bushy tiers like the office's plants (shaded balls, outlined), in a red pot, a string of gold beads on
+  // each tier, baubles and a star (its lights twinkle every frame, see TREE_LIGHTS in festivals.ts)
+  christmasTree: { height: 60, paint(p) {
+    p.shadow(1, 1, 15, 6);
+    p.box(0.66, 0.66, 0.68, 0.68, 0, 7, F.potRed);
+    p.box(0.63, 0.63, 0.74, 0.74, 6, 2, F.gold);
+    p.box(0.9, 0.9, 0.2, 0.2, 8, 4, F.trunk);
+    for (const [z, wide, high] of TREE_TIERS) {
+      p.ball(1, 1, z, wide, high, F.pineDark);
+      p.ball(0.92, 1.05, z + 1, wide - 2, high - 1, F.pine);
     }
-    // a garland of tinsel winding down, and baubles (the lights that twinkle are drawn every frame, see festivals.ts)
-    for (let z = 8; z < 50; z++) { const across = Math.round(Math.sin(z / 3.2) * (16 - z * 0.28)); p.upright(across, z, F.gold); }
-    for (const [across, z, colour] of [[-10, 9, F.bulbs[0]], [7, 11, F.bulbs[2]], [-2, 15, F.red], [11, 17, F.bulbs[4]], [-7, 22, F.bulbs[1]], [5, 26, F.red], [-3, 31, F.bulbs[2]], [3, 36, F.red], [-5, 40, F.bulbs[4]], [1, 45, F.bulbs[1]]] as const) {
+    TREE_TIERS.forEach(([z, wide, high], tier) => {
+      for (let across = -wide + 3; across <= wide - 3; across += 2) {
+        const sag = (across / wide) ** 2;
+        if (tier < 3) p.upright(across, Math.round(z - high * 0.45 + sag * high * 0.5), F.gold);
+      }
+    });
+    for (const [across, z, colour] of [[-8, 13, F.red], [7, 15, F.bulbs[2]], [-2, 20, F.bulbs[1]], [9, 23, F.red], [-7, 27, F.bulbs[4]], [3, 30, F.bulbs[2]], [-4, 37, F.red], [5, 38, F.bulbs[1]], [0, 44, F.bulbs[4]]] as const) {
       for (const [x, z2] of [[0, 0], [1, 0], [0, 1], [1, 1]]) p.upright(across + x, z + z2, colour);
+      p.upright(across, z + 1, F.white);
     }
-    for (const [across, z] of [[0, 53], [-1, 54], [0, 54], [1, 54], [0, 55], [-2, 54], [2, 54], [0, 56], [-1, 53], [1, 53], [-1, 55], [1, 55]] as const) p.upright(across, z, F.gold);
+    for (const [across, z] of [[0, 52], [0, 53], [0, 54], [0, 55], [0, 56], [-1, 54], [1, 54], [-2, 54], [2, 54], [-1, 53], [1, 53], [-1, 55], [1, 55]] as const) p.upright(across, z, F.gold);
   } },
   gifts: { height: 16, paint(p) {
     p.shadow(0.5, 0.5, 6, 3);
@@ -413,7 +432,8 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
 /** The canvas of a piece, and where its far corner (its x, y) sits on it. */
 interface Drawn { canvas: HTMLCanvasElement; corner: Point }
 
-function render(piece: FurniturePiece): Drawn {
+/** A piece drawn on its own canvas; `part`: only that part of it, as a white line around it (see CLICKABLE). */
+function render(piece: FurniturePiece, part?: (paint: Painter) => void): Drawn {
   const design = DESIGNS[piece.kind];
   const width = (piece.width + piece.depth) * TILE.x + MARGIN * 2;
   const height = (piece.width + piece.depth) * TILE.y + design.height + MARGIN * 2;
@@ -454,6 +474,11 @@ function render(piece: FurniturePiece): Drawn {
       context.fillRect(Math.round(point.x + across), Math.round(point.y), 1, 1);
     },
   };
+  if (part) {
+    part(painter);
+    ring(canvas, C.highlight);
+    return { canvas, corner };
+  }
   design.paint(painter, piece);
   outline(canvas, C.outline);
   design.fine?.(painter, piece);
@@ -462,16 +487,29 @@ function render(piece: FurniturePiece): Drawn {
 
 export interface FurnitureSprites {
   draw(context: CanvasRenderingContext2D, piece: FurniturePiece): void;
+  /** The white line around what a click opens on the piece (CLICKABLE), when it has something. */
+  drawHighlight(context: CanvasRenderingContext2D, piece: FurniturePiece): void;
 }
 
 export function pixelFurniture(): FurnitureSprites {
   const drawn = new Map<FurniturePiece, Drawn>();
+  const highlights = new Map<FurniturePiece, Drawn>();
+  const place = (context: CanvasRenderingContext2D, piece: FurniturePiece, image: Drawn) => {
+    const far = toScreen({ x: piece.x, y: piece.y });
+    context.drawImage(image.canvas, Math.round(far.x - image.corner.x * ART_SCALE), Math.round(far.y - image.corner.y * ART_SCALE), image.canvas.width * ART_SCALE, image.canvas.height * ART_SCALE);
+  };
   return {
     draw(context, piece) {
       let image = drawn.get(piece);
       if (!image) { image = render(piece); drawn.set(piece, image); }
-      const far = toScreen({ x: piece.x, y: piece.y });
-      context.drawImage(image.canvas, Math.round(far.x - image.corner.x * ART_SCALE), Math.round(far.y - image.corner.y * ART_SCALE), image.canvas.width * ART_SCALE, image.canvas.height * ART_SCALE);
+      place(context, piece, image);
+    },
+    drawHighlight(context, piece) {
+      const part = CLICKABLE[piece.kind];
+      if (!part) return;
+      let image = highlights.get(piece);
+      if (!image) { image = render(piece, part); highlights.set(piece, image); }
+      place(context, piece, image);
     },
   };
 }

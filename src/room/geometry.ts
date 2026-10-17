@@ -38,6 +38,23 @@ export function onLeftWall(screen: Point): { along: number; height: number } {
   return { along, height: ORIGIN.y + along * TILE_HEIGHT / 2 - screen.y };
 }
 
+/** A box standing on the floor: from (fromX, fromY) to (toX, toY) in tiles, from `low` to `high` room pixels up. */
+export interface Box { fromX: number; toX: number; fromY: number; toY: number; low: number; high: number }
+
+/** The box's outline on screen, clockwise from its top: the hexagon of its top and its two faces turned to the viewer. */
+export function boxOutline({ fromX, toX, fromY, toY, low, high }: Box): Point[] {
+  const corner = (x: number, y: number, height: number) => { const base = toScreen({ x, y }); return { x: base.x, y: base.y - height }; };
+  return [corner(fromX, fromY, high), corner(toX, fromY, high), corner(toX, fromY, low), corner(toX, toY, low), corner(fromX, toY, low), corner(fromX, toY, high)];
+}
+
+/** True for a point inside a convex polygon whose points go clockwise on screen. */
+export function insideConvex(point: Point, polygon: readonly Point[]): boolean {
+  return polygon.every((from, index) => {
+    const to = polygon[(index + 1) % polygon.length];
+    return (to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x) >= 0;
+  });
+}
+
 /** Draw order of things standing on the floor: the further back, the earlier. */
 export const depthOf = (tile: Point) => tile.x + tile.y;
 

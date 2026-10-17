@@ -15,7 +15,10 @@ Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, 
 - **Écrire pendant qu'une session travaille** : ton message attend la fin du tour, ou part tout de suite avec « Envoyer maintenant ». Et `/btw ta question` pose une question à côté, sans interrompre ni polluer la conversation.
 - **Coller une capture d'écran** (Cmd+V), la glisser sur le panneau, ou passer par le trombone.
 - **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Charline où elle en est »). Leurs messages s'affichent dans le fil.
-- **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet chacun avec ce qu'ils écrivent et leur rapport.
+- **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet par sous-agent au travail avec ce qu'il écrit, puis son rapport dans « Terminés ».
+- **Voir ce qu'une session a changé** : `+X −Y` dans son en-tête, puis chaque fichier avec son diff, comme dans Claude Code.
+- **La reprendre sur ton téléphone** avec Remote Control : un bouton, et elle apparaît dans claude.ai/code et l'app Claude.
+- **Ouvrir un terminal** en cliquant sur l'écran de ton bureau.
 - **Être prévenu** par un son et une notification macOS quand une session a fini ou t'attend, même onglet fermé.
 - **Mettre une session au repos** dans la salle de repos, ou garder le bureau dans une mini-fenêtre au-dessus de tes autres apps.
 - **Chercher** dans un fil avec Cmd+F, copier un bloc de code d'un clic.
@@ -75,7 +78,7 @@ python3 scripts/macos-app.py
 
 ## À savoir
 
-- L'interface est en français.
+- L'interface est en français ou en anglais (Réglages).
 - Testé sur macOS, avec des navigateurs Chromium (Chrome, Arc). Les notifications et l'app du Dock sont propres à macOS.
 - Open Space s'appuie sur le mode `claude -p` en stream-json, dont certaines options ne sont pas documentées. Une mise à jour de Claude Code peut casser une fonction : ouvre une issue si ça t'arrive.
 

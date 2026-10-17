@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom';
 import { PictureInPictureIcon } from '../command/Icons.tsx';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
-import { plural } from '../lib/format.ts';
+import { t } from '../i18n/index.ts';
+import { availability } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
 import { USER_SPEAKER, onSpeech } from '../state/speech.ts';
 import type { FestivalDay } from '../../shared/festivals.ts';
@@ -64,20 +65,27 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   crewRef.current = crew;
   const synced = useRef(false);
   const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival));
-  const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
-  const doorHovered = useRef(false);
+  const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', withVisitors: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
+  // the crew without a session, who may drop by the office
+  const free = useMemo(() => availability(crew, Object.values(sessions)).filter((person) => person.place === 'free').map((person) => person.member.name), [crew, sessions]);
+  const freeRef = useRef(free);
+  freeRef.current = free;
+  const hoveredThing = useRef<'door' | 'screen' | null>(null);
   const hoveredId = useRef<string | null>(null);
-  // the user wears their own look; a session or sub-agent named like a crew member wears that member's look
+  // what a click on the thing under the pointer does, in a card that follows the pointer
+  const hint = useRef<HTMLDivElement>(null);
+  const [hintText, setHintText] = useState<string | null>(null);
+  // the user wears their own look; a session, sub-agent or visitor named like a crew member wears that member's look
   const lookFor = useMemo(() => (personId: string): Look => {
     if (personId === PLAYER_ID) return crewRef.current.find((member) => member.self)?.look ?? DEFAULT_LOOK;
-    const name = scene.characters.get(personId)?.person.name;
+    const name = scene.nameOf(personId);
     const member = crewRef.current.find((candidate) => !candidate.self && candidate.name === name);
     return member ? member.look ?? DEFAULT_LOOK : lookOfStranger(personId);
   }, [scene]);
   // what the festival puts on everyone (a sub-agent's head, in a tag, is drawn without it)
   const [sprites] = useState(() => chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
-    : outfitFor(festival, scene.characters.get(personId)?.person.name ?? '', false, guests)));
+    : outfitFor(festival, scene.nameOf(personId), false, guests)));
   const [furniture] = useState(() => pixelFurniture());
   const [bubbles, setBubbles] = useState<readonly Bubble[]>([]);
   const [layout, setLayout] = useState<StageLayout>({ width: 0, scale: 1, offset: 0 });
@@ -110,10 +118,13 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     let last = 0;
     const frame = () => {
       const now = performance.now();
-      scene.step(Math.min(100, now - last));
+      const elapsed = Math.min(100, now - last);
+      scene.step(elapsed);
       last = now;
-      const hour = useSessions.getState().preview.hour ?? currentHour();
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, doorHovered: doorHovered.current, hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      const state = useSessions.getState();
+      const hour = state.preview.hour ?? currentHour();
+      scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, hoveredThing: hoveredThing.current, hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
@@ -175,17 +186,39 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
     if (character) { select(character.person.sessionId); return; }
+    const visitor = scene.visits?.at(point);
+    if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     if (floor.isDoorAt(point)) { scene.walkPlayerOut(); return; }
+    if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
     const tile = toTile(point);
     const spot = floor.spotAt(tile);
     if (spot) scene.sitPlayerAt(spot);
     else if (floor.isWalkable(tile)) scene.walkPlayerTo(tile);
   };
 
+  const onMouseMove = (event: MouseEvent<HTMLCanvasElement>) => {
+    const point = roomPoint(event);
+    const person = scene.personAt(point);
+    // a session in front of a visitor, the door or the desk takes the click (the user, seated behind their laptop, does not)
+    const visitor = person && person !== PLAYER_ID ? null : scene.visits?.at(point) ?? null;
+    hoveredId.current = visitor?.id ?? person;
+    const thing = (person && person !== PLAYER_ID) || visitor ? null : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : null;
+    hoveredThing.current = thing;
+    const words = t.room.hint;
+    const text = visitor ? words.startWith(visitor.name) : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : null;
+    setHintText(text);
+    const card = hint.current;
+    if (!card || !text) return;
+    // right of the pointer, or left of it near the right edge
+    const box = stage.current!.getBoundingClientRect();
+    const x = event.clientX - box.left, y = event.clientY - box.top;
+    const left = x + 16 + card.offsetWidth > box.width ? x - 10 - card.offsetWidth : x + 16;
+    card.style.transform = `translate(${Math.round(left)}px, ${Math.round(y + 10)}px)`;
+  };
+  const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
+
   const seated = plan.people.length;
-  const description = room === 'lounge'
-    ? `Salle de repos : ${plural(seated, 'session au repos', 'sessions au repos')}.`
-    : `Bureau : ${plural(seated, 'session', 'sessions')} à leur poste.`;
+  const description = room === 'lounge' ? t.room.description.lounge(seated) : t.room.description.office(seated);
   const view = (
     <div className="cp-room">
       <div className="cp-room__fit">
@@ -193,26 +226,26 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
           <div className="cp-room__zoom" ref={zoom}>
             <canvas
               ref={canvas} className="cp-room__canvas" width={CANVAS_WIDTH * RENDER_SCALE} height={CANVAS_HEIGHT * RENDER_SCALE} onClick={onClick}
-              onMouseMove={(event) => { const point = roomPoint(event); doorHovered.current = floor.isDoorAt(point); hoveredId.current = scene.personAt(point); }}
-              onMouseLeave={() => { doorHovered.current = false; hoveredId.current = null; }}
+              onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}
               role="img" aria-label={description}
             />
           </div>
+          <div ref={hint} className="cp-room__hint-card" hidden={!hintText} aria-hidden="true">{hintText}</div>
           <div className="cp-room__bubbles" aria-hidden="true">
             {bubbles.map((bubble) => <SpeechBubble key={bubble.id} bubble={bubble} layout={layout} onOpen={() => select(bubble.sessionId)} />)}
           </div>
           {!pip && pictureInPictureSupported() && (
-            <button type="button" className="cp-icon-button cp-room__pip" aria-label="Mini-fenêtre" title="La salle dans une petite fenêtre au-dessus des autres" onClick={onOpenPip}>
+            <button type="button" className="cp-icon-button cp-room__pip" aria-label={t.room.pip.open} title={t.room.pip.openTitle} onClick={onOpenPip}>
               <PictureInPictureIcon />
             </button>
           )}
           {hidden.length > 0 && (
             <div className="cp-room__more">
-              <button type="button" aria-expanded={showHidden} title={`${plural(hidden.length, 'autre session', 'autres sessions')} sans place`} onClick={() => setShowHidden((shown) => !shown)}>
+              <button type="button" aria-expanded={showHidden} title={t.room.hidden.more(hidden.length)} onClick={() => setShowHidden((shown) => !shown)}>
                 +{hidden.length}
               </button>
               {showHidden && (
-                <ul aria-label="Sessions sans place">
+                <ul aria-label={t.room.hidden.list}>
                   {hidden.map((session) => <li key={session.id}><button type="button" onClick={() => { select(session.id); setShowHidden(false); }}>{session.name}</button></li>)}
                 </ul>
               )}
@@ -226,7 +259,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   return (
     <>
       <div className="cp-room" data-away>
-        <p className="cp-room__hint">La salle est dans sa mini-fenêtre. <button type="button" className="cp-button" onClick={() => pip.close()}>La remettre ici</button></p>
+        <p className="cp-room__hint">{t.room.pip.away} <button type="button" className="cp-button" onClick={() => pip.close()}>{t.room.pip.bringBack}</button></p>
       </div>
       {createPortal(view, pip.document.body)}
     </>
@@ -256,7 +289,7 @@ function SpeechBubble({ bubble, layout, onOpen }: { bubble: Bubble; layout: Stag
     // the room's canvas describes the same sessions to screen readers, hence a plain clickable div
     <div ref={element} className="cp-room__bubble" data-from-user={bubble.fromUser} data-fading={bubble.fadingSince !== null} onClick={onOpen}>
       <img className="cp-room__bubble-head" src={bubble.head} alt="" width={27} height={27} />
-      <span><b>{bubble.label} :</b> {bubble.text}</span>
+      <span><b>{t.room.speaker(bubble.label)}</b> {bubble.text}</span>
     </div>
   );
 }

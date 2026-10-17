@@ -2,6 +2,7 @@
 // first, then the working ones, then the idle ones. The break room: the sessions put to rest and the closed ones,
 // until a message calls them back. Sub-agents do not take a seat: they show above the head of whoever runs them.
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { attentionKind, attentionQueue, type AttentionKind, type SeenSequences } from '../state/queue.ts';
 import { assignSeats } from './seats.ts';
 
@@ -86,7 +87,7 @@ export function planRoom(
   const people: Person[] = admitted.map((session) => ({
     id: session.id, sessionId: session.id, name: session.name,
     title: roleTitle(session.command) ?? session.name, status: sessionStatus(session, seen),
-    agents: session.subagents.map(({ id, name, type }) => ({ id, name, type: type || 'Sous-agent' })),
+    agents: session.subagents.map(({ id, name, type }) => ({ id, name, type: type || t.room.subagent })),
     tag: session.tag ?? null,
   }));
   return {

@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { t } from '../i18n/index.ts';
 import { homeRelative } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
 import { useDismiss } from './useDismiss.ts';
@@ -32,15 +33,15 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
   };
 
   return (
-    <div className="cp-chip cp-folder" data-folder title="Dossier de la session (laisse vide pour ton dossier par défaut)" ref={box}>
+    <div className="cp-chip cp-folder" data-folder title={t.composer.folderPicker.title} ref={box}>
       <input
-        aria-label="Dossier" role="combobox" aria-expanded={shown} aria-controls="folder-picker" aria-autocomplete="list" autoComplete="off" spellCheck={false}
+        aria-label={t.composer.folderPicker.label} role="combobox" aria-expanded={shown} aria-controls="folder-picker" aria-autocomplete="list" autoComplete="off" spellCheck={false}
         aria-activedescendant={shown && active >= 0 ? `folder-option-${active}` : undefined}
         value={value} placeholder={placeholder} onFocus={() => setOpen(true)} onKeyDown={onKeyDown}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
       />
       {shown && (
-        <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label="Dossiers">
+        <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
           {matches.map((directory, index) => {
             const shownPath = homeRelative(directory);
             const cut = shownPath.lastIndexOf('/') + 1;

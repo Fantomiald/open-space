@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
-import { JOBS, JOB_LABELS, type Job } from '../../shared/jobs.ts';
+import { JOBS, type Job } from '../../shared/jobs.ts';
 import { BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { HAT_ROWS, chibiHead, chibiSprite } from '../room/chibi.ts';
 import type { Pose } from '../room/sprites.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -11,31 +12,10 @@ import { PetPicker } from './PreferenceFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
 import { useAutosave } from './useAutosave.ts';
 
-const NO_SERVER = 'Pas de connexion au serveur : pas encore enregistré.';
-
-const LABELS = {
-  eyes: { round: 'Ronds', wide: 'Grands', sleepy: 'Mi-clos', lashes: 'Avec cils', happy: 'Rieurs' },
-  hair: {
-    none: 'Rasé', buzz: 'Très courts', short: 'Courts', sidePart: 'Raie sur le côté', curly: 'Bouclés', quiff: 'Houppette', spiky: 'En pics', mohawk: 'Crête',
-    afro: 'Afro', pigtails: 'Couettes', bob: 'Carré', ponytail: 'Queue de cheval', bun: 'Chignon', braids: 'Tresses', long: 'Longs', bangs: 'Longs à frange',
-  },
-  beard: { none: 'Aucune', stubble: 'De trois jours', mustache: 'Moustache', short: 'Courte', chinstrap: 'Collier', full: 'Pleine', long: 'Longue', handlebar: 'Moustache en guidon', goatee: 'Bouc' },
-  top: {
-    tshirt: 'T-shirt', tank: 'Débardeur', vneck: 'Col V', polo: 'Polo', shirt: 'Chemise', hoodie: 'Sweat à capuche', sweater: 'Pull col roulé', jacket: 'Veste ouverte',
-    suit: 'Costume', threePiece: 'Trois-pièces', tracksuit: 'Survêtement', dress: 'Robe', blanket: 'Couverture', none: 'Torse nu',
-  },
-  bottom: { pants: 'Pantalon', shorts: 'Short', skirt: 'Jupe', tracksuit: 'Survêtement' },
-  shoes: { shoes: 'Chaussures', sneakers: 'Baskets', boots: 'Bottes', heels: 'Talons', sandals: 'Sandales', flipflops: 'Tongs', barefoot: 'Pieds nus' },
-  hat: {
-    none: 'Aucun', cap: 'Casquette', beanie: 'Bonnet', beret: 'Béret', tophat: 'Haut-de-forme', party: 'Chapeau pointu', gold: 'Chapeau doré',
-    santa: 'Bonnet de Noël', crown: 'Couronne', bunny: 'Oreilles de lapin',
-  },
-} as const;
-
 /** The hats that take a colour of one's choice. */
 const COLOURED_HATS: ReadonlySet<Look['hat']> = new Set(['cap', 'beanie', 'beret', 'tophat', 'party']);
 
-const TABS = ['Visage', 'Cheveux', 'Barbe', 'Tête', 'Haut', 'Bas', 'Chaussures'] as const;
+const TABS = ['face', 'hair', 'beard', 'head', 'top', 'bottom', 'shoes'] as const;
 type Tab = (typeof TABS)[number];
 
 /** The four directions of the room, turned one after the other by the preview's arrows. */
@@ -44,7 +24,6 @@ const DIRECTIONS: Pose['direction'][] = ['down-right', 'down-left', 'up-left', '
 type Draft = { previousName: string | null; name: string; look: Look; self: boolean; birthday: string; jobs: readonly Job[] };
 const draftOf = (member: CrewMember): Draft => ({ previousName: member.name, name: member.name, look: member.look ?? DEFAULT_LOOK, self: member.self === true, birthday: member.birthday ?? '', jobs: member.jobs ?? [] });
 const NEW_MEMBER: Draft = { previousName: null, name: '', look: DEFAULT_LOOK, self: false, birthday: '', jobs: [] };
-const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 export function CrewDialog() {
   const open = useSessions((s) => s.crewOpen);
@@ -57,10 +36,10 @@ function CrewEditor() {
   const [section, setSection] = useState<'people' | 'pet'>('people');
   const close = () => openCrew(false);
   return (
-    <Modal title="Ton équipe" onClose={close} wide>
-      <div className="cp-segmented cp-crew__sections" role="tablist" aria-label="Équipe">
-        <button type="button" role="tab" aria-selected={section === 'people'} onClick={() => setSection('people')}>Personnes</button>
-        <button type="button" role="tab" aria-selected={section === 'pet'} onClick={() => setSection('pet')}>Animal</button>
+    <Modal title={t.settings.crew.title} onClose={close} wide>
+      <div className="cp-segmented cp-crew__sections" role="tablist" aria-label={t.settings.crew.sections}>
+        <button type="button" role="tab" aria-selected={section === 'people'} onClick={() => setSection('people')}>{t.settings.crew.people}</button>
+        <button type="button" role="tab" aria-selected={section === 'pet'} onClick={() => setSection('pet')}>{t.settings.crew.pet}</button>
       </div>
       {section === 'people' ? <PeopleTab close={close} /> : <PetTab close={close} />}
     </Modal>
@@ -72,13 +51,13 @@ function PetTab({ close }: { close: () => void }) {
   const saved = useSessions((s) => s.preferences.pet);
   const setPreferences = useSessions((s) => s.setPreferences);
   const [pet, setPet] = useState(saved);
-  const { status } = useAutosave(pet, (next) => (setPreferences({ pet: next }) ? null : NO_SERVER));
+  const { status } = useAutosave(pet, (next) => (setPreferences({ pet: next }) ? null : t.settings.noServer));
   return (
     <>
       <div className="cp-onboarding__page"><PetPicker pet={pet} onPet={setPet} /></div>
       <div className="cp-form__actions">
         <SaveNote status={status} />
-        <button type="button" className="cp-button" onClick={close}>Fermer</button>
+        <button type="button" className="cp-button" onClick={close}>{t.settings.close}</button>
       </div>
     </>
   );
@@ -93,6 +72,8 @@ function PeopleTab({ close }: { close: () => void }) {
   const crew = useSessions((s) => s.crew);
   const saveMember = useSessions((s) => s.saveMember);
   const removeMember = useSessions((s) => s.removeMember);
+  const becomeSelf = useSessions((s) => s.becomeSelf);
+  const sessions = useSessions((s) => s.sessions);
   const first = crew.find((member) => member.self) ?? crew[0];
   const [draft, setDraft] = useState<Draft>(() => (first ? draftOf(first) : NEW_MEMBER));
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -100,9 +81,9 @@ function PeopleTab({ close }: { close: () => void }) {
   // saved as it is edited: a rename moves the member, so the draft then comes from its new name
   const save = (current: Draft): string | null => {
     const name = current.name.trim();
-    if (!name) return 'Donne un prénom pour enregistrer.';
-    if (crew.some((member) => member.name === name && member.name !== current.previousName)) return `${name} existe déjà dans l’équipe.`;
-    if (!saveMember(current.previousName, name, current.look, current.birthday || undefined, current.self ? [] : current.jobs)) return NO_SERVER;
+    if (!name) return t.settings.crew.noName;
+    if (crew.some((member) => member.name === name && member.name !== current.previousName)) return t.settings.crew.nameTaken(name);
+    if (!saveMember(current.previousName, name, current.look, current.birthday || undefined, current.self ? [] : current.jobs)) return t.settings.noServer;
     setDraft((latest) => ({ ...latest, previousName: name }));
     return null;
   };
@@ -118,19 +99,28 @@ function PeopleTab({ close }: { close: () => void }) {
     setDraft(next);
     setConfirmRemove(false);
   };
+  // the user's perso in the room: someone at work in a session would be them twice
+  const busy = draft.previousName !== null && Object.values(sessions).some((session) => session.name === draft.previousName);
+  const becomeThem = (name: string) => {
+    flush();
+    if (!becomeSelf(name)) return;
+    const next = { ...draft, previousName: name, name, self: true };
+    start(next);
+    setDraft(next);
+  };
 
   return (
     <>
       <div className="cp-crew">
-        <nav className="cp-crew__list" aria-label="Personnes">
+        <nav className="cp-crew__list" aria-label={t.settings.crew.people}>
           {crew.map((member) => (
             <button key={member.name} type="button" className="cp-crew__member" aria-current={draft.previousName === member.name} onClick={() => pick(draftOf(member))}>
               <img src={chibiHead(member.look ?? DEFAULT_LOOK)} alt="" width={27} height={27} />
-              <span>{member.name}{member.self && <small className="cp-muted"> (toi)</small>}</span>
+              <span>{member.name}{member.self && <small className="cp-muted">{t.settings.crew.you}</small>}</span>
             </button>
           ))}
           <button type="button" className="cp-button" onClick={() => pick(NEW_MEMBER)}>
-            Ajouter une personne
+            {t.settings.crew.addPerson}
           </button>
         </nav>
         <LookEditor
@@ -143,10 +133,18 @@ function PeopleTab({ close }: { close: () => void }) {
 
       <div className="cp-form__actions">
         <SaveNote status={status} />
+        {draft.previousName !== null && !draft.self && (
+          <button
+            type="button" className="cp-button" disabled={busy} onClick={() => becomeThem(draft.previousName!)}
+            title={busy ? t.settings.crew.busy(draft.previousName) : t.settings.crew.becomeThem(draft.previousName)}
+          >
+            {t.settings.crew.itsMe}
+          </button>
+        )}
         {draft.previousName !== null && !draft.self && (confirmRemove
-          ? <button type="button" className="cp-button" data-variant="danger" onClick={() => remove(draft.previousName!)}>Confirmer la suppression</button>
-          : <button type="button" className="cp-button" onClick={() => setConfirmRemove(true)}>Supprimer</button>)}
-        <button type="button" className="cp-button" onClick={close}>Fermer</button>
+          ? <button type="button" className="cp-button" data-variant="danger" onClick={() => remove(draft.previousName!)}>{t.settings.crew.confirmRemove}</button>
+          : <button type="button" className="cp-button" onClick={() => setConfirmRemove(true)}>{t.settings.crew.remove}</button>)}
+        <button type="button" className="cp-button" onClick={close}>{t.settings.close}</button>
       </div>
     </>
   );
@@ -161,7 +159,9 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
   jobs?: { chosen: readonly Job[]; onChange: (jobs: Job[]) => void };
 }) {
   const [direction, setDirection] = useState(0);
-  const [tab, setTab] = useState<Tab>('Visage');
+  const [tab, setTab] = useState<Tab>('face');
+  const words = t.settings.look;
+  const labels = words.options;
   const change = (part: Partial<Look>) => onLook({ ...look, ...part });
   const [month = '', day = ''] = birthday.split('-');
   const setBirthday = (nextMonth: string, nextDay: string) => onBirthday(nextMonth && nextDay ? `${nextMonth}-${nextDay}` : '');
@@ -169,35 +169,35 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
     <>
 
         <div className="cp-crew__stage">
-          <Preview look={look} direction={DIRECTIONS[direction]} label={`Aperçu de ${name || 'la personne'}`} />
+          <Preview look={look} direction={DIRECTIONS[direction]} label={words.preview(name)} />
           <div className="cp-crew__turn">
-            <button type="button" className="cp-button" aria-label="Tourner vers la gauche" onClick={() => setDirection((value) => (value + 3) % 4)}>←</button>
-            <button type="button" className="cp-button" aria-label="Tourner vers la droite" onClick={() => setDirection((value) => (value + 1) % 4)}>→</button>
+            <button type="button" className="cp-button" aria-label={words.turnLeft} onClick={() => setDirection((value) => (value + 3) % 4)}>←</button>
+            <button type="button" className="cp-button" aria-label={words.turnRight} onClick={() => setDirection((value) => (value + 1) % 4)}>→</button>
           </div>
           <label className="cp-crew__name">
-            <span>Prénom</span>
-            <input value={name} maxLength={40} onChange={(e) => onName(e.target.value)} placeholder="Marius" />
+            <span>{words.firstName}</span>
+            <input value={name} maxLength={40} onChange={(e) => onName(e.target.value)} placeholder={words.namePlaceholder} />
           </label>
-          <div className="cp-crew__name" role="group" aria-label="Anniversaire">
-            <span>Anniversaire <small className="cp-muted">(facultatif)</small></span>
+          <div className="cp-crew__name" role="group" aria-label={words.birthday}>
+            <span>{words.birthday} <small className="cp-muted">{words.optional}</small></span>
             <div className="cp-crew__birthday">
-              <select aria-label="Jour" value={day} onChange={(e) => setBirthday(month || '01', e.target.value)}>
-                <option value="">Jour</option>
+              <select aria-label={words.day} value={day} onChange={(e) => setBirthday(month || '01', e.target.value)}>
+                <option value="">{words.day}</option>
                 {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((value) => <option key={value} value={value}>{Number(value)}</option>)}
               </select>
-              <select aria-label="Mois" value={month} onChange={(e) => setBirthday(e.target.value, day || '01')}>
-                <option value="">Mois</option>
-                {MONTHS.map((label, index) => { const value = String(index + 1).padStart(2, '0'); return <option key={value} value={value}>{label}</option>; })}
+              <select aria-label={words.month} value={month} onChange={(e) => setBirthday(e.target.value, day || '01')}>
+                <option value="">{words.month}</option>
+                {words.months.map((label, index) => { const value = String(index + 1).padStart(2, '0'); return <option key={value} value={value}>{label}</option>; })}
               </select>
             </div>
           </div>
           {jobs && (
-            <div className="cp-crew__name" role="group" aria-label="Métier">
-              <span>Métier <small className="cp-muted">(une demande qui en parle lui revient)</small></span>
+            <div className="cp-crew__name" role="group" aria-label={words.job}>
+              <span>{words.job} <small className="cp-muted">{words.jobHint}</small></span>
               <div className="cp-crew__choices">
                 {JOBS.map((job) => {
                   const chosen = jobs.chosen.includes(job);
-                  return <button key={job} type="button" aria-pressed={chosen} onClick={() => jobs.onChange(JOBS.filter((other) => (other === job ? !chosen : jobs.chosen.includes(other))))}>{JOB_LABELS[job]}</button>;
+                  return <button key={job} type="button" aria-pressed={chosen} onClick={() => jobs.onChange(JOBS.filter((other) => (other === job ? !chosen : jobs.chosen.includes(other))))}>{t.settings.jobs[job]}</button>;
                 })}
               </div>
             </div>
@@ -205,66 +205,66 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
         </div>
 
         <div className="cp-crew__wardrobe">
-          <div className="cp-crew__tabs" role="tablist" aria-label="Parties">
-            {TABS.map((name) => <button key={name} type="button" role="tab" aria-selected={tab === name} onClick={() => setTab(name)}>{name}</button>)}
+          <div className="cp-crew__tabs" role="tablist" aria-label={words.parts}>
+            {TABS.map((part) => <button key={part} type="button" role="tab" aria-selected={tab === part} onClick={() => setTab(part)}>{words.tabs[part]}</button>)}
           </div>
-          <div className="cp-crew__panel" role="tabpanel" aria-label={tab}>
-            {tab === 'Visage' && (
+          <div className="cp-crew__panel" role="tabpanel" aria-label={words.tabs[tab]}>
+            {tab === 'face' && (
               <>
-                <Swatches label="Peau" colours={[...SKIN_TONES, ...FANCY_SKINS]} value={look.skin} onPick={(skin) => change({ skin })} />
-                <Choices label="Yeux" options={EYES} labels={LABELS.eyes} value={look.eyes} onPick={(eyes) => change({ eyes })} />
+                <Swatches label={words.skin} colours={[...SKIN_TONES, ...FANCY_SKINS]} value={look.skin} onPick={(skin) => change({ skin })} />
+                <Choices label={words.eyes} options={EYES} labels={labels.eyes} value={look.eyes} onPick={(eyes) => change({ eyes })} />
                 <Choices
-                  label="Lunettes" options={['none', 'on', 'sun'] as const} labels={{ none: 'Aucunes', on: 'Lunettes', sun: 'Lunettes de soleil' }}
+                  label={words.glasses} options={['none', 'on', 'sun'] as const} labels={words.glassesChoices}
                   value={look.sunglasses ? 'sun' : look.glasses ? 'on' : 'none'}
                   onPick={(value) => change({ sunglasses: value === 'sun', glasses: value === 'on' ? look.glasses ?? GLASSES_COLORS[0] : null })}
                 />
-                {look.glasses && !look.sunglasses && <Swatches label="Monture" colours={GLASSES_COLORS} value={look.glasses} onPick={(glasses) => change({ glasses })} />}
-                <label className="cp-crew__check"><input type="checkbox" checked={look.watch} onChange={(e) => change({ watch: e.target.checked })} /> Montre</label>
+                {look.glasses && !look.sunglasses && <Swatches label={words.frame} colours={GLASSES_COLORS} value={look.glasses} onPick={(glasses) => change({ glasses })} />}
+                <label className="cp-crew__check"><input type="checkbox" checked={look.watch} onChange={(e) => change({ watch: e.target.checked })} /> {words.watch}</label>
               </>
             )}
-            {tab === 'Cheveux' && (
+            {tab === 'hair' && (
               <>
-                <Choices label="Coiffure" options={HAIR_STYLES} labels={LABELS.hair} value={look.hair} onPick={(hair) => change({ hair })} />
-                {look.hair !== 'none' && <Swatches label="Couleur" colours={HAIR_COLORS} value={look.hairColor} onPick={(hairColor) => change({ hairColor })} />}
+                <Choices label={words.hairStyle} options={HAIR_STYLES} labels={labels.hair} value={look.hair} onPick={(hair) => change({ hair })} />
+                {look.hair !== 'none' && <Swatches label={words.colour} colours={HAIR_COLORS} value={look.hairColor} onPick={(hairColor) => change({ hairColor })} />}
               </>
             )}
-            {tab === 'Barbe' && (
+            {tab === 'beard' && (
               <>
-                <Choices label="Barbe" options={BEARD_STYLES} labels={LABELS.beard} value={look.beard} onPick={(beard) => change({ beard })} />
-                {look.beard !== 'none' && <Swatches label="Couleur" colours={HAIR_COLORS} value={look.beardColor} onPick={(beardColor) => change({ beardColor })} />}
+                <Choices label={words.beard} options={BEARD_STYLES} labels={labels.beard} value={look.beard} onPick={(beard) => change({ beard })} />
+                {look.beard !== 'none' && <Swatches label={words.colour} colours={HAIR_COLORS} value={look.beardColor} onPick={(beardColor) => change({ beardColor })} />}
               </>
             )}
-            {tab === 'Tête' && (
+            {tab === 'head' && (
               <>
-                <Choices label="Chapeau" options={HATS} labels={LABELS.hat} value={look.hat} onPick={(hat) => change({ hat })} />
-                {COLOURED_HATS.has(look.hat) && <Swatches label="Couleur" colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
-                <label className="cp-crew__check"><input type="checkbox" checked={look.headphones} onChange={(e) => change({ headphones: e.target.checked })} /> Casque audio</label>
-                <p className="cp-muted">Pendant les fêtes, leur chapeau (bonnet de Noël, oreilles de lapin…) passe par-dessus le tien.</p>
+                <Choices label={words.hat} options={HATS} labels={labels.hat} value={look.hat} onPick={(hat) => change({ hat })} />
+                {COLOURED_HATS.has(look.hat) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
+                <label className="cp-crew__check"><input type="checkbox" checked={look.headphones} onChange={(e) => change({ headphones: e.target.checked })} /> {words.headphones}</label>
+                <p className="cp-muted">{words.festivalHats}</p>
               </>
             )}
-            {tab === 'Haut' && (
+            {tab === 'top' && (
               <>
-                <Choices label="Haut" options={TOPS} labels={LABELS.top} value={look.top} onPick={(top) => change({ top })} />
-                {look.top !== 'none' && <Swatches label="Couleur" colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
+                <Choices label={words.top} options={TOPS} labels={labels.top} value={look.top} onPick={(top) => change({ top })} />
+                {look.top !== 'none' && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
                 {(look.top === 'threePiece' || look.top === 'tracksuit' || look.top === 'jacket') && (
-                  <Swatches label={{ threePiece: 'Cravate', tracksuit: 'Bandes', jacket: 'Dessous' }[look.top]} colours={CLOTH_COLORS} value={look.accentColor} onPick={(accentColor) => change({ accentColor })} />
+                  <Swatches label={words.accents[look.top]} colours={CLOTH_COLORS} value={look.accentColor} onPick={(accentColor) => change({ accentColor })} />
                 )}
               </>
             )}
-            {tab === 'Bas' && (
-              look.top === 'blanket' ? <p className="cp-muted">La couverture cache le bas et les chaussures.</p>
-                : look.top === 'dress' ? <p className="cp-muted">La robe tient lieu de bas.</p> : (
+            {tab === 'bottom' && (
+              look.top === 'blanket' ? <p className="cp-muted">{words.blanketHides}</p>
+                : look.top === 'dress' ? <p className="cp-muted">{words.dressIsBottom}</p> : (
                 <>
-                  <Choices label="Bas" options={BOTTOMS} labels={LABELS.bottom} value={look.bottom} onPick={(bottom) => change({ bottom })} />
-                  <Swatches label="Couleur" colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />
+                  <Choices label={words.bottom} options={BOTTOMS} labels={labels.bottom} value={look.bottom} onPick={(bottom) => change({ bottom })} />
+                  <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />
                 </>
               )
             )}
-            {tab === 'Chaussures' && (
-              look.top === 'blanket' ? <p className="cp-muted">La couverture cache le bas et les chaussures.</p> : (
+            {tab === 'shoes' && (
+              look.top === 'blanket' ? <p className="cp-muted">{words.blanketHides}</p> : (
                 <>
-                  <Choices label="Chaussures" options={SHOES} labels={LABELS.shoes} value={look.shoes} onPick={(shoes) => change({ shoes })} />
-                  <Swatches label="Couleur" colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />
+                  <Choices label={words.shoes} options={SHOES} labels={labels.shoes} value={look.shoes} onPick={(shoes) => change({ shoes })} />
+                  <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />
                 </>
               )
             )}

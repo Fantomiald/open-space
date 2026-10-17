@@ -56,6 +56,23 @@ describe('crew', () => {
       { name: 'Max', self: true, birthday: '03-12', jobs: undefined }, { name: 'Lina', self: undefined, birthday: undefined, jobs: undefined },
       { name: 'Tom', self: undefined, birthday: undefined, jobs: ['product'] },
     ], 'a birthday left empty is removed, jobs are replaced');
-    await assert.rejects(reloaded.setSelf('Lina', look), /existe déjà/);
+  });
+
+  it('makes someone of the crew the user, at the first start or later, the user until then staying in the crew', async () => {
+    const file = path.join(folder, 'self-crew.json');
+    writeFileSync(file, JSON.stringify({ members: [{ name: 'Lina', look: null, birthday: '10-20', jobs: ['tech'] }, { name: 'Tom', look: null }] }));
+    const crew = new Crew(file);
+    await crew.load();
+    const look = parseLook({ ...DEFAULT_LOOK })!;
+    await crew.setSelf('Lina', look);
+    assert.deepEqual(crew.list().map(({ name, self, birthday }) => ({ name, self, birthday })), [
+      { name: 'Lina', self: true, birthday: '10-20' }, { name: 'Tom', self: undefined, birthday: undefined },
+    ], 'an imported member is taken over, not doubled');
+    await crew.becomeSelf('Tom');
+    const reloaded = new Crew(file);
+    await reloaded.load();
+    assert.equal(reloaded.selfName, 'Tom');
+    assert.deepEqual(reloaded.list().map(({ name, self }) => ({ name, self })), [{ name: 'Tom', self: true }, { name: 'Lina', self: undefined }]);
+    await assert.rejects(reloaded.becomeSelf('Zoé'), /pas dans l’équipe/);
   });
 });

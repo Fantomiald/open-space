@@ -8,14 +8,16 @@ import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand } from '../shared/protocol.ts';
 import { attachmentsFolder, saveAttachment } from './attachments.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
-import type { Aside, FolderCode } from '../shared/protocol.ts';
+import type { Aside, FolderCode, SessionChanges } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { lastExchanges, listConversations } from './conversations.ts';
+import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME, MAX_TAG } from './messages.ts';
 import { pickSessionName } from './names.ts';
+import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
 import { Session, newSessionInfo, type SessionDeps, type StoredInfo } from './session.ts';
 import { SessionLog } from './session-log.ts';
@@ -114,7 +116,7 @@ export class SessionManager {
     const log = new SessionLog(path.join(this.logsDir, `${id}.jsonl`), (error) => {
       this.deps.log(`log write failed for session ${id}`, error);
       const name = this.sessions.get(id)?.snapshot().name ?? id.slice(0, 8);
-      this.deps.broadcast({ t: 'toast', kind: 'error', text: `Le journal de ${name} n’a pas pu être écrit (${error.message}). Il sera rouvert au prochain événement.` });
+      this.deps.broadcast({ t: 'toast', kind: 'error', text: st.sessions.logFailed(name, error.message) });
     });
     await log.load();
     return log;
@@ -123,8 +125,8 @@ export class SessionManager {
   private createSession(info: StoredInfo, log: SessionLog): Session {
     return new Session(info, {
       spawnProcess: (launch, handlers) => {
-        if (this.stopping) throw new Error('Le serveur s’arrête : aucune session ne peut démarrer.');
-        if (!this.deps.spawnProcess) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
+        if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
+        if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
         return this.deps.spawnProcess(launch, handlers);
       },
       log,
@@ -147,11 +149,11 @@ export class SessionManager {
 
   /**
    * Who a SendMessage call writes to, for the thread: a session named by Claude Code ("Charline", "futur-d6") as is,
-   * one of ours answered at its socket by its name, any other socket as "une autre session".
+   * one of ours answered at its socket by its name, any other socket as "another session" (st.normalizer.recipientUnknown).
    */
   private peerName(address: string): string {
     if (!address.startsWith('uds:') && !address.startsWith('/')) return address;
-    return [...this.sessions.values()].find((session) => session.answersAt(address))?.snapshot().name ?? 'une autre session';
+    return [...this.sessions.values()].find((session) => session.answersAt(address))?.snapshot().name ?? st.normalizer.recipientUnknown;
   }
 
   // ── read side ──
@@ -174,16 +176,22 @@ export class SessionManager {
   }
   directories(): string[] { return listProjectDirectories(this.deps.config.roots); }
 
+  /** What a session changed in its files (see changes.ts). */
+  changes(id: string): Promise<SessionChanges> {
+    const { cwd } = this.session(id).snapshot();
+    return sessionChanges(cwd, id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home);
+  }
+
   /** The Claude Code conversations of an allowed folder that are not open here yet. */
   async conversations(directory: string): Promise<Conversation[]> {
     const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
-    if (!cwd) throw new Error('Ce dossier n’est pas dans les racines autorisées (OFFICE_ROOTS).');
+    if (!cwd) throw new Error(st.sessions.outsideRoots);
     return listConversations(cwd, new Set(this.sessions.keys()), this.deps.home);
   }
 
   private session(id: string): Session {
     const session = this.sessions.get(id);
-    if (!session) throw new Error('Cette session n’existe pas.');
+    if (!session) throw new Error(st.sessions.notFound);
     return session;
   }
 
@@ -191,9 +199,9 @@ export class SessionManager {
   /** Asks a side question about a session's conversation; one at a time per session, a new one replaces the last. */
   aside(id: string, question: string) {
     const info = this.session(id).snapshot();
-    if (!this.deps.askAside) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
+    if (!this.deps.askAside) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(info.cwd, this.deps.config.roots);
-    if (!cwd) throw new Error('Le dossier de cette session n’est plus dans les racines autorisées.');
+    if (!cwd) throw new Error(st.sessions.folderGone);
     this.asides.get(id)?.stop();
     const entry = { aside: { question, answer: '', state: 'asking' } as Aside, stop: () => {} };
     this.asides.set(id, entry);
@@ -251,17 +259,17 @@ export class SessionManager {
 
   // ── commands from clients ──
   async create(options: SessionOptions): Promise<SessionInfo> {
-    if (this.stopping) throw new Error('Le serveur s’arrête : aucune session ne peut être créée.');
-    if (!this.deps.spawnProcess) throw new Error('Claude Code n’est pas installé sur cet ordinateur.');
+    if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
+    if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.deps.config.roots);
-    if (!cwd) throw new Error('Ce dossier n’est pas dans les racines autorisées (OFFICE_ROOTS).');
+    if (!cwd) throw new Error(st.sessions.outsideRoots);
     // a folder running code of its own (hooks, MCP servers) needs the user's word once (see trust.ts)
     const code = folderCode(cwd);
     const trusted = !runsCode(code) || trustedInClaudeCode(cwd, this.deps.home) || this.trusted.has(cwd);
     if (!trusted && !options.trust) throw new TrustNeeded(cwd, code);
     if (!trusted && options.trust === 'folder') await this.trusted.add(cwd);
     const name = options.name?.trim().slice(0, MAX_NAME) || pickSessionName(new Set([...this.sessions.values()].map((session) => session.snapshot().name)));
-    if (options.resumeId && this.sessions.has(options.resumeId)) throw new Error('Cette conversation est déjà ouverte ici.');
+    if (options.resumeId && this.sessions.has(options.resumeId)) throw new Error(st.sessions.alreadyOpen);
     // a resumed conversation keeps its id: the session goes on with it through --resume
     const info = newSessionInfo({ id: options.resumeId ?? randomUUID(), name, cwd, model: options.model ?? '', permissionMode: options.permissionMode ?? DEFAULT_PERMISSION_MODE }, this.now());
     if (options.resumeId) info.resumable = true;
@@ -274,7 +282,7 @@ export class SessionManager {
     this.save();
     if (options.resumeId) {
       const found = (await listConversations(cwd, new Set(), this.deps.home)).find((conversation) => conversation.id === options.resumeId);
-      session.showHistory(found?.title ?? 'la conversation', await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
+      session.showHistory(found?.title ?? st.sessions.untitledConversation, await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
     }
     if (options.text?.trim() || options.images?.length) {
       try {
@@ -296,12 +304,13 @@ export class SessionManager {
   close(id: string) { return this.session(id).close(); }
   rename(id: string, name: string) {
     const clean = name.trim();
-    if (!clean) throw new Error('Le nom ne peut pas être vide.');
+    if (!clean) throw new Error(st.sessions.emptyName);
     this.session(id).rename(clean);
   }
 
   tag(id: string, tag: string) { this.session(id).setTag(tag); }
   rest(id: string) { return this.session(id).rest(); }
+  remoteControl(id: string, enabled: boolean) { return this.session(id).setRemote(enabled); }
 
   /** Removes a session (closed first if it runs) and its log. Claude Code's own transcript is not touched. */
   async forget(id: string) {
@@ -353,7 +362,7 @@ export class TrustNeeded extends Error {
   readonly cwd: string;
   readonly code: FolderCode;
   constructor(cwd: string, code: FolderCode) {
-    super('Ce dossier fait tourner du code à lui : confirme d’abord.');
+    super(st.sessions.trustNeeded);
     this.cwd = cwd;
     this.code = code;
   }

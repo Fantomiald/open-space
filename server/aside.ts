@@ -5,6 +5,7 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import type { ClaudeBinary } from './claude-process.ts';
+import { st } from './i18n/index.ts';
 import { asJson, asString, isJson } from './json.ts';
 
 export interface AsideRequest {
@@ -28,10 +29,6 @@ export type AsideRunner = (request: AsideRequest, handlers: AsideHandlers) => { 
 /** A side question that takes longer than this is given up. */
 const TIME_LIMIT_MS = 3 * 60_000;
 
-export const ASIDE_PROMPT =
-  'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
-  'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.';
-
 /**
  * Without --permission-prompt-tool, whatever would need a permission is refused at once: the fork can only read. The
  * question goes after "--", so one starting with a dash is not taken for an option.
@@ -42,7 +39,7 @@ export function buildAsideArgs(request: Omit<AsideRequest, 'cwd'>): string[] {
   args.push('--no-session-persistence', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-mode', 'default');
   if (request.model) args.push('--model', request.model);
   if (request.untrusted) args.push('--setting-sources', 'user');
-  args.push('--append-system-prompt', ASIDE_PROMPT, '--', request.question);
+  args.push('--append-system-prompt', st.prompt.aside, '--', request.question);
   return args;
 }
 
@@ -71,7 +68,7 @@ export function createAsideRunner(binary: ClaudeBinary, environment: NodeJS.Proc
       handlers.onEnd(result);
     };
     const stop = () => { if (child.pid !== undefined) try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ } };
-    const limit = setTimeout(() => { stop(); end({ ok: false, text: 'La question à côté a pris trop de temps.' }); }, TIME_LIMIT_MS);
+    const limit = setTimeout(() => { stop(); end({ ok: false, text: st.aside.tooLong }); }, TIME_LIMIT_MS);
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       let message: unknown;
       try { message = JSON.parse(line); } catch { return; }
@@ -80,8 +77,8 @@ export function createAsideRunner(binary: ClaudeBinary, environment: NodeJS.Proc
       if (read.result) end({ ok: read.result.ok, text: read.result.text || written });
     });
     child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-2000); });
-    child.on('close', () => end({ ok: false, text: stderr.trim().split('\n').slice(-2).join(' ') || 'Claude Code s’est arrêté sans répondre.' }));
+    child.on('close', () => end({ ok: false, text: stderr.trim().split('\n').slice(-2).join(' ') || st.aside.stoppedWithoutAnswer }));
     child.on('error', (error) => end({ ok: false, text: String(error) }));
-    return { stop: () => { stop(); end({ ok: false, text: 'Question retirée.' }); } };
+    return { stop: () => { stop(); end({ ok: false, text: st.aside.withdrawn }); } };
   };
 }

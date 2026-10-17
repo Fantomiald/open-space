@@ -15,6 +15,11 @@ describe('session state machine', () => {
     assert.deepEqual(states([{ type: 'spawn' }, { type: 'init' }, { type: 'turn_result' }]), ['starting', 'work', 'wait']);
   });
 
+  it('waits with a process started without a message (Remote Control), and works once a message comes from elsewhere', () => {
+    assert.deepEqual(states([{ type: 'attach' }, { type: 'init' }, { type: 'activity' }, { type: 'turn_result' }], initialContext('closed')), ['wait', 'wait', 'work', 'wait']);
+    assert.equal(run([{ type: 'attach' }], run([{ type: 'spawn' }, { type: 'init' }])).state, 'work', 'a running turn stays as it is');
+  });
+
   it('goes work -> perm -> work -> wait around a permission', () => {
     assert.deepEqual(
       states([{ type: 'permission_requested' }, { type: 'permission_resolved', remaining: 0 }, { type: 'turn_result' }], run([{ type: 'spawn' }, { type: 'init' }])),

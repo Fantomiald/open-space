@@ -10,6 +10,8 @@ export type MachineInput =
   | { type: 'spawn' }
   /** a message is sent to a live process */
   | { type: 'send' }
+  /** a process started without a message (Remote Control): it waits for one from elsewhere */
+  | { type: 'attach' }
   /** Claude Code sent its init message */
   | { type: 'init' }
   /** the assistant produced output while waiting (a queued message or a background task started a new turn) */
@@ -31,6 +33,8 @@ export function reduce(context: MachineContext, input: MachineInput): MachineCon
   switch (input.type) {
     case 'spawn':
       return RESTARTABLE.has(state) ? { state: 'starting' } : context;
+    case 'attach':
+      return RESTARTABLE.has(state) ? { state: 'wait' } : context;
     case 'send':
     case 'activity':
       return state === 'wait' ? { state: 'work' } : context;

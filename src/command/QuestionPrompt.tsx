@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { PermissionPrompt, Question } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { questionAnswers } from '../state/questions.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useAnswerButtons } from './useAnswerButtons.ts';
@@ -53,20 +54,21 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
     if (event.key === 'ArrowLeft') { event.preventDefault(); go(step - 1); }
   };
 
+  const words = t.composer.question;
   return (
-    <form className="cp-question" aria-label="Questions de la session" onKeyDown={onKeyDown} onSubmit={(e) => { e.preventDefault(); if (current && many) go(step + 1); else send(); }}>
+    <form className="cp-question" aria-label={words.formLabel} onKeyDown={onKeyDown} onSubmit={(e) => { e.preventDefault(); if (current && many) go(step + 1); else send(); }}>
       {many && (
-        <div className="cp-question__tabs" role="tablist" aria-label="Questions">
+        <div className="cp-question__tabs" role="tablist" aria-label={words.tabs}>
           {questions.map((item, index) => (
             <button
               key={item.question} type="button" role="tab" aria-selected={index === step} data-answered={Boolean(answers[item.question])}
               className="cp-question__tab" onClick={() => go(index)}
             >
               <span className="cp-question__check" aria-hidden="true" />
-              {item.header || `Question ${index + 1}`}
+              {item.header || words.numbered(index + 1)}
             </button>
           ))}
-          <button type="button" role="tab" aria-selected={step === last} className="cp-question__tab" data-send="true" onClick={() => go(last)}>Envoyer</button>
+          <button type="button" role="tab" aria-selected={step === last} className="cp-question__tab" data-send="true" onClick={() => go(last)}>{words.send}</button>
         </div>
       )}
 
@@ -76,14 +78,14 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
           onPick={(label) => pick(step, current, label)} onWrite={(text) => write(current, text)}
         />
       ) : (
-        <div className="cp-question__summary" role="tabpanel" aria-label="Tes réponses">
-          <p className="cp-question__text">Tes réponses</p>
+        <div className="cp-question__summary" role="tabpanel" aria-label={words.summary}>
+          <p className="cp-question__text">{words.summary}</p>
           <ul>
             {questions.map((item, index) => (
               <li key={item.question}>
                 <button type="button" className="cp-question__recap" data-missing={!answers[item.question]} onClick={() => go(index)}>
-                  <span className="cp-question__topic">{item.header || `Question ${index + 1}`}</span>
-                  <span>{answers[item.question] || 'Sans réponse'}</span>
+                  <span className="cp-question__topic">{item.header || words.numbered(index + 1)}</span>
+                  <span>{answers[item.question] || words.unanswered}</span>
                 </button>
               </li>
             ))}
@@ -92,13 +94,13 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
       )}
 
       <div className="cp-question__foot">
-        {many && <button type="button" className="cp-button" disabled={step === 0} onClick={() => go(step - 1)}>Précédent</button>}
+        {many && <button type="button" className="cp-button" disabled={step === 0} onClick={() => go(step - 1)}>{words.previous}</button>}
         <span className="cp-question__status" aria-live="polite">
-          {current && many ? `${step + 1} sur ${questions.length}` : missing === 0 ? 'Prêt à envoyer' : many ? `Encore ${missing} question${missing > 1 ? 's' : ''} sans réponse` : 'Choisis une réponse'}
+          {current && many ? words.stepOf(step + 1, questions.length) : missing === 0 ? words.ready : many ? words.stillMissing(missing) : words.pickOne}
         </span>
         {current && many
-          ? <button type="submit" className="cp-button" data-variant={answers[current.question] ? 'primary' : undefined}>Suivant</button>
-          : <button type="submit" className="cp-button" data-variant="primary" disabled={missing > 0 || buttons.disabled}>{many ? 'Envoyer les réponses' : 'Répondre'}</button>}
+          ? <button type="submit" className="cp-button" data-variant={answers[current.question] ? 'primary' : undefined}>{words.next}</button>
+          : <button type="submit" className="cp-button" data-variant="primary" disabled={missing > 0 || buttons.disabled}>{many ? words.sendAnswers : words.answer}</button>}
       </div>
     </form>
   );
@@ -108,11 +110,12 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
 function QuestionStep({ item, picked, written, onPick, onWrite }: {
   item: Question; picked: string[]; written: string; onPick: (label: string) => void; onWrite: (text: string) => void;
 }) {
+  const words = t.composer.question;
   return (
     <fieldset className="cp-question__item" role="tabpanel">
-      <legend className="cp-sr-only">{item.header || 'Question'}</legend>
+      <legend className="cp-sr-only">{item.header || words.question}</legend>
       <p className="cp-question__text">{item.question}</p>
-      {item.multiSelect && <p className="cp-question__hint">Plusieurs choix possibles</p>}
+      {item.multiSelect && <p className="cp-question__hint">{words.several}</p>}
       <div className="cp-question__options" data-multiple={item.multiSelect === true}>
         {item.options.map((option) => (
           <button key={option.label} type="button" className="cp-question__option" aria-pressed={picked.includes(option.label)} onClick={() => onPick(option.label)}>
@@ -123,8 +126,8 @@ function QuestionStep({ item, picked, written, onPick, onWrite }: {
         ))}
         <label className="cp-question__other" data-filled={written.trim() !== ''}>
           <span className="cp-question__mark" aria-hidden="true" />
-          <span className="cp-sr-only">Autre réponse</span>
-          <input value={written} onChange={(e) => onWrite(e.target.value)} placeholder="Autre réponse…" />
+          <span className="cp-sr-only">{words.other}</span>
+          <input value={written} onChange={(e) => onWrite(e.target.value)} placeholder={words.otherPlaceholder} />
         </label>
       </div>
     </fieldset>

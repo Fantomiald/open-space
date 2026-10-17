@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { t } from '../i18n/index.ts';
 import type { Attachments } from './useAttachments.ts';
 import { CloseIcon, PaperclipIcon } from './Icons.tsx';
 
@@ -6,14 +7,14 @@ import { CloseIcon, PaperclipIcon } from './Icons.tsx';
 export function AttachmentStrip({ attachments }: { attachments: Attachments }) {
   if (!attachments.items.length && !attachments.preparing) return null;
   return (
-    <ul className="cp-attachments" aria-label="Images jointes">
+    <ul className="cp-attachments" aria-label={t.composer.attachments.label}>
       {attachments.items.map((item) => (
         <li key={item.id} className="cp-attachments__item">
           <img src={item.preview} alt={item.name} />
-          <button type="button" className="cp-attachments__remove" aria-label={`Retirer ${item.name}`} title="Retirer" onClick={() => attachments.remove(item.id)}><CloseIcon /></button>
+          <button type="button" className="cp-attachments__remove" aria-label={t.composer.attachments.removeLabel(item.name)} title={t.composer.attachments.remove} onClick={() => attachments.remove(item.id)}><CloseIcon /></button>
         </li>
       ))}
-      {attachments.preparing && <li className="cp-attachments__item" data-preparing="true" aria-label="Image en préparation" />}
+      {attachments.preparing && <li className="cp-attachments__item" data-preparing="true" aria-label={t.composer.attachments.preparing} />}
     </ul>
   );
 }
@@ -23,7 +24,7 @@ export function AttachButton({ attachments, className }: { attachments: Attachme
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <button type="button" className={className ?? 'cp-icon-button'} aria-label="Joindre des images" title="Joindre des images (ou colle une capture, ou dépose-la ici)" onClick={() => input.current?.click()}>
+      <button type="button" className={className ?? 'cp-icon-button'} aria-label={t.composer.attachments.attach} title={t.composer.attachments.attachTitle} onClick={() => input.current?.click()}>
         <PaperclipIcon />
       </button>
       <input
@@ -37,5 +38,5 @@ export function AttachButton({ attachments, className }: { attachments: Attachme
 /** Over the area files can be dropped on, while some are dragged over it. */
 export function DropOverlay({ attachments }: { attachments: Attachments }) {
   if (!attachments.dragging) return null;
-  return <div className="cp-drop" aria-hidden="true"><span>Dépose tes images pour les joindre</span></div>;
+  return <div className="cp-drop" aria-hidden="true"><span>{t.composer.attachments.drop}</span></div>;
 }

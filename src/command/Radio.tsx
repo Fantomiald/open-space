@@ -2,6 +2,7 @@
 // browser (the server stays offline). It starts on a click, as browsers refuse sound before one; the station and
 // the volume are remembered.
 import { useEffect, useRef, useState } from 'react';
+import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { NextIcon, PauseIcon, PlayIcon } from './Icons.tsx';
 
@@ -59,19 +60,20 @@ export function Radio() {
   };
 
   const playing = status === 'on' || status === 'loading';
+  const words = t.common.radio;
   return (
-    <section className="cp-radio" aria-label="Radio" data-playing={status === 'on'}>
-      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={playing ? 'Couper la radio' : 'Écouter la radio'} onClick={toggle}>
+    <section className="cp-radio" aria-label={words.label} data-playing={status === 'on'}>
+      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={playing ? words.stop : words.listen} onClick={toggle}>
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
       <span className="cp-radio__bars" aria-hidden="true"><span /><span /><span /></span>
       <span className="cp-radio__now">
-        <span className="cp-radio__label" aria-live="polite">{status === 'loading' ? 'Connexion…' : status === 'failed' ? 'Radio injoignable' : status === 'on' ? 'En direct' : 'Radio'}</span>
+        <span className="cp-radio__label" aria-live="polite">{status === 'loading' ? words.connecting : status === 'failed' ? words.unreachable : status === 'on' ? words.live : words.label}</span>
         <span className="cp-radio__title">{STATIONS[station].name}</span>
       </span>
-      <button type="button" className="cp-icon-button" aria-label="Radio suivante" title="Radio suivante" onClick={nextStation}><NextIcon /></button>
+      <button type="button" className="cp-icon-button" aria-label={words.next} title={words.next} onClick={nextStation}><NextIcon /></button>
       <label className="cp-radio__volume">
-        <span className="cp-sr-only">Volume</span>
+        <span className="cp-sr-only">{words.volume}</span>
         <input type="range" min={0} max={1} step={0.05} value={volume} onChange={(e) => setVolume(Number(e.target.value))} />
       </label>
     </section>

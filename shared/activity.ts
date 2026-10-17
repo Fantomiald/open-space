@@ -17,8 +17,8 @@ export const tail = (s: unknown, n = 60) => {
 /** The action part of an MCP tool name: mcp__claude_ai_Gmail__search_threads -> "search threads" */
 const mcpAction = (tool: string) => (tool.split('__')[2] ?? '').replace(/[_-]+/g, ' ');
 
-/** The detail of a tool call shown in the thread. Never throws on odd input. */
-export function actDetail(tool: string, input: Record<string, unknown> | undefined): string {
+/** The detail of a tool call shown in the thread. Never throws on odd input. `within`: the word for "in" (a Grep path). */
+export function actDetail(tool: string, input: Record<string, unknown> | undefined, within = 'dans'): string {
   const i = input ?? {};
   switch (tool) {
     case 'WebSearch': case 'ToolSearch': return String(i.query ?? '');
@@ -26,7 +26,7 @@ export function actDetail(tool: string, input: Record<string, unknown> | undefin
     case 'Read': case 'Write': case 'Edit': case 'MultiEdit': return String(i.file_path ?? '');
     case 'NotebookEdit': return String(i.notebook_path ?? '');
     case 'Glob': return String(i.pattern ?? '');
-    case 'Grep': return `${i.pattern ?? ''}${i.path ? ` dans ${i.path}` : ''}`;
+    case 'Grep': return `${i.pattern ?? ''}${i.path ? ` ${within} ${i.path}` : ''}`;
     case 'LS': return String(i.path ?? '');
     case 'Bash': return String(i.command ?? '');
     case 'Skill': return String(i.args ?? '');

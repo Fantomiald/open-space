@@ -3,6 +3,7 @@
 // with the lamps, screens and the corridor shining through the dark), the status icons and the name tags.
 // Everything is laid out in room coordinates; the canvas itself has RENDER_SCALE times more pixels.
 import { ROOM_PALETTE as P } from '../design/room-palette.ts';
+import { t } from '../i18n/index.ts';
 import type { Agent, Status } from './cast.ts';
 import { PET_HEIGHT, drawHearts, drawPet, isSpeaking, petWords } from './pet.ts';
 import type { PetChoice } from '../../shared/pets.ts';
@@ -16,7 +17,11 @@ import { ART_SCALE } from './pixel-art.ts';
 import { furnitureDepth, type FurnitureSprites } from './pixel-furniture.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
+import { paintActivity } from './activity-icons.ts';
+import { Visits, type Visitor } from './visitors.ts';
 
+/** How long a visitor at a birthday party wishes it, in ms. */
+const WISH_MS = 4000;
 /** Pixelify Sans only draws clean glyphs at some sizes; 11 room pixels is the smallest crisp one. */
 export const TAG_FONT = '500 11px "Pixelify Sans", monospace';
 const TAG_HEIGHT = 13;
@@ -35,8 +40,8 @@ export interface FrameOptions {
   hour: number;
   /** the break room: everyone seated there dozes, eyes closed, Z's floating up */
   dozing: boolean;
-  /** the pointer is on the door: it is outlined, as something to click */
-  doorHovered: boolean;
+  /** what the pointer is on, outlined as something to click: the door, or the user's own screen */
+  hoveredThing: 'door' | 'screen' | null;
   /** the person under the pointer (a person id, or PLAYER_ID): their name tag shows in full, the others are faint */
   hoveredId: string | null;
   /** the festival the room is dressed for and who it is for (see festivalDay), and which room it is */
@@ -53,7 +58,10 @@ export interface FrameOptions {
 function paintDoorOutline(context: Context, layout: Layout) {
   const from = layout.door.y - 0.15, to = layout.door.y + DOOR_SIZE.width + 0.15, top = DOOR_SIZE.height + 4;
   const corner = (along: number, height: number) => { const base = toScreen({ x: 0, y: along }); return { x: base.x, y: base.y - height }; };
-  const outline = [corner(from, 0), corner(to, 0), corner(to, top), corner(from, top)];
+  paintOutline(context, [corner(from, 0), corner(to, 0), corner(to, top), corner(from, top)]);
+}
+
+function paintOutline(context: Context, outline: readonly Point[]) {
   context.beginPath();
   outline.forEach((point, index) => { if (index) context.lineTo(point.x, point.y); else context.moveTo(point.x, point.y); });
   context.closePath();
@@ -299,6 +307,12 @@ function characterPose(character: Character, options: FrameOptions): Pose {
   return seated && options.dozing ? { ...pose, blinking: true, smiling: false } : pose;
 }
 
+/** A visitor of the crew: walking, standing at what they came for, or sitting on the sofa (raised by its cushions). */
+function visitorPose(visitor: Visitor, options: FrameOptions): { pose: Pose; lift: number } {
+  const sitting = Visits.sitting(visitor);
+  return { pose: poseOf(visitor, sitting, false, 'none', options), lift: sitting ? visitor.spot.lift ?? 0 : 0 };
+}
+
 /** `lift`: drawn this many room pixels above the floor (someone sitting on the sofa). */
 function paintPerson(context: Context, sprites: SpriteSource, id: string, walker: Walker, pose: Pose, selected: boolean, lift = 0) {
   const feet = raise(toScreen(walker.position), lift);
@@ -355,7 +369,8 @@ function paintAgents(context: Context, sprites: SpriteSource, sessionId: string,
 }
 
 /** What the pet says ("Miaou !", "Ouaf ouaf !"…) above it, in a small white bubble. */
-function paintPetSpeech(context: Context, text: string, x: number, y: number) {
+/** A white speech bubble over the room, its tail's tip at (x, y): the pet, and the crew wishing a happy birthday. */
+function paintSpeech(context: Context, text: string, x: number, y: number) {
   const width = Math.ceil(context.measureText(text).width) + 10;
   const left = Math.round(x - width / 2), top = Math.round(y - TAG_HEIGHT - 6);
   context.fillStyle = P.pet.bubble;
@@ -467,6 +482,12 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const hand = raise(toScreen({ x: piece.x + 0.96, y: piece.y + 0.22 }), 12 * ART_SCALE);
     layers.push({ depth: furnitureDepth(piece) + 0.01, paint: () => sprites.drawTypingHand(context, typist.person.id, feet, hand, pose.step) });
   }
+  // those still outside, behind the first of two, are not in the room yet
+  const visitors = [...(scene.visits?.visitors.values() ?? [])].filter((visitor) => visitor.outside <= 0);
+  for (const visitor of visitors) {
+    const { pose, lift } = visitorPose(visitor, options);
+    layers.push({ depth: depthOf(visitor.position), paint: () => paintPerson(context, sprites, visitor.id, visitor, pose, false, lift) });
+  }
   const playerPose = poseOf(scene.player, scene.playerSpot !== null, false, 'none', options);
   const pet = scene.pet;
   const choice = options.pet.kind === 'none' ? null : options.pet;
@@ -480,6 +501,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const figures = [
     figureOf(scene.player, playerLift, sprites.height(playerPose, PLAYER_ID)),
     ...characters.map((character) => figureOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(characterPose(character, options), character.person.id))),
+    ...visitors.map((visitor) => { const { pose, lift } = visitorPose(visitor, options); return figureOf(visitor, lift, sprites.height(pose, visitor.id)); }),
   ];
   paintServerLights(context, time, layout.furniture, figures);
   paintSteam(context, time, layout.furniture);
@@ -489,7 +511,10 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const heads = [headOf(scene.player, playerLift, sprites.height(playerPose)), ...characters.map((character) => headOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(characterPose(character, options))))];
     paintFestivalEffects(context, { festival: options.festival, room: options.room, layout, time, lighting, heads });
   }
-  if (options.doorHovered) paintDoorOutline(context, layout);
+  if (options.hoveredThing === 'door') paintDoorOutline(context, layout);
+  // a white line around the user's laptop itself: a click there opens a terminal
+  const desk = options.hoveredThing === 'screen' ? layout.furniture.find((piece) => piece.kind === 'bossDesk') : undefined;
+  if (desk) furniture.drawHighlight(context, desk);
 
   // name tags and icons go on top of everything, so the furniture never hides them
   context.font = TAG_FONT;
@@ -501,16 +526,32 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (options.dozing && character.phase === 'seated') paintZzz(context, feet.x, head - 4, options.reducedMotion ? 0 : options.time, character.blinkOffset);
     context.globalAlpha = isSelected(character) || options.hoveredId === character.person.id ? 1 : FAINT_TAG_ALPHA;
     const tag = paintTag(context, character.person.name, feet.x, head - 2, P.tagText, isSelected(character));
-    if (character.phase === 'seated') paintAgents(context, sprites, character.person.sessionId, character.person.agents, tag.right + 2, tag.top, options.time, options.reducedMotion);
     // the session's tag right above its name, then what it waits for above both (the status at full strength: it calls the user)
     const labelTop = character.person.tag ? paintTag(context, character.person.tag, feet.x, tag.top - 2, P.sessionTagText, false, P.sessionTag).top : tag.top;
     context.globalAlpha = 1;
+    // the sub-agents at full strength, like the status: they show work going on
+    if (character.phase === 'seated') paintAgents(context, sprites, character.person.sessionId, character.person.agents, tag.right + 2, tag.top, options.time, options.reducedMotion);
     if (character.phase === 'seated' && character.person.status) paintStatus(context, character.person.status, feet.x, labelTop - 16, options.time, options.reducedMotion);
   }
   if (pet && choice) {
     const paws = toScreen(pet.position);
     drawHearts(context, pet, paws.x, paws.y);
-    if (isSpeaking(pet)) paintPetSpeech(context, petWords(pet, choice.kind), paws.x, paws.y - PET_HEIGHT);
+    if (isSpeaking(pet)) paintSpeech(context, petWords(pet, choice.kind), paws.x, paws.y - PET_HEIGHT);
+  }
+  // what a visitor does, in a bubble once they are there, and their name only under the pointer: they are not sessions
+  for (const visitor of visitors) {
+    const hovered = visitor.id === options.hoveredId;
+    if (visitor.phase !== 'staying' && !hovered) continue;
+    const { pose, lift } = visitorPose(visitor, options);
+    const feet = raise(toScreen(visitor.position), lift);
+    const head = feet.y - sprites.height(pose, visitor.id);
+    const above = hovered ? paintTag(context, visitor.name, feet.x, head - 2, P.tagText, false).top : head;
+    const bob = options.reducedMotion ? 0 : Math.round(Math.sin((options.time + visitor.blinkOffset) / 500));
+    // at a birthday party, they first wish it out loud (the second of two after the first), then show what they do
+    const celebrated = options.festival === 'birthday' ? options.guests.filter((name) => name !== visitor.name) : [];
+    const wishing = visitor.spot.activity === 'party' && celebrated.length > 0 && Math.floor(visitor.stayed / WISH_MS) === visitor.order;
+    if (visitor.phase === 'staying' && wishing) paintSpeech(context, t.room.birthdayWish(celebrated), feet.x, above + 4);
+    else if (visitor.phase === 'staying') paintActivity(context, visitor.spot.activity, feet.x, above - 1 + bob);
   }
   const playerFeet = toScreen(scene.player.position);
   context.globalAlpha = options.hoveredId === PLAYER_ID ? 1 : FAINT_TAG_ALPHA;

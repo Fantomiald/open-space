@@ -2,6 +2,7 @@
 // messages and answers. The meeting room listens to it for its speech bubbles; nothing is stored. What sub-agents
 // write stays in their tab: several of them at once would fill the room with bubbles.
 import type { OfficeEvent, PermissionDecision } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { earlyBubbleText } from '../room/bubbles.ts';
 import { writingStops } from './partials.ts';
 
@@ -36,9 +37,7 @@ export function earlySpeech(sessionId: string, who: string, draft: string): Spee
   return { sessionId, speaker: who, text: sentence };
 }
 
-const DECISION_WORDS: Record<PermissionDecision, string> = { allow: 'Oui', deny: 'Non', always: 'Toujours' };
-
-export const answerSpeech = (sessionId: string, decision: PermissionDecision): Speech => ({ sessionId, speaker: USER_SPEAKER, text: DECISION_WORDS[decision] });
+export const answerSpeech = (sessionId: string, decision: PermissionDecision): Speech => ({ sessionId, speaker: USER_SPEAKER, text: t.common.decisions[decision] });
 
 export const replySpeech = (sessionId: string, answers: Readonly<Record<string, string>>): Speech => ({ sessionId, speaker: USER_SPEAKER, text: Object.values(answers).join(' · ') });
 

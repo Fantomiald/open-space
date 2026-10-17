@@ -1,5 +1,6 @@
 // Turns a session's event log into the thread shown in the detail panel. Pure function.
 import type { LoggedEvent, PlanItem } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 
 /** `agent`: the sub-agent that said or did it (its id), null for the session's own agent; `author` is its name. */
 export type FeedItem =
@@ -25,7 +26,7 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
   let plan: PlanItem[] = [];
   /** where the running turn's items start: a message from another session is told at the end of the turn it started */
   let turnStart = 0;
-  const author = (who: string) => (who === 'chef' ? null : subagents.get(who)?.name ?? 'Sous-agent');
+  const author = (who: string) => (who === 'chef' ? null : subagents.get(who)?.name ?? t.session.feed.subagent);
   const agent = (who: string) => (who === 'chef' ? null : who);
 
   for (const { seq, at, ev } of events) {

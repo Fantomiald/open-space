@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import type { SlashCommand } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { commandSuggestions } from '../state/commands.ts';
 import { useSessions } from '../state/sessions.ts';
 
@@ -56,7 +57,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
     <>
       <label className="cp-sr-only" htmlFor={id}>{label}</label>
       {current && (
-        <ul id={listId} ref={list} role="listbox" className="cp-composer__commands" aria-label="Commandes">
+        <ul id={listId} ref={list} role="listbox" className="cp-composer__commands" aria-label={t.common.commandField.commands}>
           {suggestions.map((command) => (
             <li
               key={command.name} id={`${listId}-${command.name}`} role="option" aria-selected={command === current} data-active={command === current}

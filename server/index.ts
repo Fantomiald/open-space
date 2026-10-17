@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
+import { defaultFolder } from '../shared/folders.ts';
 import type { ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import { createAsideRunner } from './aside.ts';
 import { createProcessFactory, findClaude } from './claude-process.ts';
@@ -25,7 +26,9 @@ import { SessionManager, TrustNeeded } from './sessions.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
 import { attachmentsFolder } from './attachments.ts';
 import { notify } from './notifier.ts';
+import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
+import { openTerminal } from './terminal.ts';
 import { saveAvatar } from './crew.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -56,6 +59,7 @@ const clients = new Set<WebSocket>();
 const presence = new Map<WebSocket, boolean>();
 const settings = new Settings(path.join(config.dataDir, 'settings.json'));
 await settings.load();
+setServerLanguage(settings.preferences.language ?? 'fr');
 // the folders sessions may run in: OFFICE_ROOTS when set, else the user's choice (the session manager reads config.roots)
 const applyRoots = () => { if (!config.rootsLocked) config.roots = settings.preferences.roots.filter((root) => existsSync(root)); };
 applyRoots();
@@ -111,7 +115,7 @@ function onConnection(socket: WebSocket) {
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked,
   });
   socket.on('message', (data) => {
-    if (stopping) { send({ t: 'toast', kind: 'error', text: 'Le serveur s’arrête : réessaie une fois relancé.' }); return; }
+    if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
     let message: ClientMessage | null = null;
     try { message = parseClientMessage(JSON.parse(String(data))); } catch { /* not JSON */ }
     if (!message) return;
@@ -137,7 +141,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
         if (error instanceof TrustNeeded) { send({ t: 'trustNeeded', cwd: error.cwd, code: error.code }); return; }
         throw error;
       }
-      if (asked && taken.has(asked)) send({ t: 'toast', kind: 'info', text: `${asked} n’était pas dispo : c’est ${session.name} qui s’en occupe.` });
+      if (asked && taken.has(asked)) send({ t: 'toast', kind: 'info', text: st.server.nameTaken(asked, session.name) });
       break;
     }
     case 'send': sessions.send(message.sessionId, message.text, message.images); break;
@@ -151,6 +155,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'preferences': {
       const { roots, ...rest } = message.preferences;
       await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
+      setServerLanguage(settings.preferences.language ?? 'fr');
       applyRoots();
       broadcast(preferencesMessage());
       break;
@@ -159,6 +164,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await crew.setSelf(message.self.name, message.self.look, message.self.birthday);
       const { roots, ...rest } = message.preferences;
       await settings.update({ ...rest, ...(!config.rootsLocked ? { roots } : {}) }, true);
+      setServerLanguage(settings.preferences.language ?? 'fr');
       applyRoots();
       broadcast({ t: 'crew', crew: crew.list() });
       broadcast(preferencesMessage());
@@ -174,6 +180,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'forget': await sessions.forget(message.sessionId); break;
     case 'log': send({ t: 'log', sessionId: message.sessionId, ...sessions.logSince(message.sessionId, message.after) }); break;
     case 'directories': send({ t: 'directories', directories: sessions.directories() }); break;
+    case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
     case 'saveMember':
       await crew.save(message.previousName, message.name, message.look, message.birthday, message.jobs);
@@ -183,12 +190,18 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await crew.remove(message.name);
       broadcast({ t: 'crew', crew: crew.list() });
       break;
+    case 'becomeSelf':
+      await crew.becomeSelf(message.name);
+      broadcast({ t: 'crew', crew: crew.list() });
+      break;
+    case 'remoteControl': await sessions.remoteControl(message.sessionId, message.enabled); break;
+    case 'openTerminal': await openTerminal(defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir()); break;
   }
 }
 
 server.once('error', (error: NodeJS.ErrnoException) => {
-  if (error.code === 'EADDRINUSE') console.error(`  Le port ${config.port} est déjà pris : Open Space tourne peut-être déjà.`);
-  else console.error('  Le serveur ne démarre pas :', error.message);
+  if (error.code === 'EADDRINUSE') console.error(st.console.portTaken(config.port));
+  else console.error(st.console.cannotStart, error.message);
   process.exit(1);
 });
 
@@ -197,12 +210,12 @@ server.listen(config.port, HOST, () => {
   const pairLink = `${address}/pair?secret=${secret}`;
   console.log('');
   console.log('  Open Space');
-  console.log(`  ->  ${address}${DEV ? '  (pont seul, l’interface est servie par Vite)' : '  (mets-le en favori)'}`);
-  console.log(`  Autoriser un navigateur (une fois) : ${pairLink}`);
-  console.log(`  Dossiers : ${config.roots.join(path.delimiter) || 'à choisir dans la page, au premier lancement'}`);
-  console.log(`  Données : ${config.dataDir}`);
-  console.log(claude ? `  Claude Code ${claude.version} (${claude.path})` : '  Claude Code introuvable : impossible de lancer des sessions.');
-  console.log('  Pour arrêter : Ctrl + C. Les onglets ouverts se reconnectent seuls au prochain lancement.');
+  console.log(`  ->  ${address}${DEV ? st.console.devBridge : st.console.bookmark}`);
+  console.log(st.console.pair(pairLink));
+  console.log(st.console.folders(config.roots.join(path.delimiter)));
+  console.log(st.console.data(config.dataDir));
+  console.log(claude ? `  Claude Code ${claude.version} (${claude.path})` : st.console.claudeMissing);
+  console.log(st.console.stopHint);
   console.log('');
   if (process.argv.includes('--open') && !DEV) {
     // open tabs reconnect on their own: a new one only when none came back

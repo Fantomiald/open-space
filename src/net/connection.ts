@@ -2,6 +2,7 @@
 // so the page itself carries no secret. It reconnects on its own and tells apart a stopped server from a browser
 // that is not authorised, and lets the store resynchronise after each (re)connection.
 import type { ClientMessage, ServerMessage } from '../../shared/protocol.ts';
+import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 
 /** Short on purpose: `npm start` only opens a new tab when no open one came back within ~3 s. */
@@ -16,7 +17,7 @@ function send(message: ClientMessage): boolean {
     socket.send(JSON.stringify(message));
     return true;
   }
-  useSessions.getState().toast('error', 'Pas connecté au serveur : réessaie dans un instant.');
+  useSessions.getState().toast('error', t.common.notices.notConnected);
   return false;
 }
 

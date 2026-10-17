@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ASIDE_PROMPT, buildAsideArgs, readAsideLine } from './aside.ts';
+import { buildAsideArgs, readAsideLine } from './aside.ts';
+import { st } from './i18n/index.ts';
 
 describe('side questions (/btw)', () => {
   const request = { sessionId: '11111111-2222-3333-4444-555555555555', resume: true, model: 'opus', question: '-v ça marche ?' };
@@ -11,7 +12,7 @@ describe('side questions (/btw)', () => {
     assert.ok(args.includes('--no-session-persistence'));
     assert.ok(!args.includes('--permission-prompt-tool'), 'what needs a permission is refused');
     assert.ok(!args.includes('--tools'));
-    assert.deepEqual(args.slice(-4), ['--append-system-prompt', ASIDE_PROMPT, '--', '-v ça marche ?']);
+    assert.deepEqual(args.slice(-4), ['--append-system-prompt', st.prompt.aside, '--', '-v ça marche ?']);
     assert.ok(!buildAsideArgs({ ...request, resume: false }).includes('--resume'), 'no conversation yet: a fresh one');
     assert.equal(buildAsideArgs({ ...request, untrusted: true }).at(buildAsideArgs({ ...request, untrusted: true }).indexOf('--setting-sources') + 1), 'user');
   });

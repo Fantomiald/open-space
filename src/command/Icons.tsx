@@ -1,8 +1,8 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, Command, Image, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
-  PictureInPicture2, Play, Plus, Power, Search, Settings, Shuffle, SkipForward, Sofa, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
+  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, Command, Image, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
+  PictureInPicture2, Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -26,6 +26,9 @@ export const CloseIcon = icon(X);
 export const PencilIcon = icon(Pencil);
 export const PowerIcon = icon(Power);
 export const TagIcon = icon(Tag);
+/** Remote Control: the session reached from the phone or claude.ai. */
+export const PhoneIcon = icon(Smartphone);
+export const TerminalIcon = icon(SquareTerminal);
 /** The office. */
 export const DeskIcon = icon(Monitor);
 /** The break room. */
@@ -44,3 +47,5 @@ export const PeerIcon = icon(MessagesSquare);
 /** Whoever is free: the person picker's choice when nobody is asked for. */
 export const ShuffleIcon = icon(Shuffle);
 export const ChevronsUpDownIcon = icon(ChevronsUpDown);
+export const BackIcon = icon(ArrowLeft);
+export const RefreshIcon = icon(RotateCw);
