@@ -17,6 +17,7 @@ import { Radio } from './command/Radio.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { defaultFolder } from './lib/format.ts';
+import { runningShells } from './state/feed.ts';
 import { isRunning } from './state/labels.ts';
 import { selectAttentionCount, useSessions } from './state/sessions.ts';
 import { tabTitle } from './state/queue.ts';
@@ -97,11 +98,19 @@ export function App() {
         document.getElementById('feed-search')?.focus();
         return;
       }
-      // Escape, as in Claude Code: interrupts the open session while it works (even from the message field); otherwise,
-      // outside a field, it hides the panel. A dialog, or the command suggestions of a field, take it first.
+      // Escape, as in Claude Code: interrupts the open session while it works and stops its "!" commands (even from the
+      // message field); otherwise, outside a field, it hides the panel. A dialog, or the command suggestions of a field,
+      // take it first.
       if (e.key === 'Escape' && !e.isComposing && !document.querySelector('dialog[open]')) {
         const session = state.selectedId ? state.sessions[state.selectedId] : undefined;
-        if (session && isRunning(session) && session.state !== 'starting') { e.preventDefault(); state.send({ t: 'interrupt', sessionId: session.id }); return; }
+        const shells = session ? runningShells(state.logs[session.id] ?? []) : [];
+        const working = session && isRunning(session) && session.state !== 'starting';
+        if (session && (working || shells.length)) {
+          e.preventDefault();
+          for (const shellId of shells) state.send({ t: 'stopShell', sessionId: session.id, shellId });
+          if (working) state.send({ t: 'interrupt', sessionId: session.id });
+          return;
+        }
         if (session && !isTyping(e.target)) { state.select(null); return; }
       }
       if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {

@@ -62,7 +62,7 @@ export const session: Dictionary['session'] = {
       running: 'running…',
       stopped: 'stopped after 2 min',
       stoppedByUser: 'stopped',
-      stop: 'Stop the command',
+      stop: 'Stop the command (Escape)',
       exit: (code: number) => `exit ${code}`,
       empty: '(no output)',
       note: 'Claude will see it with your next message.',

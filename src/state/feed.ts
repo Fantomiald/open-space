@@ -118,6 +118,16 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
 }
 
 /** The turn under way: when it started and its first item (null when the thread ends on a finished turn). */
+/** The "!" commands of a session still running: started, not ended yet (what Escape stops). */
+export function runningShells(events: readonly LoggedEvent[]): string[] {
+  const running = new Set<string>();
+  for (const { ev } of events) {
+    if (ev.k === 'shell') running.add(ev.id);
+    else if (ev.k === 'shell_done') running.delete(ev.id);
+  }
+  return [...running];
+}
+
 export function currentTurn(items: readonly FeedItem[]): { startId: number; at: number } | null {
   const lastEnd = items.findLastIndex((item) => item.kind === 'turn');
   const first = items.slice(lastEnd + 1).find((item) => item.kind !== 'shell');

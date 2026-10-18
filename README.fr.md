@@ -17,7 +17,7 @@ Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, 
 - **Répondre sans terminal** : les autorisations (Oui, Non, Toujours) et les questions de Claude, une par onglet comme dans Claude Code.
 - **Écrire pendant qu'une session travaille** : ton message rejoint le tour en cours sans l’interrompre (Claude le lit à sa prochaine étape) ; une commande `/` attend la fin du tour, ou part tout de suite avec « Envoyer maintenant ». Et `/btw ta question` pose une question à côté, sans interrompre ni polluer la conversation.
 - **Joindre n'importe quel fichier** : coller une capture (Cmd+V), glisser des fichiers sur le panneau, ou passer par le trombone. Les images partent comme images ; un zip, un PDF ou un CSV part avec son chemin, que Claude ouvre avec ses outils, comme dans le terminal.
-- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Charline où elle en est »). Leurs messages s'affichent dans le fil.
+- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Margot où elle en est »). Leurs messages s'affichent dans le fil.
 - **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet par sous-agent au travail avec ce qu'il écrit, puis son rapport dans « Terminés ».
 - **Voir ce qu'une session a changé** : `+X −Y` dans son en-tête, puis chaque fichier avec son diff, comme dans Claude Code.
 - **Garder un œil sur le contexte** : une jauge dans l'en-tête de la session change de couleur quand la conversation se remplit, et `/context` montre ce qui la remplit, avec les boutons pour compacter ou repartir de zéro (`/compact`, `/clear`).

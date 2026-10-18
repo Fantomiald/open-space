@@ -189,7 +189,7 @@ export class SessionManager {
   }
 
   /**
-   * Who a SendMessage call writes to, for the thread: a session named by Claude Code ("Charline", "futur-d6") as is,
+   * Who a SendMessage call writes to, for the thread: a session named by Claude Code ("Margot", "app-d6") as is,
    * one of ours answered at its socket by its name, any other socket as "another session" (st.normalizer.recipientUnknown).
    */
   private peerName(address: string): string {
