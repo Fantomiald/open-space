@@ -64,7 +64,7 @@ export const session = {
       running: 'en cours…',
       stopped: 'arrêtée au bout de 2 min',
       stoppedByUser: 'arrêtée',
-      stop: 'Arrêter la commande',
+      stop: 'Arrêter la commande (Échap)',
       exit: (code: number) => `code ${code}`,
       empty: '(rien affiché)',
       note: 'Claude la verra avec ton prochain message.',

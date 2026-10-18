@@ -196,9 +196,9 @@ describe('Normalizer on a real message between two sessions (SendMessage)', () =
   });
 
   it('names a session answered at its socket after the session living there', () => {
-    const { normalizer, events: seen } = createNormalizer((address) => (address === 'uds:/tmp/cc-socks/1.sock' ? 'Charline' : address));
+    const { normalizer, events: seen } = createNormalizer((address) => (address === 'uds:/tmp/cc-socks/1.sock' ? 'Margot' : address));
     normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'SendMessage', input: { to: 'uds:/tmp/cc-socks/1.sock', message: 'Je vais bien', summary: '' } }] } });
-    assert.deepEqual(seen.map((event) => event.k === 'act' && event.detail), ['→ Charline : Je vais bien']);
+    assert.deepEqual(seen.map((event) => event.k === 'act' && event.detail), ['→ Margot : Je vais bien']);
   });
 });
 

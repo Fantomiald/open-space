@@ -5,7 +5,7 @@ import { availability, stillFree } from './availability.ts';
 import { contextLevel } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, nativeView } from './commands.ts';
 import { diffRows } from './diff.ts';
-import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord } from './feed.ts';
+import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
@@ -96,6 +96,13 @@ describe('attention queue', () => {
   });
 });
 
+describe('runningShells', () => {
+  it('lists the "!" commands started and not ended yet', () => {
+    const events = [logged(1, { k: 'shell', id: 'a', command: 'ls' }), logged(2, { k: 'shell', id: 'b', command: 'npm run dev' }), logged(3, { k: 'shell_done', id: 'a', code: 0, output: '', ms: 5 })];
+    assert.deepEqual(runningShells(events), ['b']);
+  });
+});
+
 describe('buildFeed', () => {
   const events: OfficeEvent[] = [
     { k: 'start', text: '/kit:new' },
@@ -141,8 +148,8 @@ describe('buildFeed', () => {
   it('puts a message from another session at the top of the turn it started, though it comes with its end', () => {
     const turns: OfficeEvent[] = [
       { k: 'start', text: 'Salut' }, { k: 'say', who: 'chef', text: 'Salut !' }, { k: 'end', ok: true, text: '', ms: 1 },
-      { k: 'init', model: 'm' }, { k: 'act', who: 'chef', id: 'c1', tool: 'SendMessage', detail: '→ Charline : ça va' }, { k: 'say', who: 'chef', text: 'Je lui ai répondu.' },
-      { k: 'peer', from: 'Charline', text: 'Comment tu vas ?' }, { k: 'end', ok: true, text: '', ms: 1 },
+      { k: 'init', model: 'm' }, { k: 'act', who: 'chef', id: 'c1', tool: 'SendMessage', detail: '→ Margot : ça va' }, { k: 'say', who: 'chef', text: 'Je lui ai répondu.' },
+      { k: 'peer', from: 'Margot', text: 'Comment tu vas ?' }, { k: 'end', ok: true, text: '', ms: 1 },
     ];
     const items = buildFeed(turns.map((ev, index) => logged(index + 1, ev))).items;
     assert.deepEqual(items.map((item) => item.kind), ['user', 'assistant', 'turn', 'peer', 'tool', 'assistant', 'turn']);

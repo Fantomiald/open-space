@@ -78,7 +78,7 @@ export async function listConversations(cwd: string, exclude: ReadonlySet<string
       }
       if (!preview && !aiTitle && !customTitle) continue;
       // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
-      // "Charline · what it was asked"
+      // "Margot · what it was asked"
       const about = aiTitle || preview.slice(0, 80);
       conversations.push({ id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt });
     } catch { /* unreadable: skipped */ }

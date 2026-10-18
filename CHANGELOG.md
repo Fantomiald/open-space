@@ -1,5 +1,9 @@
 # Versions
 
+## 1.2.1
+
+- Échap arrête aussi les commandes `!` de la session ouverte qui tournent encore, en plus d'interrompre son tour.
+
 ## 1.2.0
 
 - Un tableau blanc sur roulettes remplace l'imprimante et la baie serveur ; la fontaine à eau rejoint la machine à café. Au survol il s'entoure de blanc (caché derrière ceux qui passent devant), et un clic ouvre tes notes sur le même tableau, en pixel art (cadre alu, feutres et brosse, titres écrits au marqueur) : un onglet par fichier `.md` du dossier des notes (`~/Journal` par défaut, à changer dans les Réglages), affiché en Markdown, modifiable et enregistré tout seul. Ce qu'une session y écrit pendant ce temps n'est jamais écrasé : la note se recharge avec un mot pour le dire. Le tableau change avec les fêtes (« HBD » et le prénom avec des ballons à un anniversaire, citrouille, sapin, lanternes, gouttes, drapeau…).
@@ -28,7 +32,7 @@
 - Une vidéo qu'une session t'envoie (mp4, webm, mov) s'affiche dans le fil avec sa première image ; un clic la lit en grand, avec les contrôles du navigateur, et un bouton la télécharge. Les fichiers envoyés sont gardés jusqu'à 200 Mo (25 Mo avant).
 - Un message envoyé pendant qu'une session travaille lui arrive tout de suite, sans l'interrompre : Claude le lit à sa prochaine étape, te répond, et continue en général sa tâche. Seules les commandes `/` attendent la fin du tour.
 - La checklist en bas à gauche devient un panneau « État » : ce qui t'attend (questions, autorisations, tours à lire, erreurs) avec depuis quand, puis qui est au travail, depuis combien de temps et avec combien de sous-agents. Son titre le replie à ses deux compteurs.
-- Sur claude.ai et dans l'app Claude, une session en Remote Control s'appelle « tag - prénom » (« Création vidéos - Jérémy »), ou « dossier - prénom » sans tag, au lieu du seul prénom.
+- Sur claude.ai et dans l'app Claude, une session en Remote Control s'appelle « tag - prénom » (« Site vitrine - Margot »), ou « dossier - prénom » sans tag, au lieu du seul prénom.
 - Un nouvel animal : Clawd, la mascotte de Claude Code, en pixel art orange. Il fait coucou d'un bras, dort à plat ventre et parle comme Claude (« Tu as tout à fait raison ! », « ✻ Mijote… »).
 - Remote Control survit à un redémarrage du serveur : la session se rallume et retrouve la même conversation sur ton téléphone. Couper, éteindre ou mettre au repos la session y met fin pour de bon.
 - Le bouton Remote Control passe dans la barre du champ, à côté de « Commandes » : un téléphone avec un point gris (coupé) ou vert (connecté).
