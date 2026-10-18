@@ -37,6 +37,13 @@ export const settings: Dictionary['settings'] = {
     foldersIntro: 'Sessions can only work in these folders and their subfolders.',
     habits: 'Your habits',
     noFolder: 'Keep at least one folder: sessions would have nowhere to work.',
+    journalFolder: 'Whiteboard notes folder',
+    journalFolderHint: 'one .md file per project, which your sessions can fill too',
+    journalFolderInvalid: 'The notes folder must be a full path (/… or ~/…).',
+    metricsFile: 'Numbers file (optional)',
+    metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
+    metricsFilePlaceholder: '~/Journal/numbers.md',
+    metricsFileInvalid: 'The numbers file must be a full path to a .md file (/… or ~/…), or stay empty.',
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   folders: {
@@ -53,7 +60,7 @@ export const settings: Dictionary['settings'] = {
   },
   pet: {
     kinds: {
-      cat: 'A cat', dog: 'A dog', duck: 'A rubber duck', capybara: 'A capybara', axolotl: 'An axolotl', rocky: 'Rocky (Project Hail Mary)', none: 'No pet',
+      cat: 'A cat', dog: 'A dog', duck: 'A rubber duck', capybara: 'A capybara', axolotl: 'An axolotl', rocky: 'Rocky (Project Hail Mary)', clawd: 'Clawd (Claude Code’s mascot)', none: 'No pet',
     },
     patterns: { plain: 'Plain', tabby: 'Tabby', calico: 'Calico', tuxedo: 'Tuxedo' },
     breeds: { labrador: 'Labrador', dalmatian: 'Dalmatian', husky: 'Husky', shiba: 'Shiba', corgi: 'Corgi', dachshund: 'Dachshund', pug: 'Pug' },

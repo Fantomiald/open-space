@@ -57,3 +57,10 @@ export function permissionDetail(tool: string, input: Record<string, unknown> | 
   const detail = relToFolder(JSON.stringify(i, null, 2), folder);
   return detail.length > DETAIL_MAX ? `${detail.slice(0, DETAIL_MAX - 1)}…` : detail;
 }
+
+/**
+ * A background sub-agent's report, as Claude Code hands it back to its session: a message "from" the sub-agent that
+ * repeats the report its task notification already carried (checked with 2.1.302). It belongs in the sub-agent's tab,
+ * not in the conversation as a message from another session.
+ */
+export const isSubagentHandback = (text: string) => text.trimStart().startsWith('[Subagent hand-back]');

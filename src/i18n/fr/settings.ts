@@ -40,6 +40,13 @@ export const settings = {
     foldersIntro: 'Les sessions ne peuvent travailler que dans ces dossiers et leurs sous-dossiers.',
     habits: 'Tes habitudes',
     noFolder: 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.',
+    journalFolder: 'Dossier des notes du tableau',
+    journalFolderHint: 'un fichier .md par projet, que tes sessions peuvent aussi remplir',
+    journalFolderInvalid: 'Le dossier des notes doit être un chemin complet (/… ou ~/…).',
+    metricsFile: 'Fichier des chiffres (facultatif)',
+    metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
+    metricsFilePlaceholder: '~/Journal/chiffres.md',
+    metricsFileInvalid: 'Le fichier des chiffres doit être un chemin complet vers un .md (/… ou ~/…), ou rester vide.',
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
@@ -57,7 +64,7 @@ export const settings = {
   },
   pet: {
     kinds: {
-      cat: 'Un chat', dog: 'Un chien', duck: 'Un canard en plastique', capybara: 'Un capybara', axolotl: 'Un axolotl', rocky: 'Rocky (Projet Dernière Chance)', none: 'Pas d’animal',
+      cat: 'Un chat', dog: 'Un chien', duck: 'Un canard en plastique', capybara: 'Un capybara', axolotl: 'Un axolotl', rocky: 'Rocky (Projet Dernière Chance)', clawd: 'Clawd (la mascotte de Claude Code)', none: 'Pas d’animal',
     },
     patterns: { plain: 'Uni', tabby: 'Tigré', calico: 'Tricolore', tuxedo: 'Smoking' },
     breeds: { labrador: 'Labrador', dalmatian: 'Dalmatien', husky: 'Husky', shiba: 'Shiba', corgi: 'Corgi', dachshund: 'Teckel', pug: 'Carlin' },

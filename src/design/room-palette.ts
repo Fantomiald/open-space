@@ -59,17 +59,22 @@ export const ROOM_PALETTE = {
     lampShade: '#f4e3c0',
     cooler: '#d5d8de',
     water: '#6fb6f0',
-    printer: '#d5d8de',
-    server: '#1b1f2c',
-    ledGreen: '#45c46b',
-    ledBlue: '#4d8dff',
     ledRed: '#e5534b',
+    ledBlue: '#4d8dff',
     counter: '#e9e6df',
     coffee: '#2b2f3a',
     boss: '#3a2a20',
     bossStripe: '#ff8a3d',
     outline: '#0a0b0f',
-    /** around what a click opens (the user's laptop), under the pointer, like the door */
+    /** the whiteboard on wheels: its board, aluminium frame, stand, casters, and the markers it is written with (src/room/whiteboard.ts) */
+    whiteboard: '#f7f8fa', boardFrame: '#b9bec8', caster: '#22252e',
+    markers: { k: '#2b2f3a', b: '#2f6fd8', r: '#d8343f', g: '#2f8a4a', y: '#f2b822', o: '#e8833a', t: '#7a4a28' },
+    /** the drafts of the numbers object (METRICS_OBJECT in shared/room-layout.ts): banknotes and a notepad, a dashboard screen, a stock ticker, a piggy bank */
+    cash: '#5fae6a', cashBand: '#f3e9c6', notepad: '#f6f1dc', spiral: '#3b404e', rising: '#2f8a4a',
+    screenBezel: '#16141f', screenFace: '#11243c', screenGrid: '#24466e', bars: ['#45c46b', '#7fd3ff'], trend: '#ffb866',
+    ticker: '#0d0e13', tickerGreen: '#62f08e', tickerRed: '#ff6a6a', tickerAmber: '#ffc44a',
+    piggy: '#f49ac1', piggyShade: '#d86f9c', piggySnout: '#ff8fbd', coin: '#f2c14e',
+    /** around what a click opens (the user's laptop, the whiteboard, the numbers), under the pointer, like the door */
     highlight: '#ffffff',
   },
   /** Halloween's decorations (src/room/halloween.ts, and the pumpkins of pixel-furniture.ts) */
@@ -92,7 +97,7 @@ export const ROOM_PALETTE = {
     envelope: '#c8202c', kumquat: '#ff9a1f', potRed: '#b8242c', lily: '#fbfbf2', leaf: '#3f9a4a',
     speaker: '#23252e', speakerCone: '#3b3f4c', fan: '#d5d8de', fanBlade: '#9aa3b4',
     tricolor: ['#2b4fb3', '#f4f6fa', '#d8343f'], lantern: '#d8202c', lanternGlow: '#ff6a3d', note: '#f4f1e8', heart: '#ff5a7a', heartDark: '#c2305a', snow: '#f4f8ff',
-    hatStripe: '#ffffff', fur: '#f4f6fa', jewel: '#d8343f', jewelBlue: '#3a6fd8', ear: '#f4f6fa', earInside: '#ffb3c8', headphones: '#2a2d36', headphonesPad: '#e5534b',
+    hatStripe: '#ffffff', fur: '#f4f6fa', jewel: '#d8343f', jewelBlue: '#3a6fd8', ear: '#f4f6fa', earInside: '#ffb3c8', headphones: '#2a2d36', headphonesShell: '#434a5a', headphonesShine: '#7a849c', headphonesPad: '#e5534b',
     shades: '#121419', shadesShine: '#5a6a8a', waterGun: '#ff8a3d', waterGunTank: '#5ad1ff', beret: '#2b4fb3',
   },
   /** the office pet (src/room/pet.ts): its hearts and speech bubble, each cat coat, each dog breed, and Rocky */
@@ -104,6 +109,8 @@ export const ROOM_PALETTE = {
     /** each breed's fur, before the user picks another */
     dogs: { labrador: '#e3b56a', dalmatian: '#f4f4f6', husky: '#7d8696', shiba: '#d9813a', corgi: '#e0903f', dachshund: '#8a4a26', pug: '#e3c89a' },
     duck: '#ffd84a', capybara: '#9a6a3c', axolotl: '#ffb3c8',
+    /** Claude Code's mascot, in its clay orange */
+    clawd: '#d97757',
     rocky: { shell: '#8a5a2c', light: '#c08a4a', dark: '#5a3a1c' },
   },
 
@@ -138,6 +145,8 @@ export const ROOM_PALETTE = {
   shadow: 'rgba(10, 8, 20, 0.35)',
   white: '#ffffff',
   outline: '#1b1f2c',
+  /** the badge above the numbers object while something new waits in its file (src/room/metrics.ts) */
+  metricsBadge: '#ffd43b',
   status: {
     permission: '#f4a72a',
     question: '#f4a72a',
@@ -148,7 +157,7 @@ export const ROOM_PALETTE = {
   /** what a visitor of the crew is doing, in a thought bubble above their head (src/room/activity-icons.ts) */
   activity: {
     bubble: '#ffffff', ink: '#1b1f2c', mug: '#e2774a', coffee: '#5a3420', steam: '#a9afc0', water: '#4d9dff', waterLight: '#b9dcff',
-    paper: '#eef0f5', bird: '#4d8dff', beak: '#f4a72a', cover: '#d8454b', pages: '#fbf3df', screen: '#7cc6ff', balloon: '#ff5f7e', shine: '#ffd0da',
+    bird: '#4d8dff', beak: '#f4a72a', cover: '#d8454b', pages: '#fbf3df', screen: '#7cc6ff', balloon: '#ff5f7e', shine: '#ffd0da',
   },
   tag: 'rgba(15, 20, 35, 0.72)',
   tagText: '#f4f1e8',

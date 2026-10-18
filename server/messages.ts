@@ -1,8 +1,10 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { isPermissionMode, type ClientMessage, type ImageUpload, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { isPermissionMode, type ClientMessage, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
+import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
+import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import { parseJobs } from '../shared/jobs.ts';
 import { parseLook } from '../shared/look.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
@@ -19,7 +21,17 @@ const MAX_IMAGE_BASE64 = Math.floor(5 * 1024 * 1024 * 4 / 3);
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
 
 const boundedString = (value: unknown, max: number): string | null => (typeof value === 'string' && value.length <= max ? value : null);
+const INSPECT_VIEWS: ReadonlySet<InspectView> = new Set(['mcp', 'context', 'usage']);
+const MCP_ACTIONS: ReadonlySet<McpAction> = new Set(['reconnect', 'enable', 'disable', 'authenticate']);
 const identifier = (value: unknown): string | null => (typeof value === 'string' && /^[\w-]{1,100}$/.test(value) ? value : null);
+const noteName = (value: unknown): string | null => (typeof value === 'string' && NOTE_NAME.test(value) ? value : null);
+
+/** The upload ids of the files sent with a message (see uploads.ts): undefined when none, null when malformed. */
+function parseFiles(raw: unknown): string[] | undefined | null {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || raw.length > MAX_FILES || !raw.every((id) => typeof id === 'string' && UPLOAD_ID.test(id))) return null;
+  return raw.length ? raw as string[] : undefined;
+}
 
 /** Undefined when there are none; null when something is wrong with them (the whole message is then dropped). */
 function parseImages(raw: unknown): ImageUpload[] | undefined | null {
@@ -66,6 +78,9 @@ function parseOptions(raw: unknown): SessionOptions | null {
   const images = parseImages(options.images);
   if (images === null) return null;
   if (images) result.images = images;
+  const files = parseFiles(options.files);
+  if (files === null) return null;
+  if (files) result.files = files;
   if (options.resumeId !== undefined) {
     if (typeof options.resumeId !== 'string' || !CONVERSATION_ID.test(options.resumeId)) return null;
     result.resumeId = options.resumeId;
@@ -106,8 +121,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'send': {
       const text = boundedString(raw.text, MAX_TEXT);
       const images = parseImages(raw.images);
-      if (!sessionId || text === null || images === null) return null;
-      return images ? { t: 'send', sessionId, text, images } : { t: 'send', sessionId, text };
+      const files = parseFiles(raw.files);
+      if (!sessionId || text === null || images === null || files === null) return null;
+      return { t: 'send', sessionId, text, ...(images ? { images } : {}), ...(files ? { files } : {}) };
     }
     case 'answer': {
       const requestId = identifier(raw.requestId);
@@ -161,6 +177,19 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
     case 'openTerminal': return { t: 'openTerminal' };
+    case 'shell': {
+      const command = boundedString(raw.command, 10_000)?.trim();
+      return sessionId && command ? { t: 'shell', sessionId, command } : null;
+    }
+    case 'stopShell': {
+      const shellId = boundedString(raw.shellId, 100);
+      return sessionId && shellId ? { t: 'stopShell', sessionId, shellId } : null;
+    }
+    case 'inspect': return sessionId && INSPECT_VIEWS.has(raw.view as InspectView) ? { t: 'inspect', sessionId, view: raw.view as InspectView } : null;
+    case 'mcpAction': {
+      const server = boundedString(raw.server, 200);
+      return sessionId && server && MCP_ACTIONS.has(raw.action as McpAction) ? { t: 'mcpAction', sessionId, server, action: raw.action as McpAction } : null;
+    }
     case 'conversations': {
       const cwd = boundedString(raw.cwd, 4096);
       return cwd ? { t: 'conversations', cwd } : null;
@@ -182,6 +211,18 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const name = boundedString(raw.name, MAX_NAME);
       return name !== null ? { t: 'becomeSelf', name } : null;
     }
+    case 'notes': return { t: 'notes' };
+    case 'readNote': {
+      const name = noteName(raw.name);
+      return name ? { t: 'readNote', name } : null;
+    }
+    case 'writeNote': {
+      const name = noteName(raw.name);
+      const text = boundedString(raw.text, MAX_NOTE);
+      const version = raw.version === null ? null : typeof raw.version === 'string' && /^[0-9a-f]{16}$/.test(raw.version) ? raw.version : undefined;
+      return name && text !== null && version !== undefined ? { t: 'writeNote', name, text, version } : null;
+    }
+    case 'metrics': return { t: 'metrics' };
     default: return null;
   }
 }

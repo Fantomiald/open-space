@@ -10,8 +10,6 @@ const ICONS: Readonly<Record<Activity, readonly string[]>> = {
   // a mug, steaming
   coffee: ['..s..s...', '.s..s....', '..s..s...', 'mmmmmmm..', 'mcccccmmm', 'mmmmmmm.m', 'mmmmmmmmm', '.mmmmm...'],
   water: ['....w....', '...www...', '...wlw...', '..wwlww..', '.wwwlwww.', '.wwwwwww.', '..wwwww..', '...www...'],
-  // a printed sheet
-  printer: ['kkkkkk...', 'kppppkk..', 'kpkkkpkk.', 'kppppppk.', 'kpkkkkpk.', 'kppppppk.', 'kpkkkkpk.', 'kkkkkkkk.'],
   // a bird, seen out of the window
   window: ['....bb...', '...bkbbo.', '...bbbb..', 'bb.bbbb..', '.bbbbbb..', '..bbbbb..', '...o.o...', '.........'],
   // an open book
@@ -23,12 +21,11 @@ const ICONS: Readonly<Record<Activity, readonly string[]>> = {
 };
 
 const KEY: Readonly<Record<string, string>> = {
-  s: C.steam, m: C.mug, c: C.coffee, w: C.water, l: C.waterLight, k: C.ink, p: C.paper, b: C.bird, o: C.beak,
+  s: C.steam, m: C.mug, c: C.coffee, w: C.water, l: C.waterLight, k: C.ink, p: C.pages, b: C.bird, o: C.beak,
   r: C.cover, h: C.shine,
 };
 /** Letters whose colour depends on the icon (the same letter means two things). */
 const OWN_KEY: Partial<Record<Activity, Readonly<Record<string, string>>>> = {
-  books: { p: C.pages },
   sofa: { s: C.screen },
   party: { r: C.balloon },
 };

@@ -18,19 +18,23 @@ import { BUBBLE_LANE, BUBBLE_ROW_HEIGHT, VISIBLE_ROWS, bubbleText, pruneBubbles,
 import { planRoom, roomSessions, type RoomKind } from './cast.ts';
 import { chibiHead, chibiSprites, lookOfStranger } from './chibi.ts';
 import { outfitFor } from './outfits.ts';
-import { TAG_FONT, paintFrame } from './draw.ts';
+import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
 import { Floor } from './floor.ts';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, toTile } from './geometry.ts';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
 import { lightingAt } from './lighting.ts';
 import { pictureInPictureSupported } from './pip.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
+import { showsMetricsBadge } from './metrics.ts';
+import { boardContent } from './whiteboard.ts';
 
 const FRAME_MS = 1000 / 15;
 
 /** `scale`: CSS pixels per canvas pixel. `offset`: how much of the canvas is cropped on the left (narrow screens zoom in). */
 interface StageLayout { width: number; scale: number; offset: number }
 const PRUNE_EVERY_MS = 250;
+/** The boxes around the canvas: a click there is a click on the dark around the room. */
+const BACKDROP_CLASSES = ['cp-room', 'cp-room__fit', 'cp-room__stage', 'cp-room__zoom'];
 
 const PALETTE_VARIABLES = {
   '--room-bubble': ROOM_PALETTE.bubble,
@@ -64,13 +68,14 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   const crewRef = useRef(crew);
   crewRef.current = crew;
   const synced = useRef(false);
-  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival));
+  // the numbers object is there while the settings name a numbers file (App mounts the room again when that changes)
+  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival, useSessions.getState().preferences.metricsFile !== ''));
   const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', withVisitors: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
   // the crew without a session, who may drop by the office
   const free = useMemo(() => availability(crew, Object.values(sessions)).filter((person) => person.place === 'free').map((person) => person.member.name), [crew, sessions]);
   const freeRef = useRef(free);
   freeRef.current = free;
-  const hoveredThing = useRef<'door' | 'screen' | null>(null);
+  const hoveredThing = useRef<HoveredThing>(null);
   const hoveredId = useRef<string | null>(null);
   // what a click on the thing under the pointer does, in a card that follows the pointer
   const hint = useRef<HTMLDivElement>(null);
@@ -86,7 +91,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   const [sprites] = useState(() => chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
     : outfitFor(festival, scene.nameOf(personId), false, guests)));
-  const [furniture] = useState(() => pixelFurniture());
+  const [furniture] = useState(() => pixelFurniture(boardContent(festival, guests)));
   const [bubbles, setBubbles] = useState<readonly Bubble[]>([]);
   const [layout, setLayout] = useState<StageLayout>({ width: 0, scale: 1, offset: 0 });
   const list = useMemo(() => Object.values(sessions), [sessions]);
@@ -124,7 +129,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       const state = useSessions.getState();
       const hour = state.preview.hour ?? currentHour();
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, hoveredThing: hoveredThing.current, hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
@@ -188,8 +193,12 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     if (character) { select(character.person.sessionId); return; }
     const visitor = scene.visits?.at(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
+    // the dark around the room: like the panel's cross, back to the office without a session open
+    if (!isInRoom(point)) { select(null); return; }
     if (floor.isDoorAt(point)) { scene.walkPlayerOut(); return; }
     if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
+    if (floor.isBoardAt(point)) { useSessions.getState().openBoard(true); return; }
+    if (floor.isMetricsAt(point)) { useSessions.getState().openMetrics(true); return; }
     const tile = toTile(point);
     const spot = floor.spotAt(tile);
     if (spot) scene.sitPlayerAt(spot);
@@ -202,10 +211,13 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     // a session in front of a visitor, the door or the desk takes the click (the user, seated behind their laptop, does not)
     const visitor = person && person !== PLAYER_ID ? null : scene.visits?.at(point) ?? null;
     hoveredId.current = visitor?.id ?? person;
-    const thing = (person && person !== PLAYER_ID) || visitor ? null : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : null;
+    const thing: HoveredThing = (person && person !== PLAYER_ID) || visitor ? null
+      : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
-    const text = visitor ? words.startWith(visitor.name) : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : null;
+    const text = visitor ? words.startWith(visitor.name)
+      : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard
+      : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
     setHintText(text);
     const card = hint.current;
     if (!card || !text) return;
@@ -215,12 +227,16 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     const left = x + 16 + card.offsetWidth > box.width ? x - 10 - card.offsetWidth : x + 16;
     card.style.transform = `translate(${Math.round(left)}px, ${Math.round(y + 10)}px)`;
   };
+  // the dark around the canvas, on a wide or tall panel: the same as the dark around the room in it
+  const onBackdropClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target instanceof Element && BACKDROP_CLASSES.some((name) => (event.target as Element).classList.contains(name))) select(null);
+  };
   const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
 
   const seated = plan.people.length;
   const description = room === 'lounge' ? t.room.description.lounge(seated) : t.room.description.office(seated);
   const view = (
-    <div className="cp-room">
+    <div className="cp-room" onClick={onBackdropClick}>
       <div className="cp-room__fit">
         <div className="cp-room__stage" ref={stage} style={PALETTE_VARIABLES}>
           <div className="cp-room__zoom" ref={zoom}>

@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { BoardDialog } from './command/BoardDialog.tsx';
+import { MetricsDialog } from './command/MetricsDialog.tsx';
 import { CommandPalette } from './command/CommandPalette.tsx';
 import { CrewDialog } from './command/CrewDialog.tsx';
 import { Onboarding } from './command/Onboarding.tsx';
@@ -12,7 +14,7 @@ import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useSmallWindow } from './room/pip.ts';
 import { useFestival } from './room/useFestival.ts';
 import { Radio } from './command/Radio.tsx';
-import { TodoList } from './command/TodoList.tsx';
+import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { defaultFolder } from './lib/format.ts';
 import { isRunning } from './state/labels.ts';
@@ -24,6 +26,7 @@ const isTyping = (target: EventTarget | null) =>
 
 export function App() {
   const view = useSessions((s) => s.view);
+  const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
   const { smallWindow, open: openSmallWindow } = useSmallWindow();
   const day = useFestival();
   const attention = useSessions(selectAttentionCount);
@@ -121,15 +124,17 @@ export function App() {
       <Header />
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
-        <div className="cp-main__content"><RoomView key={`${view}:${day.festival}:${day.guests.join()}`} room={view === 'repos' ? 'lounge' : 'office'} day={day} pip={smallWindow} onOpenPip={() => void openSmallWindow()} /></div>
+        <div className="cp-main__content"><RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day} pip={smallWindow} onOpenPip={() => void openSmallWindow()} /></div>
         {/* keyed so a pending confirmation or rename never carries over to another session */}
         {selectedId ? <Detail key={selectedId} /> : <Launcher />}
       </main>
       <Radio />
-      <TodoList />
+      <StatusPanel />
       <CommandPalette />
       <CrewDialog />
       <SettingsDialog />
+      <BoardDialog />
+      <MetricsDialog />
       <TrustDialog />
       <Toasts />
       <AttentionAnnouncer />

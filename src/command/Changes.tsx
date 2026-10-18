@@ -3,7 +3,7 @@ import type { FileChange, SessionChanges } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { homeRelative } from '../lib/format.ts';
 import { diffRows } from '../state/diff.ts';
-import { BackIcon, RefreshIcon } from './Icons.tsx';
+import { PanelFrame } from './PanelFrame.tsx';
 
 const STATUS_LETTERS = { modified: 'M', added: 'A', deleted: 'D', outside: '?' } as const;
 
@@ -66,27 +66,19 @@ function FileDiff({ change, cwd, open }: { change: FileChange; cwd: string; open
 export function ChangesView({ cwd, changes, onBack, onRefresh }: { cwd: string; changes: SessionChanges | undefined; onBack: () => void; onRefresh: () => void }) {
   const files = changes?.files ?? [];
   const settled = changes ? changes.touched - files.length : 0;
+  const summary = !changes ? t.session.changes.computing : files.length === 0 ? t.session.changes.none : (
+    <>{t.session.files(files.length)} · <LineCounts added={changes.added} removed={changes.removed} /></>
+  );
   return (
-    <section className="cp-changes" aria-label={t.session.changes.label}>
-      <header className="cp-changes__head">
-        <button type="button" className="cp-button" data-variant="quiet" onClick={onBack}><BackIcon />{t.session.changes.back}</button>
-        <p className="cp-changes__summary">
-          {!changes ? t.session.changes.computing : files.length === 0 ? t.session.changes.none : (
-            <>{t.session.files(files.length)} · <LineCounts added={changes.added} removed={changes.removed} /></>
-          )}
-        </p>
-        <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.changes.refresh} title={t.session.changes.refresh} onClick={onRefresh}><RefreshIcon /></button>
-      </header>
-      <div className="cp-changes__body">
+    <PanelFrame label={t.session.changes.label} summary={summary} onBack={onBack} onRefresh={onRefresh}>
         {changes && files.length === 0 && (
           <p className="cp-muted">{changes.touched === 0 ? t.session.changes.nothingWritten : t.session.changes.allSettled}</p>
         )}
         {files.map((change) => <FileDiff key={change.path} change={change} cwd={cwd} open={files.length <= 3} />)}
         {files.length > 0 && settled > 0 && (
-          <p className="cp-muted cp-changes__more">{t.session.changes.settled(settled)}</p>
+          <p className="cp-panel-view__note">{t.session.changes.settled(settled)}</p>
         )}
-        <p className="cp-muted cp-changes__more">{t.session.changes.tracked}</p>
-      </div>
-    </section>
+        <p className="cp-panel-view__note">{t.session.changes.tracked}</p>
+    </PanelFrame>
   );
 }

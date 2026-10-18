@@ -8,8 +8,11 @@ export const fr = {
         `${user || 'L’utilisateur'} suit plusieurs sessions à la fois : sois concis. Pas de préambule ni de récapitulatif de ce que tu viens de faire, ` +
         `pas de narration de chaque étape ; quelques phrases courtes suffisent, et tu ne détailles que si on te le demande. ` +
         `Cette consigne porte sur tes messages, pas sur la qualité ni la complétude du travail.` +
+        ` Open Space affiche dans le fil les images que tu envoies avec SendUserFile et les pages que tu publies avec Artifact : quand tu changes quelque chose de visible (une page, un écran) et que tu peux en prendre une capture, envoie-la.` +
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
+    /** the files the user sent with a message, as their paths: Claude opens them with its tools */
+    attached: (paths: readonly string[]) => (paths.length === 1 ? `Fichier joint : ${paths[0]}` : `Fichiers joints :\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
       'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.',
@@ -35,6 +38,7 @@ export const fr = {
     closing: 'Cette session est en train de se fermer, réessaie dans un instant.',
     tooMany: (max: number) => `Trop de sessions actives (${max} au maximum). Ferme-en une.`,
     folderGone: 'Le dossier de cette session n’est plus dans les racines autorisées.',
+    uploadsGone: (count: number) => (count > 1 ? `${count} fichiers joints n’existent plus : le message est parti sans eux. Joins-les de nouveau.` : 'Un fichier joint n’existe plus : le message est parti sans lui. Joins-le de nouveau.'),
     outsideRoots: 'Ce dossier n’est pas dans les racines autorisées (OFFICE_ROOTS).',
     remoteFailed: (reason: string) => `Remote Control n’a pas démarré : ${reason}`,
     requestGone: 'Cette demande n’existe plus.',
@@ -90,6 +94,14 @@ export const fr = {
   /** a hook or an MCP server a folder would run */
   trust: {
     entry: (name: string, what: string) => `${name} : ${what}`,
+  },
+  journal: {
+    missing: (name: string) => `La note ${name} n’est plus dans le dossier du tableau.`,
+    badName: (name: string) => `« ${name} » ne peut pas être une note du tableau.`,
+    tooBig: 'Cette note est trop longue pour le tableau (1 Mo au plus).',
+  },
+  metrics: {
+    tooBig: 'Le fichier des chiffres est trop long pour l’écran (1 Mo au plus).',
   },
   server: {
     stoppingRetry: 'Le serveur s’arrête : réessaie une fois relancé.',

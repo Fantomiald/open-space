@@ -2,7 +2,7 @@
 // Shared so the server can check what it stores; src/room/pet.ts draws them.
 import { OLDER_PET_FURS } from '../src/design/people-palette.ts';
 
-export const PET_KINDS = ['cat', 'dog', 'duck', 'capybara', 'axolotl', 'rocky', 'none'] as const;
+export const PET_KINDS = ['cat', 'dog', 'duck', 'capybara', 'axolotl', 'rocky', 'clawd', 'none'] as const;
 /** A cat's coat pattern; its colour is chosen apart. */
 export const CAT_PATTERNS = ['plain', 'tabby', 'calico', 'tuxedo'] as const;
 /** A dog's breed: its shape, ears, tail and markings; its colour starts as the breed's and can be changed. */
@@ -18,7 +18,7 @@ export interface PetColors { fur?: string; eyes?: string }
 export type PetChoice =
   | { kind: 'cat'; variant: CatPattern; colors?: PetColors }
   | { kind: 'dog'; variant: DogBreed; colors?: PetColors }
-  | { kind: 'duck' | 'capybara' | 'axolotl' | 'rocky'; colors?: PetColors }
+  | { kind: 'duck' | 'capybara' | 'axolotl' | 'rocky' | 'clawd'; colors?: PetColors }
   | { kind: 'none' };
 
 export const DEFAULT_PET: PetChoice = { kind: 'cat', variant: 'plain' };
@@ -53,7 +53,7 @@ export function parsePet(raw: unknown): PetChoice | undefined {
   const painted = Object.keys(colors).length ? { colors } : {};
   if (kind === 'cat' && oneOf(CAT_PATTERNS, variant)) return { kind, variant, ...painted };
   if (kind === 'dog' && oneOf(DOG_BREEDS, variant)) return { kind, variant, ...painted };
-  if (kind === 'duck' || kind === 'capybara' || kind === 'axolotl' || kind === 'rocky') return { kind, ...painted };
+  if (kind === 'duck' || kind === 'capybara' || kind === 'axolotl' || kind === 'rocky' || kind === 'clawd') return { kind, ...painted };
   if (kind === 'none') return { kind };
   return undefined;
 }

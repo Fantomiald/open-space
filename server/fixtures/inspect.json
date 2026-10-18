@@ -1,0 +1,64 @@
+{
+  "_note": "Answers of claude -p 2.1.302 to the control requests mcp_status, get_context_usage (detail: summary) and get_usage, cut down and with made-up servers, files and names (the shapes are the real ones).",
+  "mcp_status": {
+    "mcpServers": [
+      { "name": "plugin:context7:context7", "status": "needs-auth", "config": { "type": "http", "url": "https://mcp.example.com/mcp" }, "scope": "dynamic", "source": "plugin" },
+      { "name": "billing", "status": "connected", "serverInfo": { "name": "Billing MCP server", "version": "0.1.0" }, "config": { "type": "http", "url": "https://billing.example.com/mcp" }, "scope": "user", "source": "user", "tools": [{ "name": "list-invoices", "annotations": {} }, { "name": "create-invoice", "annotations": { "openWorld": true } }] },
+      { "name": "flags", "status": "connected", "config": { "type": "stdio", "command": "npx" }, "scope": "user", "source": "user", "tools": [{ "name": "read", "annotations": {} }] },
+      { "name": "github", "status": "failed", "config": { "type": "http", "url": "https://api.example.com/mcp" }, "scope": "user", "source": "user", "error": "Server rejected the configured Authorization header (HTTP 401)." },
+      { "name": "analytics", "status": "disabled", "config": { "type": "http", "url": "https://analytics.example.com/mcp" }, "scope": "user", "source": "user" },
+      { "name": "docs", "status": "pending", "config": { "type": "stdio", "command": "node" }, "scope": "project", "source": "project" },
+      { "name": "claude.ai Gmail", "status": "needs-auth", "config": { "type": "claudeai-proxy" }, "scope": "claudeai", "source": "claudeai" },
+      { "status": "connected" }
+    ]
+  },
+  "get_context_usage": {
+    "categories": [
+      { "name": "System prompt", "tokens": 3383, "color": "promptBorder", "kind": "used" },
+      { "name": "System tools", "tokens": 7062, "color": "inactive", "kind": "used" },
+      { "name": "MCP tools", "tokens": 807, "color": "cyan_FOR_SUBAGENTS_ONLY", "kind": "used" },
+      { "name": "MCP tools (deferred)", "tokens": 226071, "color": "inactive", "isDeferred": true, "kind": "deferred" },
+      { "name": "Memory files", "tokens": 2010, "color": "claude", "kind": "used" },
+      { "name": "Skills", "tokens": 9951, "color": "warning", "kind": "used" },
+      { "name": "Messages", "tokens": 1160, "color": "purple_FOR_SUBAGENTS_ONLY", "kind": "used" },
+      { "name": "Autocompact buffer", "tokens": 33000, "color": "inactive", "kind": "buffer" },
+      { "name": "Free space", "tokens": 937799, "color": "promptBorder", "kind": "free" }
+    ],
+    "totalTokens": 24373,
+    "maxTokens": 1000000,
+    "rawMaxTokens": 1000000,
+    "autocompactSource": "model-default",
+    "percentage": 2,
+    "model": "claude-haiku-5-5",
+    "memoryFiles": [
+      { "path": "/Users/me/.claude/CLAUDE.md", "type": "User", "tokens": 1046 },
+      { "path": "/Users/me/projects/app/CLAUDE.md", "type": "Project", "tokens": 964 }
+    ],
+    "autoCompactThreshold": 967000,
+    "isAutoCompactEnabled": true
+  },
+  "get_usage": {
+    "session": { "total_cost_usd": 0.4213, "total_api_duration_ms": 61000, "total_duration_ms": 9253000, "total_lines_added": 120, "total_lines_removed": 31, "model_usage": {} },
+    "subscription_type": "max",
+    "rate_limits_available": true,
+    "rate_limits": {
+      "five_hour": { "utilization": 33, "resets_at": "2026-10-17T18:20:00.210222+00:00" },
+      "limits": [
+        { "kind": "session", "group": "session", "percent": 33, "severity": "normal", "resets_at": "2026-10-17T18:20:00.210222+00:00", "scope": null, "is_active": false },
+        { "kind": "weekly_all", "group": "weekly", "percent": 48, "severity": "normal", "resets_at": "2026-10-22T00:00:00.210242+00:00", "scope": null, "is_active": true },
+        { "kind": "weekly_scoped", "group": "weekly", "percent": 0, "severity": "normal", "resets_at": "2026-10-22T00:00:00+00:00", "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null }, "is_active": false }
+      ]
+    },
+    "behaviors": {
+      "week": {
+        "request_count": 11609,
+        "session_count": 96,
+        "behaviors": [{ "key": "long_context", "pct": 91, "count": 8792 }],
+        "agents": [{ "name": "general-purpose", "pct": 10 }, { "name": "Explore", "pct": 0 }],
+        "skills": [{ "name": "review", "pct": 3 }],
+        "plugins": [{ "name": "toolkit", "pct": 3 }],
+        "mcp_servers": [{ "name": "playwright", "pct": 3 }]
+      }
+    }
+  }
+}

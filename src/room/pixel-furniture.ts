@@ -1,9 +1,11 @@
 // The office's furniture in pixel art: each piece is a few boxes on the isometric grid (a lit top and the two faces
 // turned to the viewer), with its details, drawn once at art resolution on its own canvas, outlined, and kept.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
-import type { FurniturePiece, PieceKind } from '../../shared/room-layout.ts';
+import { TOPS, type FurniturePiece, type PieceKind } from '../../shared/room-layout.ts';
 import { toScreen, type Point } from './geometry.ts';
 import { ART_SCALE, artCanvas, fillPolygon, outline, ring, shadedBall, tones } from './pixel-art.ts';
+import { glyphRows } from './wall-art.ts';
+import { BOARD, DOODLES, DOODLE_GAP, LINE_HEIGHT, doodlesWidth, textWidth, type BoardContent } from './whiteboard.ts';
 
 const C = ROOM_PALETTE.furniture;
 const H = ROOM_PALETTE.halloween;
@@ -17,6 +19,8 @@ interface Painter {
   box(x: number, y: number, width: number, depth: number, z: number, height: number, colour: string, top?: string): void;
   /** a flat shape on the +y face (the one turned to the bottom left) of the plane y = `y` */
   onFront(y: number, fromX: number, toX: number, fromZ: number, toZ: number, colour: string): void;
+  /** a flat shape on the +x face (the one turned to the bottom right) of the plane x = `x`: what hangs on the left wall */
+  onSide(x: number, fromY: number, toY: number, fromZ: number, toZ: number, colour: string): void;
   /** a shaded ball centred above a floor point */
   ball(x: number, y: number, z: number, radiusX: number, radiusY: number, colour: string): void;
   /** a soft shadow on the floor around a point (too faint to be outlined) */
@@ -32,15 +36,200 @@ function paintLaptop(p: Painter) {
   p.box(1.1, 0.55, 0.8, 0.06, 12, 5, C.monitor);
 }
 
-/** What a click opens on a piece, outlined in white under the pointer: the user's laptop on their desk. */
-const CLICKABLE: Partial<Record<PieceKind, (paint: Painter) => void>> = { bossDesk: paintLaptop };
+/* The drafts of the numbers object (METRICS_OBJECT in shared/room-layout.ts; floor.ts finds the same boxes under the pointer) */
 
-/** `fine`: thin details painted after the outline, so they stay one pixel wide (strings). */
-interface Design { height: number; paint: (paint: Painter, piece: FurniturePiece) => void; fine?: (paint: Painter, piece: FurniturePiece) => void }
+/**
+ * At the left end of the user's desk (they sit behind its middle, so nothing of theirs hides it): a pile of banknote
+ * bundles, and a notepad standing in front of it with a rising curve. Both face the viewer, one letter a pixel.
+ */
+const BANKNOTES = [
+  '..lllwlll.',
+  '..gggwgggd',
+  '.lllwlllld',
+  '.gggwggggd',
+  'lllwlllld.',
+  'gggwggggd.',
+  '.lllwllll.',
+  '.gggwggggd',
+  'lllwllllld',
+  'gggwgggggd',
+  'gggwgggggd',
+  'gggwgggggd',
+];
+const NOTEPAD = [
+  '.k.k.k.k.',
+  'nnnnnnnnn',
+  'nnnnnnrrn',
+  'nnnnnnnrn',
+  'nnnnnnrnn',
+  'nnnnnrnnn',
+  'nnnnrnnnn',
+  'nnrrnnnnn',
+  'nrnnnnnnn',
+  'nnnnnnnnn',
+];
+const CASH_COLOURS: Readonly<Record<string, string>> = { l: tones(C.cash).light, g: C.cash, d: tones(C.cash).dark, w: C.cashBand, k: C.spiral, n: C.notepad, r: C.rising };
+/** Where each stands on the desk (from its corner, in tiles). */
+const CASH_SPOTS = { banknotes: { x: 0.3, y: 0.3 }, notepad: { x: 0.35, y: 0.82 } };
+
+/** One letter a pixel, facing the viewer, its bottom row on the desk's top above `middle`. */
+function standing(p: Painter, rows: readonly string[], colours: Readonly<Record<string, string>>, middle: { x: number; y: number }, z: number) {
+  const half = Math.floor(rows[0].length / 2);
+  for (const [line, row] of rows.entries()) [...row].forEach((letter, column) => {
+    const colour = colours[letter];
+    if (colour) p.upright(column - half, z + rows.length - 1 - line, colour, middle);
+  });
+}
+
+function paintCash(p: Painter) {
+  standing(p, BANKNOTES, CASH_COLOURS, CASH_SPOTS.banknotes, TOPS.desk);
+  standing(p, NOTEPAD, CASH_COLOURS, CASH_SPOTS.notepad, TOPS.desk);
+}
+
+/** The dashboard screen on the left wall: its frame and its face (the chart is drawn on it, see drawChart). */
+const TV_FACE = { fromY: 0.12, toY: 2.38, low: 27, high: 41 };
+function paintMetricsTv(p: Painter) {
+  p.box(0, 0, 0.12, 2.5, 26, 16, C.screenBezel);
+  p.onSide(0.12, TV_FACE.fromY, TV_FACE.toY, TV_FACE.low, TV_FACE.high, C.screenFace);
+}
+
+/** Bars of a chart (their heights), and the trend line over them: columns along the screen from its left on screen. */
+const BARS = [3, 5, 4, 7, 9] as const;
+function drawChart(p: Painter) {
+  // a column on screen goes left along y; rows go up from the face's bottom
+  const at = (column: number, row: number, colour: string) => p.pixel(0.12, TV_FACE.toY - (column + 0.5) / 8, TV_FACE.low + 1 + row, colour);
+  for (let column = 0; column < 17; column++) { at(column, 0, C.screenGrid); if (column % 2) at(column, 6, C.screenGrid); }
+  BARS.forEach((height, index) => {
+    for (let row = 1; row <= height; row++) for (const shift of [0, 1]) at(2 + index * 3 + shift, row, C.bars[index % 2]);
+  });
+  for (const [index, height] of BARS.entries()) at(2 + index * 3, height + 2, C.trend);
+  for (const [column, row] of [[3, 7], [4, 7], [6, 7], [7, 7], [9, 8], [10, 9], [12, 10], [13, 11]] as const) at(column, row, C.trend);
+  for (let column = 1; column < 6; column++) at(column, 12, C.screenGrid);
+}
+
+/** A stock ticker along the left wall: a strip of lights (what it shows: writeOnTicker). */
+const TICKER = { fromY: 0.1, toY: 4.1, low: 36, high: 42 };
+function paintTicker(p: Painter) {
+  p.box(0, 0, 0.1, 4.2, 35, 8, C.screenBezel);
+  p.onSide(0.1, TICKER.fromY, TICKER.toY, TICKER.low, TICKER.high, C.ticker);
+}
+
+/** What the ticker shows, one letter a pixel: prices going up and down (letters would not read on the slanting wall). */
+const ARROW_UP = ['..#..', '.###.', '#####', '..#..', '..#..'];
+const ARROW_DOWN = [...ARROW_UP].reverse();
+const DASH = ['.....', '.....', '#####', '.....', '.....'];
+function writeOnTicker(p: Painter) {
+  const at = (column: number, row: number, colour: string) => p.pixel(0.1, TICKER.toY - (column + 0.5) / 8, TICKER.low + row, colour);
+  const signs = [[ARROW_UP, C.tickerGreen], [DASH, C.tickerAmber], [ARROW_UP, C.tickerGreen], [ARROW_DOWN, C.tickerRed], [ARROW_UP, C.tickerGreen]] as const;
+  signs.forEach(([rows, colour], index) => {
+    for (const [line, text] of rows.entries()) [...text].forEach((letter, across) => { if (letter === '#') at(1 + index * 6 + across, rows.length - line, colour); });
+  });
+}
+
+/** A piggy bank on the bookshelf, seen from its side, a coin going into its slot: one letter a pixel (see PIGGY_COLOURS). */
+const PIGGY = [
+  '.......cc....',
+  '.......cc....',
+  '......kk.....',
+  '...pppppp.d..',
+  '.dppwwppppdp.',
+  '..pwppppppkpp',
+  '..pppppppppnn',
+  '..pppppppppnn',
+  '...ssppppss..',
+  '...dd....dd..',
+];
+const PIGGY_COLOURS: Readonly<Record<string, string>> = { c: C.coin, k: C.spiral, p: C.piggy, w: C.cashBand, d: C.piggyShade, s: C.piggyShade, n: C.piggySnout };
+const PIGGY_SPOT = { x: 1, y: 0.3 };
+const paintPiggy = (p: Painter) => standing(p, PIGGY, PIGGY_COLOURS, PIGGY_SPOT, TOPS.bookshelf);
+
+/** The whiteboard's writing surface: its plane, and where its first column and its bottom row are (see BOARD). */
+const SURFACE = { y: 0.34, fromX: 0.25, bottom: 17 };
+
+/** The whiteboard on wheels without what is written on it: casters, feet, posts, the board in its frame, the marker tray. */
+function paintWhiteboard(p: Painter) {
+  for (const x of [0.02, 3.82]) {
+    for (const y of [0.02, 0.5]) p.box(x + 0.02, y, 0.12, 0.08, 0, 2, C.caster);
+    p.box(x, 0, 0.16, 0.6, 2, 1.5, C.metal);
+    p.box(x + 0.04, 0.26, 0.08, 0.08, 3, 41, C.boardFrame);
+  }
+  p.box(0.1, 0.24, 3.8, 0.1, 14, 30, C.boardFrame);
+  p.onFront(SURFACE.y, 0.18, 3.82, 15, 43, C.whiteboard);
+  p.box(0.3, SURFACE.y, 3.4, 0.1, 13, 1, C.boardFrame);
+}
+
+/** A pixel of the writing surface: `column` along it from its left, `row` up from its bottom. */
+const onBoard = (p: Painter, column: number, row: number, colour: string) => p.pixel(SURFACE.fromX + column / 8, SURFACE.y, SURFACE.bottom + row, colour);
+
+/** A marker drawing (whiteboard.ts) with its bottom left pixel at (column, row). */
+function drawSprite(p: Painter, rows: readonly string[], column: number, row: number) {
+  for (const [line, text] of rows.entries()) [...text].forEach((letter, across) => {
+    const colour = C.markers[letter as keyof typeof C.markers];
+    if (colour) onBoard(p, column + across, row + rows.length - 1 - line, colour);
+  });
+}
+
+/**
+ * Scribbled notes: a title underlined, then items with a bullet, one ticked. The lines slant with the board, so they
+ * are drawn whole (a gap between words would read as a broken diagonal).
+ */
+function scribbleNotes(p: Painter) {
+  const line = (from: number, to: number, row: number, colour: string) => { for (let column = from; column <= to; column++) onBoard(p, column, row, colour); };
+  line(1, 11, 22, C.markers.k);
+  line(1, 11, 21, C.markers.k);
+  line(0, 13, 18, C.markers.k);
+  for (const [row, end] of [[13, 21], [8, 15], [3, 23]] as const) {
+    // the bullet two rows lower than its line: the line goes down half a row a column, and starts four columns right
+    line(1, 2, row - 2, C.markers.b);
+    line(1, 2, row - 1, C.markers.b);
+    line(5, end, row, C.markers.b);
+  }
+  for (const [column, row] of [[19, 9], [20, 8], [21, 9], [22, 10], [23, 11], [24, 12]] as const) onBoard(p, column, row, C.markers.r);
+}
+
+/** What the board shows (see boardContent): notes, the birthday wishes, or the festival's doodles, centred on it. */
+function writeOnBoard(p: Painter, board: BoardContent) {
+  if (board.kind === 'notes') { scribbleNotes(p); return; }
+  if (board.kind === 'birthday') {
+    const height = board.lines.length * LINE_HEIGHT - 2;
+    const bottom = Math.floor((BOARD.rows - height) / 2);
+    // one line after the other from the top, red then blue
+    board.lines.forEach((text, index) => {
+      const colour = index % 2 ? C.markers.b : C.markers.r;
+      const column = Math.floor((BOARD.columns - textWidth(text)) / 2);
+      const lineBottom = bottom + (board.lines.length - 1 - index) * LINE_HEIGHT;
+      for (const [line, row] of glyphRows(text).entries()) [...row].forEach((letter, across) => {
+        if (letter === '#') onBoard(p, column + across, lineBottom + 4 - line, colour);
+      });
+    });
+    return;
+  }
+  let column = Math.floor((BOARD.columns - doodlesWidth(board.doodles)) / 2);
+  for (const doodle of board.doodles) {
+    const rows = DOODLES[doodle];
+    drawSprite(p, rows, column, Math.floor((BOARD.rows - rows.length) / 2));
+    column += rows[0].length + DOODLE_GAP;
+  }
+}
+
+/** The balloons tied to the whiteboard's left post at a birthday: how far along it, how high, and their colour. */
+const BOARD_BALLOONS = [[0.15, 54, 0], [0.55, 58, 2], [0.3, 63, 1]] as const;
+
+/** What a click opens on a piece, outlined in white under the pointer: the user's laptop on their desk, the whiteboard. */
+const CLICKABLE: Partial<Record<PieceKind, (paint: Painter) => void>> = {
+  bossDesk: paintLaptop, whiteboard: paintWhiteboard, cash: paintCash, metricsTv: paintMetricsTv, ticker: paintTicker, piggyBank: paintPiggy,
+};
+
+/** `fine`: thin details painted after the outline, so they stay one pixel wide (strings). `board`: what the whiteboard shows. */
+interface Design {
+  height: number;
+  paint: (paint: Painter, piece: FurniturePiece, board: BoardContent) => void;
+  fine?: (paint: Painter, piece: FurniturePiece, board: BoardContent) => void;
+}
 
 /** Where a prop stands on its desk or table, by footprint: the user's desk is three tiles wide, the others two. */
 function propSpot(piece: FurniturePiece) {
-  if (piece.width === 3) return { x: 0.55, y: 0.55 };
+  if (piece.width === 3) return { x: 2.35, y: 0.6 };
   return piece.top === 11 ? { x: 1.45, y: 0.3 } : { x: 1.35, y: 0.5 };
 }
 
@@ -119,8 +308,8 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
     p.onFront(0.95, 0.1, 2.9, 4, 6, C.bossStripe);
     paintLaptop(p);
     p.onFront(0.61, 1.45, 1.55, 14, 15, C.lightMetal);
-    p.box(2.3, 0.4, 0.2, 0.2, 11, 4, C.lampShade);
-    p.box(0.3, 0.5, 0.5, 0.3, 11, 1, C.paper);
+    p.box(2.7, 0.12, 0.2, 0.2, 11, 4, C.lampShade);
+    p.box(2.05, 0.5, 0.5, 0.3, 11, 1, C.paper);
   } },
   chair: { height: 20, paint(p) {
     p.box(0.3, 0.3, 0.4, 0.4, 0, 1, C.metal);
@@ -408,16 +597,22 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
     p.onFront(0.75, 0.55, 0.65, 9, 10, C.ledBlue);
     p.box(0.32, 0.32, 0.36, 0.36, 13, 9, C.water);
   } },
-  printer: { height: 18, paint(p) {
-    p.box(0.1, 0.15, 0.8, 0.7, 0, 8, C.metal);
-    p.box(0.15, 0.2, 0.7, 0.6, 8, 6, C.printer);
-    p.box(0.3, 0.6, 0.4, 0.2, 14, 1, C.paper);
-    p.onFront(0.8, 0.7, 0.78, 11, 12, C.ledGreen);
+  // a whiteboard on a stand with casters, two markers and an eraser on its tray; balloons tied to it at a birthday
+  whiteboard: { height: 68, paint(p, _piece, board) {
+    paintWhiteboard(p);
+    for (const [x, colour] of [[0.7, C.markers.b], [1.05, C.markers.r]] as const) p.box(x, SURFACE.y + 0.02, 0.28, 0.05, 14, 1, colour);
+    p.box(2.9, SURFACE.y + 0.01, 0.4, 0.08, 14, 1.5, C.caster);
+    if (board.kind === 'birthday') for (const [x, z, colour] of BOARD_BALLOONS) p.ball(x, 0.3, z, 3.5, 4.5, F.balloons[colour]);
+  }, fine(p, _piece, board) {
+    writeOnBoard(p, board);
+    // the balloons' strings, from the top of the left post
+    if (board.kind === 'birthday') for (const [x, z] of BOARD_BALLOONS) for (let up = 44; up < z - 4; up++) p.pixel(0.1 + (x - 0.1) * (up - 44) / (z - 48), 0.3, up, F.white);
   } },
-  server: { height: 34, paint(p) {
-    p.box(0.1, 0.1, 0.8, 0.8, 0, 32, C.server);
-    for (let z = 4; z < 30; z += 4) p.onFront(0.9, 0.15, 0.85, z, z + 1, C.metal);
-  } },
+  // the drafts of the numbers object: the details are painted after the outline, one pixel each
+  cash: { height: 28, paint: paintCash },
+  metricsTv: { height: 46, paint: paintMetricsTv, fine: drawChart },
+  ticker: { height: 46, paint: paintTicker, fine: writeOnTicker },
+  piggyBank: { height: 40, paint: paintPiggy },
   counter: { height: 24, paint(p) {
     p.box(0, 0.1, 3, 0.85, 0, 11, C.counter);
     for (const x of [1, 2]) p.onFront(0.95, x - 0.02, x + 0.02, 1, 10, tones(C.counter).shade);
@@ -433,7 +628,7 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
 interface Drawn { canvas: HTMLCanvasElement; corner: Point }
 
 /** A piece drawn on its own canvas; `part`: only that part of it, as a white line around it (see CLICKABLE). */
-function render(piece: FurniturePiece, part?: (paint: Painter) => void): Drawn {
+function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Painter) => void): Drawn {
   const design = DESIGNS[piece.kind];
   const width = (piece.width + piece.depth) * TILE.x + MARGIN * 2;
   const height = (piece.width + piece.depth) * TILE.y + design.height + MARGIN * 2;
@@ -450,6 +645,9 @@ function render(piece: FurniturePiece, part?: (paint: Painter) => void): Drawn {
     },
     onFront(y, fromX, toX, fromZ, toZ, colour) {
       fillPolygon(context, [at(fromX, y, fromZ), at(toX, y, fromZ), at(toX, y, toZ), at(fromX, y, toZ)], colour);
+    },
+    onSide(x, fromY, toY, fromZ, toZ, colour) {
+      fillPolygon(context, [at(x, fromY, fromZ), at(x, toY, fromZ), at(x, toY, toZ), at(x, fromY, toZ)], colour);
     },
     ball(x, y, z, radiusX, radiusY, colour) {
       const center = at(x, y, z);
@@ -479,9 +677,9 @@ function render(piece: FurniturePiece, part?: (paint: Painter) => void): Drawn {
     ring(canvas, C.highlight);
     return { canvas, corner };
   }
-  design.paint(painter, piece);
+  design.paint(painter, piece, board);
   outline(canvas, C.outline);
-  design.fine?.(painter, piece);
+  design.fine?.(painter, piece, board);
   return { canvas, corner };
 }
 
@@ -491,7 +689,8 @@ export interface FurnitureSprites {
   drawHighlight(context: CanvasRenderingContext2D, piece: FurniturePiece): void;
 }
 
-export function pixelFurniture(): FurnitureSprites {
+/** `board`: what the whiteboard shows (the furniture is made again when the festival changes, with the room). */
+export function pixelFurniture(board: BoardContent = { kind: 'notes' }): FurnitureSprites {
   const drawn = new Map<FurniturePiece, Drawn>();
   const highlights = new Map<FurniturePiece, Drawn>();
   const place = (context: CanvasRenderingContext2D, piece: FurniturePiece, image: Drawn) => {
@@ -501,14 +700,14 @@ export function pixelFurniture(): FurnitureSprites {
   return {
     draw(context, piece) {
       let image = drawn.get(piece);
-      if (!image) { image = render(piece); drawn.set(piece, image); }
+      if (!image) { image = render(piece, board); drawn.set(piece, image); }
       place(context, piece, image);
     },
     drawHighlight(context, piece) {
       const part = CLICKABLE[piece.kind];
       if (!part) return;
       let image = highlights.get(piece);
-      if (!image) { image = render(piece, part); highlights.set(piece, image); }
+      if (!image) { image = render(piece, board, part); highlights.set(piece, image); }
       place(context, piece, image);
     },
   };
@@ -516,6 +715,8 @@ export function pixelFurniture(): FurnitureSprites {
 
 /** Draw order of a piece: the depth of its front tile, just before whoever stands or sits on that tile (or, for a piece drawn behind them, before anyone on any of its tiles). */
 export function furnitureDepth(piece: FurniturePiece): number {
+  // on the wall: behind everything in the room
+  if (piece.wall) return -1;
   if (piece.behind) return piece.x + piece.y - 0.1;
   return (piece.x + piece.width - 0.5) + (piece.y + piece.depth - 0.5) - 0.1;
 }

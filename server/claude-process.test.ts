@@ -15,6 +15,8 @@ describe('buildClaudeArgs', () => {
     assert.ok(!identityPrompt('Iris', 'Max').includes('demande à tous'));
     const untrusted = buildClaudeArgs({ ...base, untrusted: true });
     assert.equal(untrusted[untrusted.indexOf('--setting-sources') + 1], 'user', 'a folder not trusted: its settings stay out');
+    const reading = buildClaudeArgs({ ...base, addDirs: ['/data/uploads'] });
+    assert.equal(reading[reading.indexOf('--add-dir') + 1], '/data/uploads', 'the files the user sends are readable');
   });
 
   it('passes the session permission mode', () => {

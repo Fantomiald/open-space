@@ -6,13 +6,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand } from '../shared/protocol.ts';
-import { attachmentsFolder, saveAttachment } from './attachments.ts';
+import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
+import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
-import type { Aside, FolderCode, SessionChanges } from '../shared/protocol.ts';
+import type { ShellRunner } from './shell.ts';
+import type { Aside, FolderCode, InspectView, McpAction, SessionChanges } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
-import { lastExchanges, listConversations } from './conversations.ts';
+import { lastContextUse, lastExchanges, listConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME, MAX_TAG } from './messages.ts';
@@ -33,6 +35,8 @@ export interface SessionManagerDeps {
   broadcast: (message: ServerMessage) => void;
   log: (message: string, error?: unknown) => void;
   now?: () => number;
+  /** see SessionDeps.graceMs */
+  graceMs?: number;
   /** where Claude Code keeps its conversations (~/.claude); tests point it elsewhere */
   home?: string;
   /** a session now waits for the user (see Session's deps) */
@@ -41,6 +45,8 @@ export interface SessionManagerDeps {
   identity?: SessionDeps['identity'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
+  /** runs a command typed with "!" (see shell.ts) */
+  runShell?: ShellRunner;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -74,6 +80,8 @@ export class SessionManager {
 
   async init() {
     await mkdir(this.logsDir, { recursive: true, mode: 0o700 });
+    // --add-dir needs it to exist
+    await mkdir(uploadsFolder(this.deps.config.dataDir), { recursive: true, mode: 0o700 });
     await this.trusted.load();
     const stored = await this.readStoredState();
     this.commands = stored.commands;
@@ -86,6 +94,35 @@ export class SessionManager {
       this.sessions.set(info.id, session);
     }
     this.save();
+    this.sweep();
+    void this.fillContexts();
+    // Remote Control was on when the server stopped: back on, on the same session of claude.ai
+    for (const session of this.sessions.values()) {
+      if (session.snapshot().remoteSession) session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control back on for ${session.snapshot().name}`, error));
+    }
+  }
+
+  /**
+   * How full the context of the sessions saved without it is (they have not answered since it was recorded), from
+   * their conversation on disk. The window's size is not there: it is taken from a session with the same model.
+   */
+  private async fillContexts() {
+    const windows = new Map(this.list().flatMap((info) => (info.context?.max && info.activeModel ? [[info.activeModel, info.context.max] as const] : [])));
+    for (const session of this.sessions.values()) {
+      const info = session.snapshot();
+      if (info.context || !info.resumable) continue;
+      const last = await lastContextUse(info.cwd, session.conversationId, this.deps.home);
+      const max = last && windows.get(last.model || info.activeModel);
+      if (last && max) session.recallContext({ used: last.used, max });
+    }
+  }
+
+  /** Removes in the background the stored pictures and files of forgotten sessions (see sweepAttachments). */
+  private sweep() {
+    sweepAttachments(attachmentsFolder(this.deps.config.dataDir), this.logsDir, this.now())
+      .catch((error) => this.deps.log('cannot sweep the attachments', error));
+    sweepUploads(uploadsFolder(this.deps.config.dataDir), this.logsDir, this.now())
+      .catch((error) => this.deps.log('cannot sweep the uploads', error));
   }
 
   private async readStoredState(): Promise<{ sessions: StoredInfo[]; commands: SlashCommand[]; quota: Quota | null }> {
@@ -127,7 +164,7 @@ export class SessionManager {
       spawnProcess: (launch, handlers) => {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
-        return this.deps.spawnProcess(launch, handlers);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)] }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -137,6 +174,8 @@ export class SessionManager {
       onQuota: (quota) => { this.quota = quota; this.deps.broadcast({ t: 'quota', quota }); this.save(); },
       allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.deps.config.roots),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
+      uploadPath: (id) => uploadPath(uploadsFolder(this.deps.config.dataDir), id),
+      copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       identity: this.deps.identity,
       peerName: (address) => this.peerName(address),
@@ -144,6 +183,8 @@ export class SessionManager {
       maxLive: this.deps.config.maxLive,
       idleMs: this.deps.config.idleMs,
       now: this.deps.now,
+      graceMs: this.deps.graceMs,
+      runShell: this.deps.runShell,
     });
   }
 
@@ -178,15 +219,15 @@ export class SessionManager {
 
   /** What a session changed in its files (see changes.ts). */
   changes(id: string): Promise<SessionChanges> {
-    const { cwd } = this.session(id).snapshot();
-    return sessionChanges(cwd, id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home);
+    const { cwd, conversationId } = this.session(id).snapshot();
+    return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home);
   }
 
   /** The Claude Code conversations of an allowed folder that are not open here yet. */
   async conversations(directory: string): Promise<Conversation[]> {
     const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
     if (!cwd) throw new Error(st.sessions.outsideRoots);
-    return listConversations(cwd, new Set(this.sessions.keys()), this.deps.home);
+    return listConversations(cwd, new Set([...this.sessions.values()].map((session) => session.conversationId)), this.deps.home);
   }
 
   private session(id: string): Session {
@@ -207,7 +248,7 @@ export class SessionManager {
     this.asides.set(id, entry);
     const publish = () => { if (this.asides.get(id) === entry) this.deps.broadcast({ t: 'aside', sessionId: id, aside: entry.aside }); };
     let timer: NodeJS.Timeout | null = null;
-    const running = this.deps.askAside({ cwd, sessionId: id, resume: info.resumable, model: info.model, untrusted: info.untrusted, question }, {
+    const running = this.deps.askAside({ cwd, sessionId: info.conversationId ?? id, resume: info.resumable, model: info.model, untrusted: info.untrusted, question }, {
       onText: (text) => { entry.aside = { ...entry.aside, answer: text }; timer ??= setTimeout(() => { timer = null; publish(); }, ASIDE_EVERY_MS); },
       onEnd: ({ ok, text }) => {
         if (timer) clearTimeout(timer);
@@ -284,9 +325,9 @@ export class SessionManager {
       const found = (await listConversations(cwd, new Set(), this.deps.home)).find((conversation) => conversation.id === options.resumeId);
       session.showHistory(found?.title ?? st.sessions.untitledConversation, await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
     }
-    if (options.text?.trim() || options.images?.length) {
+    if (options.text?.trim() || options.images?.length || options.files?.length) {
       try {
-        session.send(options.text ?? '', options.images);
+        session.send(options.text ?? '', options.images, options.files);
       } catch (error) {
         await this.forget(info.id);
         throw error;
@@ -295,7 +336,7 @@ export class SessionManager {
     return session.snapshot();
   }
 
-  send(id: string, text: string, images?: readonly ImageUpload[]) { this.session(id).send(text, images); }
+  send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[]) { this.session(id).send(text, images, files); }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
   interrupt(id: string) { this.session(id).interrupt(); }
@@ -311,11 +352,16 @@ export class SessionManager {
   tag(id: string, tag: string) { this.session(id).setTag(tag); }
   rest(id: string) { return this.session(id).rest(); }
   remoteControl(id: string, enabled: boolean) { return this.session(id).setRemote(enabled); }
+  inspect(id: string, view: InspectView) { return this.session(id).inspect(view); }
+  shell(id: string, command: string) { return this.session(id).shell(command); }
+  stopShell(id: string, shellId: string) { this.session(id).stopShell(shellId); }
+  mcpAction(id: string, server: string, action: McpAction) { return this.session(id).mcpAction(server, action); }
 
   /** Removes a session (closed first if it runs) and its log. Claude Code's own transcript is not touched. */
   async forget(id: string) {
     const session = this.session(id);
     if (session.alive) await session.close();
+    else await session.stopShells();
     this.closeAside(id);
     this.sessions.delete(id);
     const log = this.logs.get(id);
@@ -324,6 +370,7 @@ export class SessionManager {
     await rm(path.join(this.logsDir, `${id}.jsonl`), { force: true });
     this.deps.broadcast({ t: 'forgotten', sessionId: id });
     this.save();
+    this.sweep();
   }
 
   // ── persistence ──
@@ -379,8 +426,11 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,
+    conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
+    context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,
     tag: asString(raw.tag).slice(0, MAX_TAG) || undefined,
     resting: raw.resting === true || undefined,
+    remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
     queued: parseQueue(raw.queued),
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed

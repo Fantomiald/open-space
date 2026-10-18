@@ -9,8 +9,10 @@ export const en: ServerDictionary = {
         `${user || 'The user'} follows several sessions at once: be concise. No preamble and no recap of what you just did, ` +
         `no narration of each step; a few short sentences are enough, and only go into detail when asked. ` +
         `This instruction is about your messages, not about the quality or completeness of the work.` +
+        ` Open Space shows in the thread the pictures you send with SendUserFile and the pages you publish with Artifact: when you change something visible (a page, a screen) and can take a screenshot of it, send it.` +
         (note ? `\n\nWhat ${who} asks of all their agents: ${note}` : '');
     },
+    attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
       'in the conversation, without using any tool. Your answer does not enter the main conversation.',
@@ -35,6 +37,7 @@ export const en: ServerDictionary = {
     closing: 'This session is closing, try again in a moment.',
     tooMany: (max: number) => `Too many active sessions (${max} at most). Close one.`,
     folderGone: 'This session’s folder is no longer in the allowed roots.',
+    uploadsGone: (count: number) => (count > 1 ? `${count} attached files no longer exist: the message went without them. Attach them again.` : 'An attached file no longer exists: the message went without it. Attach it again.'),
     outsideRoots: 'This folder is not in the allowed roots (OFFICE_ROOTS).',
     remoteFailed: (reason: string) => `Remote Control didn’t start: ${reason}`,
     requestGone: 'This request no longer exists.',
@@ -87,6 +90,14 @@ export const en: ServerDictionary = {
   },
   trust: {
     entry: (name: string, what: string) => `${name}: ${what}`,
+  },
+  journal: {
+    missing: (name: string) => `The note ${name} is no longer in the whiteboard’s folder.`,
+    badName: (name: string) => `"${name}" can’t be a whiteboard note.`,
+    tooBig: 'This note is too long for the whiteboard (1 MB at most).',
+  },
+  metrics: {
+    tooBig: 'The numbers file is too long for the screen (1 MB at most).',
   },
   server: {
     stoppingRetry: 'The server is stopping: try again once it’s back.',

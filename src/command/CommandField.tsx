@@ -71,7 +71,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
         </ul>
       )}
       <textarea
-        id={id} ref={ref} value={value} rows={rows} data-composer data-command={value.startsWith('/')}
+        id={id} ref={ref} value={value} rows={rows} data-composer data-command={value.startsWith('/')} data-shell={value.startsWith('!')}
         aria-autocomplete="list" aria-controls={current ? listId : undefined} aria-activedescendant={current ? `${listId}-${current.name}` : undefined}
         placeholder={placeholder} onChange={(e) => edit(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
       />

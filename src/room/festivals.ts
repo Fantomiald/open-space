@@ -384,7 +384,15 @@ export function festivalGlows(festival: Festival, room: Room, layout: Layout): G
 }
 
 /** The glass of the windows on the back wall, in tiles along it. */
-const windowsOf = (layout: Layout) => layout.wallItems.filter((item) => item.kind === 'window');
+/** The windows, without the part the whiteboard stands in front of (snow and fireworks are painted over the room). */
+function windowsOf(layout: Layout): { fromX: number; width: number }[] {
+  const board = layout.furniture.find((piece) => piece.kind === 'whiteboard');
+  return layout.wallItems.filter((item) => item.kind === 'window').flatMap((item) => {
+    const to = item.fromX + item.width;
+    if (!board || board.x >= to || board.x + board.width <= item.fromX) return [item];
+    return [[item.fromX, board.x], [board.x + board.width, to]].filter(([from, end]) => end - from >= 1).map(([from, end]) => ({ fromX: from, width: end - from }));
+  });
+}
 
 function px(context: Context, point: Point, colour: string, size = ART_SCALE) {
   context.fillStyle = colour;

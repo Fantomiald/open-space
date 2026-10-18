@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,9 +60,12 @@ before(async () => {
   symlinkSync(path.join(base, 'secret.txt'), path.join(soundsDir, 'leak.wav'));
   mkdirSync(path.join(base, 'attachments'));
   writeFileSync(path.join(base, 'attachments', `${'a'.repeat(64)}.png`), 'PNG');
+  writeFileSync(path.join(base, 'attachments', `${'b'.repeat(64)}.html`), '<script>alert(1)</script>');
+  writeFileSync(path.join(base, 'attachments', `${'d'.repeat(64)}.mp4`), '0123456789');
+  writeFileSync(path.join(base, 'attachments', `${'c'.repeat(64)}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
   port = await freePort();
   server = createWebServer({
-    policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), dev: false, devPort: 5174,
+    policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
   }).server;
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
@@ -116,6 +119,55 @@ describe('HTTP requests', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('content-type'), 'image/png');
     assert.equal((await fetch(`http://127.0.0.1:${port}/attachments/secret.png`, { headers: { Cookie: COOKIE } })).status, 404);
+  });
+
+  it('only downloads a file a session sent that is not a picture, under its own name: an HTML page never runs in the page', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/attachments/${'b'.repeat(64)}.html?name=${encodeURIComponent('rapport final.html')}`, { headers: { Cookie: COOKIE } });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/octet-stream');
+    assert.equal(res.headers.get('content-disposition'), 'attachment; filename="rapport final.html"');
+  });
+
+  it('shows a published page asked without a name in a sandbox of its own origin, framed by Open Space only', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/attachments/${'b'.repeat(64)}.html`, { headers: { Cookie: COOKIE } });
+    assert.equal(res.headers.get('content-type'), 'text/html; charset=utf-8');
+    const csp = res.headers.get('content-security-policy') ?? '';
+    assert.match(csp, /^sandbox allow-scripts /);
+    assert.doesNotMatch(csp, /allow-same-origin/);
+    assert.match(csp, /frame-ancestors 'self'/);
+    assert.match(await res.text(), /^<!doctype html>.*<script>alert\(1\)<\/script>$/s, 'wrapped like claude.ai does');
+  });
+
+  it('plays a video by ranges, as a browser asks for it', async () => {
+    const video = `http://127.0.0.1:${port}/attachments/${'d'.repeat(64)}.mp4`;
+    const whole = await fetch(video, { headers: { Cookie: COOKIE } });
+    assert.deepEqual([whole.status, whole.headers.get('content-type'), whole.headers.get('accept-ranges'), await whole.text()], [200, 'video/mp4', 'bytes', '0123456789']);
+    const part = await fetch(video, { headers: { Cookie: COOKIE, Range: 'bytes=2-5' } });
+    assert.deepEqual([part.status, part.headers.get('content-range'), await part.text()], [206, 'bytes 2-5/10', '2345']);
+    const end = await fetch(video, { headers: { Cookie: COOKIE, Range: 'bytes=-3' } });
+    assert.equal(await end.text(), '789');
+    assert.equal((await fetch(video, { headers: { Cookie: COOKIE, Range: 'bytes=20-' } })).status, 416);
+    assert.equal((await fetch(video)).status, 401);
+  });
+
+  it('shows an SVG as a picture that can run nothing, even opened on its own', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/attachments/${'c'.repeat(64)}.svg`, { headers: { Cookie: COOKIE } });
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+    assert.match(res.headers.get('content-security-policy') ?? '', /^sandbox; default-src 'none'/);
+  });
+
+  it('keeps a file sent from Open Space’s own page with the cookie, under its name, and refuses it from anywhere else', async () => {
+    const send = (headers: Record<string, string>) => fetch(`http://127.0.0.1:${port}/upload?name=${encodeURIComponent('../../rapport final.zip')}`, { method: 'POST', body: 'PK zip', headers });
+    const own = { Cookie: COOKIE, Origin: `http://127.0.0.1:${port}` };
+    assert.equal((await send({ Cookie: COOKIE, Origin: 'https://evil.example' })).status, 403);
+    assert.equal((await send({ Origin: own.Origin })).status, 403, 'no cookie');
+    const res = await send(own);
+    assert.equal(res.status, 200);
+    const { id, size } = await res.json() as { id: string; size: number };
+    assert.match(id, /^[0-9a-f]{16}\/rapport final\.zip$/);
+    assert.equal(size, 6);
+    assert.equal(readFileSync(path.join(base, 'uploads', id), 'utf8'), 'PK zip');
+    assert.equal((await fetch(`http://127.0.0.1:${port}/upload`, { headers: own })).status, 405);
   });
 
   it('does not follow a symlink out of dist/', async () => {

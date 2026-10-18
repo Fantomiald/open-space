@@ -7,7 +7,7 @@ import { open, readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Conversation } from '../shared/protocol.ts';
-import { asArray, asString, isJson } from './json.ts';
+import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 
 export const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Enough of a file's start to find its title and first message, and of its end to find the last exchanges. */
@@ -100,5 +100,29 @@ export async function lastExchanges(cwd: string, id: string, max = 8, home = os.
     return exchanges.slice(-max);
   } catch {
     return [];
+  }
+}
+
+/**
+ * How full a conversation's context was when it stopped: its last answer's usage (all it read, cached or not, and what
+ * it wrote), or what a compaction after it left. With the answer's model, to find the window's size elsewhere.
+ */
+export async function lastContextUse(cwd: string, id: string, home = os.homedir()): Promise<{ used: number; model: string } | null> {
+  if (!CONVERSATION_ID.test(id)) return null;
+  try {
+    let last: { used: number; model: string } | null = null;
+    for (const record of records(await readSlice(path.join(projectFolder(cwd, home), `${id}.jsonl`), true, TAIL_BYTES))) {
+      if (record.isSidechain === true) continue;
+      if (record.type === 'assistant' && isJson(record.message) && isJson(record.message.usage)) {
+        const usage = record.message.usage;
+        const used = asNumber(usage.input_tokens) + asNumber(usage.cache_creation_input_tokens) + asNumber(usage.cache_read_input_tokens) + asNumber(usage.output_tokens);
+        if (used > 0) last = { used, model: asString(record.message.model) };
+      }
+      const after = asNumber(asJson(record.compactMetadata).postTokens);
+      if (record.type === 'system' && record.subtype === 'compact_boundary' && last && after > 0) last = { ...last, used: after };
+    }
+    return last;
+  } catch {
+    return null;
   }
 }

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
-import { asideQuestion, commandSuggestions, findCommands } from './commands.ts';
+import { contextLevel } from './labels.ts';
+import { asideQuestion, commandSuggestions, findCommands, nativeView } from './commands.ts';
 import { diffRows } from './diff.ts';
-import { buildFeed, threadOf, toolSummary } from './feed.ts';
+import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
@@ -148,6 +149,70 @@ describe('buildFeed', () => {
     assert.deepEqual(threadOf(items, null).map((entry) => entry.kind), ['user', 'assistant', 'turn', 'peer', 'tools', 'assistant', 'turn']);
   });
 
+  it('knows the turn under way, when it started and what the session does in it; its word stays the same once it is over', () => {
+    const events: OfficeEvent[] = [
+      { k: 'start', text: 'one' }, { k: 'say', who: 'chef', text: 'done' }, { k: 'end', ok: true, text: '', ms: 1 },
+      { k: 'state', state: 'starting' }, { k: 'start', text: 'two' }, { k: 'act', who: 'chef', id: 'c1', tool: 'Bash', detail: 'npm test' },
+    ];
+    const items = buildFeed(events.map((ev, index) => logged(index + 1, ev))).items;
+    assert.deepEqual(currentTurn(items), { startId: 5, at: 5000 });
+    assert.deepEqual(turnPhase(items), { tool: 'Bash' });
+    const more: OfficeEvent[] = [...events, { k: 'act_done', who: 'chef', id: 'c1', ok: true }, { k: 'end', ok: true, text: '', ms: 1 }];
+    const done = buildFeed(more.map((ev, index) => logged(index + 1, ev))).items;
+    assert.equal(currentTurn(done), null);
+    assert.equal(turnPhase(done), 'thinking');
+    const turns = done.filter((item) => item.kind === 'turn');
+    assert.deepEqual(turns.map((item) => item.startId), [1, 5], 'the turn remembers its first event');
+    const words = [{ doing: 'a', done: 'A' }, { doing: 'b', done: 'B' }];
+    assert.equal(turnWord(5, words).done, turnWord(5, words).done);
+    assert.equal(turnWord(5, words).doing, 'b');
+  });
+
+  it('shows a command run with "!" with its output once it ended, outside the turns', () => {
+    const items = buildFeed([
+      logged(1, { k: 'shell', id: 's1', command: 'git status' }), logged(2, { k: 'start', text: 'hi' }),
+      logged(3, { k: 'shell_done', id: 's1', code: 0, output: 'clean', ms: 40 }),
+    ]).items;
+    assert.deepEqual(items[0], { id: 1, kind: 'shell', at: 1000, shellId: 's1', command: 'git status', output: 'clean', code: 0, done: true, ms: 40, byUser: false });
+    assert.deepEqual(currentTurn(items), { startId: 2, at: 2000 }, 'the turn starts with the message, not the command');
+    const stopped = buildFeed([logged(1, { k: 'shell', id: 's2', command: 'npm run dev' }), logged(2, { k: 'shell_done', id: 's2', code: null, output: '', ms: 900, byUser: true })]).items;
+    assert.equal(stopped[0].kind === 'shell' && stopped[0].byUser, true);
+  });
+
+  it('grades how full a context is: by its share of the window, or by its size in a very large one', () => {
+    assert.equal(contextLevel(undefined), null);
+    assert.equal(contextLevel({ used: 50_000, max: 200_000 }), 'calm');
+    assert.equal(contextLevel({ used: 110_000, max: 200_000 }), 'rising');
+    assert.equal(contextLevel({ used: 160_000, max: 200_000 }), 'high');
+    assert.equal(contextLevel({ used: 250_000, max: 1_000_000 }), 'calm');
+    assert.equal(contextLevel({ used: 450_000, max: 1_000_000 }), 'rising', 'a long context gets less sharp, even in a big window');
+    assert.equal(contextLevel({ used: 800_000, max: 1_000_000 }), 'high', 'red only once the meter is three quarters full');
+  });
+
+  it('tells a compaction and a new conversation in the thread', () => {
+    const items = buildFeed([logged(1, { k: 'compact', auto: false, before: 29998, after: 5250 }), logged(2, { k: 'cleared' })]).items;
+    const [compacted, cleared] = items.map((item) => (item.kind === 'notice' ? item.text : ''));
+    assert.match(compacted, /^Conversation compactée : 30\sk → 5,3\sk jetons$/);
+    assert.equal(cleared, 'Nouvelle conversation : Claude repart de zéro (/clear).');
+  });
+
+  it('keeps the sub-agents’ hand-backs of older logs out of the conversation', () => {
+    const items = buildFeed([logged(1, { k: 'peer', from: 'general-purpose', text: '[Subagent hand-back] The text below is the final report…' })]).items;
+    assert.deepEqual(items, []);
+  });
+
+  it('names a sub-agent’s message after the sub-agent, and folds its report under its card', () => {
+    const items = buildFeed([
+      logged(1, { k: 'hire', id: 'task1', type: 'general-purpose', name: 'Mila', task: 'Tableau', prompt: 'go' }),
+      logged(2, { k: 'peer', from: 'general-purpose', text: 'Done: server side.', subagent: 'task1' }),
+      logged(3, { k: 'report', who: 'task1', text: 'All done.' }),
+    ]).items;
+    const message = items.find((item) => item.kind === 'peer');
+    assert.deepEqual(message?.kind === 'peer' && message.subagent, { agentId: 'task1', name: 'Mila' });
+    const card = items.find((item) => item.kind === 'subagent');
+    assert.equal(card?.kind === 'subagent' && card.report, 'All done.');
+  });
+
   it('survives an empty log and events about unknown sub-agents', () => {
     assert.deepEqual(buildFeed([]), { items: [], plan: [] });
     assert.doesNotThrow(() => buildFeed([logged(1, { k: 'report', who: 'ghost', text: 'x' }), logged(2, { k: 'act_done', who: 'chef', id: 'nope', ok: true })]));
@@ -206,7 +271,7 @@ describe('slash commands', () => {
   ];
 
   it('puts the plugins\' commands first and hides internal and unusable ones', () => {
-    assert.deepEqual(findCommands(commands, '').map((c) => c.name), ['kit:new', 'kit:status', 'web-test', 'compact']);
+    assert.deepEqual(findCommands(commands, '').map((c) => c.name), ['kit:new', 'kit:status', 'web-test', 'compact', 'clear']);
   });
 
   it('matches every word in the name or the description', () => {
@@ -215,12 +280,37 @@ describe('slash commands', () => {
   });
 
   it('suggests commands only while a command name is being typed', () => {
-    assert.deepEqual(commandSuggestions(commands, '/').map((c) => c.name), ['kit:new', 'kit:status', 'btw', 'web-test', 'compact']);
+    assert.deepEqual(commandSuggestions(commands, '/').map((c) => c.name), ['kit:new', 'kit:status', 'btw', 'web-test', 'compact', 'clear']);
     assert.deepEqual(commandSuggestions(commands, '/kit').map((c) => c.name), ['kit:new', 'kit:status']);
-    assert.deepEqual(commandSuggestions(commands, '/cle'), []);
+    assert.deepEqual(commandSuggestions(commands, '/cle').map((c) => c.name), ['clear'], '/clear works: Open Space follows the new conversation');
     assert.deepEqual(commandSuggestions(commands, '/kit:new mon idée'), []);
     assert.deepEqual(commandSuggestions(commands, 'kit'), []);
     assert.deepEqual(commandSuggestions(commands, ' /kit'), []);
+  });
+
+  it('puts the command named as typed first, before a plugin that only mentions it', () => {
+    const named = [{ name: 'seo:dataforseo', description: 'Live data via an MCP server' }, { name: 'mcp', description: 'Manage MCP servers' }, { name: 'kit:mcp-setup' }];
+    assert.deepEqual(findCommands(named, 'mcp').map((c) => c.name), ['mcp', 'kit:mcp-setup', 'seo:dataforseo']);
+  });
+
+  it('hides what does nothing here: /fast, /rename, removed and renamed ones', () => {
+    assert.deepEqual(findCommands([{ name: 'fast' }, { name: 'rename' }, { name: 'agents' }, { name: 'extra-usage' }, { name: 'usage' }], '').map((c) => c.name), ['usage']);
+  });
+
+  it('offers the values of a command once its name is typed, with what each does', () => {
+    assert.deepEqual(commandSuggestions(commands, '/effort ').map((c) => c.name), ['effort low', 'effort medium', 'effort high', 'effort xhigh', 'effort max', 'effort auto']);
+    assert.deepEqual(commandSuggestions(commands, '/model op').map((c) => c.name), ['model opus', 'model opusplan', 'model opus[1m]']);
+    assert.equal(commandSuggestions(commands, '/advisor ').find((c) => c.name === 'advisor off')?.description, 'Sans conseiller');
+    assert.deepEqual(commandSuggestions(commands, '/effort high '), [], 'a value already chosen');
+    assert.deepEqual(commandSuggestions(commands, '/compact '), [], 'a command without values');
+  });
+
+  it('opens a view of its own for /mcp, /context and /usage typed alone', () => {
+    assert.equal(nativeView('/mcp'), 'mcp');
+    assert.equal(nativeView(' /context  '), 'context');
+    assert.equal(nativeView('/usage'), 'usage');
+    assert.equal(nativeView('/mcp add github'), null);
+    assert.equal(nativeView('/compact'), null);
   });
 });
 

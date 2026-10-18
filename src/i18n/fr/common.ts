@@ -71,6 +71,20 @@ export const common = {
   commandField: {
     commands: 'Commandes',
   },
+  /** what each value of a command does, in the field's suggestions (src/state/commands.ts) */
+  commandOptions: {
+    effort: { low: 'Rapide, réfléchit peu', medium: 'Équilibré', high: 'Réfléchit plus', xhigh: 'Réfléchit beaucoup', max: 'Le plus poussé', auto: 'Laisse Claude choisir' },
+    model: {
+      default: 'Le modèle recommandé', opus: 'Pour le travail complexe', sonnet: 'Le plus efficace pour les tâches simples', haiku: 'Le plus rapide',
+      fable: 'Pour les problèmes les plus durs', opusplan: 'Opus pour planifier, Sonnet pour exécuter', 'opus[1m]': 'Opus, contexte d’un million de jetons',
+      'sonnet[1m]': 'Sonnet, contexte d’un million de jetons', 'fable[1m]': 'Fable, contexte d’un million de jetons',
+    },
+    advisor: { fable: 'Consulte Fable aux moments clés', opus: 'Consulte Opus aux moments clés', sonnet: 'Consulte Sonnet aux moments clés', off: 'Sans conseiller' },
+    'output-style': {
+      default: 'Le style normal', Proactive: 'Agit tout de suite, demande peu', Concise: 'Va droit au résultat', Explanatory: 'Explique ses choix',
+      Learning: 'Te fait écrire des bouts de code pour apprendre',
+    },
+  },
   ownCommands: {
     btw: { description: 'Une question à côté : la session répond sans s’interrompre, et ça n’entre pas dans sa conversation', argumentHint: '<ta question>' },
   },

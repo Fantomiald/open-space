@@ -39,6 +39,17 @@ export function stateLabel(session: SessionInfo, kind: AttentionKind | null): st
   }
 }
 
+/**
+ * How full a session's context is, as its meter shows it: calm, filling (half the window, or 300k tokens in a very large
+ * one: answers get less sharp in a long context), nearly full (three quarters). Null before the first answer told it.
+ */
+export function contextLevel(context: SessionInfo['context']): 'calm' | 'rising' | 'high' | null {
+  if (!context?.max) return null;
+  const share = context.used / context.max;
+  if (share >= 0.75) return 'high';
+  return share >= 0.5 || context.used >= 300_000 ? 'rising' : 'calm';
+}
+
 /** True when the session can still receive a message that makes it work (all of them can: a stopped one is resumed). */
 export const isRunning = (session: SessionInfo) => session.state === 'starting' || session.state === 'work' || session.state === 'perm';
 

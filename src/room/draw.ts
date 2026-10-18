@@ -8,7 +8,8 @@ import type { Agent, Status } from './cast.ts';
 import { PET_HEIGHT, drawHearts, drawPet, isSpeaking, petWords } from './pet.ts';
 import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
-import { ROOM, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
+import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
+import { metricsBadgeAt } from './metrics.ts';
 import { festivalGlows, paintFestivalEffects, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
@@ -30,6 +31,8 @@ const FAINT_TAG_ALPHA = 0.45;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;
 
+export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | null;
+
 export interface FrameOptions {
   time: number;
   reducedMotion: boolean;
@@ -40,8 +43,10 @@ export interface FrameOptions {
   hour: number;
   /** the break room: everyone seated there dozes, eyes closed, Z's floating up */
   dozing: boolean;
-  /** what the pointer is on, outlined as something to click: the door, or the user's own screen */
-  hoveredThing: 'door' | 'screen' | null;
+  /** what the pointer is on, outlined as something to click: the door, the user's own screen, the whiteboard, the numbers */
+  hoveredThing: HoveredThing;
+  /** something new waits in the numbers file: a badge over the numbers object */
+  metricsBadge: boolean;
   /** the person under the pointer (a person id, or PLAYER_ID): their name tag shows in full, the others are faint */
   hoveredId: string | null;
   /** the festival the room is dressed for and who it is for (see festivalDay), and which room it is */
@@ -52,6 +57,26 @@ export interface FrameOptions {
   playerName: string;
   /** the office pet the user chose */
   pet: PetChoice;
+}
+
+/** Something drawn in depth order: a piece of furniture, a person, the pet. */
+interface Layer { depth: number; paint: (context: Context) => void }
+
+let highlightCanvas: { canvas: HTMLCanvasElement; context: Context } | null = null;
+/**
+ * The white line around what a click opens on a piece, drawn after the light so the night does not dim it, but hidden
+ * behind whoever and whatever stands in front of the piece: they are cut out of it, at their exact shape.
+ */
+function paintHighlight(context: Context, furniture: FurnitureSprites, piece: FurniturePiece, layers: readonly Layer[]) {
+  highlightCanvas ??= roomCanvas();
+  const { canvas, context: mask } = highlightCanvas;
+  mask.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  furniture.drawHighlight(mask, piece);
+  mask.globalCompositeOperation = 'destination-out';
+  const depth = furnitureDepth(piece);
+  for (const layer of layers) if (layer.depth > depth) layer.paint(mask);
+  mask.globalCompositeOperation = 'source-over';
+  context.drawImage(canvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
 /** A white outline around the door's frame, drawn after the light so the night does not dim it. */
@@ -167,12 +192,14 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
     const { x, y } = piece;
     if (piece.kind === 'floorLamp') lights.push({ at: above(x + 0.5, y + 0.5, 52), radius: 140, colour: P.light.lamp, strength: 1 });
     if (piece.kind === 'bossDesk') {
-      lights.push({ at: above(x + 2.4, y + 0.5, 34), radius: 90, colour: P.light.boss, strength: 0.9 });
+      lights.push({ at: above(x + 2.8, y + 0.2, 34), radius: 90, colour: P.light.boss, strength: 0.9 });
       if (bossAtDesk) lights.push({ at: above(x + 1.5, y + 0.2, 30), radius: 90, colour: P.light.screen, strength: 1 });
     }
     if (piece.kind === 'counter') lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
-    if (piece.kind === 'cooler' || piece.kind === 'server') lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
+    if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 68), radius: 80, colour: P.light.screen, strength: 0.7 });
+    if (piece.kind === 'ticker') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 78), radius: 70, colour: P.light.screenIdle, strength: 0.5 });
+    if (piece.kind === 'cooler') lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {
       // the screen of whoever sits at a desk is on and lights their face, at work or not (their hands and their status
       // already tell which)
@@ -253,32 +280,6 @@ function paintSteam(context: Context, time: number, pieces: readonly FurniturePi
     }
   }
   context.globalAlpha = 1;
-}
-
-/** Where someone stands on screen, for what is painted over the room afterwards. */
-interface Figure { depth: number; left: number; right: number; top: number; bottom: number }
-
-/**
- * The server's lights blink, and stay bright in the dark: they are painted after the light, so over the people. A light
- * hidden by someone standing or sitting in front of the server is left out.
- */
-function paintServerLights(context: Context, time: number, pieces: readonly FurniturePiece[], figures: readonly Figure[]) {
-  for (const piece of pieces) {
-    if (piece.kind !== 'server') continue;
-    const inFront = figures.filter((figure) => figure.depth > furnitureDepth(piece));
-    for (let row = 0; row < 6; row++) for (let column = 0; column < 3; column++) {
-      const seed = hash(`${row}:${column}`);
-      if ((Math.floor(time / (300 + (seed % 700))) + seed) % 3 === 0) continue;
-      const point = raise(toScreen({ x: piece.x + 0.25 + column * 0.18, y: piece.y + 0.9 }), (6 + row * 4) * ART_SCALE);
-      if (inFront.some((figure) => point.x + 2 > figure.left && point.x < figure.right && point.y + 2 > figure.top && point.y < figure.bottom)) continue;
-      rect(context, point.x, point.y, 2, 2, seed % 2 ? P.furniture.ledGreen : P.furniture.ledBlue);
-    }
-  }
-}
-
-function figureOf(walker: Walker, lift: number, height: number): Figure {
-  const feet = raise(toScreen(walker.position), lift);
-  return { depth: depthOf(walker.position), left: feet.x - 14, right: feet.x + 14, top: feet.y - height, bottom: feet.y + 2 };
 }
 
 /* People */
@@ -383,36 +384,43 @@ function paintSpeech(context: Context, text: string, x: number, y: number) {
   context.fillText(text, Math.round(x), top + 10);
 }
 
-/** The icon above a seated person: ! permission, ? question, ... working, a tick when a finished turn waits to be seen, x error. */
-function paintStatus(context: Context, status: Exclude<Status, null>, x: number, y: number, time: number, reducedMotion: boolean) {
-  const colour = P.status[status];
-  const asking = status === 'permission' || status === 'question';
-  const pulse = asking && !reducedMotion ? Math.round(Math.sin(time / 220)) : 0;
-  // what waits for the user is drawn half as big again, so it shows from across the room
+type Glyph = readonly (readonly [number, number])[];
+const EXCLAMATION: Glyph = [[0, 0], [0, 1], [0, 2], [0, 4]];
+
+/** A rounded bubble centred on (x, y), its tail down, a white glyph in it (dots from its middle); `scale`: drawn bigger. */
+function paintIconBubble(context: Context, x: number, y: number, colour: string, glyph: Glyph, scale = 1, ink: string = P.white) {
   context.save();
   context.translate(x, y);
-  if (asking) context.scale(1.5, 1.5);
+  context.scale(scale, scale);
   context.translate(-x, -y);
-  const top = y + pulse;
   context.fillStyle = P.outline;
-  context.beginPath(); context.roundRect(x - 7, top - 7, 14, 13, 3); context.fill();
+  context.beginPath(); context.roundRect(x - 7, y - 7, 14, 13, 3); context.fill();
   context.fillStyle = colour;
-  context.beginPath(); context.roundRect(x - 6, top - 6, 12, 11, 2); context.fill();
-  rect(context, x - 1, top + 6, 3, 2, P.outline);
-  rect(context, x, top + 5, 1, 2, colour);
-  const glyph = (dots: readonly (readonly [number, number])[]) => { for (const [dx, dy] of dots) rect(context, x + dx, top - 3 + dy, 1, 1, P.white); };
-  switch (status) {
-    case 'permission': glyph([[0, 0], [0, 1], [0, 2], [0, 4]]); break;
-    case 'question': glyph([[-1, 0], [0, 0], [1, 0], [1, 1], [0, 2], [0, 4]]); break;
-    case 'finished': glyph([[-3, 2], [-2, 3], [-1, 2], [0, 1], [1, 0]]); break;
-    case 'error': glyph([[-2, 0], [2, 0], [-1, 1], [1, 1], [0, 2], [-1, 3], [1, 3], [-2, 4], [2, 4]]); break;
-    case 'working': {
-      const lifted = reducedMotion ? -1 : Math.floor(time / 300) % 3;
-      glyph([0, 1, 2].map((dot) => [-3 + dot * 3, 2 - (dot === lifted ? 1 : 0)] as const));
-      break;
-    }
-  }
+  context.beginPath(); context.roundRect(x - 6, y - 6, 12, 11, 2); context.fill();
+  rect(context, x - 1, y + 6, 3, 2, P.outline);
+  rect(context, x, y + 5, 1, 2, colour);
+  for (const [dx, dy] of glyph) rect(context, x + dx, y - 3 + dy, 1, 1, ink);
   context.restore();
+}
+
+/** The icon above a seated person: ! permission, ? question, ... working, a tick when a finished turn waits to be seen, x error. */
+function paintStatus(context: Context, status: Exclude<Status, null>, x: number, y: number, time: number, reducedMotion: boolean) {
+  const asking = status === 'permission' || status === 'question';
+  const pulse = asking && !reducedMotion ? Math.round(Math.sin(time / 220)) : 0;
+  const lifted = reducedMotion ? -1 : Math.floor(time / 300) % 3;
+  const glyph: Glyph = status === 'permission' ? EXCLAMATION
+    : status === 'question' ? [[-1, 0], [0, 0], [1, 0], [1, 1], [0, 2], [0, 4]]
+    : status === 'finished' ? [[-3, 2], [-2, 3], [-1, 2], [0, 1], [1, 0]]
+    : status === 'error' ? [[-2, 0], [2, 0], [-1, 1], [1, 1], [0, 2], [-1, 3], [1, 3], [-2, 4], [2, 4]]
+    : [0, 1, 2].map((dot) => [-3 + dot * 3, 2 - (dot === lifted ? 1 : 0)] as const);
+  // what waits for the user is drawn half as big again, so it shows from across the room
+  paintIconBubble(context, x, y + pulse, P.status[status], glyph, asking ? 1.5 : 1);
+}
+
+/** The badge over the numbers object while something new waits in its file: a dark "!" in a yellow bubble, half as big again, bobbing, its tail on `at`. */
+function paintMetricsBadge(context: Context, at: Point, time: number) {
+  const bob = Math.round(Math.sin(time / 260));
+  paintIconBubble(context, at.x, at.y - 12 + bob, P.metricsBadge, EXCLAMATION, 1.5, P.outline);
 }
 
 const wallCache = new Map<Layout, { key: number; canvas: HTMLCanvasElement }>();
@@ -461,13 +469,13 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const seated = characters.filter((character) => character.phase === 'seated');
   const occupied = new Set(seated.map((character) => character.seat));
   const isSelected = (character: Character) => character.person.sessionId === options.selectedSessionId;
-  const layers: { depth: number; paint: () => void }[] = [];
+  const layers: Layer[] = [];
   const bossAtDesk = scene.playerSpot?.atDesk === true;
-  for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: () => furniture.draw(context, piece) });
+  for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: (on) => furniture.draw(on, piece) });
   for (const character of characters) {
     const pose = characterPose(character, options);
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
-    layers.push({ depth: depthOf(character.position), paint: () => paintPerson(context, sprites, character.person.id, character, pose, isSelected(character), lift) });
+    layers.push({ depth: depthOf(character.position), paint: (on) => paintPerson(on, sprites, character.person.id, character, pose, isSelected(character), lift) });
   }
   // the keys of a desk's laptop that show, right of its lid, where the visible hand of whoever types there rests
   for (const piece of layout.furniture) {
@@ -478,30 +486,24 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (pose.gesture !== 'typing' || pose.direction !== 'down-left') continue;
     const feet = raise(toScreen(typist.position), scene.floor.seatLift(typist.seat));
     const hand = raise(toScreen({ x: piece.x + 0.96, y: piece.y + 0.22 }), 12 * ART_SCALE);
-    layers.push({ depth: furnitureDepth(piece) + 0.01, paint: () => sprites.drawTypingHand(context, typist.person.id, feet, hand, pose.step) });
+    layers.push({ depth: furnitureDepth(piece) + 0.01, paint: (on) => sprites.drawTypingHand(on, typist.person.id, feet, hand, pose.step) });
   }
   // those still outside, behind the first of two, are not in the room yet
   const visitors = [...(scene.visits?.visitors.values() ?? [])].filter((visitor) => visitor.outside <= 0);
   for (const visitor of visitors) {
     const { pose, lift } = visitorPose(visitor, options);
-    layers.push({ depth: depthOf(visitor.position), paint: () => paintPerson(context, sprites, visitor.id, visitor, pose, false, lift) });
+    layers.push({ depth: depthOf(visitor.position), paint: (on) => paintPerson(on, sprites, visitor.id, visitor, pose, false, lift) });
   }
   const playerPose = poseOf(scene.player, scene.playerSpot !== null, false, 'none', options);
   const pet = scene.pet;
   const choice = options.pet.kind === 'none' ? null : options.pet;
-  if (pet && choice) layers.push({ depth: depthOf(pet.position), paint: () => drawPet(context, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
+  if (pet && choice) layers.push({ depth: depthOf(pet.position), paint: (on) => drawPet(on, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
   const playerLift = scene.playerSpot?.lift ?? 0;
-  layers.push({ depth: depthOf(scene.player.position), paint: () => paintPerson(context, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
-  for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint();
+  layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
+  for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint(context);
 
   paintLight(context, lighting, lightsOf(layout, occupied, bossAtDesk, lighting, options));
   const time = options.reducedMotion ? 0 : options.time;
-  const figures = [
-    figureOf(scene.player, playerLift, sprites.height(playerPose, PLAYER_ID)),
-    ...characters.map((character) => figureOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(characterPose(character, options), character.person.id))),
-    ...visitors.map((visitor) => { const { pose, lift } = visitorPose(visitor, options); return figureOf(visitor, lift, sprites.height(pose, visitor.id)); }),
-  ];
-  paintServerLights(context, time, layout.furniture, figures);
   paintSteam(context, time, layout.furniture);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
@@ -510,9 +512,14 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     paintFestivalEffects(context, { festival: options.festival, room: options.room, layout, time, lighting, heads });
   }
   if (options.hoveredThing === 'door') paintDoorOutline(context, layout);
-  // a white line around the user's laptop itself: a click there opens a terminal
-  const desk = options.hoveredThing === 'screen' ? layout.furniture.find((piece) => piece.kind === 'bossDesk') : undefined;
-  if (desk) furniture.drawHighlight(context, desk);
+  // a white line around the user's laptop itself (a click there opens a terminal), around the whiteboard (its notes), or
+  // around the numbers object
+  const hovered = options.hoveredThing;
+  const clickable = hovered === 'metrics' ? layout.furniture.find(isMetricsPiece)
+    : hovered === 'screen' || hovered === 'board' ? layout.furniture.find((piece) => piece.kind === (hovered === 'screen' ? 'bossDesk' : 'whiteboard')) : undefined;
+  if (clickable) paintHighlight(context, furniture, clickable, layers);
+  const metrics = options.metricsBadge ? layout.furniture.find(isMetricsPiece) : undefined;
+  if (metrics) paintMetricsBadge(context, metricsBadgeAt(metrics), time);
 
   // name tags and icons go on top of everything, so the furniture never hides them
   context.font = TAG_FONT;

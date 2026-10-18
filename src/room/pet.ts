@@ -270,6 +270,24 @@ function paintRocky(R: Paint, P: Dot, fur: Tones, activity: PetActivity, frame: 
   R(8, 4 + low, 1, 3, dark); R(11, 3 + low, 1, 3, dark); R(6, 7 + low, 6, 1, dark);
 }
 
+/**
+ * Clawd, Claude Code's mascot: a clay-orange block with two tall eyes, a stub of an arm each side, four little legs.
+ * It waves an arm to wash, and settles on its belly, eyes shut, to sleep.
+ */
+function paintClawd(R: Paint, P: Dot, fur: Tones, activity: PetActivity, frame: 0 | 1) {
+  const low = activity === 'sleep' ? 2 : 0;
+  const bob = activity === 'walk' ? frame : 0;
+  const top = 3 + low - bob;
+  if (activity !== 'sleep') {
+    [5, 7, 11, 13].forEach((x, leg) => { R(x, 9, 1, activity === 'walk' && (leg + frame) % 2 === 0 ? 1 : 2, fur.base); });
+  }
+  R(4, top, 11, 6, fur.base); R(4, top, 1, 6, fur.shade); R(5, top, 9, 1, fur.light);
+  // the arms, one waving up when it washes
+  R(2, top + 3, 2, 2, fur.base); P(2, top + 3, fur.shade);
+  if (activity === 'wash') R(15, top - 1 + frame, 2, 2, fur.base); else R(15, top + 3, 2, 2, fur.base);
+  if (activity === 'sleep') { R(7, top + 2, 2, 1, C.black); R(11, top + 2, 2, 1, C.black); } else { R(7, top + 1, 1, 2, C.black); R(12, top + 1, 1, 2, C.black); }
+}
+
 function paint(choice: Drawn, activity: PetActivity, frame: 0 | 1): HTMLCanvasElement {
   const { canvas, context } = artCanvas(CANVAS.width, CANVAS.height);
   const R: Paint = (x, y, width, height, colour) => { context.fillStyle = colour; context.fillRect(x + 3, y + 4, width, height); };
@@ -282,6 +300,7 @@ function paint(choice: Drawn, activity: PetActivity, frame: 0 | 1): HTMLCanvasEl
     case 'capybara': paintCapybara(R, P, fur, activity, frame); break;
     case 'axolotl': paintAxolotl(R, P, fur, activity, frame); break;
     case 'rocky': paintRocky(R, P, fur, activity, frame); break;
+    case 'clawd': paintClawd(R, P, fur, activity, frame); break;
   }
   return outline(canvas, ROOM_PALETTE.furniture.outline);
 }

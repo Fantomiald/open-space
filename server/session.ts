@@ -2,11 +2,16 @@
 // a message needs it, released when idle), the event log, the state machine and the requests waiting for
 // the user; everything it does is published as events with a sequence number.
 import { randomUUID } from 'node:crypto';
+import { statSync } from 'node:fs';
+import path from 'node:path';
 import { tail } from '../shared/activity.ts';
-import type { AttentionKind, ImageUpload, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand } from '../shared/protocol.ts';
+import type { AttentionKind, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState } from '../shared/protocol.ts';
+import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { st } from './i18n/index.ts';
-import type { Json } from './json.ts';
+import { asString, type Json } from './json.ts';
+import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
+import type { ShellRunner } from './shell.ts';
 import { Normalizer, describeRequest, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
@@ -26,6 +31,10 @@ export interface SessionDeps {
   onAttention?: (kind: AttentionKind, session: SessionInfo) => void;
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
   saveImage: (image: ImageUpload) => string;
+  /** where a file the user uploaded is (see uploads.ts), or null */
+  uploadPath?: (id: string) => string | null;
+  /** keeps a copy of a file Claude sent; its stored name, or null (see attachments.ts) */
+  copyFile?: (path: string) => string | null;
   /** how many claude processes are alive across all sessions */
   liveCount: () => number;
   maxLive: number;
@@ -36,6 +45,10 @@ export interface SessionDeps {
   peerName?: (address: string) => string;
   /** time source, replaceable in tests */
   now?: () => number;
+  /** runs a command typed with "!" (see shell.ts) */
+  runShell?: ShellRunner;
+  /** how long an empty turn (see onResult) and an interrupt without answer (see sendNow) are given, in ms; shorter in tests */
+  graceMs?: number;
 }
 
 /** Why we asked the process to stop (null = nobody did: it ended or crashed on its own). */
@@ -48,6 +61,7 @@ interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; 
 export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote'>;
 
 const LAST_MESSAGE_LENGTH = 400;
+const GRACE_MS = 3000;
 /** The text being written is sent at most this often: one message per chunk would flood the clients. */
 const PARTIAL_EVERY_MS = 80;
 
@@ -68,11 +82,24 @@ export class Session {
   private interrupted = false;
   /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
   private queuedImages = new Map<string, readonly ImageUpload[]>();
+  /** the other files of the queued messages, by queue id, as their upload ids (same) */
+  private queuedFiles = new Map<string, readonly string[]>();
   /** the text being written not sent yet, by who writes it */
   private partials = new Map<string, string>();
   private partialTimer: NodeJS.Timeout | null = null;
   /** where other Claude Code sessions reach the current process (see InitInfo), '' before its init */
   private socket = '';
+  /** the commands run with "!" since the last message, with what they wrote, in Claude Code's own format: they go with the next one */
+  private shellNotes: string[] = [];
+  /** the "!" commands still running, by their id, to stop them */
+  /** the "!" commands still running: how to stop each, and its end */
+  private shells = new Map<string, { stop: AbortController; done: Promise<unknown> }>();
+  /** something happened in the turn under way (or since the last one ended): an empty result does not end a real turn */
+  private turnOutput = false;
+  /** /clear's turn, empty: it ends at once (see onResult) */
+  private cleared = false;
+  /** an empty result waiting to see whether the turn goes on (see onResult) */
+  private emptyResult: NodeJS.Timeout | null = null;
   /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
   private remote: RemoteControl | undefined;
 
@@ -115,6 +142,10 @@ export class Session {
     const changed = next.state !== this.context.state;
     this.context = next;
     if (changed) {
+      // since when it works: a permission or a question on the way does not start it again
+      const busy = (state: SessionState) => state === 'starting' || state === 'work' || state === 'perm';
+      if (!busy(next.state)) this.info.busySince = undefined;
+      else if (!busy(this.info.state)) this.info.busySince = this.now();
       this.info.state = next.state;
       this.info.stateSince = this.now();
       this.record({ k: 'state', state: next.state, reason });
@@ -136,16 +167,24 @@ export class Session {
   }
 
   /**
-   * A message from the user. During a turn it is queued (the user sees it, can take it back, or interrupt the turn to
-   * send it at once); otherwise it leaves now, after anything still queued.
+   * A message from the user. During a turn, a plain one goes at once and joins it: Claude Code reads it at the turn's
+   * next step, without stopping it (checked with 2.1.302: Claude answers it, then usually goes on). A slash command,
+   * which only runs between turns, is queued (the user sees it, can take it back, or interrupt the turn to send it at
+   * once), and so is anything sent after it. Otherwise the message leaves now, after anything still queued.
    */
-  send(text: string, images: readonly ImageUpload[] = []) {
+  send(text: string, images: readonly ImageUpload[] = [], files: readonly string[] = []) {
     const clean = text.trim();
-    if (!clean && !images.length) return;
+    if (!clean && !images.length && !files.length) return;
     if (this.stopRequest) throw new Error(st.sessions.closing);
+    if (this.busy && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length) {
+      this.deliver(clean, images, files, true);
+      this.publish();
+      return;
+    }
     const id = randomUUID();
     if (images.length) this.queuedImages.set(id, images);
-    this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}) }];
+    if (files.length) this.queuedFiles.set(id, files);
+    this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}) }];
     if (this.busy) { this.publish(); return; }
     this.sendQueued();
   }
@@ -153,6 +192,7 @@ export class Session {
   /** Takes a message back from the queue. */
   unqueue(queueId: string) {
     this.queuedImages.delete(queueId);
+    this.queuedFiles.delete(queueId);
     this.info.queued = this.info.queued?.filter((message) => message.id !== queueId);
     if (!this.info.queued?.length) this.info.queued = undefined;
     this.publish();
@@ -160,8 +200,12 @@ export class Session {
 
   /** Sends the queue now: the running turn is interrupted, and the queue leaves when it ends. */
   sendNow() {
-    if (this.busy) this.interrupt();
-    else this.sendQueued();
+    if (!this.busy) { this.sendQueued(); return; }
+    this.interrupt();
+    // an interrupt with no turn to stop (the session looked busy, Claude Code was waiting) never ends one: the queue
+    // then leaves anyway, Claude Code takes it as soon as it can
+    const timer = setTimeout(() => { if (this.busy && this.info.queued?.length && this.process?.alive) this.sendQueued(); }, this.deps.graceMs ?? GRACE_MS);
+    timer.unref();
   }
 
   /** Sends the oldest queued messages as one: the plain ones together, a slash command alone (it must come first). */
@@ -173,15 +217,19 @@ export class Session {
     const count = firstCommand === 0 ? 1 : firstCommand === -1 ? queued.length : firstCommand;
     const batch = queued.slice(0, count);
     // the queue only shrinks once the message has left: a refusal (too many live sessions) keeps it
-    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []));
-    for (const message of batch) this.queuedImages.delete(message.id);
+    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []), batch.flatMap((message) => this.queuedFiles.get(message.id) ?? []));
+    for (const message of batch) { this.queuedImages.delete(message.id); this.queuedFiles.delete(message.id); }
     this.info.queued = queued.length > count ? queued.slice(count) : undefined;
     this.publish();
   }
 
-  private deliver(clean: string, images: readonly ImageUpload[]) {
+  /** `joining`: sent during a turn, which it joins (see send) instead of starting one. */
+  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false) {
     this.clearIdleTimer();
-    this.interrupted = false;
+    if (!joining) {
+      this.turnOutput = false;
+      this.interrupted = false;
+    }
     // a message calls a resting session back from the break room
     this.info.resting = undefined;
     const command = /^\/(\S+)/.exec(clean)?.[1];
@@ -194,14 +242,25 @@ export class Session {
       this.info.error = undefined;
     }
     let outgoing = clean;
-    // a slash command must stay first in its message: the new name then goes with the next plain message
+    // a slash command must stay first in its message: the new name and the commands run with "!" then go with the next plain message
     if (this.info.introducedAs !== this.info.name && !command) {
       outgoing = renameNote(this.info.name) + clean;
       this.info.introducedAs = this.info.name;
     }
+    if (this.shellNotes.length && !command) {
+      outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
+      this.shellNotes = [];
+    }
     const names = images.map((image) => this.deps.saveImage(image));
-    this.record({ k: 'start', text: clean, ...(names.length ? { images: names } : {}) });
-    this.apply({ type: spawning ? 'spawn' : 'send' });
+    // like a file dropped in the terminal: its path in the message, Claude opens it with its tools
+    const uploaded = files.flatMap((id) => {
+      const file = this.deps.uploadPath?.(id);
+      return file ? [{ id, name: path.basename(file), size: statSync(file).size, file }] : [];
+    });
+    if (uploaded.length) outgoing = [outgoing, st.prompt.attached(uploaded.map((upload) => upload.file))].filter(Boolean).join('\n\n');
+    this.record({ k: 'start', text: clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}) });
+    if (uploaded.length < files.length) this.record({ k: 'note', text: st.sessions.uploadsGone(files.length - uploaded.length) });
+    if (!joining) this.apply({ type: spawning ? 'spawn' : 'send' });
     this.process?.send(outgoing, images);
   }
 
@@ -219,11 +278,28 @@ export class Session {
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
+      onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
+      onFiles: (who, caption, files, display) => this.onEvent({
+        k: 'files', who, ...(caption.trim() ? { caption: caption.slice(0, 2000) } : {}),
+        files: files.map((file) => {
+          const stored = this.deps.copyFile?.(file.path) ?? null;
+          const extension = stored?.split('.').pop();
+          // a page is previewed unless Claude sent it as a mere attachment ('attach'); an SVG is a picture
+          return {
+            title: path.basename(file.path), stored, image: file.image || extension === 'svg', size: file.size,
+            ...(extension === 'html' && display !== 'attach' ? { page: true as const } : {}),
+            ...(extension && VIDEO_EXTENSIONS.has(extension) && display !== 'attach' ? { video: true as const } : {}),
+          };
+        }),
+      }),
+      onArtifact: (who, artifact) => this.onEvent({
+        k: 'artifact', who, title: artifact.title || path.basename(artifact.path), url: artifact.url, stored: this.deps.copyFile?.(artifact.path) ?? null,
+      }),
       names: this.subagentNames,
       peerName: this.deps.peerName,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.info.id, resume: this.info.resumable, model: this.info.model, permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -239,7 +315,24 @@ export class Session {
     this.process = handle;
   }
 
+  /** A context use found on disk, kept unless the session reported one meanwhile. */
+  recallContext(context: { used: number; max: number }) {
+    if (this.info.context) return;
+    this.info.context = context;
+    this.publish();
+  }
+
+  /** The Claude Code conversation the session goes on with (a new one after /clear). */
+  get conversationId() { return this.info.conversationId ?? this.info.id; }
+
   private onInit(init: InitInfo) {
+    // /clear: Claude Code goes on in a new conversation, the one a release must resume afterwards
+    if (init.conversationId && init.conversationId !== this.conversationId) {
+      this.info.conversationId = init.conversationId === this.info.id ? undefined : init.conversationId;
+      this.info.context = undefined;
+      this.record({ k: 'cleared' });
+      this.cleared = true;
+    }
     this.socket = init.socket;
     this.info.activeModel = init.model;
     this.info.resumable = true;
@@ -249,38 +342,118 @@ export class Session {
 
   /**
    * Turns Remote Control on (the process starts without a message when there is none, and stays) or off (the process
-   * may then be released as usual).
+   * may then be released as usual). Its session on claude.ai outlives the process (keep_session_on_exit): after a
+   * restart of the server, the session reattaches to it, the same conversation on the phone (checked with 2.1.302).
    */
   async setRemote(enabled: boolean) {
     if (!enabled) {
-      if (!this.remote) return;
+      const wasOn = !!this.remote || !!this.info.remoteSession;
+      this.info.remoteSession = undefined;
+      if (!wasOn) return;
       this.remote = undefined;
       this.publish();
-      if (this.process?.alive) await this.process.remoteControl(false).catch(() => {});
+      // not waited for long: closing must not hang on a Claude Code that does not answer
+      if (this.process?.alive) await Promise.race([this.process.control({ subtype: 'remote_control', enabled: false }).catch(() => {}), new Promise((resolve) => setTimeout(resolve, 5000).unref())]);
       if (this.context.state === 'wait') this.armIdleTimer();
       return;
     }
     if (this.remote) return;
-    if (this.stopRequest) throw new Error(st.sessions.closing);
+    // reachable from elsewhere: out of the break room
+    this.info.resting = undefined;
+    const process = this.liveProcess();
     this.clearIdleTimer();
-    if (!this.process?.alive) {
-      this.info.resting = undefined;
-      this.info.error = undefined;
-      this.startProcess();
-    }
-    const process = this.process!;
     this.remote = { url: '', state: 'connecting' };
-    this.apply({ type: 'attach' });
+    this.publish();
     try {
-      const url = await process.remoteControl(true);
-      if (this.remote && this.process === process) this.remote = { ...this.remote, url };
+      // Remote Control works in -p as this control request, not as the /remote-control command nor the
+      // --remote-control flag (both do nothing there). Checked with 2.1.302: the answer carries session_url, then
+      // system/bridge_state messages follow ("ready", "connected").
+      // its title on claude.ai and in the app (`name`, kept apart from --name, which other sessions write to): what it is about, then who
+      const title = `${this.info.tag || path.basename(this.info.cwd)} - ${this.info.name}`;
+      const ask = (reattach?: string) => process.control({ subtype: 'remote_control', enabled: true, name: title, keep_session_on_exit: true, ...(reattach ? { reattach_session_id: reattach } : {}) });
+      // a session ended on claude.ai meanwhile cannot be reattached to: a new one then
+      const answer = await ask(this.info.remoteSession).catch((error: unknown) => (this.info.remoteSession ? ask() : Promise.reject(error)));
+      this.info.remoteSession = asString(answer.bridge_session_id) || undefined;
+      if (this.remote && this.process === process) this.remote = { ...this.remote, url: asString(answer.session_url) };
     } catch (error) {
       this.remote = undefined;
+      this.info.remoteSession = undefined;
       if (this.context.state === 'wait') this.armIdleTimer();
       throw new Error(st.sessions.remoteFailed(error instanceof Error ? error.message : String(error)));
     } finally {
       this.publish();
     }
+  }
+
+  /**
+   * The session's process, started without a message when it has none (it then waits, and is released when idle like
+   * any other): what Claude Code is asked about directly (Remote Control, the views of the panel) needs one.
+   */
+  private liveProcess(): ProcessHandle {
+    if (this.process?.alive) return this.process;
+    if (this.stopRequest) throw new Error(st.sessions.closing);
+    this.info.error = undefined;
+    this.startProcess();
+    this.apply({ type: 'attach' });
+    this.armIdleTimer();
+    return this.process!;
+  }
+
+  /**
+   * Runs a command typed with "!" in the session's folder, without Claude, and shows it with its output. Like Claude
+   * Code's bash mode, Claude sees it with the user's next message, as the terminal writes it in the conversation
+   * (`<bash-input>`, then `<bash-stdout>` and `<bash-stderr>`, checked in transcripts of 2.1.302).
+   */
+  async shell(command: string) {
+    const cwd = this.deps.allowedDirectory(this.info.cwd);
+    if (!cwd) throw new Error(st.sessions.folderGone);
+    if (!this.deps.runShell) throw new Error(st.sessions.claudeMissing);
+    const id = randomUUID();
+    const stop = new AbortController();
+    this.record({ k: 'shell', id, command });
+    const run = this.deps.runShell(command, cwd, stop.signal);
+    this.shells.set(id, { stop, done: run });
+    const result = await run.finally(() => this.shells.delete(id));
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    this.record({ k: 'shell_done', id, code: result.stopped ? null : result.code, output: output.slice(-20_000), ms: result.ms, ...(result.stopped && !result.timedOut ? { byUser: true } : {}) });
+    const stdout = result.stdout || (result.stderr ? '' : '(Bash completed with no output)');
+    this.shellNotes.push(`<bash-input>${command}</bash-input>\n<bash-stdout>${stdout}</bash-stdout><bash-stderr>${result.stderr}</bash-stderr>`);
+  }
+
+  /** Stops a "!" command still running (its whole process group); what it wrote so far is kept. */
+  stopShell(shellId: string) { this.shells.get(shellId)?.stop.abort(); }
+
+  /** Stops every "!" command still running, once they have ended and been written down: none outlives the session. */
+  async stopShells() {
+    const running = [...this.shells.values()];
+    for (const { stop } of running) stop.abort();
+    await Promise.all(running.map(({ done }) => done.catch(() => {})));
+    // their end is recorded once the runner's promise settles, a tick later
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  /** What one of the panel's own views shows, asked to Claude Code (see inspect.ts). */
+  async inspect(view: InspectView): Promise<Inspection> {
+    const process = this.liveProcess();
+    switch (view) {
+      case 'mcp': return { view, servers: parseMcpServers(await process.control({ subtype: 'mcp_status' })) };
+      // 'summary': from the last answer's usage and estimates, without a token-count call per category
+      case 'context': return { view, usage: parseContextUsage(await process.control({ subtype: 'get_context_usage', detail: 'summary' })) };
+      case 'usage': return { view, report: parseUsageReport(await process.control({ subtype: 'get_usage' })) };
+    }
+  }
+
+  /**
+   * Acts on one of the session's MCP servers. Turning one on or off is kept for the session's folder, like /mcp in the
+   * terminal. Signing in answers the page to open: Claude Code waits for the sign-in's return on localhost, then
+   * reconnects the server (checked with 2.1.302).
+   */
+  async mcpAction(server: string, action: McpAction): Promise<string | null> {
+    const process = this.liveProcess();
+    if (action === 'reconnect') await process.control({ subtype: 'mcp_reconnect', serverName: server });
+    else if (action === 'enable' || action === 'disable') await process.control({ subtype: 'mcp_toggle', serverName: server, enabled: action === 'enable' });
+    else return asString((await process.control({ subtype: 'mcp_authenticate', serverName: server })).authUrl) || null;
+    return null;
   }
 
   private onRemoteState(state: string) {
@@ -301,8 +474,15 @@ export class Session {
   private onEvent(ev: OfficeEvent) {
     // the whole message is here: what was left of it to send is not needed any more
     if (ev.k === 'say') this.partials.delete(ev.who);
-    // output while waiting: a queued message or a background task started a new turn
-    if (this.context.state === 'wait' && (ev.k === 'say' || ev.k === 'act' || ev.k === 'hire' || ev.k === 'think')) this.apply({ type: 'activity' });
+    // Claude Code's init (it opens every turn) is not something happening in it
+    if (ev.k !== 'init') {
+      this.turnOutput = true;
+      if (this.emptyResult) { clearTimeout(this.emptyResult); this.emptyResult = null; }
+    }
+    // the session's own agent at work while waiting: a queued message or a background task started a new turn (a
+    // sub-agent still at work in the background does not: the session itself waits for the user)
+    const own = (ev.k === 'say' || ev.k === 'act' || ev.k === 'think') ? ev.who === 'chef' : ev.k === 'hire';
+    if (this.context.state === 'wait' && own) this.apply({ type: 'activity' });
     if (ev.k === 'say' && ev.who === 'chef') this.info.lastMessage = tail(ev.text, LAST_MESSAGE_LENGTH);
     if (ev.k === 'hire') this.info.subagents = [...this.info.subagents, { id: ev.id, name: ev.name, type: ev.type }];
     if (ev.k === 'leave') {
@@ -337,18 +517,34 @@ export class Session {
   }
 
   private onResult(result: TurnResult) {
+    // Claude Code sometimes closes an empty turn of a few ms before the real one (waking a session up, after a
+    // background sub-agent's hand-back): nothing happened, so nothing is told. If nothing follows, the session waits.
+    if (this.cleared && !result.text.trim()) { this.cleared = false; this.endTurn(false); return; }
+    this.cleared = false;
+    if (result.ok && !this.turnOutput && !result.text.trim() && !this.interrupted && !this.requests.size) {
+      if (this.emptyResult) clearTimeout(this.emptyResult);
+      this.emptyResult = setTimeout(() => { this.emptyResult = null; this.endTurn(false); }, this.deps.graceMs ?? GRACE_MS);
+      this.emptyResult.unref();
+      return;
+    }
     this.info.turns++;
     this.cancelRequests();
     const stopped = this.interrupted;
     this.record({ k: 'end', ok: result.ok, text: result.text.slice(0, 20000), ms: result.ms, stopped: stopped || undefined });
     this.interrupted = false;
+    this.endTurn(!stopped);
+  }
+
+  /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished). */
+  private endTurn(tell: boolean) {
+    this.turnOutput = false;
     this.apply({ type: 'turn_result' });
     if (this.context.state !== 'wait') return;
     // queued messages leave at once: the session works again, nothing to tell the user
     if (this.info.queued?.length) { this.sendQueued(); return; }
     this.armIdleTimer();
     // a turn the user stopped themselves needs no telling either
-    if (!stopped) this.deps.onAttention?.('finished', this.snapshot());
+    if (tell) this.deps.onAttention?.('finished', this.snapshot());
   }
 
   private pending(requestId: string): PendingRequest {
@@ -403,8 +599,9 @@ export class Session {
     this.publish();
   }
 
-  /** Stops the process now. A session without a process is simply marked closed. */
+  /** Stops the process now (and Remote Control for good). A session without a process is simply marked closed. */
   async close() {
+    await Promise.all([this.setRemote(false), this.stopShells()]);
     this.clearIdleTimer();
     if (this.process?.alive) {
       this.stopRequest = { reason: 'closed', note: st.sessions.stopped.byUser };
@@ -417,6 +614,7 @@ export class Session {
   /** The server is stopping: release the process. A waiting session stays waiting, a working one is marked closed (it can be resumed). */
   async shutdown() {
     this.clearIdleTimer();
+    await this.stopShells();
     if (!this.process?.alive) return;
     const waiting = this.context.state === 'wait';
     this.stopRequest = waiting ? { reason: 'idle', note: st.sessions.stopped.released } : { reason: 'closed', note: st.sessions.stopped.serverStopped };
@@ -443,6 +641,8 @@ export class Session {
   private onExit(handle: ProcessHandle, code: number | null, signal: NodeJS.Signals | null, stderr: string) {
     if (this.process !== handle) return;
     this.clearIdleTimer();
+    if (this.emptyResult) clearTimeout(this.emptyResult);
+    this.emptyResult = null;
     const normalizer = this.normalizer;
     if (this.partialTimer) clearTimeout(this.partialTimer);
     this.partialTimer = null;

@@ -22,6 +22,19 @@ export function resolveInside(root: string, candidate: string): string | null {
   }
 }
 
+/**
+ * The real path of an existing regular file whose real name ends with `extension` (a link named so but leading to
+ * something else does not count), otherwise null.
+ */
+export function resolveFileWith(file: string, extension: string): string | null {
+  try {
+    const real = realpathSync(file);
+    return real.toLowerCase().endsWith(extension) && statSync(real).isFile() ? real : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The real path of an existing directory that lies inside one of the allowed roots, otherwise null. "~" is the home, as the page shows it. */
 export function resolveAllowedDirectory(directory: string, roots: readonly string[], home = os.homedir()): string | null {
   const expanded = directory === '~' || directory.startsWith('~/') ? path.join(home, directory.slice(1)) : directory;

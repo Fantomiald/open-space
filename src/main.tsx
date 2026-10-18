@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import '@fontsource/pixelify-sans/500.css';
 import '@fontsource/pixelify-sans/700.css';
 import '@fontsource-variable/plus-jakarta-sans';
+import '@fontsource/kalam/700.css';
 import './design/tokens.css';
 import './design/components.css';
 import './room/room.css';

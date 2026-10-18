@@ -32,6 +32,9 @@ export function Onboarding() {
   const [roots, setRoots] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Omit<Preferences, 'roots'>>({
     notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET,
+    // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
+    journalFolder: '',
+    metricsFile: '',
   });
 
   useEffect(() => { send({ t: 'suggestRoots' }); }, [send]);

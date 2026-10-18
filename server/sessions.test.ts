@@ -8,6 +8,8 @@ import type { LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, Pr
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
 import { projectFolder } from './conversations.ts';
+import { ATTACHMENT_NAME } from './attachments.ts';
+import { saveUpload } from './uploads.ts';
 import { SessionManager } from './sessions.ts';
 
 /** A scripted stand-in for the claude process: the tests feed it captured lines and watch what the session writes back. */
@@ -18,6 +20,8 @@ class FakeProcess implements ProcessHandle {
   answers: { requestId: string; answer: PermissionAnswer }[] = [];
   interrupts = 0;
   remoteCalls: boolean[] = [];
+  remoteTitles: string[] = [];
+  controls: Record<string, unknown>[] = [];
   stopCalls: number[] = [];
   launch: LaunchOptions;
   handlers: ProcessHandlers;
@@ -31,7 +35,15 @@ class FakeProcess implements ProcessHandle {
   answerPermission(requestId: string, answer: PermissionAnswer) { this.answers.push({ requestId, answer }); }
   refuseControl() { /* not needed by these tests */ }
   interrupt() { this.interrupts++; }
-  remoteControl(enabled: boolean) { this.remoteCalls.push(enabled); return Promise.resolve(enabled ? 'https://claude.ai/code/session_test' : ''); }
+  /** answers the control requests like Claude Code would (Remote Control, the MCP servers) */
+  control(request: Record<string, unknown>) {
+    this.controls.push(request);
+    if (request.subtype === 'remote_control') { this.remoteCalls.push(request.enabled === true); if (request.name) this.remoteTitles.push(String(request.name)); }
+    if (request.subtype === 'remote_control') return Promise.resolve(request.enabled ? { session_url: 'https://claude.ai/code/session_test', bridge_session_id: 'cse_test' } : {});
+    if (request.subtype === 'mcp_status') return Promise.resolve({ mcpServers: [{ name: 'docs', status: 'connected', config: { type: 'stdio' }, source: 'project', tools: [{ name: 'search' }] }] });
+    if (request.subtype === 'mcp_authenticate') return Promise.resolve({ authUrl: 'https://auth.example.com/sign-in', requiresUserAction: true, callbackExpected: true });
+    return Promise.resolve({});
+  }
   stop(graceMs: number) {
     this.stopCalls.push(graceMs);
     this.exit(0, null, '');
@@ -75,7 +87,12 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
   };
   const config: Config = { port: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [], ...overrides };
   const attention: [string, string][] = [];
-  const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, now, home, onAttention: (kind, session) => attention.push([kind, session.id]) });
+  const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, now, home, graceMs: 40, runShell: (command, cwd, signal) => new Promise((resolve) => {
+    const result = { code: command.startsWith('false') ? 1 : 0, stdout: `ran ${command} in ${path.basename(cwd)}`, stderr: '', ms: 5, timedOut: false, stopped: false };
+    // "wait": runs until it is stopped
+    if (command === 'wait') signal?.addEventListener('abort', () => resolve({ ...result, code: null, stopped: true }));
+    else resolve(result);
+  }), onAttention: (kind, session) => attention.push([kind, session.id]) });
   const states = (id: string) => messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id && m.ev.k === 'state' ? [m.ev.state] : []));
   const find = (id: string): SessionInfo => {
     const session = manager.list().find((s) => s.id === id);
@@ -125,7 +142,8 @@ describe('creating sessions', () => {
     await manager.init();
     const session = await manager.create({ cwd: projectA(), text: '/kit:new', model: 'haiku' });
     assert.equal(processes.length, 1);
-    assert.deepEqual(processes[0].launch, { cwd: projectA(), sessionId: session.id, resume: false, model: 'haiku', permissionMode: 'auto', name: session.name });
+    assert.deepEqual(processes[0].launch, { cwd: projectA(), sessionId: session.id, resume: false, model: 'haiku', permissionMode: 'auto', name: session.name, addDirs: [path.join(processes[0].launch.addDirs?.[0] ?? '')] });
+    assert.match(processes[0].launch.addDirs?.[0] ?? '', /\/uploads$/, 'the uploaded files are readable');
     assert.deepEqual(processes[0].sent, ['/kit:new']);
     assert.equal(session.state, 'starting');
     await manager.shutdown();
@@ -279,6 +297,146 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
+  it('runs a "!" command in the session folder without Claude, shows it, and tells Claude with the next plain message', async () => {
+    const { manager, processes, messages } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    await manager.shell(id, 'ls');
+    const events = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id ? [m.ev] : []));
+    assert.deepEqual(events.map((ev) => ev.k), ['shell', 'shell_done']);
+    assert.equal(events[1].k === 'shell_done' && events[1].output, 'ran ls in project-a');
+    assert.equal(processes.length, 0, 'no Claude for it');
+    manager.send(id, '/compact');
+    manager.sendNow(id);
+    processes[0].feed('simple-turn');
+    manager.send(id, 'what do you see?');
+    assert.deepEqual(processes[0].sent, ['/compact', '<bash-input>ls</bash-input>\n<bash-stdout>ran ls in project-a</bash-stdout><bash-stderr></bash-stderr>\n\nwhat do you see?']);
+    await manager.shutdown();
+  });
+
+  it('sends the files the user uploaded as their paths, like a file dropped in the terminal', async () => {
+    const { manager, processes, messages, dataDir } = setup();
+    await manager.init();
+    const id = saveUpload(path.join(dataDir, 'uploads'), 'notes.zip', Buffer.from('PK'));
+    const session = await manager.create({ cwd: projectA(), text: 'look at this', files: [id, 'ffffffffffffffff/gone.zip'] });
+    const file = path.join(dataDir, 'uploads', id);
+    assert.deepEqual(processes[0].sent, [`look at this\n\nFichier joint : ${file}`]);
+    const start = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === session.id && m.ev.k === 'start' ? [m.ev] : []))[0];
+    assert.deepEqual(start.files, [{ id, name: 'notes.zip', size: 2 }], 'a file gone since is left out');
+    await manager.shutdown();
+  });
+
+  it('stops a "!" command the user stops, and says it was them', async () => {
+    const { manager, messages } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    const running = manager.shell(id, 'wait');
+    const started = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id && m.ev.k === 'shell' ? [m.ev] : []))[0];
+    manager.stopShell(id, started.id);
+    await running;
+    const done = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id && m.ev.k === 'shell_done' ? [m.ev] : []))[0];
+    assert.equal(done.code, null);
+    assert.equal(done.byUser, true);
+    await manager.shutdown();
+  });
+
+  it('keeps a copy of what Claude sends and publishes: a page previewed unless sent as an attachment, an SVG as a picture', async () => {
+    const { manager, processes, messages } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'show me' });
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    const folder = path.join(base, `sent-${++counter}`);
+    mkdirSync(folder);
+    for (const name of ['report.html', 'notes.html', 'flow.svg']) writeFileSync(path.join(folder, name), `<!-- ${name} -->`);
+    const send = (callId: string, file: string, display?: string) => {
+      emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id: callId, name: 'SendUserFile', input: { files: [file], ...(display ? { display } : {}) } }] } });
+      emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: callId, content: 'sent' }] }, tool_use_result: { caption: '', attachments: [{ path: file, size: 20, isImage: false, pathValidated: true }] } });
+    };
+    send('f1', path.join(folder, 'report.html'));
+    send('f2', path.join(folder, 'notes.html'), 'attach');
+    send('f3', path.join(folder, 'flow.svg'));
+    const url = 'https://claude.ai/code/artifact/45d6ab09-7dfe-4be7-b936-67421f2ca900';
+    emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'a1', name: 'Artifact', input: { file_path: path.join(folder, 'report.html') } }] } });
+    emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'a1', content: 'Published' }] }, tool_use_result: { url, path: path.join(folder, 'report.html'), title: 'Report' } });
+    const events = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id ? [m.ev] : []));
+    const sent = events.flatMap((ev) => (ev.k === 'files' ? ev.files : []));
+    assert.deepEqual(sent.map(({ title, image, page }) => ({ title, image, page })), [
+      { title: 'report.html', image: false, page: true }, { title: 'notes.html', image: false, page: undefined }, { title: 'flow.svg', image: true, page: undefined },
+    ]);
+    assert.ok(sent.every((file) => file.stored && ATTACHMENT_NAME.test(file.stored)));
+    const artifact = events.find((ev) => ev.k === 'artifact');
+    assert.ok(artifact?.k === 'artifact' && artifact.url === url && artifact.title === 'Report' && artifact.stored === sent[0].stored, 'the same page, stored once');
+    await manager.shutdown();
+  });
+
+  it('goes on with the new conversation Claude Code starts on /clear, says so, and resumes it after a release', async () => {
+    const { manager, processes, messages, find } = setup({ idleMs: 30 });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    emit({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello' }], usage: { input_tokens: 10, output_tokens: 5 } } });
+    emit({ type: 'result', subtype: 'success', is_error: false, result: 'Hello', duration_ms: 900, modelUsage: { m: { contextWindow: 200000 } } });
+    assert.deepEqual(find(id).context, { used: 15, max: 200000 });
+    manager.send(id, '/clear');
+    emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: 'new-conversation' });
+    emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    assert.equal(find(id).conversationId, 'new-conversation');
+    assert.equal(find(id).context, undefined, 'an empty context again');
+    assert.ok(messages.some((m) => m.t === 'ev' && m.ev.k === 'cleared'));
+    assert.equal(find(id).state, 'wait', 'the clearing turn ends at once');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    manager.send(id, 'again');
+    assert.equal(processes[1].launch.sessionId, 'new-conversation');
+    assert.equal(processes[1].launch.resume, true);
+    await manager.shutdown();
+  });
+
+  it('does not end a turn on an empty result of Claude Code: the real one follows, or the session waits quietly', async () => {
+    const { manager, processes, messages, find, attention } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    const ends = () => messages.filter((m) => m.t === 'ev' && m.ev.k === 'end').length;
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [] });
+    emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    assert.equal(find(id).state, 'work', 'still at it');
+    emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [] });
+    emit({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hello' }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, result: 'Hello', duration_ms: 900 });
+    assert.equal(ends(), 1);
+    assert.equal(find(id).state, 'wait');
+    manager.send(id, 'again');
+    emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(find(id).state, 'wait', 'nothing followed: it waits');
+    assert.equal(ends(), 1, 'and no empty turn is told');
+    assert.deepEqual(attention, [['finished', id]]);
+    await manager.shutdown();
+  });
+
+  it('keeps waiting while a sub-agent works in the background, and sends the queue at once when asked to, even without a turn to stop', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'agent-1', name: 'Agent', input: { description: 'research', prompt: 'go', run_in_background: true } }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, result: 'Launched.', duration_ms: 900 });
+    assert.equal(find(id).state, 'wait');
+    emit({ type: 'assistant', parent_tool_use_id: 'agent-1', message: { content: [{ type: 'thinking', thinking: '' }, { type: 'tool_use', id: 't2', name: 'Read', input: {} }] } });
+    assert.equal(find(id).state, 'wait', 'the sub-agent works, the session waits for the user');
+    // looks busy (a turn the CLI never ends): "send now" interrupts, then sends the queue anyway
+    emit({ type: 'assistant', message: { content: [{ type: 'text', text: 'On it' }] } });
+    assert.equal(find(id).state, 'work');
+    manager.send(id, 'urgent');
+    manager.sendNow(id);
+    assert.equal(processes[0].interrupts, 1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.deepEqual(processes[0].sent, ['hi', 'urgent']);
+    assert.equal(find(id).queued, undefined);
+    await manager.shutdown();
+  });
+
   it('queues the messages sent during a turn, shows them, and sends them together when it ends', async () => {
     const { manager, processes, find } = setup();
     await manager.init();
@@ -333,12 +491,44 @@ describe('a normal turn', () => {
     processes[0].feed('simple-turn');
     assert.deepEqual(attention, [['finished', id]]);
     manager.send(id, 'two');
-    manager.send(id, 'three');
+    manager.send(id, '/compact');
     processes[0].feed('simple-turn', 1);
-    assert.equal(attention.length, 1, 'the queued message left at once');
+    assert.equal(attention.length, 1, 'the queued command left at once');
     manager.interrupt(id);
     processes[0].feed('simple-turn', 1);
     assert.equal(attention.length, 1, 'stopped by the user');
+    await manager.shutdown();
+  });
+
+  it('says since when a session works, through a permission on the way, and forgets it once the turn ends', async () => {
+    let clock = 1000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    assert.equal(find(id).busySince, 1000);
+    clock = 5000;
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    processes[0].handlers.onMessage({ type: 'control_request', request_id: 'r1', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 't1' } });
+    assert.equal(find(id).state, 'perm');
+    assert.equal(find(id).busySince, 1000, 'a permission does not start the clock again');
+    processes[0].feed('simple-turn', 1);
+    assert.equal(find(id).state, 'wait');
+    assert.equal(find(id).busySince, undefined);
+    await manager.shutdown();
+  });
+
+  it('gives a plain message sent during a turn to Claude Code at once, without stopping nor queueing anything', async () => {
+    const { manager, processes, find, messages } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    assert.equal(find(id).state, 'work');
+    manager.send(id, 'quick question');
+    assert.deepEqual(processes[0].sent, ['one', 'quick question']);
+    assert.equal(find(id).queued, undefined);
+    assert.equal(find(id).state, 'work', 'the turn goes on');
+    assert.equal(processes[0].interrupts, 0);
+    assert.ok(messages.some((m) => m.t === 'ev' && m.ev.k === 'start' && m.ev.text === 'quick question'), 'shown in the thread');
     await manager.shutdown();
   });
 
@@ -563,12 +753,34 @@ describe('process life cycle', () => {
     await manager.shutdown();
   });
 
+  it('turns Remote Control back on after a restart of the server, on the same session of claude.ai, and ends it for good when closed', async () => {
+    const first = setup();
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA() });
+    await first.manager.remoteControl(id, true);
+    assert.equal(first.processes[0].controls.find((request) => request.subtype === 'remote_control')?.keep_session_on_exit, true);
+    assert.equal(first.find(id).remoteSession, 'cse_test');
+    await first.manager.shutdown();
+    const second = setup({}, first.dataDir);
+    await second.manager.init();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const reattach = second.processes[0]?.controls.find((request) => request.subtype === 'remote_control');
+    assert.equal(reattach?.reattach_session_id, 'cse_test', 'the same conversation on the phone');
+    assert.equal(second.find(id).remote?.url, 'https://claude.ai/code/session_test');
+    await second.manager.close(id);
+    assert.deepEqual(second.processes[0].remoteCalls, [true, false], 'closed: Remote Control ends too');
+    assert.equal(second.find(id).remoteSession, undefined);
+    await second.manager.shutdown();
+  });
+
   it('keeps the process of a session under Remote Control, started without a message, and lets it go once turned off', async () => {
     const { manager, processes, find } = setup({ idleMs: 30 });
     await manager.init();
-    const { id } = await manager.create({ cwd: projectA() });
+    const { id, name } = await manager.create({ cwd: projectA() });
+    manager.tag(id, 'Création vidéos');
     await manager.remoteControl(id, true);
     assert.equal(processes.length, 1);
+    assert.deepEqual(processes[0].remoteTitles, [`Création vidéos - ${name}`], 'titled by what it is about, then who');
     assert.deepEqual(processes[0].sent, [], 'no message is needed to reach it from the phone');
     assert.deepEqual(find(id).remote, { url: 'https://claude.ai/code/session_test', state: 'connecting' });
     processes[0].handlers.onMessage({ type: 'system', subtype: 'bridge_state', state: 'connected' });
@@ -581,6 +793,22 @@ describe('process life cycle', () => {
     assert.equal(find(id).remote, undefined);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(processes[0].alive, false);
+    await manager.shutdown();
+  });
+
+  it('asks a sleeping session’s Claude Code about its MCP servers, without a message, then lets the process go', async () => {
+    const { manager, processes } = setup({ idleMs: 30 });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    assert.deepEqual(await manager.inspect(id, 'mcp'), { view: 'mcp', servers: [{ name: 'docs', state: 'connected', source: 'project', transport: 'stdio', tools: 1 }] });
+    assert.equal(processes.length, 1);
+    assert.deepEqual(processes[0].sent, []);
+    assert.equal(await manager.mcpAction(id, 'docs', 'authenticate'), 'https://auth.example.com/sign-in');
+    assert.equal(await manager.mcpAction(id, 'docs', 'disable'), null);
+    assert.deepEqual(processes[0].controls.map((request) => request.subtype), ['mcp_status', 'mcp_authenticate', 'mcp_toggle']);
+    assert.equal(processes[0].controls[2].enabled, false);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, false, 'released once idle');
     await manager.shutdown();
   });
 
@@ -707,6 +935,28 @@ describe('persistence and resynchronisation', () => {
     assert.deepEqual(loaded.permissions, []);
     assert.equal(loaded.lastSeq, 0);
     assert.equal('restricted' in loaded, false);
+    await context.manager.shutdown();
+  });
+
+  it('reads from disk how full the context of a session saved without it is, with the window of a session on the same model', async () => {
+    const home = path.join(base, `home-${++counter}`);
+    const context = setup({}, undefined, undefined, home);
+    mkdirSync(context.dataDir, { recursive: true });
+    const [known, unknown, otherModel] = ['0552561c-ed98-44d9-97f9-e8b3abc2bf14', '2f0c8d3e-5b1a-4c7e-9d2f-6a8b0c1e3f57', 'c0e9b38f-6acd-4694-a6dd-7a19abdba4f6'];
+    const stored = (id: string, activeModel: string, extra = {}) => ({ id, name: id.slice(0, 4), cwd: projectA(), state: 'wait', model: '', activeModel, turns: 1, resumable: true, ...extra });
+    writeFileSync(path.join(context.dataDir, 'sessions.json'), JSON.stringify({ version: 1, commands: [], sessions: [
+      stored(known, 'claude-opus-5-5', { context: { used: 10, max: 1_000_000 } }), stored(unknown, 'claude-opus-5-5'), stored(otherModel, 'claude-haiku-5-5'),
+    ] }));
+    const folder = path.join(home, '.claude', 'projects', projectA().replace(/[^a-zA-Z0-9]/g, '-'));
+    mkdirSync(folder, { recursive: true });
+    for (const [id, model] of [[unknown, 'claude-opus-5-5'], [otherModel, 'claude-haiku-5-5']]) {
+      writeFileSync(path.join(folder, `${id}.jsonl`), JSON.stringify({ type: 'assistant', message: { model, usage: { input_tokens: 5, cache_read_input_tokens: 70_000, output_tokens: 20 } } }));
+    }
+    await context.manager.init();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(context.find(unknown).context, { used: 70_025, max: 1_000_000 });
+    assert.equal(context.find(otherModel).context, undefined, 'no window known for that model');
+    assert.deepEqual(context.find(known).context, { used: 10, max: 1_000_000 });
     await context.manager.shutdown();
   });
 
