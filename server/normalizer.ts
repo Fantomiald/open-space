@@ -1,7 +1,7 @@
 // Translates what a `claude -p --output-format stream-json` process says into OfficeEvents.
 // `who` is "chef" (the main agent of the session) or the tool_use id of the Task/Agent call that
 // started a sub-agent (every message of that sub-agent carries it as parent_tool_use_id).
-import { actDetail, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
+import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
 import type { OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
@@ -9,7 +9,8 @@ import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 export interface TurnResult { ok: boolean; text: string; ms: number }
 
 /** `socket`: where other Claude Code sessions reach this one ("/tmp/cc-socks/<pid>.sock"; their SendMessage calls write "uds:" before it). */
-export interface InitInfo { model: string; commands: string[]; socket: string }
+/** `conversationId`: the conversation Claude Code goes on with (a new one after /clear) */
+export interface InitInfo { model: string; commands: string[]; socket: string; conversationId: string }
 
 /** A can_use_tool control request: a tool call (or an AskUserQuestion call) waiting for the user. */
 export interface ToolRequest { requestId: string; who: string; tool: string; input: Record<string, unknown>; suggestions: Json[] }
@@ -27,6 +28,12 @@ export interface NormalizerOptions {
   onCancel: (requestId: string) => void;
   /** the text of a message still being written, so far (it then arrives whole as a `say` event) */
   onPartial: (who: string, text: string) => void;
+  /** files Claude sent the user (SendUserFile, see claude-process.ts): their paths as Claude Code checked them */
+  onFiles?: (who: string, caption: string, files: readonly { path: string; size: number; image: boolean }[], display: string) => void;
+  /** a page Claude published with its Artifact tool: its claude.ai address and the local HTML file it came from */
+  onArtifact?: (who: string, artifact: { url: string; path: string; title: string }) => void;
+  /** how full the context is: `used` as of the session's own agent's last answer, `max` the model's window (from a turn's end) */
+  onContext?: (context: { used?: number; max?: number }) => void;
   /** where Remote Control is at, once turned on (system/bridge_state: "ready", "connected", "failed"…) */
   onRemoteState?: (state: string) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
@@ -42,6 +49,12 @@ export class Normalizer {
   private hired = new Set<string>();
   /** the text being written, by who writes it */
   private writing = new Map<string, string>();
+  /** SendUserFile calls waiting for their result (what they sent comes with it), with how Claude asked them shown: 'render', 'attach' or '' */
+  private sending = new Map<string, string>();
+  /** Artifact calls publishing a page, waiting for their result (its address comes with it) */
+  private publishing = new Set<string>();
+  /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
+  private agentTasks = new Map<string, string>();
   /** sub-agents currently working (called, not yet gone) */
   readonly present = new Set<string>();
 
@@ -68,7 +81,20 @@ export class Normalizer {
       case 'result': {
         // a turn started by another session's message: Claude Code only says so here, at its end
         const origin = asJson(message.origin);
-        if (origin.kind === 'peer' && asString(origin.body).trim()) this.options.emit({ k: 'peer', from: asString(origin.name) || st.normalizer.peerUnknown, text: asString(origin.body).slice(0, 20000) });
+        // one of this session's sub-agents writes like another session (signed with its type, "general-purpose"), with
+        // its task's id as senderTaskId (transcripts of 2.1.302): its hand-back repeats its report, its other messages
+        // (how far it got) are marked as its own
+        const body = asString(origin.body);
+        const senderTask = asString(origin.senderTaskId);
+        if (origin.kind === 'peer' && body.trim() && !isSubagentHandback(body)) {
+          this.options.emit({
+            k: 'peer', from: asString(origin.name) || st.normalizer.peerUnknown, text: body.slice(0, 20000),
+            ...(senderTask ? { subagent: this.agentTasks.get(senderTask) ?? senderTask } : {}),
+          });
+        }
+        // the window of the model that answered (Claude Code tells it per model at a turn's end)
+        const windows = Object.values(asJson(message.modelUsage)).map((usage) => asNumber(asJson(usage).contextWindow)).filter(Boolean);
+        if (windows.length) this.options.onContext?.({ max: Math.max(...windows) });
         this.options.onResult({
           ok: !message.is_error && message.subtype === 'success', text: asString(message.result), ms: asNumber(message.duration_ms),
         });
@@ -122,9 +148,17 @@ export class Normalizer {
           model: asString(message.model),
           commands: asArray(message.slash_commands).filter((name): name is string => typeof name === 'string'),
           socket: asString(message.messaging_socket_path),
+          conversationId: asString(message.session_id),
         });
         this.options.emit({ k: 'init', model: asString(message.model) });
         break;
+      case 'compact_boundary': {
+        const metadata = asJson(message.compact_metadata);
+        const after = asNumber(metadata.post_tokens);
+        this.options.emit({ k: 'compact', auto: metadata.trigger === 'auto', before: asNumber(metadata.pre_tokens), after });
+        if (after) this.options.onContext?.({ used: after });
+        break;
+      }
       case 'bridge_state':
         this.options.onRemoteState?.(asString(message.state));
         break;
@@ -156,6 +190,12 @@ export class Normalizer {
 
   private assistant(message: Json) {
     const who = asString(message.parent_tool_use_id) || 'chef';
+    // what this answer was given to read is the context as it stands (cache included); a sub-agent has its own
+    const usage = asJson(asJson(message.message).usage);
+    if (who === 'chef' && Object.keys(usage).length) {
+      const used = asNumber(usage.input_tokens) + asNumber(usage.cache_creation_input_tokens) + asNumber(usage.cache_read_input_tokens) + asNumber(usage.output_tokens);
+      if (used) this.options.onContext?.({ used });
+    }
     for (const block of asArray(asJson(message.message).content).map(asJson)) {
       if (block.type === 'thinking') {
         this.options.emit({ k: 'think', who });
@@ -174,6 +214,10 @@ export class Normalizer {
     // how a sub-agent hands its report back: the report itself comes with its end
     if (name === 'SubagentHandback') return;
     this.whoOfTool.set(id, who);
+    // the files are shown with the call's result, no action line
+    if (name === 'SendUserFile') { this.sending.set(id, asString(input.display)); return; }
+    // a page, not an asset upload nor a read, list or delete
+    if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && input.asset !== true && input.file_path) this.publishing.add(id);
     if (name === 'Agent' || name === 'Task') {
       const type = asString(input.subagent_type);
       this.present.add(id);
@@ -200,9 +244,26 @@ export class Normalizer {
       const id = asString(block.tool_use_id);
       const who = this.whoOfTool.get(id);
       if (who === undefined) continue;
+      const display = this.sending.get(id);
+      if (display !== undefined) {
+        this.sending.delete(id);
+        const result = asJson(message.tool_use_result);
+        const files = asArray(result.attachments).map(asJson).filter((file) => asString(file.path) && file.pathValidated !== false)
+          .map((file) => ({ path: asString(file.path), size: asNumber(file.size), image: file.isImage === true }));
+        if (files.length) this.options.onFiles?.(who, asString(result.caption), files, display);
+        continue;
+      }
+      if (this.publishing.delete(id)) {
+        // checked with the transcripts of 2.1.302: tool_use_result is { url, path, title, artifact_id, updated, … }
+        const result = asJson(message.tool_use_result);
+        const url = asString(result.url);
+        const file = asString(result.path);
+        if (!block.is_error && ARTIFACT_URL.test(url) && /\.html?$/i.test(file)) this.options.onArtifact?.(who, { url, path: file, title: asString(result.title).slice(0, 200) });
+      }
       if (this.present.has(id)) {
         // a sub-agent's report comes back to the main agent as the tool result of the Task call
         const result = asJson(message.tool_use_result);
+        if (asString(result.agentId)) this.agentTasks.set(asString(result.agentId), id);
         // except for one sent to the background (or elsewhere): that result is a placeholder, and the sub-agent goes on
         // working until its task_notification
         if (result.status === 'async_launched' || result.status === 'remote_launched') continue;
@@ -220,6 +281,9 @@ export class Normalizer {
     }
   }
 }
+
+/** A page of claude.ai's artifacts, the only address an artifact card links to. */
+const ARTIFACT_URL = /^https:\/\/claude\.ai\/(code\/)?artifact\/[\w-]{1,100}$/;
 
 function textOf(content: unknown): string {
   if (typeof content === 'string') return content;

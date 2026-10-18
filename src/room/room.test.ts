@@ -5,11 +5,11 @@ import { earlySpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
 import { VISIBLE_ROWS, bubbleText, earlyBubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import type { SeenSequences } from '../state/queue.ts';
 import { planRoom, roleTitle, roomSessions } from './cast.ts';
-import { LOUNGE, OFFICE, ROOM, blockedTiles } from '../../shared/room-layout.ts';
+import { LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ROOM, blockedTiles, isMetricsPiece, type MetricsKind } from '../../shared/room-layout.ts';
 import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/festivals.ts';
 import { outfitFor } from './outfits.ts';
 import { Floor } from './floor.ts';
-import { distance, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
+import { distance, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { Scene, directionOf } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
@@ -17,6 +17,8 @@ import { assignSeats } from './seats.ts';
 import { parseLook } from '../../shared/look.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { lookOfStranger } from './chibi.ts';
+import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
+import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
 
 const session = (id: string, state: SessionState, extra: Partial<SessionInfo> = {}): SessionInfo => ({
   id, name: id, cwd: `/work/${id}`, model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
@@ -44,7 +46,7 @@ describe('isometric grid', () => {
     assert.equal(OFFICE_FLOOR.isWalkable({ x: 3.5, y: 3.5 }), false, 'a desk');
     assert.equal(OFFICE_FLOOR.isWalkable({ x: 0.1, y: 5 }), false);
     assert.equal(OFFICE_FLOOR.isWalkable({ x: ROOM.width + 1, y: 5 }), false);
-    assert.equal(OFFICE_FLOOR.isWalkable({ x: 11.5, y: 0.5 }), false, 'the server against the wall');
+    assert.equal(OFFICE_FLOOR.isWalkable({ x: 11.5, y: 0.5 }), false, 'the whiteboard against the wall');
     assert.equal(OFFICE_FLOOR.isWalkable({ x: 3.5, y: 2.5 }), true, 'a chair can be walked to');
   });
 });
@@ -539,5 +541,116 @@ describe('office life', () => {
     assert.ok(morning >= 15 && morning <= 30, `${morning} in a morning hour`);
     assert.ok(evening >= 3 && evening <= 6, `${evening} in an evening hour`);
     assert.equal(visitsIn(2), 0);
+  });
+});
+
+describe('the room on screen', () => {
+  it('tells the room (floor, walls, their top) from the dark around it', () => {
+    assert.ok(isInRoom(toScreen({ x: ROOM.width / 2, y: ROOM.depth / 2 })), 'the middle of the floor');
+    assert.ok(isInRoom({ x: toScreen({ x: 0, y: 0 }).x, y: toScreen({ x: 0, y: 0 }).y - 90 }), 'high on the back corner');
+    assert.ok(!isInRoom({ x: 5, y: 470 }), 'the bottom left corner of the canvas');
+    assert.ok(!isInRoom({ x: 635, y: 10 }), 'the top right corner');
+    const front = toScreen({ x: ROOM.width, y: ROOM.depth });
+    assert.ok(!isInRoom({ x: front.x, y: front.y + 6 }), 'just under the front corner of the floor');
+  });
+});
+
+describe('the whiteboard', () => {
+  it('stands in the office only, and the pointer finds it', () => {
+    const board = OFFICE_FLOOR.board!;
+    assert.ok(OFFICE_FLOOR.isBoardAt(toScreen({ x: (board.fromX + board.toX) / 2, y: board.toY })));
+    assert.equal(OFFICE_FLOOR.isBoardAt(toScreen({ x: 5, y: 9 })), false);
+    assert.equal(LOUNGE_FLOOR.board, null);
+    assert.ok(!OFFICE.furniture.some((piece) => piece.kind === ('printer' as string) || piece.kind === ('server' as string)), 'no printer nor server rack any more');
+    for (const spot of OFFICE.visitSpots!.filter((spot) => spot.activity === 'window')) assert.ok(spot.at.x < board.fromX - 1 || spot.at.x > board.toX + 1, `the window at ${spot.at.x} is away from the whiteboard`);
+    const cooler = OFFICE.furniture.find((piece) => piece.kind === 'cooler')!;
+    const water = OFFICE.visitSpots!.find((spot) => spot.activity === 'water')!;
+    assert.ok(distance(water.at, { x: cooler.x + 0.5, y: cooler.y + 0.5 }) < 1.5, 'a glass of water at the cooler, by the coffee machine');
+  });
+
+  it('shows notes on an ordinary day, doodles for a festival, and wishes a happy birthday to whoever it is', () => {
+    assert.deepEqual(boardContent(null, []), { kind: 'notes' });
+    assert.deepEqual(boardContent('birthday', ['Lina']), { kind: 'birthday', lines: ['HBD', 'LINA !!'] });
+    assert.deepEqual(boardContent('birthday', ['Hélène']), { kind: 'birthday', lines: ['HBD', 'HELENE', '!!'] }, 'capitals without accents, "!!" below when it does not fit');
+    assert.deepEqual(birthdayLines(['Maximilien']), ['HBD', 'MAXIMIL', '!!'], 'cut to the board');
+    assert.deepEqual(birthdayLines([]), ['HBD !!']);
+    const halloween = boardContent('halloween', []);
+    assert.ok(halloween.kind === 'doodles' && halloween.doodles.includes('pumpkin'));
+    const christmas = boardContent('christmas', []);
+    assert.ok(christmas.kind === 'doodles' && christmas.doodles.includes('tree'));
+  });
+
+  it('fits what it shows on its surface, every festival included', () => {
+    for (const festival of FESTIVALS) {
+      const content = boardContent(festival, ['Christophe']);
+      if (content.kind === 'birthday') {
+        assert.ok(content.lines.every((line) => line.length <= lettersPerLine && textWidth(line) <= BOARD.columns), festival);
+        assert.ok(content.lines.length * LINE_HEIGHT - 2 <= BOARD.rows, festival);
+      } else if (content.kind === 'doodles') {
+        assert.ok(doodlesWidth(content.doodles) <= BOARD.columns, `${festival} wide`);
+        for (const doodle of content.doodles) assert.ok(DOODLES[doodle].length <= BOARD.rows && DOODLES[doodle].every((row) => row.length === DOODLES[doodle][0].length), `${festival} ${doodle}`);
+      }
+    }
+  });
+});
+
+describe('the numbers object', () => {
+  /** The office with one draft of the numbers object. */
+  const officeWith = (kind: MetricsKind) => new Floor({ ...OFFICE, furniture: [...OFFICE.furniture, METRICS_PIECES[kind]] });
+  const at = (x: number, y: number, height: number) => { const base = toScreen({ x, y }); return { x: base.x, y: base.y - height }; };
+
+  it('is in the office only once the settings name a numbers file', () => {
+    assert.equal(OFFICE_FLOOR.metrics, null);
+    assert.ok(!OFFICE_FLOOR.layout.furniture.some(isMetricsPiece));
+    const floor = new Floor(OFFICE, null, true);
+    assert.deepEqual(floor.layout.furniture.filter(isMetricsPiece).map((piece) => piece.kind), [METRICS_OBJECT]);
+    assert.ok(floor.metrics);
+    assert.equal(new Floor(LOUNGE, null, true).metrics, null, 'not in the break room');
+  });
+
+  it('stands on a wall, a desk or a shelf without taking a tile, and the pointer finds it, each draft', () => {
+    for (const kind of METRICS_KINDS) {
+      const floor = officeWith(kind);
+      const piece = METRICS_PIECES[kind];
+      const box = floor.metrics!;
+      assert.equal(piece.blocks, false, kind);
+      assert.ok(piece.wall || piece.top !== undefined, `${kind} hangs or stands on something`);
+      if (piece.wall) {
+        assert.equal(piece.x, 0, `${kind} on the left wall`);
+        assert.ok(piece.y + piece.depth < OFFICE.door.y - 0.5, `${kind} clear of the door`);
+        assert.ok(box.high <= 100, `${kind} under the top of the wall`);
+      } else {
+        const support = OFFICE.furniture.find((other) => other !== piece && other.x === piece.x && other.y === piece.y && other.width === piece.width)!;
+        assert.ok(support && support.kind !== piece.kind, `${kind} on its desk or shelf`);
+      }
+      assert.ok(floor.isMetricsAt(at((box.fromX + box.toX) / 2, box.toY, (box.low + box.high) / 2)), `${kind} under the pointer`);
+      assert.equal(floor.isMetricsAt(toScreen({ x: 10, y: 10 })), false, kind);
+      assert.deepEqual(blockedTiles(floor.layout.furniture), BLOCKED, `${kind} blocks nothing`);
+    }
+    const laptop = OFFICE_FLOOR.userScreen!;
+    assert.ok(officeWith('cash').metrics!.toX < laptop.fromX, 'the banknotes and the notepad left of the laptop');
+  });
+
+  it('keeps every seat and every place to drop by reachable', () => {
+    for (const kind of METRICS_KINDS) {
+      const floor = officeWith(kind);
+      floor.layout.seats.forEach((seat, index) => {
+        const end = floor.pathToSeat(floor.door, index).at(-1)!;
+        assert.equal(`${Math.floor(end.x)},${Math.floor(end.y)}`, `${seat.x},${seat.y}`, `${kind} seat ${seat.x},${seat.y}`);
+      });
+      for (const spot of floor.layout.visitSpots ?? []) assert.ok(close(tileCenter(floor.route(floor.door, spot.at).at(-1)!), tileCenter(spot.at)), `${kind} ${spot.activity}`);
+    }
+  });
+
+  it('shows its badge while something new waits and the panel is closed, above the object, in the room', () => {
+    assert.equal(showsMetricsBadge(true, false), true);
+    assert.equal(showsMetricsBadge(true, true), false, 'opening the panel clears it at once');
+    assert.equal(showsMetricsBadge(false, false), false);
+    for (const kind of METRICS_KINDS) {
+      const box = officeWith(kind).metrics!;
+      const badge = metricsBadgeAt(METRICS_PIECES[kind]);
+      assert.ok(isInRoom(badge), `${kind} badge in the room`);
+      assert.ok(badge.y < at(box.fromX, box.toY, box.high).y + 4, `${kind} badge above the object`);
+    }
   });
 });

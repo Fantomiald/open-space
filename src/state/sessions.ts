@@ -6,9 +6,10 @@ import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
-import type { Aside, ClaudeInfo, ClientMessage, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, LoggedEvent, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
+import type { Aside, ClaudeInfo, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
+import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
@@ -25,6 +26,11 @@ export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 /** What the launcher starts with: a command in its field, someone of the crew to take it (a click on a visitor). */
 export interface NewSessionDraft { command?: string; person?: string }
 
+/** What the session panel shows under its header: the conversation, what the session changed, or one of the views of Claude Code. */
+export type PanelView = 'thread' | 'changes' | InspectView;
+/** The answers to the views of Claude Code of a session, as last asked for. */
+export interface Inspections { mcp?: McpServer[]; context?: ContextUsage; usage?: UsageReport }
+
 interface CommandPostState {
   connection: Connection;
   claude: ClaudeInfo | null;
@@ -33,9 +39,25 @@ interface CommandPostState {
   crew: CrewMember[];
   crewOpen: boolean;
   settingsOpen: boolean;
+  /** the whiteboard's notes are open (a click on the whiteboard of the room) */
+  boardOpen: boolean;
+  /** the journal folder and its notes, as last listed */
+  notes: { folder: string; files: NoteFile[] } | null;
+  /** the last note the server sent: read, saved, or refused because it changed on the disk (see the 'note' message) */
+  lastNote: { note: Note; outcome: 'read' | 'saved' | 'conflict' } | null;
+  /** the numbers panel is open (a click on the numbers object of the room) */
+  metricsOpen: boolean;
+  /** the numbers file as last read: null when there is none yet, undefined until read */
+  metrics: MetricsFile | null | undefined;
+  /** the numbers file changed since the page last showed it: a badge on the numbers object */
+  metricsUnread: boolean;
   directories: string[];
   /** what each session changed in its files, as last asked for */
   changes: Record<string, SessionChanges>;
+  /** the views of Claude Code answered so far, by session */
+  inspections: Record<string, Inspections>;
+  /** what the open session's panel shows (back to the conversation when another session opens) */
+  panelView: PanelView;
   /** the Claude Code conversations found for a folder, to resume one (the last folder asked for) */
   conversations: { cwd: string; list: Conversation[] } | null;
   sessions: Record<string, SessionInfo>;
@@ -86,6 +108,8 @@ interface CommandPostState {
 
   receive: (message: ServerMessage) => void;
   select: (sessionId: string | null) => void;
+  /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
+  showPanel: (view: PanelView) => void;
   /** the user is looking at this session: what it shows now is no longer news */
   markSeen: (sessionId: string) => void;
   setView: (view: View) => void;
@@ -95,6 +119,9 @@ interface CommandPostState {
   openSearch: (open: boolean) => void;
   openCrew: (open: boolean) => void;
   openSettings: (open: boolean) => void;
+  openBoard: (open: boolean) => void;
+  /** opening it reads the numbers file, which clears the badge */
+  openMetrics: (open: boolean) => void;
   /** false when the message could not leave (not connected) */
   /** `birthday`: "MM-DD", or undefined for none */
   saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
@@ -108,7 +135,7 @@ interface CommandPostState {
   /** the user's answer to `trustRequest`: trust the folder, run without its settings, or give up (null) */
   answerTrust: (choice: 'folder' | 'restricted' | null) => void;
   /** a message to a session, with the pictures attached to it */
-  sendText: (sessionId: string, text: string, images?: ImageUpload[]) => boolean;
+  sendText: (sessionId: string, text: string, images?: ImageUpload[], files?: string[]) => boolean;
   answerPermission: (sessionId: string, requestId: string, decision: PermissionDecision) => boolean;
   answerQuestions: (sessionId: string, requestId: string, answers: Record<string, string>) => boolean;
 }
@@ -143,8 +170,16 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   crew: [],
   crewOpen: false,
   settingsOpen: false,
+  boardOpen: false,
+  notes: null,
+  lastNote: null,
+  metricsOpen: false,
+  metrics: undefined,
+  metricsUnread: false,
   directories: [],
   changes: {},
+  inspections: {},
+  panelView: 'thread',
   conversations: null,
   sessions: {},
   logs: {},
@@ -159,7 +194,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, journalFolder: '', metricsFile: '' },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -186,6 +221,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     switch (message.t) {
       case 'hello': {
         const sessions = Object.fromEntries(message.sessions.map((session) => [session.id, session]));
+        keepDrafts(Object.keys(sessions));
         // the browser's language becomes the setting until the user picks one: the server speaks it too
         if (!message.preferences.language) s.send({ t: 'preferences', preferences: { language: languageOf(navigator.languages) } });
         set({
@@ -218,6 +254,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const { [message.sessionId]: _log, ...logs } = s.logs;
         const { [message.sessionId]: _seen, ...seen } = s.seen;
         writePreference('seen', seen);
+        writeDraft(message.sessionId, '');
         set({ sessions, logs, seen, selectedId: s.selectedId === message.sessionId ? null : s.selectedId });
         break;
       }
@@ -254,22 +291,38 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'commands': set({ commands: message.commands }); break;
       case 'directories': set({ directories: message.directories }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
+      case 'inspection': {
+        const { inspection } = message;
+        const answer: Inspections = inspection.view === 'mcp' ? { mcp: inspection.servers } : inspection.view === 'context' ? { context: inspection.usage } : { usage: inspection.report };
+        set({ inspections: { ...s.inspections, [message.sessionId]: { ...s.inspections[message.sessionId], ...answer } } });
+        break;
+      }
       case 'conversations': set({ conversations: { cwd: message.cwd, list: message.conversations } }); break;
       case 'crew': set({ crew: message.crew }); break;
       case 'quota': set({ quota: message.quota }); break;
+      case 'notes': set({ notes: { folder: message.folder, files: message.files } }); break;
+      case 'note': set({ lastNote: { note: message.note, outcome: message.outcome } }); break;
+      case 'metrics': set({ metrics: message.metrics }); break;
+      case 'metricsStatus': set({ metricsUnread: message.unread }); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
 
   select: (sessionId) => {
     const s = get();
-    set({ selectedId: sessionId, ...(sessionId !== s.selectedId ? { searchOpen: false } : {}) });
+    set({ selectedId: sessionId, ...(sessionId !== s.selectedId ? { searchOpen: false, panelView: 'thread' } : {}) });
     if (!sessionId) return;
     get().markSeen(sessionId);
     if (!s.logs[sessionId]) {
       set({ logs: { ...s.logs, [sessionId]: [] }, logLoaded: { ...s.logLoaded, [sessionId]: false } });
       s.send({ t: 'log', sessionId, after: 0 });
     }
+  },
+
+  showPanel: (view) => {
+    const s = get();
+    set({ panelView: view });
+    if (s.selectedId && view !== 'thread' && view !== 'changes') s.send({ t: 'inspect', sessionId: s.selectedId, view });
   },
 
   markSeen: (sessionId) => {
@@ -298,6 +351,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   setPreview: (preview) => set({ preview }),
   openCrew: (open) => set({ crewOpen: open }),
   openSettings: (open) => set({ settingsOpen: open }),
+  openBoard: (open) => set({ boardOpen: open, ...(open ? {} : { lastNote: null }) }),
+  openMetrics: (open) => {
+    set({ metricsOpen: open, metrics: undefined });
+    if (open) get().send({ t: 'metrics' });
+  },
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),
   becomeSelf: (name) => get().send({ t: 'becomeSelf', name }),
@@ -314,7 +372,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (!request || !choice) { set({ awaitingNew: false }); return; }
     get().createSession({ ...request.options, trust: choice });
   },
-  sendText: (sessionId, text, images) => get().send({ t: 'send', sessionId, text, ...(images?.length ? { images } : {}) }),
+  sendText: (sessionId, text, images, files) => get().send({ t: 'send', sessionId, text, ...(images?.length ? { images } : {}), ...(files?.length ? { files } : {}) }),
   answerPermission: (sessionId, requestId, decision) => {
     const sent = answerAllowed() && get().send({ t: 'answer', sessionId, requestId, decision });
     if (sent) announceSpeech(answerSpeech(sessionId, decision));

@@ -124,7 +124,7 @@ export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoi
       {pet.kind !== 'none' && <PetPreview pet={pet} />}
       {pet.kind !== 'none' && (
         <div className="cp-pet__colours">
-          <ColourRow label={pet.kind === 'rocky' ? t.settings.pet.shell : pet.kind === 'duck' ? t.settings.pet.colour : pet.kind === 'axolotl' ? t.settings.pet.skin : t.settings.pet.fur} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
+          <ColourRow label={pet.kind === 'rocky' ? t.settings.pet.shell : pet.kind === 'duck' || pet.kind === 'clawd' ? t.settings.pet.colour : pet.kind === 'axolotl' ? t.settings.pet.skin : t.settings.pet.fur} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
           {pet.kind === 'cat' && <ColourRow label={t.settings.pet.eyes} colours={PET_EYE_COLORS} value={pet.colors?.eyes ?? PET_EYE_COLORS[0]} onPick={(colour) => paint('eyes', colour)} />}
         </div>
       )}

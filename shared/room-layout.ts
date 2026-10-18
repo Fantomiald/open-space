@@ -1,6 +1,6 @@
 // The two rooms, in floor tiles (x along the back wall, y from the back wall towards the viewer): the office, laid out
 // like the original Bureau des agents (windows on the city, groups of desks on coloured rugs, the user's desk in the
-// middle, a reading corner and a coffee corner), and the break room, where sessions put to rest sit on sofas until
+// middle, a whiteboard on wheels, a reading corner and a coffee corner), and the break room, where sessions put to rest sit on sofas until
 // they are called back. Everything is drawn in code (src/room/pixel-furniture.ts). Shared because the tests read it.
 import type { Festival } from './festivals.ts';
 
@@ -9,7 +9,9 @@ export const ROOM = { width: 20, depth: 14 };
 
 export type PieceKind =
   | 'desk' | 'bossDesk' | 'chair' | 'plant' | 'bigPlant' | 'bookshelf' | 'sofa' | 'sofaArm' | 'couch' | 'couchArm' | 'lowTable'
-  | 'floorLamp' | 'cooler' | 'printer' | 'server' | 'counter'
+  | 'floorLamp' | 'cooler' | 'whiteboard' | 'counter'
+  // the numbers object, one of these (see METRICS_OBJECT)
+  | MetricsKind
   // the festivals' (see FESTIVAL_PIECES): standing on the floor
   | 'pumpkin' | 'christmasTree' | 'gifts' | 'partyTable' | 'balloons' | 'pool' | 'speaker' | 'fan' | 'kumquat' | 'eggs'
   // and props: the same footprint as the desk or table they stand on, drawn right after it
@@ -28,7 +30,19 @@ export interface FurniturePiece {
   behind?: boolean;
   /** a prop: the height of the top it stands on, in art pixels (it has the footprint of that desk or table) */
   top?: number;
+  /** hangs on the wall its footprint is against: nothing on the floor, and drawn before whoever and whatever stands in the room */
+  wall?: true;
 }
+
+/**
+ * The numbers object ("Chiffres", a click opens the numbers file; only there when the settings name one): drafts of
+ * what it is in the office, the one in METRICS_OBJECT is the room's. A pile of banknotes and a notepad with a rising
+ * curve on the user's desk; a dashboard screen on the left wall; a stock ticker along it; a piggy bank on the bookshelf.
+ */
+export type MetricsKind = 'cash' | 'metricsTv' | 'ticker' | 'piggyBank';
+export const METRICS_KINDS: readonly MetricsKind[] = ['cash', 'metricsTv', 'ticker', 'piggyBank'];
+export const METRICS_OBJECT: MetricsKind = 'metricsTv';
+export const isMetricsPiece = (piece: FurniturePiece) => (METRICS_KINDS as readonly PieceKind[]).includes(piece.kind);
 
 /**
  * A place to sit, and the direction a seated person faces (2: +x, 4: +y, towards the viewer). On a sofa, the person
@@ -54,7 +68,7 @@ export interface PlayerSpot {
 }
 
 /** What someone of the crew without a session drops by the office for (src/room/visitors.ts). */
-export type Activity = 'coffee' | 'water' | 'printer' | 'window' | 'books' | 'sofa' | 'party';
+export type Activity = 'coffee' | 'water' | 'window' | 'books' | 'sofa' | 'party';
 
 /**
  * Where a visitor stops: the floor point they stand on (or sit on, raised by `lift`) and the direction they face. Two
@@ -110,8 +124,20 @@ const DESKS = [
   [5, 3], [17, 3], [13, 9], [5, 7], [1, 3], [3, 7],
 ] as const;
 const DESK_SEATS: readonly Seat[] = DESKS.map(([x, y]) => ({ x, y: y - 1, facing: 4, lift: DESK_SEAT_LIFT }));
+/** Heights of the tops props stand on, in art pixels (see pixel-furniture.ts). */
+export const TOPS = { desk: 11, lowTable: 7, bookshelf: 24 } as const;
 const READING_SOFA = wallSofa(12, 2);
 const BOSS_DESK = piece('bossDesk', 8, 6, 3);
+const BOOKSHELF = piece('bookshelf', 4.5, 13, 2);
+
+/** Each draft of the numbers object, where it goes (the props have the footprint of the desk or shelf they stand on). */
+export const METRICS_PIECES: Readonly<Record<MetricsKind, FurniturePiece>> = {
+  cash: piece('cash', BOSS_DESK.x, BOSS_DESK.y, BOSS_DESK.width, BOSS_DESK.depth, false, { top: TOPS.desk }),
+  // on the left wall, high above the desks along it, between the back corner and the door
+  metricsTv: piece('metricsTv', 0, 1.8, 0.12, 2.5, false, { wall: true }),
+  ticker: piece('ticker', 0, 1.2, 0.1, 4.2, false, { wall: true }),
+  piggyBank: piece('piggyBank', BOOKSHELF.x, BOOKSHELF.y, BOOKSHELF.width, BOOKSHELF.depth, false, { top: TOPS.bookshelf }),
+};
 
 export const OFFICE: Layout = {
   furniture: [
@@ -122,18 +148,19 @@ export const OFFICE: Layout = {
     piece('chair', 9, 5, 1, 1, false),
     // along the back wall
     piece('plant', 0, 0),
-    piece('cooler', 8, 0),
-    piece('printer', 9.6, 0),
-    piece('server', 11, 0),
+    // the whiteboard on its stand, its notes facing the room (a click opens them)
+    piece('whiteboard', 8, 0.2, 4, 0.6),
     piece('bigPlant', 19, 0),
     // the reading corner, front left, and the coffee corner, front right
     piece('floorLamp', 0, 11),
     ...READING_SOFA.pieces,
-    piece('bookshelf', 4.5, 13, 2),
+    BOOKSHELF,
     // left of the bookshelf: its right side is where someone of the crew stands to pick a book (visitSpots)
     piece('plant', 3, 13),
     piece('plant', 14, 13),
     piece('counter', 15, 13, 3),
+    // the water cooler, right of the coffee machine
+    piece('cooler', 18, 13),
     piece('bigPlant', 19, 13),
     piece('floorLamp', 19, 11),
   ],
@@ -160,10 +187,10 @@ export const OFFICE: Layout = {
     // looks down-right, the right one down-left)
     { activity: 'coffee', at: { x: 15.3, y: 12.3 }, facing: 4, together: 2 },
     { activity: 'coffee', at: { x: 17, y: 12.3 }, facing: 4, together: 4 },
-    { activity: 'water', at: { x: 8.5, y: 1.3 }, facing: 0 },
-    { activity: 'printer', at: { x: 10.2, y: 1.3 }, facing: 0 },
-    // at the windows, where no row of desks stands in front
-    { activity: 'window', at: { x: 7.2, y: 1.2 }, facing: 0 },
+    // a glass at the cooler, a little right of it so it does not hide them
+    { activity: 'water', at: { x: 18.4, y: 12.2 }, facing: 4 },
+    // at the windows the whiteboard leaves free, between the chairs of the desks in front (so neither hides them)
+    { activity: 'window', at: { x: 3.4, y: 1.1 }, facing: 0 },
     { activity: 'window', at: { x: 18.4, y: 1.3 }, facing: 0 },
     // against the bookshelf's right side, turned to it: it stands on the room's front edge, and hides whoever is
     // behind or left of it
@@ -223,8 +250,6 @@ export const LOUNGE: Layout = {
   playerSpots: sofaSpots([...ARMCHAIR.seats, ...COUCHES.flatMap((item) => item.seats), ...LOUNGE_WALL_SOFA.seats]),
 };
 
-/** Heights of the tops props stand on, in art pixels (see pixel-furniture.ts). */
-export const TOPS = { desk: 11, lowTable: 7 } as const;
 type Support = Pick<FurniturePiece, 'x' | 'y' | 'width' | 'depth'> & { top: number };
 /** A prop on a piece of furniture: drawn on its top, right after it (see furnitureDepth). */
 const on = (kind: PieceKind, support: Support) => piece(kind, support.x, support.y, support.width, support.depth, false, { top: support.top });
@@ -277,6 +302,9 @@ const FESTIVAL_VISITS: Partial<Record<Festival, readonly VisitSpot[]>> = {
   christmas: [{ activity: 'party', at: { x: 12.3, y: 6.4 }, facing: 0, together: 2 }, { activity: 'party', at: { x: 13.7, y: 6.4 }, facing: 0, together: 4 }],
   songkran: [{ activity: 'party', at: { x: 9.5, y: 9.6 }, facing: 0 }],
 };
+
+/** The office with its numbers object (the user named a numbers file); the other room as it is. */
+export const withMetrics = (layout: Layout): Layout => (layout === OFFICE ? { ...layout, furniture: [...layout.furniture, METRICS_PIECES[METRICS_OBJECT]] } : layout);
 
 /** A room as it is for a festival (or none): its furniture, plus the festival's, and the festival's places to drop by. */
 export function layoutOn(layout: Layout, festival: Festival | null): Layout {

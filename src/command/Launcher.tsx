@@ -73,7 +73,8 @@ export function Launcher() {
     if (!ready || !cwd) return;
     const message = text.trim();
     const images = attachments.uploads;
-    createSession({ cwd, model, permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
+    const files = attachments.files;
+    createSession({ cwd, model, permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
     setText('');
     attachments.clear();
     setResumeId(null);

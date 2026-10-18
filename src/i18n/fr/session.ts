@@ -1,5 +1,7 @@
 import { plural } from '../index.ts';
 
+const tokenCount = (count: number, locale: string) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(count);
+
 export const session = {
   files: (count: number) => plural(count, 'fichier', 'fichiers'),
   detail: {
@@ -14,8 +16,6 @@ export const session = {
     searchTitle: 'Chercher dans la conversation (Cmd F)',
     interrupt: 'Interrompre',
     interruptTitle: 'Interrompre ce qu’elle fait (la session reste ouverte)',
-    remoteOff: 'Couper Remote Control',
-    remoteOn: 'Remote Control : la continuer depuis ton téléphone ou claude.ai',
     rest: 'Repos',
     restTitle: 'En salle de repos : Claude Code s’arrête, un message la rappelle',
     switchOff: 'Éteindre',
@@ -35,6 +35,8 @@ export const session = {
   remote: {
     states: { connecting: 'connexion…', connected: 'connectée', failed: 'coupée' },
     open: 'Ouvrir sur claude.ai (elle est aussi dans l’app Claude)',
+    off: 'Remote Control : coupé. Clique pour la continuer depuis ton téléphone ou claude.ai',
+    on: (state: string) => `Remote Control : ${state}. Clique pour couper`,
   },
   feed: {
     subagent: 'Sous-agent',
@@ -50,9 +52,34 @@ export const session = {
     imageTitle: 'Voir l’image en grand',
     imageAlt: 'Jointe à ton message',
     question: 'Question',
-    turnStopped: 'Tour interrompu',
-    turnDone: 'Tour terminé',
-    turnFailed: 'Tour en échec',
+    /** a word for each turn, like Claude Code's ("Baked for 10s"): while it runs, then once it is done */
+    turnWords: [
+      { doing: 'Mijote', done: 'Mijoté' }, { doing: 'Concocte', done: 'Concocté' }, { doing: 'Pétrit', done: 'Pétri' }, { doing: 'Infuse', done: 'Infusé' },
+      { doing: 'Brasse', done: 'Brassé' }, { doing: 'Mitonne', done: 'Mitonné' }, { doing: 'Peaufine', done: 'Peaufiné' }, { doing: 'Cogite', done: 'Cogité' },
+    ],
+    working: (word: string, elapsed: string, doing: string) => `${word}… ${elapsed} · ${doing}`,
+    unread: (count: number) => (count === 1 ? '1 nouveau message' : `${count} nouveaux messages`),
+    /** a command run with "!" in the session's folder (like Claude Code's bash mode) */
+    shell: {
+      running: 'en cours…',
+      stopped: 'arrêtée au bout de 2 min',
+      stoppedByUser: 'arrêtée',
+      stop: 'Arrêter la commande',
+      exit: (code: number) => `code ${code}`,
+      empty: '(rien affiché)',
+      note: 'Claude la verra avec ton prochain message.',
+    },
+    /** the files a session sent (SendUserFile) and the picture viewer */
+    files: { open: 'Voir en grand', play: 'Lire la vidéo', download: 'Télécharger', missing: 'pas gardé (trop gros ou introuvable)' },
+    viewer: { close: 'Fermer', original: 'Ouvrir l’original', onClaude: 'Ouvrir sur claude.ai' },
+    /** a page a session published on claude.ai (its Artifact tool) */
+    artifact: { open: (title: string) => `Voir « ${title} » en grand`, enlarge: 'Voir en grand', onClaude: 'Ouvrir sur claude.ai, dans un nouvel onglet' },
+    compacted: (auto: boolean, before: number, after: number) => `Conversation ${auto ? 'compactée automatiquement' : 'compactée'} : ${tokenCount(before, 'fr-FR')} → ${tokenCount(after, 'fr-FR')} jetons`,
+    cleared: 'Nouvelle conversation : Claude repart de zéro (/clear).',
+    phases: { thinking: 'réfléchit' },
+    turnDone: (word: string, duration: string, time: string) => `${word} pendant ${duration} · fini à ${time}`,
+    turnStopped: (duration: string, time: string) => `Interrompu au bout de ${duration} · ${time}`,
+    turnFailed: (duration: string, time: string) => `En échec au bout de ${duration} · ${time}`,
     tabs: 'Fil',
     conversation: 'Conversation',
     region: 'Fil de la session',
@@ -60,6 +87,8 @@ export const session = {
     empty: 'Rien pour l\'instant. Envoie un premier message.',
     mission: 'Sa mission',
     report: 'Son rapport',
+    /** a message one of the session's sub-agents sent it while working, folded */
+    subagentMessage: (name: string) => `Message de ${name}`,
     thinking: (name: string) => `${name} réfléchit`,
   },
   search: {
@@ -73,6 +102,77 @@ export const session = {
     close: 'Fermer la recherche',
     closeTitle: 'Fermer (Échap)',
   },
+  /** the views of Claude Code opened by /mcp, /context and /usage (ClaudeViews.tsx) */
+  mcp: {
+    label: 'Serveurs MCP',
+    asking: 'Je demande à Claude Code…',
+    none: 'Aucun serveur MCP',
+    empty: 'Cette session n’a aucun serveur MCP. Ajoutes-en avec « claude mcp add » dans un terminal.',
+    servers: (count: number) => plural(count, 'serveur', 'serveurs'),
+    connected: (count: number) => plural(count, 'connecté', 'connectés'),
+    toFix: (count: number) => `${count} à régler`,
+    groups: { failed: 'À régler', pending: 'En connexion', connected: 'Connectés', disabled: 'Désactivés' },
+    states: { connected: 'connecté', pending: 'connexion en cours', failed: 'en échec', 'needs-auth': 'connexion requise', disabled: 'désactivé' },
+    sources: { user: 'Tes réglages', project: 'Ce projet', local: 'Ce dossier', plugin: 'Plugin', claudeai: 'Connecteur claude.ai', other: 'Autre réglage' },
+    fromPlugin: (name: string) => `Plugin ${name}`,
+    /** '' for claude.ai's connectors: their source says it already */
+    transport: (type: string) => ({ http: 'HTTP', sse: 'SSE', stdio: 'local', ws: 'WebSocket', 'claudeai-proxy': '' } as Readonly<Record<string, string>>)[type] ?? type,
+    tools: (count: number) => plural(count, 'outil', 'outils'),
+    reconnect: 'Reconnecter',
+    signIn: 'Se connecter',
+    check: 'Vérifier la connexion',
+    enable: 'Activer',
+    disable: 'Désactiver',
+    disableTitle: 'Désactiver ce serveur dans ce dossier',
+    signingIn: 'Termine la connexion dans la page ouverte dans ton navigateur. Le serveur se connecte ensuite tout seul ; sinon, vérifie la connexion.',
+    note: (folder: string) => `Activer ou désactiver un serveur vaut pour ce dossier (${folder}), comme /mcp dans le terminal. « Se connecter » ouvre sa page de connexion dans ton navigateur.`,
+  },
+  context: {
+    label: 'Contexte',
+    asking: 'Je demande à Claude Code…',
+    summary: (used: string, max: string, percent: string) => `${used} sur ${max} jetons · ${percent}`,
+    windowLabel: (percent: string) => `Fenêtre de contexte remplie à ${percent}`,
+    /** Claude Code's names of what fills the context */
+    categories: {
+      'System prompt': 'Consignes système', 'System tools': 'Outils de Claude Code', 'MCP tools': 'Outils MCP', 'MCP server instructions': 'Consignes des serveurs MCP',
+      'MCP tools (deferred)': 'Outils MCP', 'System tools (deferred)': 'Outils de Claude Code', 'Custom agents': 'Agents', 'Memory files': 'Mémoire (CLAUDE.md)',
+      Skills: 'Skills', Messages: 'Conversation', 'Autocompact buffer': 'Réservé au résumé automatique', 'Free space': 'Libre',
+    },
+    autoCompact: (at: string) => `La conversation est résumée automatiquement vers ${at} jetons.`,
+    /** what to do when the context fills up (the context chip of the header, and the /context view) */
+    advice: {
+      calm: 'Contexte de la conversation : voir le détail',
+      rising: 'Le contexte se remplit. Même tâche : /compact le résume. Autre chose : /clear repart de zéro.',
+      high: 'Contexte presque plein : Claude devient moins précis. Compacte, vide-le si la tâche change, ou passe à une autre session.',
+    },
+    compact: 'Compacter',
+    clear: 'Vider',
+    chip: (percent: string) => `Contexte ${percent}`,
+    deferred: 'Chargés à la demande',
+    deferredNote: 'Ces outils ne prennent de place qu’une fois utilisés : ils ne comptent pas encore.',
+    memory: 'Fichiers de mémoire',
+  },
+  usage: {
+    label: 'Usage',
+    asking: 'Je demande à Claude Code…',
+    plan: (name: string) => `Forfait ${name}`,
+    noPlan: 'Sans forfait claude.ai',
+    limits: { session: 'Session (5 h)', weekly: 'Semaine, tous les modèles', weeklyModel: (model: string) => `Semaine, ${model}`, other: 'Autre limite' },
+    session: 'Cette session',
+    cost: 'Coût',
+    duration: 'Durée',
+    apiTime: 'Temps de calcul',
+    lines: 'Lignes',
+    costNote: 'Avec un forfait, ce coût n’est pas facturé : c’est l’équivalent au prix de l’API.',
+    week: 'Ce qui a pesé ces 7 jours',
+    weekCounts: (requests: number, sessions: number) => `${requests.toLocaleString('fr-FR')} ${requests > 1 ? 'requêtes' : 'requête'} · ${plural(sessions, 'session', 'sessions')}`,
+    skills: 'Skills',
+    agents: 'Agents',
+    mcpServers: 'Serveurs MCP',
+    weekNote: 'Approximatif : d’après les sessions de cette machine, en part des requêtes.',
+  },
+  /** a view shown in place of the conversation (PanelFrame) */
+  panel: { back: 'Conversation', refresh: 'Actualiser', askAgain: 'Redemander à Claude Code (la vue se met aussi à jour à chaque fin de tour)' },
   changes: {
     label: 'Changements',
     status: { modified: 'modifié', added: 'nouveau', deleted: 'supprimé', outside: 'hors git' },
@@ -81,10 +181,8 @@ export const session = {
     binary: 'Fichier binaire.',
     tooLong: 'Diff trop long pour être montré ici.',
     cut: 'La suite du diff est coupée : trop longue.',
-    back: 'Conversation',
     computing: 'Calcul des changements…',
     none: 'Aucun changement',
-    refresh: 'Actualiser',
     nothingWritten: 'Elle n’a encore écrit aucun fichier.',
     allSettled: 'Tout ce qu’elle a écrit est déjà commité, ou revenu comme avant.',
     settled: (count: number) => (count === 1 ? 'Un autre fichier qu’elle a écrit est déjà commité ou inchangé.' : `${count} autres fichiers qu’elle a écrits sont déjà commités ou inchangés.`),
@@ -97,8 +195,17 @@ export const session = {
     withdraw: 'Retirer la question',
     closeTitle: 'Fermer',
   },
+  /** where the sessions are at, in the corner of the screen */
+  status: {
+    title: 'État',
+    waiting: 'À toi',
+    working: 'Au travail',
+    starting: 'démarre',
+    subagents: (count: number) => (count === 1 ? '1 sous-agent' : `${count} sous-agents`),
+    fold: 'Replier',
+    unfold: 'Déplier',
+  },
   todo: {
-    title: 'Checklist',
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,
     answer: (name: string) => `Répondre à ${name}`,
     read: (name: string) => `Lire ce qu’a fait ${name}`,

@@ -47,6 +47,8 @@ export interface LaunchOptions {
   note?: string;
   /** without the folder's own settings (see server/trust.ts) */
   untrusted?: boolean;
+  /** folders the session may read besides its own (--add-dir): where the files the user sends are kept */
+  addDirs?: readonly string[];
 }
 
 /**
@@ -66,7 +68,7 @@ export interface LaunchOptions {
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -74,6 +76,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
     '--name', options.name,
   ];
   if (options.model) args.push('--model', options.model);
+  for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
   if (!options.resume) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note));
@@ -109,8 +112,8 @@ export interface ProcessHandle {
   answerPermission: (requestId: string, answer: PermissionAnswer) => void;
   refuseControl: (requestId: string) => void;
   interrupt: () => void;
-  /** Turns Remote Control on or off (claude.ai/code and the Claude app reach the session); on: resolves with the session's link. */
-  remoteControl: (enabled: boolean) => Promise<string>;
+  /** A control request of ours (Remote Control, the MCP servers, the context…): resolves with Claude Code's answer. */
+  control: (request: Json) => Promise<Json>;
   /** Ends stdin, then SIGTERM to the process group after `graceMs`, SIGKILL 3 s later. Resolves once the process is gone. */
   stop: (graceMs: number) => Promise<void>;
 }
@@ -129,12 +132,16 @@ class ClaudeProcess implements ProcessHandle {
   private exited = false;
   private exitWaiters: (() => void)[] = [];
   private handlers: ProcessHandlers;
-  /** our own control requests waiting for their control_response, by request id */
+  /** our own control requests waiting for their control_response, by request id (`requests` numbers them) */
+  private requests = 0;
   private replies = new Map<string, { resolve: (response: Json) => void; reject: (error: Error) => void }>();
 
   constructor(binary: ClaudeBinary, environment: NodeJS.ProcessEnv, launch: LaunchOptions, handlers: ProcessHandlers) {
     this.handlers = handlers;
-    const child = spawn(binary.path, buildClaudeArgs(launch), { cwd: launch.cwd, env: environment, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+    // CLAUDE_CODE_ATTACHMENTS_BY_PATH gives Claude its SendUserFile tool and has it hand the files' paths over instead of
+    // uploading them (checked with 2.1.302): Open Space shows them in the thread (see Normalizer and Session.onFiles)
+    const env = { ...environment, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1' };
+    const child = spawn(binary.path, buildClaudeArgs(launch), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     this.child = child;
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       if (!line.trim()) return;
@@ -196,16 +203,11 @@ class ClaudeProcess implements ProcessHandle {
     this.write({ type: 'control_request', request_id: `interrupt-${Date.now()}`, request: { subtype: 'interrupt' } });
   }
 
-  /**
-   * Remote Control works in -p as a control request, not as the /remote-control command nor the --remote-control flag
-   * (both do nothing there). Checked with 2.1.302: the answer carries session_url, then system/bridge_state messages
-   * follow ("ready", "connected").
-   */
-  remoteControl(enabled: boolean): Promise<string> {
-    const requestId = `remote-${Date.now()}`;
+  control(request: Json): Promise<Json> {
+    const requestId = `${asString(request.subtype)}-${++this.requests}`;
     return new Promise((resolve, reject) => {
-      this.replies.set(requestId, { resolve: (response) => resolve(asString(response.session_url)), reject });
-      if (!this.write({ type: 'control_request', request_id: requestId, request: { subtype: 'remote_control', enabled } })) {
+      this.replies.set(requestId, { resolve, reject });
+      if (!this.write({ type: 'control_request', request_id: requestId, request })) {
         this.replies.delete(requestId);
         reject(new Error(st.process.stopped));
       }

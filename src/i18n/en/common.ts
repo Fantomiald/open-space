@@ -73,6 +73,19 @@ export const common: Dictionary['common'] = {
   commandField: {
     commands: 'Commands',
   },
+  commandOptions: {
+    effort: { low: 'Quick, thinks little', medium: 'Balanced', high: 'Thinks more', xhigh: 'Thinks a lot', max: 'As far as it goes', auto: 'Let Claude choose' },
+    model: {
+      default: 'The recommended model', opus: 'For complex work', sonnet: 'Most efficient for simpler tasks', haiku: 'The fastest',
+      fable: 'For the toughest problems', opusplan: 'Opus to plan, Sonnet to carry out', 'opus[1m]': 'Opus, one-million-token context',
+      'sonnet[1m]': 'Sonnet, one-million-token context', 'fable[1m]': 'Fable, one-million-token context',
+    },
+    advisor: { fable: 'Consults Fable at key moments', opus: 'Consults Opus at key moments', sonnet: 'Consults Sonnet at key moments', off: 'No advisor' },
+    'output-style': {
+      default: 'The normal style', Proactive: 'Acts at once, asks little', Concise: 'Gets straight to the result', Explanatory: 'Explains its choices',
+      Learning: 'Has you write bits of code to learn',
+    },
+  },
   ownCommands: {
     btw: { description: 'A side question: the session answers without stopping, and it stays out of its conversation', argumentHint: '<your question>' },
   },

@@ -88,6 +88,13 @@ const HATS: Readonly<Record<Exclude<Hat, 'party' | 'gold'>, { x: number; rows: r
     'ccccccccccc',
   ] },
 };
+/** Headphones, each cup a rounded shell lit from the top left (k shell, l shine, d shadow, p the red cap). Seen
+ * three-quarters, the near cup is the bigger one, on the side of the visible ear: the left from the front, the right from
+ * behind. From the front the far cup hides behind the face, its edge showing; from behind both stick out. */
+const HEADPHONES = {
+  front: { near: { x: -1, y: 5, rows: ['.lk.', 'lkkk', 'kpkd', 'kkdd', '.dd.'] }, far: { x: 14, y: 5, rows: ['k.', 'kd', 'kd', 'dd', 'd.'] } },
+  back: { near: { x: 13, y: 5, rows: ['.lk.', 'lkkk', 'kkpd', 'kkdd', '.dd.'] }, far: { x: -1, y: 5, rows: ['.k.', 'kkd', 'kdd', 'kdd', '.d.'] } },
+};
 const HAT_PAINT: Readonly<Record<string, string>> = { r: F.red, w: F.fur, f: F.fur, y: F.gold, b: F.jewelBlue, p: F.earInside, k: F.headphones };
 /** The arm nearer the viewer once the sprite is mirrored to face down-left (the way people at a desk face), and its
  * elbow while seated: where the forearm of someone typing starts. */
@@ -115,10 +122,16 @@ function cone(R: Paint, base: number, body: string, stripe: string, pompom: stri
 function paintOutfit(R: Paint, P: (x: number, y: number, colour: string) => void, look: Look, outfit: Outfit, back: boolean, up: number) {
   const top = HAIR_TOP[look.hair] + up;
   if (outfit.headphones) {
-    R(3, top, 11, 1, F.headphones); P(2, top + 1, F.headphones); P(14, top + 1, F.headphones);
-    R(1, top + 2, 1, Math.max(0, 5 + up - top - 2), F.headphones); R(15, top + 2, 1, Math.max(0, 5 + up - top - 2), F.headphones);
-    R(0, 5 + up, 3, 4, F.headphones); R(14, 5 + up, 3, 4, F.headphones);
-    P(1, 6 + up, F.headphonesPad); P(15, 6 + up, F.headphonesPad);
+    const paints: Readonly<Record<string, string>> = { k: F.headphonesShell, l: F.headphonesShine, d: F.headphones, p: F.headphonesPad };
+    const grid = (x: number, y: number, rows: readonly string[]) => {
+      for (const [line, row] of rows.entries()) [...row].forEach((letter, column) => { if (paints[letter]) P(x + column, y + line, paints[letter]); });
+    };
+    grid(3, top, ['llkkkkkkkd']);
+    grid(2, top + 1, ['l..........d']);
+    for (let y = top + 2; y < 5 + up; y++) { P(1, y, F.headphonesShell); P(14, y, F.headphones); }
+    const { near, far } = back ? HEADPHONES.back : HEADPHONES.front;
+    grid(far.x, far.y + up, far.rows);
+    grid(near.x, near.y + up, near.rows);
   }
   if (outfit.sunglasses) {
     if (back) R(11, 5 + up, 3, 1, F.shades);

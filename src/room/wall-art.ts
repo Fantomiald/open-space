@@ -63,10 +63,15 @@ const plain = (text: string) => text.toUpperCase().normalize('NFD').replace(/[̀
 /** How many tiles a word takes along a wall (4 art pixels a letter, its gap included). */
 export const textLength = (text: string) => (plain(text).length * 4 - 1) / 8;
 
+/** Words in the 3 x 5 font, as five rows of pixels ("#" is ink), one column between letters (the whiteboard writes with it too). */
+export function glyphRows(text: string): string[] {
+  const letters = [...plain(text)];
+  return Array.from({ length: 5 }, (_, line) => letters.map((letter) => (FONT[letter] ?? FONT[' '])[line]).join('.'));
+}
+
 /** Words on a wall, their bottom at `bottom`: on a ribbon of `ribbon` one pixel around them when given. */
 export function wallText(context: Context, text: string, wall: Wall, from: number, bottom: number, ink: string, ribbon?: string) {
-  const letters = [...plain(text)];
-  const rows = Array.from({ length: 5 }, (_, line) => letters.map((letter) => (FONT[letter] ?? FONT[' '])[line]).join('.'));
+  const rows = glyphRows(text);
   if (ribbon) {
     const width = rows[0].length + 4;
     onWall(context, Array.from({ length: 7 }, () => 'r'.repeat(width)), { r: ribbon }, wall, from - 2 / 8, bottom - 1);

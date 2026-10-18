@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SlashCommand } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { findCommands } from '../state/commands.ts';
+import { findCommands, nativeView } from '../state/commands.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
 
@@ -19,6 +19,7 @@ function PaletteContent() {
   const openPalette = useSessions((s) => s.openPalette);
   const openNewSession = useSessions((s) => s.openNewSession);
   const sendText = useSessions((s) => s.sendText);
+  const showPanel = useSessions((s) => s.showPanel);
   const [query, setQuery] = useState('');
   const [args, setArgs] = useState('');
   const [target, setTarget] = useState<'selected' | 'new'>(selected ? 'selected' : 'new');
@@ -38,7 +39,10 @@ function PaletteContent() {
   const run = (command: SlashCommand) => {
     const text = `/${command.name}${args.trim() ? ` ${args.trim()}` : ''}`;
     close();
-    if (target === 'selected' && selected) sendText(selected.id, text);
+    // a view of Open Space's own for the open session (/mcp, /context, /usage), rather than Claude Code's line of text
+    const view = nativeView(text);
+    if (target === 'selected' && selected && view) showPanel(view);
+    else if (target === 'selected' && selected) sendText(selected.id, text);
     else openNewSession({ command: text });
   };
 

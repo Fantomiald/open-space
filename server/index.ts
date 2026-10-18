@@ -25,10 +25,15 @@ import { suggestRoots } from './paths.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
 import { attachmentsFolder } from './attachments.ts';
+import { uploadsFolder } from './uploads.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
-import { openTerminal } from './terminal.ts';
+import { openTerminal, openWebPage } from './desktop.ts';
+import { createShellRunner } from './shell.ts';
+import { listNotes, readNote, writeNote } from './journal.ts';
+import { metricsChangedAt, readMetrics } from './metrics.ts';
+import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +46,8 @@ const PING_INTERVAL_MS = 25_000;
 const MAX_BUFFERED_BYTES = 8_000_000;
 /** an open tab retries every 2 s at most, so it is back within this delay; only then does --open open a new one */
 const OPEN_IF_ALONE_AFTER_MS = 3000;
+/** how often the numbers file is looked at, for the badge on the numbers object (scripts or sessions rewrite it now and then) */
+const METRICS_CHECK_MS = 10_000;
 
 // An unexpected error is logged, never fatal: one bad request must not kill running sessions.
 const log = (message: string, error?: unknown) => console.error(`  !  ${message}`, error instanceof Error ? error.message : (error ?? ''));
@@ -83,6 +90,7 @@ const sessions = new SessionManager({
   config,
   spawnProcess: claude ? createProcessFactory(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
+  runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   broadcast,
   log,
@@ -92,9 +100,20 @@ const sessions = new SessionManager({
 });
 await sessions.init();
 
+const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
+/** something new waits in the numbers file, as last told to the pages */
+let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
+/** Tells every page when the badge of the numbers object comes or goes. */
+async function checkMetrics() {
+  const unread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
+  if (unread === metricsUnread) return;
+  metricsUnread = unread;
+  broadcast({ t: 'metricsStatus', unread });
+}
+setInterval(() => { checkMetrics().catch((error: unknown) => log('numbers file', error)); }, METRICS_CHECK_MS).unref();
 const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded });
 prepareSounds(config.dataDir, log);
-const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection });
+const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection });
 
 function onConnection(socket: WebSocket) {
   clients.add(socket);
@@ -114,6 +133,7 @@ function onConnection(socket: WebSocket) {
     sessions: sessions.list(), commands: sessions.getCommands(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked,
   });
+  send({ t: 'metricsStatus', unread: metricsUnread });
   socket.on('message', (data) => {
     if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
     let message: ClientMessage | null = null;
@@ -144,7 +164,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       if (asked && taken.has(asked)) send({ t: 'toast', kind: 'info', text: st.server.nameTaken(asked, session.name) });
       break;
     }
-    case 'send': sessions.send(message.sessionId, message.text, message.images); break;
+    case 'send': sessions.send(message.sessionId, message.text, message.images, message.files); break;
     case 'answer': sessions.answer(message.sessionId, message.requestId, message.decision); break;
     case 'reply': sessions.reply(message.sessionId, message.requestId, message.answers); break;
     case 'interrupt': sessions.interrupt(message.sessionId); break;
@@ -158,6 +178,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       setServerLanguage(settings.preferences.language ?? 'fr');
       applyRoots();
       broadcast(preferencesMessage());
+      await checkMetrics();
       break;
     }
     case 'onboard': {
@@ -195,6 +216,33 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       broadcast({ t: 'crew', crew: crew.list() });
       break;
     case 'remoteControl': await sessions.remoteControl(message.sessionId, message.enabled); break;
+    case 'shell': await sessions.shell(message.sessionId, message.command); break;
+    case 'stopShell': sessions.stopShell(message.sessionId, message.shellId); break;
+    case 'inspect': send({ t: 'inspection', sessionId: message.sessionId, inspection: await sessions.inspect(message.sessionId, message.view) }); break;
+    case 'mcpAction':
+      try {
+        const signIn = await sessions.mcpAction(message.sessionId, message.server, message.action);
+        if (signIn) openWebPage(signIn);
+      } finally {
+        // the list again, the action done or refused (its error then shows as a toast)
+        send({ t: 'inspection', sessionId: message.sessionId, inspection: await sessions.inspect(message.sessionId, 'mcp') });
+      }
+      break;
+    case 'notes': send(await notesMessage()); break;
+    case 'readNote': send({ t: 'note', note: await readNote(settings.preferences.journalFolder, message.name), outcome: 'read' }); break;
+    case 'writeNote': {
+      const { saved, note } = await writeNote(settings.preferences.journalFolder, message.name, message.text, message.version);
+      send({ t: 'note', note, outcome: saved ? 'saved' : 'conflict' });
+      send(await notesMessage());
+      break;
+    }
+    case 'metrics': {
+      const metrics = await readMetrics(settings.preferences.metricsFile);
+      send({ t: 'metrics', metrics });
+      if (metrics && hasNewMetrics(metrics.mtime, settings.metricsSeenAt)) await settings.metricsSeen(metrics.mtime);
+      await checkMetrics();
+      break;
+    }
     case 'openTerminal': await openTerminal(defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir()); break;
   }
 }

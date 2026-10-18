@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { lastExchanges, listConversations, projectFolder } from './conversations.ts';
+import { lastContextUse, lastExchanges, listConversations, projectFolder } from './conversations.ts';
 
 const home = mkdtempSync(path.join(os.tmpdir(), 'office-conversations-'));
 after(() => rmSync(home, { recursive: true, force: true }));
@@ -19,8 +19,8 @@ describe('Claude Code conversations on disk', () => {
     line({ type: 'last-prompt', sessionId: A }),
     line({ type: 'user', isMeta: true, message: { role: 'user', content: '<local-command-caveat>…' } }),
     line({ type: 'user', message: { role: 'user', content: '<command-name>/model</command-name>' } }),
-    line({ type: 'user', message: { role: 'user', content: 'Compare les deux flows Kiin' } }),
-    line({ type: 'ai-title', aiTitle: 'Kiin business flows comparison' }),
+    line({ type: 'user', message: { role: 'user', content: 'Compare les deux flows Atlas' } }),
+    line({ type: 'ai-title', aiTitle: 'Atlas business flows comparison' }),
     line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '…' }, { type: 'text', text: 'Le premier est plus simple.' }] } }),
     line({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }),
     'not json',
@@ -34,7 +34,7 @@ describe('Claude Code conversations on disk', () => {
 
   it('lists the conversations with their title and first message, without empty ones or those already open', async () => {
     assert.deepEqual((await listConversations(cwd, new Set(), home)).map(({ id, title, preview }) => ({ id, title, preview })),
-      [{ id: A, title: 'Kiin business flows comparison', preview: 'Compare les deux flows Kiin' }]);
+      [{ id: A, title: 'Atlas business flows comparison', preview: 'Compare les deux flows Atlas' }]);
     assert.deepEqual(await listConversations(cwd, new Set([A]), home), []);
     assert.deepEqual(await listConversations('/nowhere', new Set(), home), []);
   });
@@ -51,9 +51,28 @@ describe('Claude Code conversations on disk', () => {
 
   it('reads the last exchanges, what the user said and what Claude answered', async () => {
     assert.deepEqual(await lastExchanges(cwd, A, 8, home), [
-      { who: 'user', text: 'Compare les deux flows Kiin' },
+      { who: 'user', text: 'Compare les deux flows Atlas' },
       { who: 'assistant', text: 'Le premier est plus simple.' },
     ]);
     assert.deepEqual(await lastExchanges(cwd, '../etc', 8, home), []);
   });
+
+  it('reads how full the context was: the last answer of the main thread, or what a compaction left', async () => {
+    const C = '2f0c8d3e-5b1a-4c7e-9d2f-6a8b0c1e3f57';
+    const usage = (input: number) => ({ input_tokens: 2, cache_creation_input_tokens: input, cache_read_input_tokens: 1000, output_tokens: 8 });
+    const write = (...records: object[]) => writeFileSync(path.join(folder, `${C}.jsonl`), records.map(line).join('\n'));
+    write(
+      { type: 'assistant', message: { model: 'claude-opus-5-5', usage: usage(40_000) } },
+      { type: 'assistant', isSidechain: true, message: { model: 'claude-haiku-5-5', usage: usage(5) } },
+    );
+    assert.deepEqual(await lastContextUse(cwd, C, home), { used: 41_010, model: 'claude-opus-5-5' });
+    write(
+      { type: 'assistant', message: { model: 'claude-opus-5-5', usage: usage(40_000) } },
+      { type: 'system', subtype: 'compact_boundary', compactMetadata: { trigger: 'manual', preTokens: 41_010, postTokens: 5250 } },
+    );
+    assert.deepEqual(await lastContextUse(cwd, C, home), { used: 5250, model: 'claude-opus-5-5' });
+    assert.equal(await lastContextUse(cwd, B, home), null, 'no answer yet');
+    assert.equal(await lastContextUse(cwd, '../etc', home), null);
+  });
 });
+

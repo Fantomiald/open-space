@@ -55,6 +55,10 @@ export function insideConvex(point: Point, polygon: readonly Point[]): boolean {
   });
 }
 
+/** The room as drawn: its floor and its two walls, their top edge included (the rest of the canvas is the dark around it). */
+const ROOM_OUTLINE = boxOutline({ fromX: 0, toX: ROOM.width, fromY: 0, toY: ROOM.depth, low: 0, high: WALL_HEIGHT + 6 });
+export const isInRoom = (screen: Point) => insideConvex(screen, ROOM_OUTLINE);
+
 /** Draw order of things standing on the floor: the further back, the earlier. */
 export const depthOf = (tile: Point) => tile.x + tile.y;
 

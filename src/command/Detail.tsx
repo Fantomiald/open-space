@@ -9,9 +9,10 @@ import { useSessions } from '../state/sessions.ts';
 import { DropOverlay } from './Attachments.tsx';
 import { AsidePanel } from './AsidePanel.tsx';
 import { ChangesView, LineCounts } from './Changes.tsx';
+import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
 import { Composer } from './Composer.tsx';
 import { Feed } from './Feed.tsx';
-import { CloseIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { CloseIcon, PauseIcon, PencilIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
@@ -35,7 +36,8 @@ export function Detail() {
   const feed = useMemo(() => buildFeed(events), [events]);
   const changes = useSessions((s) => (s.selectedId ? s.changes[s.selectedId] : undefined));
   const live = useSessions((s) => s.connection === 'live');
-  const [showChanges, setShowChanges] = useState(false);
+  const panelView = useSessions((s) => s.panelView);
+  const showPanel = useSessions((s) => s.showPanel);
   // what it changed, asked again at the end of each of its turns and when a sub-agent comes or goes
   const turns = session?.turns, helpers = session?.subagents.length;
   useEffect(() => {
@@ -48,6 +50,7 @@ export function Detail() {
   const attachments = useAttachments();
   if (!selectedId || !session) return null;
 
+  const back = () => showPanel('thread');
   const model = session.activeModel || session.model || t.session.detail.defaultModel;
   const [first, ...others] = session.permissions;
   /** The name or the tag, edited in place: Enter saves, Escape or leaving the field cancels. */
@@ -85,11 +88,6 @@ export function Detail() {
             {isRunning(session) && (
               <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle} disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
             )}
-            <button
-              type="button" className="cp-icon-button" data-variant="outlined" aria-label="Remote Control" aria-pressed={!!session.remote}
-              title={session.remote ? t.session.detail.remoteOff : t.session.detail.remoteOn}
-              onClick={() => send({ t: 'remoteControl', sessionId: session.id, enabled: !session.remote })}
-            ><PhoneIcon /></button>
             {!session.resting && (
               <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.rest} title={t.session.detail.restTitle} onClick={() => send({ t: 'rest', sessionId: session.id })}><RestIcon /></button>
             )}
@@ -102,10 +100,11 @@ export function Detail() {
             ? <button type="button" className="cp-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
             : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
           {session.remote && <RemoteChip remote={session.remote} />}
+          {session.context && <ContextChip context={session.context} onOpen={() => showPanel('context')} />}
           {changes && changes.files.length > 0 && (
             <button
-              type="button" className="cp-changes-chip" aria-pressed={showChanges} title={t.session.detail.changesTitle}
-              onClick={() => setShowChanges(!showChanges)}
+              type="button" className="cp-changes-chip" aria-pressed={panelView === 'changes'} title={t.session.detail.changesTitle}
+              onClick={() => showPanel(panelView === 'changes' ? 'thread' : 'changes')}
             >
               <LineCounts added={changes.added} removed={changes.removed} />
               <span>{t.session.files(changes.files.length)}</span>
@@ -136,9 +135,11 @@ export function Detail() {
           <ul>{feed.plan.map((item) => <li key={item.text} data-status={item.status}>{item.text}</li>)}</ul>
         </details>
       )}
-      {showChanges ? (
-        <ChangesView cwd={session.cwd} changes={changes} onBack={() => setShowChanges(false)} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
-      ) : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} />}
+      {panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
+        : panelView === 'mcp' ? <McpView sessionId={session.id} cwd={session.cwd} onBack={back} />
+          : panelView === 'context' ? <ContextView sessionId={session.id} onBack={back} />
+            : panelView === 'usage' ? <UsageView sessionId={session.id} onBack={back} />
+              : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} />}
       <AsidePanel session={session} />
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>

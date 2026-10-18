@@ -6,13 +6,14 @@ import { asJson } from './json.ts';
 import { Normalizer, describeRequest, ruleText, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
 
 function createNormalizer(peerName?: (address: string) => string) {
-  const seen = { events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[] };
+  const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
+  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
-    names: new Set(), peerName,
+    names: new Set(), peerName, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
 }
@@ -33,7 +34,7 @@ describe('Normalizer on a real simple turn', () => {
   const { events, results, quotas, inits, partials } = replay('simple-turn');
 
   it('reads model and slash commands from the init message', () => {
-    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'], socket: '' }], 'recorded before Claude Code had sockets');
+    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'], socket: '', conversationId: 'b40531d7-8ea6-4c7f-875e-058a07dcfee9' }], 'recorded before Claude Code had sockets');
     assert.deepEqual(events[0], { k: 'init', model: 'claude-haiku-5-5' });
   });
 
@@ -180,10 +181,76 @@ describe('Normalizer on a real message between two sessions (SendMessage)', () =
     assert.ok(order.indexOf('peer') > order.lastIndexOf('init'), 'with the second turn, the one it started');
   });
 
+  it('leaves out a background sub-agent’s hand-back: it repeats the report of its task notification', () => {
+    const { normalizer, events: seen } = createNormalizer();
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 1, origin: { kind: 'peer', name: 'general-purpose', body: '[Subagent hand-back] The text below is the final report of a subagent…\n  Done.' } });
+    assert.deepEqual(seen.filter((event) => event.k === 'peer'), []);
+  });
+
+  it('marks the other messages of a background sub-agent as its own, by the task id its launch gave', () => {
+    const { normalizer, events: seen } = createNormalizer();
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'task1', name: 'Agent', input: { subagent_type: 'general-purpose', description: 'Tableau', prompt: 'go', run_in_background: true } }] } });
+    normalizer.handle({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'task1', content: 'launched' }] }, tool_use_result: { isAsync: true, status: 'async_launched', agentId: 'a04f5ae49b848c901' } });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 1, origin: { kind: 'peer', from: 'a04f5ae49b848c901', senderTaskId: 'a04f5ae49b848c901', name: 'general-purpose', body: 'Done: server side.\nLeft: the panel.' } });
+    assert.deepEqual(seen.filter((event) => event.k === 'peer'), [{ k: 'peer', from: 'general-purpose', text: 'Done: server side.\nLeft: the panel.', subagent: 'task1' }]);
+  });
+
   it('names a session answered at its socket after the session living there', () => {
     const { normalizer, events: seen } = createNormalizer((address) => (address === 'uds:/tmp/cc-socks/1.sock' ? 'Charline' : address));
     normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'SendMessage', input: { to: 'uds:/tmp/cc-socks/1.sock', message: 'Je vais bien', summary: '' } }] } });
     assert.deepEqual(seen.map((event) => event.k === 'act' && event.detail), ['→ Charline : Je vais bien']);
+  });
+});
+
+describe('Normalizer on files Claude sends the user (SendUserFile, as seen with 2.1.302)', () => {
+  it('passes the files on with their caption once sent, with no action line', () => {
+    const { normalizer, events, files } = createNormalizer();
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'f1', name: 'SendUserFile', input: { files: ['/repo/shot.png'], caption: 'test', status: 'normal' } }] } });
+    normalizer.handle({
+      type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'f1', content: '1 file delivered to user.' }] },
+      tool_use_result: { caption: 'test', attachments: [{ path: '/repo/shot.png', size: 1396, isImage: true, media_type: 'image/png', pathValidated: true }, { path: '/nope', size: 1, pathValidated: false }] },
+    });
+    assert.deepEqual(files, [{ who: 'chef', caption: 'test', files: [{ path: '/repo/shot.png', size: 1396, image: true }], display: '' }]);
+    assert.deepEqual(events, []);
+  });
+});
+
+describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts of 2.1.302)', () => {
+  it('passes a published page on with its claude.ai address and its file, and keeps its action line', () => {
+    const published: { who: string; artifact: { url: string; path: string; title: string } }[] = [];
+    const events: OfficeEvent[] = [];
+    const normalizer = new Normalizer({
+      emit: (event) => events.push(event), onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
+      names: new Set(), onArtifact: (who, artifact) => published.push({ who, artifact }),
+    });
+    const url = 'https://claude.ai/code/artifact/45d6ab09-7dfe-4be7-b936-67421f2ca900';
+    const call = (id: string, input: object, result: object, isError = false) => {
+      normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: 'Artifact', input }] } });
+      normalizer.handle({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: `Published at ${url}`, is_error: isError }] }, tool_use_result: result });
+    };
+    call('a1', { file_path: '/tmp/headers.html', description: 'Quatre en-têtes' }, { url, path: '/tmp/headers.html', artifact_id: 'x', title: 'Headers', updated: false });
+    call('a2', { action: 'list' }, { url, path: '/tmp/headers.html' });
+    call('a3', { file_path: '/tmp/x.html' }, { url: 'https://evil.example/artifact/1', path: '/tmp/x.html' });
+    call('a4', { file_path: '/tmp/y.html' }, { url, path: '/tmp/y.html' }, true);
+    assert.deepEqual(published, [{ who: 'chef', artifact: { url, path: '/tmp/headers.html', title: 'Headers' } }]);
+    assert.deepEqual(events.filter((event) => event.k === 'act').length, 4, 'each call keeps its action line');
+  });
+});
+
+describe('Normalizer on the context (as seen with 2.1.302)', () => {
+  it('measures the context at each answer of the session’s own agent, the window at a turn’s end, and tells a compaction', () => {
+    const contexts: { used?: number; max?: number }[] = [];
+    const seen: OfficeEvent[] = [];
+    const normalizer = new Normalizer({
+      emit: (event) => seen.push(event), onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
+      names: new Set(), onContext: (context) => contexts.push(context),
+    });
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 2, cache_creation_input_tokens: 14454, cache_read_input_tokens: 15310, output_tokens: 4 } } });
+    normalizer.handle({ type: 'assistant', parent_tool_use_id: 'agent', message: { content: [{ type: 'text', text: 'sub' }], usage: { input_tokens: 999 } } });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 1, modelUsage: { 'claude-haiku-5-5': { contextWindow: 1000000 } } });
+    normalizer.handle({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'manual', pre_tokens: 29998, post_tokens: 5250 } });
+    assert.deepEqual(contexts, [{ used: 29770 }, { max: 1000000 }, { used: 5250 }], 'a sub-agent’s own context is left out');
+    assert.deepEqual(seen.filter((event) => event.k === 'compact'), [{ k: 'compact', auto: false, before: 29998, after: 5250 }]);
   });
 });
 

@@ -1,7 +1,7 @@
 // One room's floor, from its layout: where its seats are, which tiles are free, and the walking routes across it.
 // The office and the break room each have their own (see shared/room-layout.ts).
 import type { Festival } from '../../shared/festivals.ts';
-import { blockedTiles, layoutOn, type Layout, type PlayerSpot } from '../../shared/room-layout.ts';
+import { blockedTiles, isMetricsPiece, layoutOn, withMetrics, type Layout, type MetricsKind, type PlayerSpot } from '../../shared/room-layout.ts';
 import { DOOR_SIZE, ROOM, boxOutline, facingVector, insideConvex, onLeftWall, tileCenter, type Box, type Point } from './geometry.ts';
 import { route } from './paths.ts';
 
@@ -14,6 +14,19 @@ const WALL_MARGIN = 0.2;
 const LAPTOP = { fromX: 1.1, toX: 1.9, fromY: 0.15, toY: 0.61, low: 22, high: 34 };
 /** The laptop is small: the pointer finds it a bit around it too (tiles, room pixels). */
 const LAPTOP_MARGIN = { across: 0.15, up: 4 };
+/** The whiteboard on its stand (see pixel-furniture.ts), from the floor to the top of its posts, in room pixels. */
+const BOARD_HEIGHT = 88;
+/**
+ * What a click opens the numbers on, for each draft of the numbers object (pixel-furniture.ts draws them): in tiles
+ * from the piece's corner, and in room pixels above the floor.
+ */
+export const METRICS_BOXES: Readonly<Record<MetricsKind, Box>> = {
+  // the notepad and the banknotes at the left end of the user's desk
+  cash: { fromX: 0, toX: 0.8, fromY: 0.1, toY: 0.9, low: 22, high: 48 },
+  metricsTv: { fromX: 0, toX: 0.12, fromY: 0, toY: 2.5, low: 52, high: 84 },
+  ticker: { fromX: 0, toX: 0.1, fromY: 0, toY: 4.2, low: 70, high: 86 },
+  piggyBank: { fromX: 0.6, toX: 1.4, fromY: 0, toY: 0.6, low: 48, high: 70 },
+};
 
 /** Grows a box by `across` tiles on each side and `up` room pixels above and below. */
 const grown = (box: Box, across: number, up: number): Box => ({
@@ -29,17 +42,26 @@ export class Floor {
   private readonly avoided: Set<string>;
   /** the user's laptop, where a click opens a terminal: in the room with their desk (the office) */
   readonly userScreen: Box | null;
+  /** the whiteboard, where a click opens its notes (the office) */
+  readonly board: Box | null;
+  /** the numbers object, where a click opens the numbers (the office) */
+  readonly metrics: Box | null;
 
-  /** `festival`: its decorations join the furniture. */
-  constructor(layout: Layout, festival: Festival | null = null) {
-    this.layout = layoutOn(layout, festival);
+  /** `festival`: its decorations join the furniture. `numbers`: the office has its numbers object. */
+  constructor(layout: Layout, festival: Festival | null = null, numbers = false) {
+    this.layout = layoutOn(numbers ? withMetrics(layout) : layout, festival);
     this.door = { x: 0.4, y: layout.door.y + 0.6 };
     this.blocked = blockedTiles(this.layout.furniture);
-    this.avoided = blockedTiles(this.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined).map((piece) => ({ ...piece, blocks: true })));
+    this.avoided = blockedTiles(this.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined && !piece.wall).map((piece) => ({ ...piece, blocks: true })));
     const desk = this.layout.furniture.find((piece) => piece.kind === 'bossDesk');
     this.userScreen = desk
       ? { fromX: desk.x + LAPTOP.fromX, toX: desk.x + LAPTOP.toX, fromY: desk.y + LAPTOP.fromY, toY: desk.y + LAPTOP.toY, low: LAPTOP.low, high: LAPTOP.high }
       : null;
+    const board = this.layout.furniture.find((piece) => piece.kind === 'whiteboard');
+    this.board = board ? { fromX: board.x, toX: board.x + board.width, fromY: board.y, toY: board.y + board.depth, low: 0, high: BOARD_HEIGHT } : null;
+    const metrics = this.layout.furniture.find(isMetricsPiece);
+    const box = metrics && METRICS_BOXES[metrics.kind as MetricsKind];
+    this.metrics = metrics && box ? { ...box, fromX: metrics.x + box.fromX, toX: metrics.x + box.toX, fromY: metrics.y + box.fromY, toY: metrics.y + box.toY } : null;
   }
 
   get seatCount() { return this.layout.seats.length; }
@@ -86,6 +108,16 @@ export class Floor {
   /** True for a canvas point on the user's laptop, or just around it. */
   isUserScreenAt(screen: Point): boolean {
     return !!this.userScreen && insideConvex(screen, boxOutline(grown(this.userScreen, LAPTOP_MARGIN.across, LAPTOP_MARGIN.up)));
+  }
+
+  /** True for a canvas point on the whiteboard. */
+  isBoardAt(screen: Point): boolean {
+    return !!this.board && insideConvex(screen, boxOutline(this.board));
+  }
+
+  /** True for a canvas point on the numbers object. */
+  isMetricsAt(screen: Point): boolean {
+    return !!this.metrics && insideConvex(screen, boxOutline(this.metrics));
   }
 
   /** The spot where the user can sit whose area holds a floor point, if any. */

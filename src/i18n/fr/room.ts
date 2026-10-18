@@ -8,8 +8,8 @@ export const room = {
   /** what the crew says at a birthday party (src/room/visitors.ts) */
   birthdayWish: (names: readonly string[]) => `Joyeux anniversaire ${names.join(' et ')} !`,
   subagent: 'Sous-agent',
-  /** the card following the pointer over the door or the user's screen */
-  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', startWith: (name: string) => `Lancer une session avec ${name}` },
+  /** the card following the pointer over the door, the user's screen, the whiteboard or the numbers */
+  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
     office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,
@@ -30,10 +30,11 @@ export const room = {
   petLines: {
     cat: ['Miaou !', 'Mrrrr…', 'Miaou ?', 'Mraou !'],
     dog: ['Ouaf ouaf !', 'Wouf !', 'Ouaf ?', 'Ouaf ouaf ouaf !'],
-    duck: ['Coin coin !', 'Coin ?', 'Explique-moi ton bug.', 'Coin.'],
+    duck: ['Coin coin !', 'Coin ?', 'Coin.', 'Coin coin coin !'],
     capybara: ['Tranquille.', 'Mmh.', 'Zen.', '…'],
     axolotl: ['Blub !', 'Bloup.', 'Blub blub ?'],
     rocky: ['♫ Amaze! Amaze! Amaze!', '♫ Fist my bump.', '♫ Good good good.', '♫ Happy happy happy!', '♫ You are friend, question?'],
+    clawd: ['Tu as tout à fait raison !', 'Bonne question !', 'Excellente idée !', '✻ Mijote…', '✻ Cogite…', '✻ Infuse…', '✻ Peaufine…'],
   } satisfies Record<Exclude<PetKind, 'none'>, readonly string[]>,
   /** the festivals' names, in the preview menu */
   festivals: {

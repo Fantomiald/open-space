@@ -1,41 +1,53 @@
 # Open Space
 
-Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis ton navigateur.
+**English** · [Français](README.fr.md)
 
-![Le bureau d'Open Space : des sessions à leur poste, deux lèvent la main pour une question](docs/images/office.png)
+A pixel-art office to run several Claude Code sessions at once, from your browser.
 
-Chaque session est un perso assis à son poste. Il tape quand il travaille, lève la main quand il a besoin de toi, sourit quand il a fini. Un clic sur lui ouvre son fil à droite, et tu réponds sans changer de fenêtre. Plus besoin de jongler entre six terminaux pour savoir qui attend quoi.
+![The Open Space office: sessions at their desks, two of them raising a hand with a question](docs/images/office.png)
 
-Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, ton `CLAUDE.md` et tes réglages de Claude Code s'appliquent comme dans ton terminal.
+Each session is a character at a desk. They type while they work, raise a hand when they need you, and smile when they're done. Click one to open its thread on the right and answer without switching windows. No more juggling six terminals to find out who is waiting on what.
 
-## Ce que tu y fais
+Open Space runs the `claude` installed on your machine. Your skills, plugins, `CLAUDE.md` and Claude Code settings apply just as they do in your terminal.
 
-- **Lancer des sessions** dans tes dossiers de projets, chacune avec un prénom de ton équipe. Leurs réponses s'écrivent en direct dans le fil.
-- **Répondre sans terminal** : les autorisations (Oui, Non, Toujours) et les questions de Claude, une par onglet comme dans Claude Code.
-- **Écrire pendant qu'une session travaille** : ton message attend la fin du tour, ou part tout de suite avec « Envoyer maintenant ». Et `/btw ta question` pose une question à côté, sans interrompre ni polluer la conversation.
-- **Coller une capture d'écran** (Cmd+V), la glisser sur le panneau, ou passer par le trombone.
-- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Charline où elle en est »). Leurs messages s'affichent dans le fil.
-- **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet par sous-agent au travail avec ce qu'il écrit, puis son rapport dans « Terminés ».
-- **Voir ce qu'une session a changé** : `+X −Y` dans son en-tête, puis chaque fichier avec son diff, comme dans Claude Code.
-- **La reprendre sur ton téléphone** avec Remote Control : un bouton, et elle apparaît dans claude.ai/code et l'app Claude.
-- **Ouvrir un terminal** en cliquant sur l'écran de ton bureau.
-- **Être prévenu** par un son et une notification macOS quand une session a fini ou t'attend, même onglet fermé.
-- **Mettre une session au repos** dans la salle de repos, ou garder le bureau dans une mini-fenêtre au-dessus de tes autres apps.
-- **Chercher** dans un fil avec Cmd+F, copier un bloc de code d'un clic.
+## What you can do
 
-## Ton équipe, ton bureau
+- **Start sessions** in your project folders, each with a first name from your crew. Their answers stream into the thread.
+- **See where everyone is at** in the Status panel, bottom left: what waits for you and for how long, who is at work and for how long.
+- **Answer without a terminal**: permissions (Yes, No, Always) and Claude's questions, one tab each as in Claude Code.
+- **Write while a session works**: your message joins the running turn without interrupting it (Claude reads it at its next step); a `/` command waits for the turn to end, or leaves at once with "Send now". `/btw your question` asks a side question without interrupting or cluttering the conversation.
+- **Attach any file**: paste a screenshot (Cmd+V), drop files on the panel, or use the paperclip. Pictures go to Claude as pictures; a zip, a PDF or a CSV goes as its path, which Claude opens with its tools, as in the terminal.
+- **Let sessions talk to each other**: each one carries its first name and the others find it by that name ("ask Charline where things stand"). Their messages show in the thread.
+- **Follow sub-agents**: their faces next to the session's name, a tab for each one at work with what it writes, then its report under "Done".
+- **See what a session changed**: `+X −Y` in its header, then each file with its diff, as in Claude Code.
+- **Watch the context**: a gauge in the session's header changes colour as the conversation fills up, and `/context` shows what fills it, with buttons to compact or start over (`/compact`, `/clear`).
+- **Claude Code's views in the page**: `/mcp` lists the MCP servers and lets you reconnect, sign in to or turn off each one; `/usage` shows your limits and your week. Commands with options (`/model`, `/effort`…) suggest their values.
+- **Run a shell command** by typing `!` first. It runs in the session's folder without Claude, who sees it with your next message, as in the terminal.
+- **See the files Claude sends you** in the thread: pictures and SVG diagrams, HTML pages as a live preview, full size in one click. Other files download. A page Claude publishes on claude.ai (an artifact) shows as a live preview: click it to see it large, or open it on claude.ai.
+- **Keep an unsent message**: what you type stays in each session's field when you switch from one session to another.
+- **Continue on your phone** with Remote Control: one button, and the session shows up in claude.ai/code and the Claude app.
+- **Open a terminal** by clicking the screen on your own desk.
+- **Read and edit your daily notes** on the office whiteboard: one tab per Markdown file of `~/Journal` (or the folder set in Settings), which your sessions can fill too.
+- **Keep an eye on a file of numbers** (optional): set a Markdown file in Settings and a pile of banknotes shows up on your desk; a click shows the file, a red "!" floats above it when it changed since you last looked.
+- **Get notified** by a sound and a macOS notification when a session is done or waiting for you, even with the tab closed.
+- **Send a session to the break room**, or keep the office in a mini window above your other apps.
+- **Search** a thread with Cmd+F, copy a code block in one click.
 
-Tu crées ton perso au premier lancement, puis toute ton équipe dans **Équipe** : 16 coiffures, 9 barbes, 14 hauts, des chapeaux, des lunettes de soleil, des peaux de toutes les couleurs. Une session qui porte le prénom d'un membre prend son look. Donne-leur un métier (Tech, Cyber, Produit, RH…) : une demande lancée sans choisir la personne va à quelqu'un de libre dont le métier colle, ou choisis-la toi-même dans le lanceur.
+The whiteboard shows the `.md` files of your notes folder, one tab per file, and you can write in them right there. Your Claude sessions can keep them up to date too: add to your `CLAUDE.md` a line like `When a task is done, add a line to ~/Journal/<project>.md`. The numbers object works the same way with any Markdown file your scripts or a session rewrite (numbers, stats, tracking); leave its setting empty and it stays out of the office.
 
-Un animal se balade dans le bureau : un chat, un chien (7 races), un canard en plastique pour le débogage, un capybara, un axolotl, ou Rocky de *Projet Dernière Chance*. Clique dessus, il te répond à sa façon.
+## Your crew, your office
 
-Le bureau suit l'heure de la journée et se déguise pour 14 fêtes : Noël, Halloween, le Nouvel An chinois, Songkran, le 14 juillet, et l'anniversaire de chaque membre de ton équipe. L'icône calendrier du bandeau te laisse les essayer toutes.
+You create your own character on first launch, then your whole crew under **Crew**: 16 hairstyles, 9 beards, 14 tops, hats, sunglasses, and skin of every colour. A session named after a crew member takes on their look. Give them a job (Tech, Cyber, Product, HR…): a request started without picking someone goes to a free member whose job fits, or you pick them yourself in the launcher.
 
-![La salle de repos décorée pour Noël](docs/images/christmas.png)
+A pet wanders around the office: a cat, a dog (7 breeds), a rubber duck for debugging, a capybara, an axolotl, Rocky from *Project Hail Mary*, or Clawd, Claude Code's mascot. Click it and it answers in its own way.
 
-## Installer
+The office follows the time of day and dresses up for 14 occasions: Christmas, Halloween, Chinese New Year, Songkran, Bastille Day, and the birthday of each member of your crew. The calendar icon in the top bar lets you try them all.
 
-Il te faut **Node.js 22.18 ou plus** et **Claude Code installé et connecté** ([la doc de Claude Code](https://code.claude.com/docs) explique comment).
+![The break room decorated for Christmas](docs/images/christmas.png)
+
+## Install
+
+You need **Node.js 22.18 or later** and **Claude Code installed and signed in** ([the Claude Code docs](https://code.claude.com/docs) explain how).
 
 ```bash
 git clone https://github.com/Fantomiald/open-space.git
@@ -44,62 +56,64 @@ npm ci --ignore-scripts
 npm start
 ```
 
-`npm start` construit l'interface, lance le serveur et ouvre ton navigateur sur **http://127.0.0.1:4848**. Mets cette adresse en favori : elle ne change pas, et un onglet ouvert se reconnecte tout seul quand le serveur redémarre. La toute première fois, le lien « Autoriser un navigateur » s'ouvre aussi : il pose un cookie qui reste valable 400 jours.
+`npm start` builds the interface, starts the server and opens your browser at **http://127.0.0.1:4848**. Bookmark it: the address doesn't change, and an open tab reconnects by itself when the server restarts. The very first time, the "Allow a browser" link opens too: it sets a cookie that stays valid for 400 days.
 
-Le premier lancement te pose quatre questions : ton prénom et ton perso, les dossiers où les sessions ont le droit de travailler (Open Space te propose ceux qui contiennent des projets), puis tes habitudes : modèle et autorisations par défaut, son, notifications, animal. Tout se change ensuite dans **Équipe** et **Réglages**.
+The first launch asks four things: your first name and your character, the folders sessions may work in (Open Space suggests those that hold projects), then your habits: default model and permissions, sound, notifications, pet. Everything can be changed later under **Crew** and **Settings**.
 
-### Sur Mac : l'app du Dock
+The interface follows your browser's language, French or English. You can switch it in **Settings**.
+
+### On a Mac: the Dock app
 
 ```bash
 pip3 install pillow
 python3 scripts/macos-app.py
 ```
 
-Ça crée `~/Applications/Open Space.app`, avec ton perso en icône. L'ouvrir lance le serveur et la page, la quitter arrête le serveur. Les notifications s'affichent alors à son nom et avec ton perso. Relance le script si tu changes de look ou si tu déplaces le projet.
+This creates `~/Applications/Open Space.app`, with your character as its icon. Opening it starts the server and the page; quitting it stops the server. Notifications then show under its name, with your character. Run the script again if you change your look or move the project.
 
-## Sécurité
+## Security
 
-- Le serveur n'écoute que sur ta machine (`127.0.0.1`) et refuse tout navigateur sans le cookie d'autorisation.
-- Les sessions ne travaillent que dans les dossiers que tu as choisis.
-- Un dossier dont les réglages lancent du code (hooks, serveurs MCP du projet) ne démarre qu'après ton accord. Sans accord, la session tourne sans ces réglages.
-- Les variables `ANTHROPIC_*` et tes autres secrets de shell ne sont pas transmis aux sessions. Le serveur n'appelle rien sur internet.
-- Les nouvelles sessions partent en mode **Auto** : Claude décide et te demande quand c'est risqué. Choisis « Demande à chaque fois » dans les réglages si tu préfères tout valider.
+- The server only listens on your machine (`127.0.0.1`) and refuses any browser without the authorization cookie.
+- Sessions only work in the folders you chose.
+- A folder whose settings run code (hooks, the project's MCP servers) only starts once you agree. Without your agreement, the session runs without those settings.
+- `ANTHROPIC_*` variables and your other shell secrets aren't passed to sessions. The server makes no call to the internet.
+- New sessions start in **Auto** mode: Claude decides, and asks you when something is risky. Pick "Asks every time" in Settings if you'd rather approve everything.
 
-## Réglages avancés
+## Advanced settings
 
-| Variable | Rôle | Par défaut |
+| Variable | Purpose | Default |
 |---|---|---|
-| `OFFICE_ROOTS` | Dossiers autorisés, séparés par `:`. Remplace ceux choisis dans la page | ceux de l'onboarding |
-| `OFFICE_DIR` | Où vivent tes données (équipe, sessions, journaux) | `~/.open-space` |
-| `PORT` | Port du serveur | `4848` |
-| `OFFICE_MAX_LIVE` | Sessions Claude Code actives en même temps | `8` |
-| `OFFICE_IDLE_MINUTES` | Après ce délai, une session inactive libère son processus (elle reprend au prochain message) | `30` |
-| `OFFICE_ENV_PASSTHROUGH` | Variables de ton shell à transmettre en plus aux sessions | aucune |
+| `OFFICE_ROOTS` | Allowed folders, separated by `:`. Replaces the ones chosen in the page | those from onboarding |
+| `OFFICE_DIR` | Where your data lives (crew, sessions, logs) | `~/.open-space` |
+| `PORT` | Server port | `4848` |
+| `OFFICE_MAX_LIVE` | Claude Code sessions running at the same time | `8` |
+| `OFFICE_IDLE_MINUTES` | After this long, an idle session releases its process (it resumes with the next message) | `30` |
+| `OFFICE_ENV_PASSTHROUGH` | Extra variables from your shell to pass to sessions | none |
 
-## À savoir
+## Good to know
 
-- L'interface est en français ou en anglais (Réglages).
-- Testé sur macOS, avec des navigateurs Chromium (Chrome, Arc). Les notifications et l'app du Dock sont propres à macOS.
-- Open Space s'appuie sur le mode `claude -p` en stream-json, dont certaines options ne sont pas documentées. Une mise à jour de Claude Code peut casser une fonction : ouvre une issue si ça t'arrive.
+- Tested on macOS with Chromium browsers (Chrome, Arc). Notifications and the Dock app are macOS only.
+- Open Space relies on `claude -p` in stream-json mode, some of whose options are undocumented. Everything was checked with Claude Code 2.1.302: a newer version may break a feature. Please open an issue if that happens to you.
+- The code's comments and the internal docs ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) are partly in French.
 
-## Développer
+## Develop
 
-| Commande | |
+| Command | |
 |---|---|
-| `npm start` | build + serveur + navigateur |
-| `npm run dev` | serveur + Vite avec rechargement à chaud (http://localhost:5174) |
-| `npm run check` | types, client et serveur |
-| `npm run lint` | linter ([Biome](https://biomejs.dev), règles expliquées dans `biome.jsonc`) |
-| `npm test` | tests (`node:test`, sans dépendance) |
-| `npm run build` | build de l'interface |
+| `npm start` | build + server + browser |
+| `npm run dev` | server + Vite with hot reload (http://localhost:5174) |
+| `npm run check` | types, client and server |
+| `npm run lint` | linter ([Biome](https://biomejs.dev), rules explained in `biome.jsonc`) |
+| `npm test` | tests (`node:test`, no dependency) |
+| `npm run build` | build the interface |
 
-Le fonctionnement interne (serveur, protocole, salle, ce qui a été vérifié avec un vrai Claude Code) est décrit dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Les règles à suivre en modifiant le code sont dans [CLAUDE.md](CLAUDE.md).
+How it works inside (server, protocol, office, and what was checked against a real Claude Code) is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The rules to follow when changing the code are in [CLAUDE.md](CLAUDE.md).
 
-## Crédits
+## Credits
 
-- Parti de [bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) (MIT). Le serveur, le protocole et l'interface ont été réécrits ; le copyright d'origine reste dans [LICENSE](LICENSE).
-- Polices [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) et [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icônes [Lucide](https://lucide.dev) (ISC).
-- Rocky vient du roman *Project Hail Mary* d'Andy Weir : un clin d'œil de fan, sans lien avec l'auteur ni l'éditeur.
-- Open Space n'est pas un produit d'Anthropic. Claude et Claude Code sont des marques d'Anthropic.
+- Started from [bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) (MIT). The server, protocol and interface were rewritten; the original copyright stays in [LICENSE](LICENSE).
+- Fonts [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) and [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icons [Lucide](https://lucide.dev) (ISC).
+- Rocky comes from Andy Weir's novel *Project Hail Mary*: a fan's nod, with no connection to the author or the publisher.
+- Clawd is Claude Code's mascot, drawn here as a fan's nod. Open Space isn't an Anthropic product. Claude and Claude Code are trademarks of Anthropic.
 
-Licence MIT, par [Fantomiald](https://github.com/Fantomiald).
+MIT licence, by [Fantomiald](https://github.com/Fantomiald).

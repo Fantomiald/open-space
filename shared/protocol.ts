@@ -14,8 +14,8 @@ export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'c
  */
 export type OfficeEvent =
   /** a message was sent to the session */
-  /** a message from the user; `images`: the pictures sent with it, by name under /attachments/ */
-  | { k: 'start'; text: string; images?: string[] }
+  /** a message from the user; `images`: the pictures sent with it, by name under /attachments/; `files`: the other files */
+  | { k: 'start'; text: string; images?: string[]; files?: UploadedFile[] }
   | { k: 'init'; model: string }
   | { k: 'think'; who: string }
   | { k: 'say'; who: string; text: string }
@@ -37,11 +37,34 @@ export type OfficeEvent =
    * a message from another Claude Code session (its SendMessage tool), `from`: that session's name. It started the turn
    * it comes with, but Claude Code only tells it at the turn's end: the thread shows it at the top of that turn.
    */
-  | { k: 'peer'; from: string; text: string }
+  /** `subagent`: written by one of the session's own sub-agents (the id of its Task call), not by another session */
+  | { k: 'peer'; from: string; text: string; subagent?: string }
+  /**
+   * a command the user ran with "!" in the session's folder, without Claude (like Claude Code's bash mode), then its
+   * end: `output` is what it wrote (the end of it when long), `code` null when it was stopped after too long
+   */
+  | { k: 'shell'; id: string; command: string }
+  /** `code` null: stopped, by the user (`byUser`) or after two minutes */
+  | { k: 'shell_done'; id: string; code: number | null; output: string; ms: number; byUser?: true }
+  /** files a session's Claude (or one of its sub-agents) sent the user with its SendUserFile tool, and what it said of them */
+  | { k: 'files'; who: string; caption?: string; files: SentFile[] }
+  /** a page Claude published on claude.ai with its Artifact tool: its address there, and `stored` the copy of its HTML under /attachments/ (null when it could not be kept) */
+  | { k: 'artifact'; who: string; title: string; url: string; stored: string | null }
+  /** the conversation was summarized to free its context (/compact, or automatically when full): its size before and after, in tokens */
+  | { k: 'compact'; auto: boolean; before: number; after: number }
+  /** /clear: Claude goes on in a new, empty conversation */
+  | { k: 'cleared' }
   /** a note of Open Space in the thread ("the last exchanges of the conversation it resumes") */
   | { k: 'note'; text: string }
   /** the session changed state (see SessionState) */
   | { k: 'state'; state: SessionState; reason?: string };
+
+/**
+ * A file a session sent: `title` its own name; `stored` the copy under /attachments/ (null when it could not be kept: too
+ * big, gone); `image`: shown in the thread (png, jpeg, gif, webp, svg); `page`: an HTML page shown in a preview, unless
+ * Claude sent it as a mere attachment; `video`: played in the page; any other file is offered for download.
+ */
+export interface SentFile { title: string; stored: string | null; image: boolean; page?: true; video?: true; size: number }
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }
 
@@ -90,7 +113,10 @@ export type AttentionKind = 'permission' | 'question' | 'finished' | 'error';
 /** What a folder would run of its own with a session: its hooks and MCP servers ("event : command", "name : command"), and whether it has a CLAUDE.md. */
 export interface FolderCode { hooks: string[]; mcpServers: string[]; instructions: boolean }
 
-export interface QueuedMessage { id: string; text: string; /** how many pictures go with it */ images?: number }
+export interface QueuedMessage { id: string; text: string; /** how many pictures go with it */ images?: number; /** how many other files */ files?: number }
+
+/** A file of any kind the user sent with a message: `id` as uploaded (POST /upload, see server/uploads.ts) */
+export interface UploadedFile { id: string; name: string; size: number }
 
 export type ImageType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 /** A picture sent with a message (a pasted or dropped screenshot), in base64. */
@@ -127,6 +153,10 @@ export interface SessionInfo {
   state: SessionState;
   /** epoch ms of the last state change */
   stateSince: number;
+  /** epoch ms since which it works (starting, at work or waiting for a permission on the way), while it does */
+  busySince?: number;
+  /** its session on claude.ai while Remote Control is on, kept across restarts of the server to reattach to it */
+  remoteSession?: string;
   createdAt: number;
   /** completed turns */
   turns: number;
@@ -144,11 +174,54 @@ export interface SessionInfo {
   resumable: boolean;
   /** highest event sequence number recorded for this session */
   lastSeq: number;
+  /**
+   * the Claude Code conversation the session goes on with: its own id at first, a new one after /clear (Claude Code
+   * starts another conversation then); absent = `id`
+   */
+  conversationId?: string;
+  /** how full the conversation's context is, in tokens, as of the last answer (`max`: the model's window) */
+  context?: { used: number; max: number };
   /** Remote Control is on: the session is also reachable from claude.ai/code and the Claude app, at `url` ('' until known) */
   remote?: RemoteControl;
 }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
+
+/* The session panel's own views of what Claude Code knows (/mcp, /context, /usage), read from it (server/inspect.ts) */
+
+/** `pending`: still connecting; `needs-auth`: waits for the user to sign in. */
+export type McpState = 'connected' | 'pending' | 'failed' | 'needs-auth' | 'disabled';
+/** Where a server is set up: the user's settings, the folder's (project, local), a plugin, claude.ai's connectors. */
+export type McpSource = 'user' | 'project' | 'local' | 'plugin' | 'claudeai' | 'other';
+export interface McpServer { name: string; state: McpState; source: McpSource; transport: string; tools: number; error?: string }
+export type McpAction = 'reconnect' | 'enable' | 'disable' | 'authenticate';
+
+/** `deferred`: loaded only when used, not counted; `buffer`: kept free for the automatic summary. */
+export interface ContextCategory { name: string; tokens: number; kind: 'used' | 'deferred' | 'buffer' | 'free' }
+export interface ContextUsage {
+  model: string;
+  used: number;
+  max: number;
+  categories: ContextCategory[];
+  memoryFiles: { path: string; kind: string; tokens: number }[];
+  /** the conversation is summarized when it gets this big, null when that is off */
+  autoCompactAt: number | null;
+}
+
+/** A plan limit: `model` for a weekly limit on one model; `percent` 0-100; `resetsAt` ms. */
+export interface UsageLimit { kind: 'session' | 'weekly' | 'weeklyModel' | 'other'; model?: string; percent: number; resetsAt: number | null }
+export interface UsageShare { name: string; percent: number }
+export interface UsageReport {
+  /** "max", "pro"…, '' when not on a plan */
+  plan: string;
+  limits: UsageLimit[];
+  session: { costUsd: number; durationMs: number; apiMs: number; linesAdded: number; linesRemoved: number };
+  /** what weighed on the limits these seven days, on this machine, by share of the requests */
+  week: { requests: number; sessions: number; skills: UsageShare[]; agents: UsageShare[]; mcpServers: UsageShare[] } | null;
+}
+
+export type Inspection = { view: 'mcp'; servers: McpServer[] } | { view: 'context'; usage: ContextUsage } | { view: 'usage'; report: UsageReport };
+export type InspectView = Inspection['view'];
 
 export interface SlashCommand { name: string; description?: string; argumentHint?: string }
 
@@ -167,6 +240,8 @@ export interface SessionOptions {
   text?: string;
   /** pictures sent with the first message */
   images?: ImageUpload[];
+  /** other files sent with it, by their upload id */
+  files?: string[];
   /** for a folder that runs code of its own and was never trusted (see FolderCode): trust it from now on, or run
    * this session without its settings. Without it, such a folder is refused with a `trustNeeded` message. */
   trust?: 'folder' | 'restricted';
@@ -200,9 +275,21 @@ export interface Preferences {
   officeLife: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
+  /** the folder of the whiteboard's notes, one Markdown file per project (absolute; ~/Journal by default) */
+  journalFolder: string;
+  /** the Markdown file the office's numbers object shows, kept up to date by the user's scripts or sessions (absolute; '' by default: no object) */
+  metricsFile: string;
   /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
   language?: Language;
 }
+
+/** A note of the whiteboard (a Markdown file of the journal folder, see shared/journal.ts): its file name, its last change (ms). */
+export interface NoteFile { name: string; mtime: number }
+/** A note's text, and its version (a hash of the text): a save carries the version it was made from, and is refused when the file changed since. */
+export interface Note extends NoteFile { text: string; version: string }
+
+/** The numbers file as it is on the disk: its text and its last change (ms). */
+export interface MetricsFile { text: string; mtime: number }
 
 /** A folder offered at the onboarding as a place for sessions to run in: how many projects it holds (-1: not looked into). */
 export interface RootSuggestion { path: string; projects: number }
@@ -211,7 +298,7 @@ export type ClientMessage =
   | { t: 'create'; options: SessionOptions }
   /** the Claude Code conversations of a folder, to resume one */
   | { t: 'conversations'; cwd: string }
-  | { t: 'send'; sessionId: string; text: string; images?: ImageUpload[] }
+  | { t: 'send'; sessionId: string; text: string; images?: ImageUpload[]; files?: string[] }
   | { t: 'answer'; sessionId: string; requestId: string; decision: PermissionDecision }
   /** answers to an AskUserQuestion call: question text -> chosen label(s) or the user's own text */
   | { t: 'reply'; sessionId: string; requestId: string; answers: Record<string, string> }
@@ -250,11 +337,25 @@ export type ClientMessage =
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
   /** opens a terminal window on the user's computer, in the default folder */
   | { t: 'openTerminal' }
+  /** runs a command typed with "!" in the session's folder, without Claude; Claude learns of it with the next message */
+  | { t: 'shell'; sessionId: string; command: string }
+  | { t: 'stopShell'; sessionId: string; shellId: string }
+  /** asks a session's Claude Code for one of the panel's views (its process starts if needed) */
+  | { t: 'inspect'; sessionId: string; view: InspectView }
+  /** reconnects, turns on or off, or signs in to one of a session's MCP servers; the MCP view follows */
+  | { t: 'mcpAction'; sessionId: string; server: string; action: McpAction }
   /** adds a crew member (previousName null) or updates the one called previousName */
   | { t: 'saveMember'; previousName: string | null; name: string; look: Look; birthday?: string; jobs?: Job[] }
   | { t: 'removeMember'; name: string }
   /** someone of the crew becomes the user */
-  | { t: 'becomeSelf'; name: string };
+  | { t: 'becomeSelf'; name: string }
+  /** the notes of the whiteboard (the journal folder) */
+  | { t: 'notes' }
+  | { t: 'readNote'; name: string }
+  /** saves a note made from `version` (null: a new one); the folder is created if needed */
+  | { t: 'writeNote'; name: string; text: string; version: string | null }
+  /** reads the numbers file to show it: its numbers then count as seen */
+  | { t: 'metrics' };
 
 export type ServerMessage =
   | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
@@ -276,7 +377,16 @@ export type ServerMessage =
   | { t: 'commands'; commands: SlashCommand[] }
   | { t: 'directories'; directories: string[] }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }
+  | { t: 'inspection'; sessionId: string; inspection: Inspection }
   | { t: 'quota'; quota: Quota }
+  /** the journal folder and its notes, by name */
+  | { t: 'notes'; folder: string; files: NoteFile[] }
+  /** a note as it is on the disk: read, just saved, or changed since the version a save was made from (`conflict`: not saved) */
+  | { t: 'note'; note: Note; outcome: 'read' | 'saved' | 'conflict' }
+  /** the numbers file, null when there is none yet (asked for with 'metrics') */
+  | { t: 'metrics'; metrics: MetricsFile | null }
+  /** whether the numbers file changed since the page last showed it (the badge on the numbers object); sent at connection and when it flips */
+  | { t: 'metricsStatus'; unread: boolean }
   | { t: 'toast'; kind: 'info' | 'error'; text: string };
 
 /** A side question (/btw) and its answer. */
