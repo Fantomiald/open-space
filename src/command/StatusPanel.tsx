@@ -17,8 +17,9 @@ const writeFolded = (folded: boolean) => { try { localStorage.setItem(FOLDED_KEY
 export function StatusPanel() {
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
-  const select = useSessions((s) => s.select);
-  const selectedId = useSessions((s) => s.selectedId);
+  const show = useSessions((s) => s.show);
+  const openIds = useSessions((s) => s.openIds);
+  const toggleOpen = useSessions((s) => s.toggleOpen);
   const [folded, setFolded] = useState(readFolded);
   const waiting = useMemo(() => attentionQueue(Object.values(sessions), seen), [sessions, seen]);
   const working = useMemo(() => otherSessions(Object.values(sessions), seen).working, [sessions, seen]);
@@ -43,7 +44,7 @@ export function StatusPanel() {
               <ul className="cp-status__list">
                 {waiting.map(({ session, kind }) => (
                   <li key={session.id}>
-                    <button type="button" className="cp-status__item" data-kind={kind} aria-current={session.id === selectedId} onClick={() => select(session.id)}>
+                    <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">{todoLabel(session, kind)}</span>
                       <span className="cp-status__time">{formatDuration(now - session.stateSince)}</span>
@@ -59,7 +60,7 @@ export function StatusPanel() {
               <ul className="cp-status__list">
                 {working.map((session) => (
                   <li key={session.id}>
-                    <button type="button" className="cp-status__item" data-kind="working" aria-current={session.id === selectedId} onClick={() => select(session.id)}>
+                    <button type="button" className="cp-status__item" data-kind="working" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">
                         {session.name}

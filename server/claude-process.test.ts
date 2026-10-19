@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildClaudeArgs, identityPrompt, renameNote } from './claude-process.ts';
+import { buildClaudeArgs, identityPrompt, parseCatalog, renameNote } from './claude-process.ts';
 import { setServerLanguage } from './i18n/index.ts';
 
 describe('buildClaudeArgs', () => {
@@ -38,6 +38,35 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs({ ...base, model: 'haiku' });
     assert.equal(args[args.indexOf('--model') + 1], 'haiku');
     for (const forbidden of ['--tools', '--restricted', '--dangerously-skip-permissions', '--allowedTools', '--permission-prompts']) assert.ok(!args.includes(forbidden));
+  });
+});
+
+describe('parseCatalog', () => {
+  it('reads the commands and the models of the initialize answer (shape of Claude Code 2.1.303)', () => {
+    const catalog = parseCatalog({
+      commands: [
+        { name: 'impeccable:impeccable', description: 'Design work', argumentHint: '[shape · polish] [target]', aliases: ['impeccable'] },
+        { name: 'compact', description: 'Free up context', argumentHint: '', builtin: true },
+        { description: 'no name' },
+      ],
+      models: [
+        { value: 'default', displayName: 'Default (recommended)', description: 'Opus 5.5', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'turbo'] },
+        { value: 'haiku', displayName: 'Haiku 5.5', supportsEffort: false },
+      ],
+    });
+    assert.deepEqual(catalog.commands, [
+      { name: 'impeccable:impeccable', description: 'Design work', argumentHint: '[shape · polish] [target]', aliases: ['impeccable'] },
+      { name: 'compact', description: 'Free up context' },
+    ]);
+    assert.deepEqual(catalog.models, [
+      { value: 'default', label: 'Default (recommended)', description: 'Opus 5.5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      { value: 'haiku', label: 'Haiku 5.5', efforts: [] },
+    ]);
+  });
+
+  it('passes the effort at launch', () => {
+    const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', effort: 'high', permissionMode: 'auto', name: 'Ana' });
+    assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), ['--effort', 'high']);
   });
 });
 

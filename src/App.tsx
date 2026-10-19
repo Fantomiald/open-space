@@ -5,15 +5,14 @@ import { CommandPalette } from './command/CommandPalette.tsx';
 import { CrewDialog } from './command/CrewDialog.tsx';
 import { Onboarding } from './command/Onboarding.tsx';
 import { SettingsDialog } from './command/SettingsDialog.tsx';
-import { Detail } from './command/Detail.tsx';
 import { Header } from './command/Header.tsx';
 import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
 import { RoomView } from './room/RoomView.tsx';
 import { Sky } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
-import { useSmallWindow } from './room/pip.ts';
 import { useFestival } from './room/useFestival.ts';
+import { Stack } from './command/Stack.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { defaultFolder } from './lib/format.ts';
@@ -28,10 +27,10 @@ const isTyping = (target: EventTarget | null) =>
 export function App() {
   const view = useSessions((s) => s.view);
   const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
-  const { smallWindow, open: openSmallWindow } = useSmallWindow();
   const day = useFestival();
   const attention = useSessions(selectAttentionCount);
   const selectedId = useSessions((s) => s.selectedId);
+  const openIds = useSessions((s) => s.openIds);
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
@@ -80,7 +79,7 @@ export function App() {
       if (!id) return;
       history.replaceState(null, '', location.pathname + location.search);
       const state = useSessions.getState();
-      if (state.sessions[id]) state.select(id);
+      if (state.sessions[id]) state.show(id);
     };
     openLinked();
     window.addEventListener('hashchange', openLinked);
@@ -111,7 +110,29 @@ export function App() {
           if (working) state.send({ t: 'interrupt', sessionId: session.id });
           return;
         }
-        if (session && !isTyping(e.target)) { state.select(null); return; }
+        if (state.zoomedId) { e.preventDefault(); state.zoom(null); return; }
+        if (session && !isTyping(e.target)) { state.closeOpen(session.id); return; }
+      }
+      // Tab, outside a field: the open sessions step aside to see and click the room, and come back (Shift+Tab still
+      // moves the focus). In the message field it does nothing, so a Tab pressed while writing neither hides the
+      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it.
+      if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && state.openIds.length && !document.querySelector('dialog[open]')) {
+        const target = e.target instanceof HTMLElement ? e.target : null;
+        if (target?.matches('.cp-composer textarea')) {
+          e.preventDefault();
+          return;
+        }
+        if (!isTyping(target)) {
+          e.preventDefault();
+          if (state.stackHidden) {
+            state.hideStack(false);
+            if (state.selectedId) document.getElementById(`composer-field-${state.selectedId}`)?.focus({ preventScroll: true });
+          } else {
+            target?.blur();
+            state.hideStack(true);
+          }
+          return;
+        }
       }
       if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
         e.preventDefault();
@@ -125,6 +146,12 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    const onResize = () => useSessions.getState().fitOpen();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   // the first start: nothing else until the user said who they are and where sessions may work
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
@@ -134,9 +161,8 @@ export function App() {
       <Header />
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
-        <div className="cp-main__content"><RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day} pip={smallWindow} onOpenPip={() => void openSmallWindow()} /></div>
-        {/* keyed so a pending confirmation or rename never carries over to another session */}
-        {selectedId ? <Detail key={selectedId} /> : <Launcher />}
+        <div className="cp-main__content"><RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/></div>
+        {openIds.length ? <Stack /> : <Launcher />}
       </main>
       <StatusPanel />
       <CommandPalette />

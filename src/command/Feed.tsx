@@ -354,7 +354,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts }: { f
   const stuck = useRef(true);
   /** the user's last message, once the thread went down for it */
   const sentSeen = useRef<number | null>(null);
-  const searching = useSessions((s) => s.searchOpen);
+  const searching = useSessions((s) => s.searchOpen && s.selectedId === sessionId);
   const draft = drafts[shownAgent ? shownAgent.agentId : 'chef'];
   // a message of the user's own brings the thread back down, like Claude Code
   const lastEntry = entries.at(-1);

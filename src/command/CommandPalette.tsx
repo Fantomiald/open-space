@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SlashCommand } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { findCommands, nativeView } from '../state/commands.ts';
-import { useSessions } from '../state/sessions.ts';
+import { findCommands, nativeView, typedName } from '../state/commands.ts';
+import { commandsIn, useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
 
 const MAX_SHOWN = 80;
@@ -14,7 +14,6 @@ export function CommandPalette() {
 }
 
 function PaletteContent() {
-  const commands = useSessions((s) => s.commands);
   const selected = useSessions((s) => (s.selectedId ? s.sessions[s.selectedId] : undefined));
   const openPalette = useSessions((s) => s.openPalette);
   const openNewSession = useSessions((s) => s.openNewSession);
@@ -23,6 +22,7 @@ function PaletteContent() {
   const [query, setQuery] = useState('');
   const [args, setArgs] = useState('');
   const [target, setTarget] = useState<'selected' | 'new'>(selected ? 'selected' : 'new');
+  const commands = useSessions((s) => commandsIn(s, target === 'selected' ? selected?.cwd : undefined));
   const [active, setActive] = useState(0);
   const list = useRef<HTMLUListElement>(null);
 
@@ -37,7 +37,7 @@ function PaletteContent() {
   const close = () => openPalette(false);
 
   const run = (command: SlashCommand) => {
-    const text = `/${command.name}${args.trim() ? ` ${args.trim()}` : ''}`;
+    const text = `/${typedName(command)}${args.trim() ? ` ${args.trim()}` : ''}`;
     close();
     // a view of Open Space's own for the open session (/mcp, /context, /usage), rather than Claude Code's line of text
     const view = nativeView(text);
@@ -67,7 +67,7 @@ function PaletteContent() {
         <ul id="palette-list" ref={list} role="listbox" className="cp-palette__list" aria-label={words.available}>
           {shown.map((command, index) => (
             <li key={command.name} id={`palette-${command.name}`} role="option" aria-selected={index === active} data-active={index === active} onMouseEnter={() => setActive(index)} onClick={() => run(command)}>
-              <strong>/{command.name}</strong>
+              <strong>/{typedName(command)}</strong>
               {command.argumentHint && <span className="cp-muted"> {command.argumentHint}</span>}
               {command.description && <span className="cp-palette__description">{command.description}</span>}
             </li>

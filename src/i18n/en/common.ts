@@ -28,7 +28,6 @@ export const common: Dictionary['common'] = {
   header: {
     connected: 'Connected to the server',
     disconnected: 'Not connected to the server',
-    waiting: (count) => `${count} waiting`,
     rooms: 'Room',
     office: 'Office',
     lounge: 'Break room',

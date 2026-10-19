@@ -1,8 +1,8 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, ExternalLink, File, FileText, Image, Info, ListMusic, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
-  PictureInPicture2, Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipBack, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
+  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, ExternalLink, File, FileText, Image, Info, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
+  Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -17,7 +17,6 @@ const BellOffIcon = icon(BellOff);
 export const SoundIcon = ({ muted }: { muted: boolean }) => (muted ? <SoundOffIcon /> : <SoundOnIcon />);
 const SoundOnIcon = icon(Volume2);
 const SoundOffIcon = icon(VolumeX);
-export const PictureInPictureIcon = icon(PictureInPicture2);
 export const PaperclipIcon = icon(Paperclip);
 export const ImageIcon = icon(Image);
 export const SearchIcon = icon(Search);
@@ -47,6 +46,9 @@ export const NextIcon = icon(SkipForward);
 export const PreviousIcon = icon(SkipBack);
 export const LibraryIcon = icon(ListMusic);
 export const SendIcon = icon(ArrowRight);
+export const MaximizeIcon = icon(Maximize2);
+export const MinimizeIcon = icon(Minimize2);
+export const TuneIcon = icon(SlidersHorizontal);
 /** The festivals and the hour of the room, to try them. */
 export const CalendarIcon = icon(CalendarHeart);
 export const SettingsIcon = icon(Settings);

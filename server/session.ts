@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
-import type { AttentionKind, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState } from '../shared/protocol.ts';
+import type { AttentionKind, Effort, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { st } from './i18n/index.ts';
@@ -299,7 +299,7 @@ export class Session {
       peerName: this.deps.peerName,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -579,6 +579,25 @@ export class Session {
     if (!this.process?.alive || (this.context.state !== 'work' && this.context.state !== 'perm')) return;
     this.interrupted = true;
     this.process.interrupt();
+  }
+
+  /**
+   * Another model or effort ('' : the default). A running process takes it at once, as the Agent SDK does it (checked
+   * with 2.1.303 through get_settings); the next launches pass it as --model and --effort.
+   */
+  async tune(change: { model?: string; effort?: Effort | '' }) {
+    const process = this.process?.alive ? this.process : null;
+    const model = change.model !== undefined && change.model !== this.info.model ? change.model : null;
+    const effort = change.effort !== undefined && change.effort !== (this.info.effort ?? '') ? change.effort : null;
+    if (model !== null) {
+      this.info.model = model;
+      // the model in use is known again at the next init; until then the session shows the one asked for
+      this.info.activeModel = '';
+    }
+    if (effort !== null) this.info.effort = effort || undefined;
+    this.publish();
+    if (model !== null) await process?.control({ subtype: 'set_model', model: model || 'default' });
+    if (effort !== null) await process?.control({ subtype: 'apply_flag_settings', settings: { effortLevel: effort || null } });
   }
 
   rename(name: string) {

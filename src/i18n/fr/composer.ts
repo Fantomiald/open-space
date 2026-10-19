@@ -6,6 +6,8 @@ export const composer = {
     placeholderPermission: 'Une autorisation attend ta réponse ci-dessus (un message ici attendra la fin du tour)…',
     placeholderBusy: (name: string) => `${name} travaille : ton message lui arrive sans l’interrompre…`,
     placeholder: 'Écris à cette session, ou / pour une commande (Entrée envoie, Maj+Entrée saute une ligne)',
+    /** with several sessions open, one line */
+    placeholderShort: 'Message, ou / commande',
     queueLabel: 'Messages en attente',
     queued: (count: number) => plural(count, 'message en attente', 'messages en attente'),
     leaveAtTurnEnd: ', partent à la fin du tour',
@@ -26,6 +28,13 @@ export const composer = {
     /** "!command": run without Claude, like Claude Code's bash mode */
     placeholderShell: 'Commande shell, lancée dans le dossier de la session',
     run: 'Exécuter',
+  },
+  tune: {
+    title: 'Modèle et effort de cette session, changés tout de suite',
+    model: 'Modèle',
+    effort: 'Effort',
+    defaultEffort: 'auto',
+    efforts: { low: 'bas', medium: 'moyen', high: 'élevé', xhigh: 'très élevé', max: 'max' },
   },
   launcher: {
     label: 'Nouvelle session',

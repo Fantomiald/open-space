@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import type { ServerMessage, SessionInfo } from '../shared/protocol.ts';
-import type { LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
+import type { CatalogProbe, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
 import { projectFolder } from './conversations.ts';
@@ -77,7 +77,7 @@ before(() => {
 });
 after(() => rmSync(base, { recursive: true, force: true }));
 
-function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-${++counter}`), now?: () => number, home?: string) {
+function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-${++counter}`), now?: () => number, home?: string, probeCatalog?: CatalogProbe) {
   const processes: FakeProcess[] = [];
   const messages: ServerMessage[] = [];
   const spawnProcess: ProcessFactory = (launch, handlers) => {
@@ -87,7 +87,7 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
   };
   const config: Config = { port: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [], ...overrides };
   const attention: [string, string][] = [];
-  const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, now, home, graceMs: 40, runShell: (command, cwd, signal) => new Promise((resolve) => {
+  const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, now, home, probeCatalog, graceMs: 40, runShell: (command, cwd, signal) => new Promise((resolve) => {
     const result = { code: command.startsWith('false') ? 1 : 0, stdout: `ran ${command} in ${path.basename(cwd)}`, stderr: '', ms: 5, timedOut: false, stopped: false };
     // "wait": runs until it is stopped
     if (command === 'wait') signal?.addEventListener('abort', () => resolve({ ...result, code: null, stopped: true }));
@@ -793,6 +793,46 @@ describe('process life cycle', () => {
     assert.equal(find(id).remote, undefined);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(processes[0].alive, false);
+    await manager.shutdown();
+  });
+
+  it('changes the model and the effort at once, and launches with them afterwards', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), model: 'opus', text: 'hello' });
+    await manager.tune(id, { model: 'sonnet', effort: 'high' });
+    assert.deepEqual(processes[0].controls, [{ subtype: 'set_model', model: 'sonnet' }, { subtype: 'apply_flag_settings', settings: { effortLevel: 'high' } }]);
+    assert.equal(find(id).model, 'sonnet');
+    assert.equal(find(id).effort, 'high');
+    await manager.tune(id, { model: '', effort: '' });
+    assert.deepEqual(processes[0].controls.slice(2), [{ subtype: 'set_model', model: 'default' }, { subtype: 'apply_flag_settings', settings: { effortLevel: null } }]);
+    await manager.tune(id, { effort: 'max' });
+    await manager.close(id);
+    manager.send(id, 'again');
+    assert.equal(processes[1].launch.effort, 'max');
+    assert.equal(processes[1].launch.model, '');
+    await manager.shutdown();
+  });
+
+  it('probes the commands of each session folder and the models, before any message', async () => {
+    const probed: string[] = [];
+    const probe: CatalogProbe = (cwd) => {
+      probed.push(cwd);
+      return Promise.resolve({
+        commands: cwd === projectA() ? [{ name: 'pr', description: 'Open a pull request' }, { name: 'compact' }] : [{ name: 'compact' }],
+        models: [{ value: 'default', label: 'Default', efforts: ['low', 'high'] }],
+      });
+    };
+    const { manager, messages, processes } = setup({}, undefined, undefined, undefined, probe);
+    await manager.init();
+    await manager.create({ cwd: projectA() });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(processes.length, 0, 'no session process for it');
+    assert.deepEqual(manager.getFolderCommands()[projectA()]?.map((command) => command.name), ['pr', 'compact']);
+    assert.deepEqual(manager.getCommands().map((command) => command.name), ['compact'], 'the commands of no folder come from the home folder');
+    assert.deepEqual(manager.getModels().map((model) => model.value), ['default']);
+    assert.ok(messages.some((message) => message.t === 'folderCommands' && message.cwd === projectA()));
+    assert.ok(probed.includes(projectA()));
     await manager.shutdown();
   });
 

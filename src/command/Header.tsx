@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { roomSessions } from '../room/cast.ts';
-import { useSessions, selectAttentionCount, type View } from '../state/sessions.ts';
+import { useSessions, type View } from '../state/sessions.ts';
 import { BellIcon, CommandIcon, CrewIcon, DeskIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
 import { PreviewMenu } from './PreviewMenu.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
@@ -14,7 +14,6 @@ const PALETTE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctr
 export function Header() {
   const view = useSessions((s) => s.view);
   const setView = useSessions((s) => s.setView);
-  const attention = useSessions(selectAttentionCount);
   const quota = useSessions((s) => s.quota);
   const connection = useSessions((s) => s.connection);
   const notifications = useSessions((s) => s.preferences.notifications);
@@ -39,7 +38,6 @@ export function Header() {
         <div className="cp-header__brand">
           <span className="cp-header__signal" data-connection={connection} title={connection === 'live' ? words.connected : words.disconnected} />
           <h1 className="cp-sr-only">Open Space</h1>
-          {attention > 0 && <span className="cp-count" role="status" aria-label={words.waiting(attention)}>{attention}</span>}
         </div>
         <nav className="cp-segmented" data-icons aria-label={words.rooms}>
           {VIEWS.map(([id, ViewIcon, room]) => (

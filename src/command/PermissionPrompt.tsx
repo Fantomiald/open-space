@@ -9,6 +9,7 @@ export function PermissionPrompt({ sessionId, prompt, more }: { sessionId: strin
   const buttons = useAnswerButtons();
   const words = t.composer.permission;
   const answer = (decision: PermissionDecision) => buttons.sent(answerPermission(sessionId, prompt.requestId, decision));
+  const scope = prompt.canAlways && prompt.always?.length ? words.alwaysScope(prompt.always) : null;
   return (
     <div className="cp-permission" role="group" aria-label={words.label(prompt.tool)}>
       <div className="cp-permission__what">
@@ -20,14 +21,12 @@ export function PermissionPrompt({ sessionId, prompt, more }: { sessionId: strin
         <button type="button" className="cp-button" data-variant="primary" disabled={buttons.disabled} onClick={() => answer('allow')}>{words.yes}</button>
         <button type="button" className="cp-button" disabled={buttons.disabled} onClick={() => answer('deny')}>{words.no}</button>
         {prompt.canAlways && (
-          <button type="button" className="cp-button" disabled={buttons.disabled} title={words.alwaysTitle} onClick={() => answer('always')}>
+          <button type="button" className="cp-button" disabled={buttons.disabled} title={scope ?? words.alwaysTitle} onClick={() => answer('always')}>
             {words.always}
           </button>
         )}
       </div>
-      {prompt.canAlways && prompt.always?.length ? (
-        <p className="cp-permission__always">{words.alwaysScope(prompt.always)}</p>
-      ) : null}
+      {scope && <p className="cp-permission__always">{scope}</p>}
     </div>
   );
 }

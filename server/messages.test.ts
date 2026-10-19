@@ -3,6 +3,16 @@ import { describe, it } from 'node:test';
 import { MAX_NAME, MAX_TEXT, parseClientMessage } from './messages.ts';
 
 describe('parseClientMessage', () => {
+  it('reads a change of model or effort, and refuses an unknown effort', () => {
+    assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: 'sonnet' }), { t: 'tune', sessionId: 's1', model: 'sonnet' });
+    assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: '', effort: '' }), { t: 'tune', sessionId: 's1', model: '', effort: '' });
+    assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', effort: 'xhigh' }), { t: 'tune', sessionId: 's1', effort: 'xhigh' });
+    assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', effort: 'turbo' }), null);
+    assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', model: '--settings x' }), null);
+    assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1' }), null);
+  });
+
+
   it('accepts every well-formed message', () => {
     assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/a/b', model: 'haiku', permissionMode: 'plan', name: 'Zoé', text: '/kit:new' } }),
       { t: 'create', options: { cwd: '/a/b', model: 'haiku', permissionMode: 'plan', name: 'Zoé', text: '/kit:new' } });

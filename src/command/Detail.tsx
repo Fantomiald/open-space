@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { folderName, homeRelative } from '../lib/format.ts';
 import { buildFeed } from '../state/feed.ts';
 import { isRunning } from '../state/labels.ts';
 import { attentionKind } from '../state/queue.ts';
@@ -9,9 +8,9 @@ import { DropOverlay } from './Attachments.tsx';
 import { AsidePanel } from './AsidePanel.tsx';
 import { ChangesView, LineCounts } from './Changes.tsx';
 import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
-import { Composer } from './Composer.tsx';
+import { Composer, RemoteButton } from './Composer.tsx';
 import { Feed } from './Feed.tsx';
-import { CloseIcon, PauseIcon, PencilIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { CloseIcon, MaximizeIcon, MinimizeIcon, PauseIcon, PencilIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
@@ -21,36 +20,44 @@ import { useAttachments } from './useAttachments.ts';
 const NO_EVENTS: never[] = [];
 const NO_DRAFTS: Readonly<Record<string, string>> = {};
 
-export function Detail() {
-  const selectedId = useSessions((s) => s.selectedId);
-  const session = useSessions((s) => (s.selectedId ? s.sessions[s.selectedId] : undefined));
-  const events = useSessions((s) => (s.selectedId ? s.logs[s.selectedId] : undefined)) ?? NO_EVENTS;
-  const loaded = useSessions((s) => (s.selectedId ? s.logLoaded[s.selectedId] === true : false));
-  const drafts = useSessions((s) => (s.selectedId ? s.partials[s.selectedId] : undefined)) ?? NO_DRAFTS;
+/**
+ * One open session over the room. Several can be open side by side (Shift+click, see Stack): the one the user is in
+ * (`selectedId`) is `active`, and only it shows the search bar and the views other than the thread; one can be zoomed.
+ */
+export function Detail({ sessionId }: { sessionId: string }) {
+  const active = useSessions((s) => s.selectedId === sessionId);
+  const session = useSessions((s) => s.sessions[sessionId]);
+  const events = useSessions((s) => s.logs[sessionId]) ?? NO_EVENTS;
+  const loaded = useSessions((s) => s.logLoaded[sessionId] === true);
+  const drafts = useSessions((s) => s.partials[sessionId]) ?? NO_DRAFTS;
   const send = useSessions((s) => s.send);
-  const select = useSessions((s) => s.select);
-  const searchOpen = useSessions((s) => s.searchOpen);
+  const focus = useSessions((s) => s.focus);
+  const closeOpen = useSessions((s) => s.closeOpen);
+  const several = useSessions((s) => s.openIds.length > 1);
+  const zoomed = useSessions((s) => s.zoomedId === sessionId);
+  const zoom = useSessions((s) => s.zoom);
+  const toggleZoom = () => zoom(zoomed ? null : sessionId);
+  const searchOpen = useSessions((s) => s.searchOpen) && active;
   const openSearch = useSessions((s) => s.openSearch);
   const seen = useSessions((s) => s.seen);
   const feed = useMemo(() => buildFeed(events), [events]);
-  const changes = useSessions((s) => (s.selectedId ? s.changes[s.selectedId] : undefined));
+  const changes = useSessions((s) => s.changes[sessionId]);
   const live = useSessions((s) => s.connection === 'live');
-  const panelView = useSessions((s) => s.panelView);
+  const panelView = useSessions((s) => (active ? s.panelView : 'thread'));
   const showPanel = useSessions((s) => s.showPanel);
   // what it changed, asked again at the end of each of its turns and when a sub-agent comes or goes
   const turns = session?.turns, helpers = session?.subagents.length;
   useEffect(() => {
-    if (selectedId && live && turns !== undefined) send({ t: 'changes', sessionId: selectedId });
-  }, [selectedId, live, turns, helpers, send]);
+    if (live && turns !== undefined) send({ t: 'changes', sessionId });
+  }, [sessionId, live, turns, helpers, send]);
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
   // panel by session, so another session starts without them)
   const attachments = useAttachments();
-  if (!selectedId || !session) return null;
+  if (!session) return null;
 
   const back = () => showPanel('thread');
-  const model = session.activeModel || session.model || t.session.detail.defaultModel;
   const [first, ...others] = session.permissions;
   /** The name or the tag, edited in place: Enter saves, Escape or leaving the field cancels. */
   const field = (kind: 'name' | 'tag') => (
@@ -71,9 +78,13 @@ export function Detail() {
   );
 
   return (
-    <aside className="cp-detail" aria-label={t.session.detail.label(session.name)} {...attachments.dropTarget}>
+    <aside
+      className="cp-detail" data-active={active} data-attention={attentionKind(session, seen) ?? undefined} aria-label={t.session.detail.label(session.name)} {...attachments.dropTarget}
+      onPointerDownCapture={() => focus(session.id)} onFocusCapture={() => focus(session.id)}
+    >
       <DropOverlay attachments={attachments} />
-      <header className="cp-detail__head">
+      {/* a double click on the head, outside its buttons, zooms it (as on a window's title bar) */}
+      <header className="cp-detail__head" onDoubleClick={(e) => { if (several && !(e.target as Element).closest('button, input, form')) toggleZoom(); }}>
         <div className="cp-detail__title">
           {editing === 'name' ? field('name') : (
             <h2>
@@ -83,7 +94,14 @@ export function Detail() {
           )}
           <StateBadge session={session} kind={attentionKind(session, seen)} />
           <div className="cp-detail__controls">
+            {several && (
+              <button
+                type="button" className="cp-icon-button" data-variant="outlined" aria-pressed={zoomed}
+                aria-label={zoomed ? t.session.detail.unzoom : t.session.detail.zoom} title={zoomed ? t.session.detail.unzoomTitle : t.session.detail.zoomTitle} onClick={toggleZoom}
+              >{zoomed ? <MinimizeIcon /> : <MaximizeIcon />}</button>
+            )}
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.search} aria-pressed={searchOpen} title={t.session.detail.searchTitle} onClick={() => openSearch(!searchOpen)}><SearchIcon /></button>
+            <RemoteButton session={session} />
             {isRunning(session) && (
               <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle} disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
             )}
@@ -91,7 +109,7 @@ export function Detail() {
               <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.rest} title={t.session.detail.restTitle} onClick={() => send({ t: 'rest', sessionId: session.id })}><RestIcon /></button>
             )}
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.switchOff} title={t.session.detail.switchOffTitle} onClick={() => setSwitchingOff(true)}><PowerIcon /></button>
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => select(null)}><CloseIcon /></button>
+            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
         <div className="cp-detail__line">
@@ -108,17 +126,14 @@ export function Detail() {
               <span>{t.session.files(changes.files.length)}</span>
             </button>
           )}
-          <p className="cp-detail__meta" title={session.cwd}>
-            {folderName(session.cwd)} <span className="cp-muted">({homeRelative(session.cwd)})</span> · {model}
-            {session.untrusted && <span className="cp-detail__untrusted" title={t.session.detail.untrustedTitle}> · {t.session.detail.untrusted}</span>}
-          </p>
+          {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         </div>
         {switchingOff && (
           <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
             <p className="cp-muted">{t.session.detail.switchOffText}</p>
             <div className="cp-form__actions">
               <button type="button" className="cp-button" autoFocus onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); select(null); }}>{t.session.detail.switchOff}</button>
+              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); closeOpen(session.id); }}>{t.session.detail.switchOff}</button>
             </div>
           </Modal>
         )}

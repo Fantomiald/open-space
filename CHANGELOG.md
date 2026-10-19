@@ -1,5 +1,15 @@
 # Versions
 
+## À venir
+
+- Maj+clic sur un agent (dans la salle ou la liste d'état) ouvre sa conversation avec celles déjà ouvertes : trois l'une au-dessus de l'autre, puis une nouvelle colonne vers la gauche, sans jamais couvrir la carte d'état ; les colonnes rétrécissent pour tenir (6 au plus, pour que la salle reste visible). Dans ces petites fenêtres, les outils passent en icônes à gauche d'un champ d'une ligne (commandes, modèle et effort, pièce jointe), sans onglets de sous-agents. Remote Control remonte dans l'en-tête, à droite de la loupe. Chaque fenêtre fait un tiers de la hauteur dès la deuxième colonne. Tab, hors d'un champ, les fait glisser hors de vue pour voir et cliquer la salle, Tab les ramène ; Maj+Tab garde la navigation au clavier. Un clic dans le vide ne ferme rien quand plusieurs sont ouvertes. Chaque fenêtre garde sa place : en fermer une ne fait remonter que celles du dessous, et rien n'est rechargé. Un clic sur un agent le montre à la place de la fenêtre active, un clic dans le vide ne ferme rien. Le bouton Agrandir (ou un double-clic sur l'en-tête) en montre une seule, Échap revient. Une fenêtre ouverte mais pas active qui finit sonne et reste « à voir ». La disposition revient au rechargement de la page.
+- La mini-fenêtre (la salle au-dessus des autres apps) est retirée.
+- La pastille du nombre de choses à voir, en haut à gauche, disparaît : la carte État le montre déjà.
+- Le bouton Commandes du champ n'est plus que son icône, et la ligne du dossier et du modèle sous le nom disparaît.
+- Le modèle et l'effort d'une session se changent sous son champ, à côté de « Commandes », et s'appliquent tout de suite. `/model` et `/effort` tapés dans le champ font pareil, et la session les garde quand elle repart.
+- Les commandes du champ sont celles du dossier de la session (ses commandes et skills à lui compris), connues dès son ouverture, avant le premier message. Les sous-commandes d'un skill sont proposées après son nom (`/impeccable polish`), et un skill de plugin se tape par son nom court.
+- Un « / » tapé au milieu d'une phrase propose aussi les commandes, et les complète à cet endroit.
+
 ## 1.3.0
 
 - Nouveau look : la salle flotte sur un socle de pierre, dans un ciel pixel art qui suit l'heure (nuages qui dérivent, étoiles, lune, neige à Noël, feux d'artifice au Nouvel An et au 14 juillet). Les panneaux sont en verre foncé, les pastilles ont toutes la même hauteur, les murs ont de l'épaisseur et les prénoms sont des pastilles. Le soleil ne passe plus par la fenêtre cachée derrière le tableau.

@@ -7,15 +7,20 @@ import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { Aside, ClaudeInfo, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
+import type { Aside, ClaudeInfo, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
+import { addTo, fitColumns, maxColumns, nextFocus, removeFrom, replaceIn, type Columns } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
+
+/** The open windows, kept in this browser so a reload finds them as they were. */
+const readLayout = () => readPreference<{ columns: string[][]; selectedId: string } | null>('layout', null);
+const writeLayout = (columns: Columns, selectedId: string | null) => writePreference('layout', columns.length && selectedId ? { columns, selectedId } : null);
 
 /** stopped: the bridge does not answer; unpaired: it answers but this browser has no valid session cookie */
 export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
@@ -76,9 +81,22 @@ interface CommandPostState {
   partials: Partials;
   /** each session's side question (/btw) and its answer, while it is shown */
   asides: Record<string, Aside>;
+  /** the commands of no folder in particular, then those of each session folder (its own included) */
   commands: SlashCommand[];
+  folderCommands: Record<string, SlashCommand[]>;
+  /** the models Claude Code offers, with their efforts (empty until it was asked) */
+  models: ModelChoice[];
   quota: Quota | null;
+  /** the session the keyboard, the palette and the panel's views go to: one of `openIds`, or null when none is open */
   selectedId: string | null;
+  /** the sessions shown over the room, in columns of three from the right (several with Shift+click, see stack.ts) */
+  columns: Columns;
+  /** `columns`, flat */
+  openIds: string[];
+  /** one of several open sessions shown alone for a while, the others kept in their place (as tmux's zoom) */
+  zoomedId: string | null;
+  /** Tab: the open sessions stay open but step aside, to see and click the room */
+  stackHidden: boolean;
   view: View;
   /** false until the user changes room: they then come in through the door instead of sitting at their desk */
   enteredThroughDoor: boolean;
@@ -114,7 +132,22 @@ interface CommandPostState {
   send: (message: ClientMessage) => boolean;
 
   receive: (message: ServerMessage) => void;
+  /** opens this session alone (null: none) */
   select: (sessionId: string | null) => void;
+  /** a click on a session: brought forward if it is open, else shown in place of the one the keyboard is in */
+  show: (sessionId: string) => void;
+  /** Shift+click: adds the session beside the open ones (nothing when there is no room left), or takes it out */
+  toggleOpen: (sessionId: string) => void;
+  zoom: (sessionId: string | null) => void;
+  /** one of the open sessions takes the keyboard (the user clicked in it) */
+  focus: (sessionId: string) => void;
+  /** takes one of the open sessions out */
+  closeOpen: (sessionId: string) => void;
+  /** sets the open windows (stack.ts makes them), kept for the next visit */
+  arrange: (columns: Columns) => void;
+  hideStack: (hidden: boolean) => void;
+  /** after the window shrank: the column that no longer fits closes */
+  fitOpen: () => void;
   /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
   showPanel: (view: PanelView) => void;
   /** the user is looking at this session: what it shows now is no longer news */
@@ -197,8 +230,14 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   partials: {},
   asides: {},
   commands: [],
+  folderCommands: {},
+  models: [],
   quota: null,
   selectedId: null,
+  columns: [],
+  openIds: [],
+  zoomedId: null,
+  stackHidden: false,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
   view: readPreference<string>('view', 'salle') === 'repos' ? 'repos' : 'salle',
   enteredThroughDoor: false,
@@ -236,10 +275,17 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         if (!message.preferences.language) s.send({ t: 'preferences', preferences: { language: languageOf(navigator.languages) } });
         set({
           ...languageState(message.preferences),
-          claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, quota: message.quota,
+          claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
+          folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked,
-          selectedId: s.selectedId && sessions[s.selectedId] ? s.selectedId : null,
         });
+        // after a reconnection the windows stay; after a reload they come back as they were
+        const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
+        const columns = (kept?.columns ?? []).map((column) => column.filter((id) => sessions[id])).filter((column) => column.length > 0);
+        get().arrange(columns);
+        const focused = kept && sessions[kept.selectedId] ? kept.selectedId : columns[0]?.[0];
+        if (focused) get().focus(focused);
+        else set({ selectedId: null });
         // resynchronise the followed sessions: ask for what was missed while disconnected
         for (const id of Object.keys(s.logs)) {
           if (sessions[id]) s.send({ t: 'log', sessionId: id, after: s.logs[id].at(-1)?.seq ?? 0 });
@@ -249,7 +295,14 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'session': {
         const previous = s.sessions;
         set({ sessions: { ...previous, [message.session.id]: message.session } });
-        if (s.awaitingNew && !previous[message.session.id]) { set({ awaitingNew: false }); get().select(message.session.id); }
+        if (s.awaitingNew && !previous[message.session.id]) {
+          // a new session with several open joins them when there is room, else takes the place of the one in use
+          set({ awaitingNew: false });
+          const fits = s.openIds.length > 1 && addTo(s.columns, message.session.id, maxColumns(window.innerWidth));
+          if (fits) get().toggleOpen(message.session.id);
+          else get().show(message.session.id);
+        }
+        // only the window the user is in: another open one that finishes still rings and waits to be seen
         if (s.selectedId === message.session.id && isVisible()) get().markSeen(message.session.id);
         const waiting = newlyWaiting(previous, [message.session], get().seen);
         if (s.sound) chime(waiting);
@@ -265,7 +318,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const { [message.sessionId]: _seen, ...seen } = s.seen;
         writePreference('seen', seen);
         writeDraft(message.sessionId, '');
-        set({ sessions, logs, seen, selectedId: s.selectedId === message.sessionId ? null : s.selectedId });
+        set({ sessions, logs, seen });
+        if (s.openIds.includes(message.sessionId)) get().closeOpen(message.sessionId);
         break;
       }
       case 'aside': {
@@ -299,6 +353,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         });
         break;
       case 'commands': set({ commands: message.commands }); break;
+      case 'folderCommands': set({ folderCommands: { ...s.folderCommands, [message.cwd]: message.commands } }); break;
+      case 'models': set({ models: message.models }); break;
       case 'directories': set({ directories: message.directories }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
       case 'inspection': {
@@ -322,14 +378,70 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   },
 
   select: (sessionId) => {
+    set({ stackHidden: false });
+    get().arrange(sessionId ? [[sessionId]] : []);
+    if (sessionId) get().focus(sessionId);
+    else set({ selectedId: null, searchOpen: false, panelView: 'thread' });
+  },
+
+  show: (sessionId) => {
     const s = get();
-    set({ selectedId: sessionId, ...(sessionId !== s.selectedId ? { searchOpen: false, panelView: 'thread' } : {}) });
-    if (!sessionId) return;
-    get().markSeen(sessionId);
+    set({ stackHidden: false });
+    if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
+    if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
+    s.arrange(replaceIn(s.columns, s.selectedId, sessionId));
+    s.focus(sessionId);
+  },
+
+  toggleOpen: (sessionId) => {
+    const s = get();
+    if (!s.selectedId) { s.select(sessionId); return; }
+    set({ stackHidden: false });
+    if (s.openIds.includes(sessionId)) {
+      if (s.openIds.length > 1) s.closeOpen(sessionId);
+      return;
+    }
+    const columns = addTo(s.columns, sessionId, maxColumns(window.innerWidth));
+    if (!columns) return;
+    set({ zoomedId: null });
+    s.arrange(columns);
+    s.focus(sessionId);
+  },
+
+  zoom: (sessionId) => set({ zoomedId: sessionId && get().openIds.length > 1 ? sessionId : null }),
+
+  focus: (sessionId) => {
+    const s = get();
+    if (sessionId !== s.selectedId) set({ selectedId: sessionId, searchOpen: false, panelView: 'thread' });
+    s.markSeen(sessionId);
+    writeLayout(get().columns, sessionId);
     if (!s.logs[sessionId]) {
       set({ logs: { ...s.logs, [sessionId]: [] }, logLoaded: { ...s.logLoaded, [sessionId]: false } });
       s.send({ t: 'log', sessionId, after: 0 });
     }
+  },
+
+  closeOpen: (sessionId) => {
+    const s = get();
+    const next = s.selectedId === sessionId ? nextFocus(s.columns, sessionId) : s.selectedId;
+    s.arrange(removeFrom(s.columns, sessionId));
+    if (next) s.focus(next);
+    else s.select(null);
+  },
+
+  arrange: (columns) => {
+    const openIds = columns.flat();
+    set((state) => ({ columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null }));
+    writeLayout(columns, get().selectedId);
+  },
+
+  hideStack: (hidden) => set({ stackHidden: hidden && get().openIds.length > 0 }),
+
+  fitOpen: () => {
+    const s = get();
+    const columns = fitColumns(s.columns, maxColumns(window.innerWidth));
+    if (columns.length === s.columns.length) return;
+    for (const id of s.openIds.filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
   },
 
   showPanel: (view) => {
@@ -400,3 +512,6 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
 /** Sessions waiting for the user and not seen yet, for the tab title. */
 export const selectAttentionCount = (state: CommandPostState) => attentionQueue(Object.values(state.sessions), state.seen).length;
+
+/** The commands offered in a session folder (the ones of no folder until it was probed), or with no folder. */
+export const commandsIn = (state: Pick<CommandPostState, 'commands' | 'folderCommands'>, cwd?: string): SlashCommand[] => (cwd && state.folderCommands[cwd]) || state.commands;
