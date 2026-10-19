@@ -1,6 +1,6 @@
 # Versions
 
-## À venir
+## 1.4.0
 
 - Maj+clic sur un agent (dans la salle ou la liste d'état) ouvre sa conversation avec celles déjà ouvertes : trois l'une au-dessus de l'autre, puis une nouvelle colonne vers la gauche, sans jamais couvrir la carte d'état ; les colonnes rétrécissent pour tenir (6 au plus, pour que la salle reste visible). Dans ces petites fenêtres, les outils passent en icônes à gauche d'un champ d'une ligne (commandes, modèle et effort, pièce jointe), sans onglets de sous-agents. Remote Control remonte dans l'en-tête, à droite de la loupe. Chaque fenêtre fait un tiers de la hauteur dès la deuxième colonne. Tab, hors d'un champ, les fait glisser hors de vue pour voir et cliquer la salle, Tab les ramène ; Maj+Tab garde la navigation au clavier. Un clic dans le vide ne ferme rien quand plusieurs sont ouvertes. Chaque fenêtre garde sa place : en fermer une ne fait remonter que celles du dessous, et rien n'est rechargé. Un clic sur un agent le montre à la place de la fenêtre active, un clic dans le vide ne ferme rien. Le bouton Agrandir (ou un double-clic sur l'en-tête) en montre une seule, Échap revient. Une fenêtre ouverte mais pas active qui finit sonne et reste « à voir ». La disposition revient au rechargement de la page.
 - La mini-fenêtre (la salle au-dessus des autres apps) est retirée.
