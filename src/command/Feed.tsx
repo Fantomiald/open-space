@@ -1,28 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SentFile } from '../../shared/protocol.ts';
+import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { locale, t } from '../i18n/index.ts';
 import { formatDuration } from '../lib/format.ts';
+import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
-import { ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
+import { ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { Prose } from './Prose.tsx';
 import { currentTurn, threadOf, toolSummary, turnPhase, turnWord, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
 import { FeedSearch } from './FeedSearch.tsx';
-
-/** Copies the code block whose copy button was clicked (see mdToHtml), and shows a tick for a moment. */
-export function copyCodeOnClick(target: EventTarget | null) {
-  const button = target instanceof Element ? target.closest<HTMLElement>('[data-copy]') : null;
-  const code = button?.closest('.cp-code')?.querySelector('pre');
-  if (!button || !code) return;
-  void navigator.clipboard.writeText((code.textContent ?? '').replace(/\n$/, '')).then(() => {
-    button.dataset.copied = 'true';
-    window.setTimeout(() => { delete button.dataset.copied; }, 1500);
-  }, () => { /* refused: nothing copied, the button stays as it is */ });
-}
 
 type Subagent = FeedItem & { kind: 'subagent' };
 
@@ -91,7 +81,10 @@ function Tools({ run }: { run: ToolRun }) {
 }
 
 /** `speaker`: the session's name, shown on what its main agent says. `openAgent`: shows a sub-agent's own thread. */
-/** A file a session sent: a picture to open in large, any other file to download (its own name kept). */
+/** A text file bigger than this is only offered for download: the viewer would choke on it. */
+const MAX_READ_BYTES = 5_000_000;
+
+/** A file a session sent: a picture or a text to open in large, any other file to download (its own name kept). */
 function SentFileView({ file, onView, caption }: { file: SentFile; onView: (image: Viewed) => void; caption: string }) {
   const words = t.session.feed.files;
   if (!file.stored) return <span className="cp-file" data-missing="true" title={words.missing}>{file.title}<span className="cp-file__size">{words.missing}</span></span>;
@@ -102,7 +95,7 @@ function SentFileView({ file, onView, caption }: { file: SentFile; onView: (imag
     const download = `${src}?name=${encodeURIComponent(file.title)}`;
     return (
       <div className="cp-artifact">
-        <PagePreview src={src} title={file.title} onOpen={() => onView({ src, alt: file.title, caption: caption || file.title, page: true, link: { href: download, label: words.download, download: file.title } })} />
+        <PagePreview src={src} title={file.title} onOpen={() => onView({ src, alt: file.title, caption: caption || file.title, kind: 'page', link: { href: download, label: words.download, download: file.title } })} />
         <p className="cp-artifact__bar">
           <span className="cp-artifact__title">{file.title}</span>
           <a className="cp-icon-button" href={download} download={file.title} aria-label={words.download} title={words.download}><DownloadIcon /></a>
@@ -112,8 +105,18 @@ function SentFileView({ file, onView, caption }: { file: SentFile; onView: (imag
   }
   if (file.image) {
     return (
-      <button type="button" className="cp-file__image" title={words.open} onClick={() => onView({ src, alt: file.title, caption: caption || file.title })}>
+      <button type="button" className="cp-file__image" title={words.open} onClick={() => onView({ src, alt: file.title, caption: caption || file.title, kind: 'image' })}>
         <img src={src} alt={file.title} loading="lazy" />
+      </button>
+    );
+  }
+  const extension = file.stored.split('.').pop() ?? '';
+  if (TEXT_EXTENSIONS.has(extension) && file.size <= MAX_READ_BYTES) {
+    const kind = extension === 'md' || extension === 'markdown' ? 'markdown' : 'text';
+    const download = `${src}?name=${encodeURIComponent(file.title)}`;
+    return (
+      <button type="button" className="cp-file" title={words.read} onClick={() => onView({ src, alt: file.title, caption: caption || file.title, kind, link: { href: download, label: words.download, download: file.title } })}>
+        <FileTextIcon />{file.title}<span className="cp-file__size">{bytes(file.size)}</span>
       </button>
     );
   }
@@ -143,7 +146,7 @@ function ArtifactCard({ item, speaker, onView }: { item: FeedItem & { kind: 'art
     <li className="cp-feed__item" data-kind="artifact">
       <span className="cp-feed__who">{item.author ?? speaker}</span>
       <div className="cp-artifact">
-        {src && <PagePreview src={src} title={item.title} onOpen={() => onView({ src, alt: item.title, caption: item.title, page: true, link: { href: item.url, label: t.session.feed.viewer.onClaude } })} />}
+        {src && <PagePreview src={src} title={item.title} onOpen={() => onView({ src, alt: item.title, caption: item.title, kind: 'page', link: { href: item.url, label: t.session.feed.viewer.onClaude } })} />}
         <p className="cp-artifact__bar">
           <span className="cp-artifact__title">{item.title}</span>
           <a className="cp-icon-button" href={item.url} target="_blank" rel="noopener noreferrer" aria-label={words.onClaude} title={words.onClaude}><ExternalLinkIcon /></a>
@@ -164,7 +167,7 @@ function SentVideo({ src, title, size, caption, onView }: { src: string; title: 
   return (
     <div className="cp-video">
       {playable && (
-        <button type="button" className="cp-video__open" title={words.play} onClick={() => onView({ src, alt: title, caption: caption || title, video: true, link: { href: download, label: words.download, download: title } })}>
+        <button type="button" className="cp-video__open" title={words.play} onClick={() => onView({ src, alt: title, caption: caption || title, kind: 'video', link: { href: download, label: words.download, download: title } })}>
           {/* "#t=0.1": a first frame to show, rather than a black one */}
           <video src={`${src}#t=0.1`} preload="metadata" muted playsInline tabIndex={-1} onError={() => setPlayable(false)} />
           <span className="cp-video__play" aria-hidden="true"><PlayIcon /></span>
@@ -192,7 +195,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
           {item.images.length > 0 && (
             <div className="cp-feed__images">
               {item.images.map((name) => (
-                <button key={name} type="button" title={t.session.feed.imageTitle} onClick={() => onView({ src: `/attachments/${name}`, alt: t.session.feed.imageAlt })}>
+                <button key={name} type="button" title={t.session.feed.imageTitle} onClick={() => onView({ src: `/attachments/${name}`, alt: t.session.feed.imageAlt, kind: 'image' })}>
                   <img src={`/attachments/${name}`} alt={t.session.feed.imageAlt} loading="lazy" />
                 </button>
               ))}
@@ -339,7 +342,7 @@ function Working({ items, speaker }: { items: readonly FeedItem[]; speaker: stri
  */
 export function Feed({ feed, sessionId, loading, speaker, working, drafts }: { feed: FeedData; sessionId: string; loading: boolean; speaker: string; working: boolean; drafts: Readonly<Record<string, string>> }) {
   const [agent, setAgent] = useState<string | null>(null);
-  // a picture of the thread opened in large
+  // a picture, a page, a video or a text of the thread opened in large
   const [viewing, setViewing] = useState<Viewed | null>(null);
   const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed.items]);
   // the tabs: those at work, and one done while it is open; the others wait in the menu

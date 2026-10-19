@@ -25,7 +25,6 @@ export const composer = {
     queue: 'Mettre en file',
     /** "!command": run without Claude, like Claude Code's bash mode */
     placeholderShell: 'Commande shell, lancée dans le dossier de la session',
-    shellMode: 'Mode shell : sans Claude, il la verra avec ton prochain message',
     run: 'Exécuter',
   },
   launcher: {

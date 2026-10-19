@@ -1,7 +1,7 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, ExternalLink, File, Image, Info, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
+  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, ExternalLink, File, FileText, Image, Info, MessagesSquare, Monitor, Moon, Paperclip, Pause, Pencil,
   PictureInPicture2, Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, type LucideIcon,
 } from 'lucide-react';
 
@@ -32,6 +32,7 @@ export const PhoneIcon = icon(Smartphone);
 export const TerminalIcon = icon(SquareTerminal);
 export const DownloadIcon = icon(Download);
 export const FileIcon = icon(File);
+export const FileTextIcon = icon(FileText);
 export const ExternalLinkIcon = icon(ExternalLink);
 export const AlertIcon = icon(CircleAlert);
 /** The office. */

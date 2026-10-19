@@ -218,21 +218,12 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text-muted); font-size: var(--text-xs);
 }
 .cp-changes-chip:hover, .cp-changes-chip[aria-pressed='true'] { border-color: var(--color-accent); color: var(--color-text); }
-/* Remote Control on: a link to the session on claude.ai, with where the connection is at */
-.cp-remote-chip {
-  display: inline-flex; align-items: center; gap: var(--space-2); padding: 0.1rem var(--space-2); border-radius: 999px; white-space: nowrap;
-  border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); font-size: var(--text-xs); text-decoration: none;
-}
-a.cp-remote-chip:hover { border-color: var(--color-accent); }
 /* Remote Control in the field's bar: the phone, and a dot grey when off, green once connected */
 .cp-remote-button { position: relative; }
 .cp-remote-button__dot { position: absolute; right: 0.3rem; bottom: 0.3rem; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--tone-idle); box-shadow: 0 0 0 2px var(--color-surface); }
 .cp-remote-button[data-state='connecting'] .cp-remote-button__dot { background: var(--tone-work); }
 .cp-remote-button[data-state='connected'] .cp-remote-button__dot { background: var(--tone-reply); }
 .cp-remote-button[data-state='failed'] .cp-remote-button__dot { background: var(--tone-error); }
-.cp-remote-chip__dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--tone-work); }
-.cp-remote-chip[data-state='connected'] .cp-remote-chip__dot { background: var(--tone-reply); }
-.cp-remote-chip[data-state='failed'] .cp-remote-chip__dot { background: var(--tone-error); }
 .cp-detail > .cp-panel-view { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .cp-panel-view__head { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
 .cp-panel-view__summary { margin: 0 auto 0 0; min-width: 0; font-size: var(--text-sm); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
@@ -494,7 +485,7 @@ a.cp-remote-chip:hover { border-color: var(--color-accent); }
   display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); text-decoration: none; overflow-wrap: anywhere;
 }
-a.cp-file:hover { border-color: var(--color-accent); }
+:is(a, button).cp-file:hover { border-color: var(--color-accent); }
 .cp-file[data-missing='true'] { color: var(--color-text-muted); border-style: dashed; }
 .cp-file__size { flex: none; font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 
@@ -504,7 +495,11 @@ a.cp-file:hover { border-color: var(--color-accent); }
 .cp-viewer__figure { margin: 0; display: grid; gap: var(--space-2); justify-items: center; max-width: 100%; max-height: 100%; min-height: 0; }
 .cp-viewer__figure img { max-width: min(92vw, 100%); max-height: calc(100dvh - 9rem); object-fit: contain; border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface-sunken); }
 /* a published page, large: as wide as the screen allows */
-.cp-viewer__figure[data-page='true'] { width: min(92vw, 80rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
+.cp-viewer__figure[data-kind='page'] { width: min(92vw, 80rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
+/* a text file, large: a sheet as wide as a page of reading, that scrolls */
+.cp-viewer__figure:is([data-kind='markdown'], [data-kind='text']) { width: min(92vw, 52rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; justify-items: stretch; }
+.cp-viewer__text { margin: 0; min-height: 0; overflow: auto; padding: var(--space-5) var(--space-6); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface); color: var(--color-text); }
+.cp-viewer__text[data-plain='true'] { font-family: var(--font-mono); font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cp-viewer__figure video { width: min(92vw, 64rem); max-height: calc(100dvh - 9rem); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface-sunken); }
 .cp-viewer__figure iframe { width: 100%; height: 100%; border: 0; border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface-sunken); }
 .cp-viewer__bar { display: flex; align-items: center; gap: var(--space-3); max-width: min(92vw, 60rem); color: var(--color-text); font-size: var(--text-sm); }
@@ -997,9 +992,11 @@ a.cp-file:hover { border-color: var(--color-accent); }
 .cp-folder__parent { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-xs); color: var(--color-text-muted); }
 
 /* the field in shell mode ("!command") */
-.cp-composer textarea[data-shell='true'] { border-color: var(--tone-peer); font-family: var(--font-mono); color: var(--tone-peer); }
-.cp-composer textarea[data-shell='true']:focus-visible { outline-color: var(--tone-peer); }
-.cp-composer__mode { margin: 0 auto 0 0; align-self: center; font-size: var(--text-xs); color: var(--tone-peer); }
+.cp-command-field { position: relative; display: grid; }
+/* the "!" sits in the field's padding, the command starts after it and its space */
+.cp-command-field__prompt { position: absolute; top: calc(var(--space-2) + var(--border-width)); left: calc(var(--space-3) + var(--border-width)); font-family: var(--font-mono); font-weight: var(--weight-bold); color: var(--tone-peer); pointer-events: none; }
+.cp-command-field[data-shell='true'] textarea { padding-left: calc(var(--space-3) + 2ch); border-color: var(--tone-peer); font-family: var(--font-mono); color: var(--tone-peer); }
+.cp-command-field[data-shell='true'] textarea:focus-visible { outline-color: var(--tone-peer); }
 
 /* ── A command run with "!" (like Claude Code's bash mode): the command, how it went, what it wrote ── */
 .cp-feed__item[data-kind='shell'] { display: grid; gap: var(--space-1); }

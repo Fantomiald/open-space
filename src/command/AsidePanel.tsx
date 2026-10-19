@@ -1,7 +1,7 @@
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
-import { copyCodeOnClick } from './Feed.tsx';
+import { copyCodeOnClick } from './copyCode.ts';
 import { Prose } from './Prose.tsx';
 import { CloseIcon } from './Icons.tsx';
 

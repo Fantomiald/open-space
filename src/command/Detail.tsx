@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RemoteControl } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { folderName, homeRelative } from '../lib/format.ts';
 import { buildFeed } from '../state/feed.ts';
@@ -99,7 +98,6 @@ export function Detail() {
           {editing === 'tag' ? field('tag') : session.tag
             ? <button type="button" className="cp-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
             : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
-          {session.remote && <RemoteChip remote={session.remote} />}
           {session.context && <ContextChip context={session.context} onOpen={() => showPanel('context')} />}
           {changes && changes.files.length > 0 && (
             <button
@@ -144,12 +142,4 @@ export function Detail() {
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>
   );
-}
-
-/** Remote Control is on: where it is at, and its page on claude.ai (the Claude app lists it too, under the session's name). */
-function RemoteChip({ remote }: { remote: RemoteControl }) {
-  const label = <><span className="cp-remote-chip__dot" aria-hidden="true" />Remote Control · {t.session.remote.states[remote.state]}</>;
-  return remote.url
-    ? <a className="cp-remote-chip" data-state={remote.state} href={remote.url} target="_blank" rel="noreferrer" title={t.session.remote.open}>{label}</a>
-    : <span className="cp-remote-chip" data-state={remote.state}>{label}</span>;
 }
