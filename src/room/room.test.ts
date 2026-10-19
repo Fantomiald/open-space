@@ -19,6 +19,7 @@ import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
 import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
+import { stackLabels } from './labels.ts';
 
 const session = (id: string, state: SessionState, extra: Partial<SessionInfo> = {}): SessionInfo => ({
   id, name: id, cwd: `/work/${id}`, model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
@@ -437,8 +438,11 @@ describe('looks', () => {
   it('accepts only a complete look with known traits and #rrggbb colours', () => {
     assert.deepEqual(parseLook(look), look);
     assert.equal(parseLook({ ...look, hair: 'dreadlocks' }), null);
-    const { sunglasses: _sun, headphones: _phones, hat: _hat, hatColor: _hatColor, eyes: _eyes, ...older } = look;
-    assert.deepEqual(parseLook(older), { ...look, eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_LOOK.hatColor }, 'a look saved before them keeps everything else');
+    const { sunglasses: _sun, headphones: _phones, hat: _hat, hatColor: _hatColor, eyes: _eyes, accessory: _accessory, ...older } = look;
+    assert.deepEqual(parseLook(older), { ...look, eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_LOOK.hatColor, accessory: 'none' }, 'a look saved before them keeps everything else');
+    const anime = { ...look, top: 'narutoJacket', bottom: 'luffyShorts', shoes: 'zoroBoots', hat: 'strawHat', accessory: 'mask' } as const;
+    assert.deepEqual(parseLook(anime), anime, 'anime pieces mix like any other');
+    assert.equal(parseLook({ ...look, accessory: 'cape' }), null);
     assert.equal(parseLook({ ...look, eyes: 'narrow' })?.eyes, 'round', 'eyes no longer offered: round ones, the rest kept');
     assert.equal(parseLook({ ...look, hat: 'sombrero' }), null);
     assert.equal(parseLook({ ...look, topColor: 'red' }), null);
@@ -558,7 +562,9 @@ describe('the room on screen', () => {
 describe('the whiteboard', () => {
   it('stands in the office only, and the pointer finds it', () => {
     const board = OFFICE_FLOOR.board!;
-    assert.ok(OFFICE_FLOOR.isBoardAt(toScreen({ x: (board.fromX + board.toX) / 2, y: board.toY })));
+    // the middle of the board, not a point on its outline, where rounding decides
+    const foot = toScreen({ x: (board.fromX + board.toX) / 2, y: (board.fromY + board.toY) / 2 });
+    assert.ok(OFFICE_FLOOR.isBoardAt({ x: foot.x, y: foot.y - board.high / 2 }));
     assert.equal(OFFICE_FLOOR.isBoardAt(toScreen({ x: 5, y: 9 })), false);
     assert.equal(LOUNGE_FLOOR.board, null);
     assert.ok(!OFFICE.furniture.some((piece) => piece.kind === ('printer' as string) || piece.kind === ('server' as string)), 'no printer nor server rack any more');
@@ -652,5 +658,20 @@ describe('the numbers object', () => {
       assert.ok(isInRoom(badge), `${kind} badge in the room`);
       assert.ok(badge.y < at(box.fromX, box.toY, box.high).y + 4, `${kind} badge above the object`);
     }
+  });
+});
+
+describe('name tags', () => {
+  const box = (left: number, top: number, width = 40) => ({ left, top, width, height: 13 });
+
+  it('leaves tags that do not touch where they are', () => {
+    assert.deepEqual(stackLabels([box(0, 100), box(60, 100), box(0, 50)]), [100, 100, 50]);
+  });
+
+  it('moves the tag further back above the one in front, and again above a third', () => {
+    const tops = stackLabels([box(20, 95), box(0, 100), box(10, 90)]);
+    assert.equal(tops[1], 100, 'the front one keeps its place');
+    assert.equal(tops[0], 100 - 1 - 13);
+    assert.equal(tops[2], tops[0] - 1 - 13);
   });
 });

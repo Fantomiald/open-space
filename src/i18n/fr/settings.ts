@@ -130,6 +130,7 @@ export const settings = {
     beard: 'Barbe',
     hat: 'Chapeau',
     headphones: 'Casque audio',
+    accessory: 'Accessoire',
     festivalHats: 'Pendant les fêtes, leur chapeau (bonnet de Noël, oreilles de lapin…) passe par-dessus le tien.',
     top: 'Haut',
     accents: { threePiece: 'Cravate', tracksuit: 'Bandes', jacket: 'Dessous' },
@@ -140,20 +141,29 @@ export const settings = {
     options: {
       eyes: { round: 'Ronds', wide: 'Grands', sleepy: 'Mi-clos', lashes: 'Avec cils', happy: 'Rieurs' },
       hair: {
-        none: 'Rasé', buzz: 'Très courts', short: 'Courts', sidePart: 'Raie sur le côté', curly: 'Bouclés', quiff: 'Houppette', spiky: 'En pics', mohawk: 'Crête',
+        none: 'Rasé', buzz: 'Très courts', short: 'Courts', sidePart: 'Raie sur le côté', sweep: 'Mèche sur l’œil', curly: 'Bouclés', quiff: 'Houppette', spiky: 'En pics', mohawk: 'Crête',
         afro: 'Afro', pigtails: 'Couettes', bob: 'Carré', ponytail: 'Queue de cheval', bun: 'Chignon', braids: 'Tresses', long: 'Longs', bangs: 'Longs à frange',
       },
       beard: { none: 'Aucune', stubble: 'De trois jours', mustache: 'Moustache', short: 'Courte', chinstrap: 'Collier', full: 'Pleine', long: 'Longue', handlebar: 'Moustache en guidon', goatee: 'Bouc' },
       top: {
         tshirt: 'T-shirt', tank: 'Débardeur', vneck: 'Col V', polo: 'Polo', shirt: 'Chemise', hoodie: 'Sweat à capuche', sweater: 'Pull col roulé', jacket: 'Veste ouverte',
         suit: 'Costume', threePiece: 'Trois-pièces', tracksuit: 'Survêtement', dress: 'Robe', blanket: 'Couverture', none: 'Torse nu',
+        narutoJacket: 'Veste de Naruto', zoroShirt: 'T-shirt et haramaki de Zoro', luffyVest: 'Gilet de Luffy', sanjiSuit: 'Costume de Sanji', kakashiVest: 'Gilet de Kakashi',
       },
-      bottom: { pants: 'Pantalon', shorts: 'Short', skirt: 'Jupe', tracksuit: 'Survêtement' },
-      shoes: { shoes: 'Chaussures', sneakers: 'Baskets', boots: 'Bottes', heels: 'Talons', sandals: 'Sandales', flipflops: 'Tongs', barefoot: 'Pieds nus' },
+      bottom: {
+        pants: 'Pantalon', shorts: 'Short', skirt: 'Jupe', tracksuit: 'Survêtement',
+        narutoPants: 'Pantalon de Naruto', zoroPants: 'Pantalon de Zoro', luffyShorts: 'Short de Luffy', sanjiPants: 'Pantalon de Sanji', kakashiPants: 'Pantalon de Kakashi',
+      },
+      shoes: {
+        shoes: 'Chaussures', sneakers: 'Baskets', boots: 'Bottes', heels: 'Talons', sandals: 'Sandales', flipflops: 'Tongs', barefoot: 'Pieds nus',
+        narutoSandals: 'Sandales de Naruto', zoroBoots: 'Bottes de Zoro', luffySandals: 'Sandales de Luffy', sanjiShoes: 'Chaussures de Sanji', kakashiSandals: 'Sandales de Kakashi',
+      },
       hat: {
         none: 'Aucun', cap: 'Casquette', beanie: 'Bonnet', beret: 'Béret', tophat: 'Haut-de-forme', party: 'Chapeau pointu', gold: 'Chapeau doré',
         santa: 'Bonnet de Noël', crown: 'Couronne', bunny: 'Oreilles de lapin',
+        leafBand: 'Bandeau de Naruto', leafBandTilted: 'Bandeau de Kakashi', bandana: 'Bandana de Zoro', strawHat: 'Chapeau de paille de Luffy',
       },
+      accessory: { none: 'Aucun', whiskers: 'Moustaches de Naruto', scar: 'Cicatrice de Luffy', cigarette: 'Cigarette de Sanji', mask: 'Masque de Kakashi', swords: 'Sabres de Zoro' },
     },
   },
   /** What crew members do (shared/jobs.ts), by id. */

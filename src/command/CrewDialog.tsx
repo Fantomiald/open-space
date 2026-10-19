@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
 import { JOBS, type Job } from '../../shared/jobs.ts';
-import { BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, type Look } from '../../shared/look.ts';
+import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { HAT_ROWS, chibiHead, chibiSprite } from '../room/chibi.ts';
@@ -238,6 +238,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
               <>
                 <Choices label={words.hat} options={HATS} labels={labels.hat} value={look.hat} onPick={(hat) => change({ hat })} />
                 {COLOURED_HATS.has(look.hat) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
+                <Choices label={words.accessory} options={ACCESSORIES} labels={labels.accessory} value={look.accessory} onPick={(accessory) => change({ accessory })} />
                 <label className="cp-crew__check"><input type="checkbox" checked={look.headphones} onChange={(e) => change({ headphones: e.target.checked })} /> {words.headphones}</label>
                 <p className="cp-muted">{words.festivalHats}</p>
               </>
@@ -245,7 +246,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
             {tab === 'top' && (
               <>
                 <Choices label={words.top} options={TOPS} labels={labels.top} value={look.top} onPick={(top) => change({ top })} />
-                {look.top !== 'none' && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
+                {look.top !== 'none' && !isCostumePiece(look.top) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
                 {(look.top === 'threePiece' || look.top === 'tracksuit' || look.top === 'jacket') && (
                   <Swatches label={words.accents[look.top]} colours={CLOTH_COLORS} value={look.accentColor} onPick={(accentColor) => change({ accentColor })} />
                 )}
@@ -256,7 +257,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
                 : look.top === 'dress' ? <p className="cp-muted">{words.dressIsBottom}</p> : (
                 <>
                   <Choices label={words.bottom} options={BOTTOMS} labels={labels.bottom} value={look.bottom} onPick={(bottom) => change({ bottom })} />
-                  <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />
+                  {!isCostumePiece(look.bottom) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />}
                 </>
               )
             )}
@@ -264,7 +265,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
               look.top === 'blanket' ? <p className="cp-muted">{words.blanketHides}</p> : (
                 <>
                   <Choices label={words.shoes} options={SHOES} labels={labels.shoes} value={look.shoes} onPick={(shoes) => change({ shoes })} />
-                  <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />
+                  {!isCostumePiece(look.shoes) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />}
                 </>
               )
             )}

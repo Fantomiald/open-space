@@ -4,6 +4,7 @@
  *
  * One dark look only: night-blue neutrals tuned to the room's backdrop, and an indigo accent for
  * the primary action, the current selection and the focus (amber already means "waiting for a permission").
+ * The room floats in the sky of its windows; the panels over it are frosted glass (--glass-*), so the sky and the room show through.
  */
 :root {
   color-scheme: dark;
@@ -33,14 +34,24 @@
   --space-6: 2.5rem;
 
   /* Shape and depth */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  /* fixed heights: the header's pills, the badges and chips of a line, the little counts */
+  --pill-height: 2.5rem;
+  --control-height: 2rem;
+  /* (pill height - control height) / 2: a control's distance to the edge of its pill */
+  --pill-inset: 0.25rem;
+  --badge-height: 1.5rem;
+  --count-height: 1.25rem;
   --border-width: 1px;
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 16px rgb(0 0 0 / 0.35);
   --shadow-overlay: 0 12px 48px rgb(0 0 0 / 0.65);
 
   /* Layout */
+  /* the one gap between floating things, and between them and the window's edge */
+  --gutter: 0.75rem;
   --detail-width: 31rem;
   --content-max: 70rem;
   --breakpoint-narrow: 60rem; /* documentation only: media queries cannot read custom properties */
@@ -51,9 +62,30 @@
 
   /* Surfaces and text */
   --color-surface-raised: #182033;
-  --color-header: #0e1320;
-  /* around the room: black, so the office's light is all there is */
-  --color-void: #000000;
+  /* around the room: the sky of its windows at the room's hour (--sky-top, --sky-bottom set by RoomView), night until then */
+  --color-backdrop: linear-gradient(180deg, var(--sky-top, #0b1430) 0%, var(--sky-bottom, #24366e) 100%);
+  /*
+   * frosted glass: a tint over the sky and the room blurred (--frost, an image src/room/Sky.tsx keeps up to date, fixed
+   * to the viewport so each pane shows what is behind it), a hairline edge lit from above. Not backdrop-filter:
+   * Chromium drops a live blur for a frame whenever the page repaints (typing, scrolling, a bubble), and panes blink.
+   * What opens over the panes (menus, popovers, dialogs) is a denser tint alone.
+   */
+  --glass: rgb(16 20 36 / 0.70);
+  --glass-surface: linear-gradient(var(--glass), var(--glass)), var(--frost, none) 0 0 / 100vw 100vh no-repeat fixed;
+  --glass-strong: rgb(16 19 34 / 0.94);
+  --glass-tint: rgb(255 255 255 / 0.05);
+  --glass-edge: rgb(255 255 255 / 0.10);
+  /* the floor a person or a pet stands on in the crew dialog: a soft spotlight */
+  --stage-light: radial-gradient(50% 20% at 50% 44%, rgb(154 168 255 / 0.2), transparent);
+  /* a slider's track, on glass */
+  --track: rgb(255 255 255 / 0.22);
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 50px rgb(4 5 14 / 0.45);
+  /* what is chosen (the pressed option of a group, the radio's play button): solid and light */
+  --selected: #eef1fa;
+  --selected-text: #11142a;
+  /* the user's own messages: the accent through the glass; the agent's are plain glass */
+  --bubble-mine: rgb(154 168 255 / 0.22);
+  --bubble-mine-edge: rgb(154 168 255 / 0.38);
   --color-bg: #0b0e16;
   --color-surface: #121725;
   --color-surface-sunken: #080b12;

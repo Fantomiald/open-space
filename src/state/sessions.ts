@@ -6,6 +6,7 @@ import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
+import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
 import type { Aside, ClaudeInfo, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand } from '../../shared/protocol.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -51,6 +52,12 @@ interface CommandPostState {
   metrics: MetricsFile | null | undefined;
   /** the numbers file changed since the page last showed it: a badge on the numbers object */
   metricsUnread: boolean;
+  /** the music apps of the computer the radio can drive (none outside macOS) */
+  musicApps: MusicApp[];
+  /** what the music app the radio drives plays, as last asked for */
+  nowPlaying: NowPlaying | null;
+  /** Music's playlists and the library's tracks found for `query`, as last asked for */
+  musicLibrary: { query: string; playlists: string[]; tracks: MusicTrack[] } | null;
   directories: string[];
   /** what each session changed in its files, as last asked for */
   changes: Record<string, SessionChanges>;
@@ -176,6 +183,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   metricsOpen: false,
   metrics: undefined,
   metricsUnread: false,
+  musicApps: [],
+  nowPlaying: null,
+  musicLibrary: null,
   directories: [],
   changes: {},
   inspections: {},
@@ -304,6 +314,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'note': set({ lastNote: { note: message.note, outcome: message.outcome } }); break;
       case 'metrics': set({ metrics: message.metrics }); break;
       case 'metricsStatus': set({ metricsUnread: message.unread }); break;
+      case 'musicApps': set({ musicApps: message.apps }); break;
+      case 'music': set({ nowPlaying: message.nowPlaying }); break;
+      case 'musicLibrary': set({ musicLibrary: { query: message.query, playlists: message.playlists, tracks: message.tracks } }); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },

@@ -29,6 +29,9 @@ export function attentionQueue(sessions: readonly SessionInfo[], seen: SeenSeque
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.session.stateSince - b.session.stateSince);
 }
 
+/** At work: its turn running, or between turns while sub-agents it sent off in the background still work. */
+export const isWorking = (session: SessionInfo) => session.state === 'work' || session.state === 'starting' || (session.state === 'wait' && session.subagents.length > 0);
+
 export interface SessionGroups { working: SessionInfo[]; idle: SessionInfo[]; stopped: SessionInfo[] }
 
 /** Sessions that are not in the queue: running, ready (new, or finished and seen), or stopped (seen errors included). */
@@ -36,8 +39,8 @@ export function otherSessions(sessions: readonly SessionInfo[], seen: SeenSequen
   const byRecent = (a: SessionInfo, b: SessionInfo) => b.stateSince - a.stateSince;
   const rest = sessions.filter((session) => attentionKind(session, seen) === null);
   return {
-    working: rest.filter((s) => s.state === 'work' || s.state === 'starting').sort(byRecent),
-    idle: rest.filter((s) => s.state === 'wait').sort(byRecent),
+    working: rest.filter(isWorking).sort(byRecent),
+    idle: rest.filter((s) => s.state === 'wait' && !isWorking(s)).sort(byRecent),
     stopped: rest.filter((s) => s.state === 'closed' || s.state === 'done' || s.state === 'error').sort(byRecent),
   };
 }

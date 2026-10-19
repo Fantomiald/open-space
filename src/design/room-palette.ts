@@ -3,7 +3,8 @@
 // room's colours here only (src/room/room.css reads the bubble colours from this file through CSS variables).
 
 export const ROOM_PALETTE = {
-  backdrop: '#000000',
+  /** around the room: clear, the page's backdrop shows through */
+  backdrop: 'transparent',
   /** the floor, the walls and what hangs on them */
   room: {
     planks: ['#9a6a40', '#a5744a', '#8f6138', '#a06e44'],
@@ -11,6 +12,12 @@ export const ROOM_PALETTE = {
     plankLight: '#b98652',
     floorEdge: '#5a3a22',
     floorEdgeDark: '#46301c',
+    /** the stone slab the room stands on, floating in the sky: its two faces, the lit lip, the joints, the stepped underside */
+    slab: '#8a849e',
+    slabDark: '#6a6482',
+    slabLight: '#b2acc6',
+    slabSeam: '#5a5470',
+    slabUnder: '#4a4560',
     wall: '#3f3a5a',
     wallStripe: '#38344f',
     wallSide: '#353049',
@@ -22,6 +29,9 @@ export const ROOM_PALETTE = {
     baseboard: '#2a2030',
     wallTop: '#6c6690',
     wallTopSide: '#5a547a',
+    /** the cut end of a wall at the front of the room, and the lit edge of its top */
+    wallEnd: '#2e2a44',
+    wallTopEdge: '#8a84ae',
     doorFrame: '#7a5236',
     doorway: '#120d0b',
     doorLight: '#ffcf8a',
@@ -131,6 +141,10 @@ export const ROOM_PALETTE = {
     sun: '#fff1c9',
     sunLow: '#ffb46b',
     moon: '#9fb7ff',
+    /** the sky behind the page (src/room/sky.ts) */
+    moonDisk: '#eef2ff',
+    cloud: '#f7f9ff',
+    cloudShade: '#d3ddf2',
     lamp: '#ffc46b',
     screen: '#7fd3ff',
     screenIdle: '#5a7bd0',
@@ -147,24 +161,35 @@ export const ROOM_PALETTE = {
   outline: '#1b1f2c',
   /** the badge above the numbers object while something new waits in its file (src/room/metrics.ts) */
   metricsBadge: '#ffd43b',
+  /** the round icon at the start of a name tag, in the page's session tones (--tone-* in tokens.css) */
   status: {
-    permission: '#f4a72a',
-    question: '#f4a72a',
-    working: '#4d8dff',
-    finished: '#45c46b',
-    error: '#e5534b',
+    permission: '#ffb866',
+    question: '#ffb866',
+    working: '#8cc2ff',
+    finished: '#6fdc9b',
+    error: '#ff8f8a',
   },
+  /** the glyph in that icon */
+  statusInk: '#141826',
+  /** a name tag that waits for the user: amber through the glass, an amber edge and a soft halo */
+  askingTag: 'rgba(78, 58, 38, 0.9)',
+  askingTagEdge: 'rgba(255, 184, 102, 0.7)',
+  askingTagHalo: 'rgba(255, 184, 102, 0.16)',
+  errorTagEdge: 'rgba(255, 143, 138, 0.55)',
+  /** a name tag with nothing going on */
+  quietTagText: '#c3c9d8',
   /** what a visitor of the crew is doing, in a thought bubble above their head (src/room/activity-icons.ts) */
   activity: {
     bubble: '#ffffff', ink: '#1b1f2c', mug: '#e2774a', coffee: '#5a3420', steam: '#a9afc0', water: '#4d9dff', waterLight: '#b9dcff',
     bird: '#4d8dff', beak: '#f4a72a', cover: '#d8454b', pages: '#fbf3df', screen: '#7cc6ff', balloon: '#ff5f7e', shine: '#ffd0da',
   },
-  tag: 'rgba(15, 20, 35, 0.72)',
+  tag: 'rgba(15, 20, 35, 0.8)',
   tagText: '#f4f1e8',
-  /** a session's tag, above its name */
+  /** the word the user put on a session, after its name */
   sessionTag: '#9aa8ff',
-  sessionTagText: '#0d1230',
   playerTagText: '#ffd6e2',
+  /** the hairline around a name tag, like the edge of the glass panels */
+  tagEdge: 'rgba(255, 255, 255, 0.18)',
   /** the outline of the door under the pointer */
   doorHover: '#ffffff',
   selection: '#ffffff',

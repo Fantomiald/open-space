@@ -19,7 +19,7 @@ export const WALL_HEIGHT = 100;
 /** The doorway in the left wall: its width along the wall, in tiles (from the layout's door.y), and its height in room pixels. */
 export const DOOR_SIZE = { width: 1.3, height: 60 };
 /** Where the far corner of the floor (tile 0, 0) lands on the canvas. */
-const ORIGIN: Point = { x: 272, y: 188 };
+const ORIGIN: Point = { x: 272, y: 168 };
 
 
 export function toScreen(tile: Point): Point {

@@ -5,6 +5,7 @@ import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { Look } from './look.ts';
+import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 
 export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'completed' }
 
@@ -358,7 +359,11 @@ export type ClientMessage =
   /** saves a note made from `version` (null: a new one); the folder is created if needed */
   | { t: 'writeNote'; name: string; text: string; version: string | null }
   /** reads the numbers file to show it: its numbers then count as seen */
-  | { t: 'metrics' };
+  | { t: 'metrics' }
+  /** what a music app of the computer plays, after `action` when there is one (the radio asks every few seconds) */
+  | { t: 'music'; app: MusicApp; action?: MusicAction }
+  /** Music's playlists, and the tracks of its library that match `query` (none for an empty query) */
+  | { t: 'musicLibrary'; query: string };
 
 export type ServerMessage =
   | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
@@ -390,6 +395,10 @@ export type ServerMessage =
   | { t: 'metrics'; metrics: MetricsFile | null }
   /** whether the numbers file changed since the page last showed it (the badge on the numbers object); sent at connection and when it flips */
   | { t: 'metricsStatus'; unread: boolean }
+  /** the music apps the radio can drive, sent at connection (none outside macOS) */
+  | { t: 'musicApps'; apps: MusicApp[] }
+  | { t: 'music'; nowPlaying: NowPlaying }
+  | { t: 'musicLibrary'; query: string; playlists: string[]; tracks: MusicTrack[] }
   | { t: 'toast'; kind: 'info' | 'error'; text: string };
 
 /** A side question (/btw) and its answer. */

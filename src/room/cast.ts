@@ -3,7 +3,7 @@
 // until a message calls them back. Sub-agents do not take a seat: they show above the head of whoever runs them.
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { attentionKind, attentionQueue, type AttentionKind, type SeenSequences } from '../state/queue.ts';
+import { attentionKind, attentionQueue, isWorking, type AttentionKind, type SeenSequences } from '../state/queue.ts';
 import { assignSeats } from './seats.ts';
 
 /** The icon above someone's head: an attention kind, at work, or nothing. */
@@ -48,7 +48,7 @@ export function roleTitle(command: string): string | null {
 export function sessionStatus(session: SessionInfo, seen: SeenSequences): Status {
   const kind = attentionKind(session, seen);
   if (kind) return kind;
-  return session.state === 'work' || session.state === 'starting' ? 'working' : null;
+  return isWorking(session) ? 'working' : null;
 }
 
 export type RoomKind = 'office' | 'lounge';
@@ -65,8 +65,8 @@ export function roomSessions(all: readonly SessionInfo[], seen: SeenSequences, r
   const rest = sessions.filter((session) => !queued.has(session.id)).sort((a, b) => a.createdAt - b.createdAt);
   return [
     queue,
-    rest.filter((session) => session.state === 'work' || session.state === 'starting'),
-    rest.filter((session) => session.state === 'wait'),
+    rest.filter(isWorking),
+    rest.filter((session) => session.state === 'wait' && !isWorking(session)),
   ];
 }
 

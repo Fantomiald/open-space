@@ -2,13 +2,20 @@
 // (src/room/chibi.ts); the crew editor picks them. Shared so the server can check what it stores.
 import { DEFAULT_HAT_COLOR } from '../src/design/people-palette.ts';
 
-export const HAIR_STYLES = ['none', 'buzz', 'short', 'sidePart', 'curly', 'quiff', 'spiky', 'mohawk', 'afro', 'pigtails', 'bob', 'ponytail', 'bun', 'braids', 'long', 'bangs'] as const;
+export const HAIR_STYLES = ['none', 'buzz', 'short', 'sidePart', 'sweep', 'curly', 'quiff', 'spiky', 'mohawk', 'afro', 'pigtails', 'bob', 'ponytail', 'bun', 'braids', 'long', 'bangs'] as const;
 export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'short', 'chinstrap', 'full', 'long', 'handlebar', 'goatee'] as const;
-export const TOPS = ['tshirt', 'tank', 'vneck', 'polo', 'shirt', 'hoodie', 'sweater', 'jacket', 'suit', 'threePiece', 'tracksuit', 'dress', 'blanket', 'none'] as const;
-export const BOTTOMS = ['pants', 'shorts', 'skirt', 'tracksuit'] as const;
-export const SHOES = ['shoes', 'sneakers', 'boots', 'heels', 'sandals', 'flipflops', 'barefoot'] as const;
+/** Anime pieces (src/room/costumes.ts): drawn in the character's colours, not the look's. */
+export const COSTUME_TOPS = ['narutoJacket', 'zoroShirt', 'luffyVest', 'sanjiSuit', 'kakashiVest'] as const;
+export const COSTUME_BOTTOMS = ['narutoPants', 'zoroPants', 'luffyShorts', 'sanjiPants', 'kakashiPants'] as const;
+export const COSTUME_SHOES = ['narutoSandals', 'zoroBoots', 'luffySandals', 'sanjiShoes', 'kakashiSandals'] as const;
+export const COSTUME_HATS = ['leafBand', 'leafBandTilted', 'bandana', 'strawHat'] as const;
+export const TOPS = ['tshirt', 'tank', 'vneck', 'polo', 'shirt', 'hoodie', 'sweater', 'jacket', 'suit', 'threePiece', 'tracksuit', 'dress', 'blanket', 'none', ...COSTUME_TOPS] as const;
+export const BOTTOMS = ['pants', 'shorts', 'skirt', 'tracksuit', ...COSTUME_BOTTOMS] as const;
+export const SHOES = ['shoes', 'sneakers', 'boots', 'heels', 'sandals', 'flipflops', 'barefoot', ...COSTUME_SHOES] as const;
 /** What one wears on the head: the festivals put some of the same on everyone (src/room/outfits.ts), over this one. */
-export const HATS = ['none', 'cap', 'beanie', 'beret', 'tophat', 'party', 'gold', 'santa', 'crown', 'bunny'] as const;
+export const HATS = ['none', 'cap', 'beanie', 'beret', 'tophat', 'party', 'gold', 'santa', 'crown', 'bunny', ...COSTUME_HATS] as const;
+/** What else goes with an anime look: whiskers, a scar, a cigarette, a mask, three swords at the hip. */
+export const ACCESSORIES = ['none', 'whiskers', 'scar', 'cigarette', 'mask', 'swords'] as const;
 export const EYES = ['round', 'wide', 'sleepy', 'lashes', 'happy'] as const;
 
 export type HairStyle = (typeof HAIR_STYLES)[number];
@@ -18,6 +25,9 @@ export type Bottom = (typeof BOTTOMS)[number];
 export type Shoes = (typeof SHOES)[number];
 export type HatStyle = (typeof HATS)[number];
 export type EyeStyle = (typeof EYES)[number];
+export type Accessory = (typeof ACCESSORIES)[number];
+
+export const isCostumePiece = (value: string) => ([...COSTUME_TOPS, ...COSTUME_BOTTOMS, ...COSTUME_SHOES, ...COSTUME_HATS] as readonly string[]).includes(value);
 
 /**
  * Colours are "#rrggbb". A blanket covers the trousers and the shoes, a dress the trousers; `glasses` is the colour of
@@ -44,11 +54,12 @@ export interface Look {
   shoes: Shoes;
   shoesColor: string;
   watch: boolean;
+  accessory: Accessory;
 }
 
 /** The traits that came after the first looks: a look saved without them gets these, and keeps everything else. */
-export const LATER_TRAITS: Pick<Look, 'eyes' | 'sunglasses' | 'headphones' | 'hat' | 'hatColor'> = {
-  eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_HAT_COLOR,
+export const LATER_TRAITS: Pick<Look, 'eyes' | 'sunglasses' | 'headphones' | 'hat' | 'hatColor' | 'accessory'> = {
+  eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_HAT_COLOR, accessory: 'none',
 };
 
 const COLOR = /^#[0-9a-f]{6}$/;
@@ -62,7 +73,8 @@ export function parseLook(raw: unknown): Look | null {
   const valid = isColor(look.skin) && oneOf(HAIR_STYLES, look.hair) && isColor(look.hairColor) && oneOf(BEARD_STYLES, look.beard)
     && isColor(look.beardColor) && (look.glasses === null || isColor(look.glasses)) && oneOf(TOPS, look.top) && isColor(look.topColor) && isColor(look.accentColor)
     && oneOf(BOTTOMS, look.bottom) && isColor(look.bottomColor) && oneOf(SHOES, look.shoes) && isColor(look.shoesColor) && typeof look.watch === 'boolean'
-    && typeof look.sunglasses === 'boolean' && typeof look.headphones === 'boolean' && oneOf(HATS, look.hat) && isColor(look.hatColor);
+    && typeof look.sunglasses === 'boolean' && typeof look.headphones === 'boolean' && oneOf(HATS, look.hat) && isColor(look.hatColor)
+    && oneOf(ACCESSORIES, look.accessory);
   if (!valid) return null;
   return {
     // eyes no longer offered fall back to round ones rather than losing the whole look
@@ -70,6 +82,6 @@ export function parseLook(raw: unknown): Look | null {
     beardColor: look.beardColor as string, glasses: look.glasses as string | null, sunglasses: look.sunglasses as boolean, headphones: look.headphones as boolean,
     hat: look.hat as HatStyle, hatColor: look.hatColor as string, top: look.top as Top, topColor: look.topColor as string, accentColor: look.accentColor as string,
     bottom: look.bottom as Bottom, bottomColor: look.bottomColor as string, shoes: look.shoes as Shoes, shoesColor: look.shoesColor as string,
-    watch: look.watch as boolean,
+    watch: look.watch as boolean, accessory: look.accessory as Accessory,
   };
 }

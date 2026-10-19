@@ -1,5 +1,16 @@
 # Versions
 
+## 1.3.0
+
+- Nouveau look : la salle flotte sur un socle de pierre, dans un ciel pixel art qui suit l'heure (nuages qui dérivent, étoiles, lune, neige à Noël, feux d'artifice au Nouvel An et au 14 juillet). Les panneaux sont en verre foncé, les pastilles ont toutes la même hauteur, les murs ont de l'épaisseur et les prénoms sont des pastilles. Le soleil ne passe plus par la fenêtre cachée derrière le tableau.
+- Sur mobile : la salle, la liste d'état, puis un champ compact flottant en bas, rien collé aux bords.
+- Le verre ne clignote plus : son flou est une image du ciel et de la salle calculée par la page, plus le flou en direct du navigateur.
+- Sur Mac, la radio pilote aussi Musique ou Spotify : un clic sur son libellé choisit la source, la pastille montre la pochette et le morceau, avec lecture, précédent, suivant et volume ; pour Musique, tes playlists et une recherche dans ta bibliothèque. Un titre trop long défile.
+- Une session dont les sous-agents travaillent en arrière-plan est au travail : son perso tape au clavier.
+- Quand le contexte se remplit, le champ propose de compacter, avec ce que le résumé doit garder pour continuer ; on peut masquer ce rappel.
+- Les étiquettes au-dessus des têtes ne se cachent plus entre elles : celle de derrière monte.
+- Tenues de Naruto, Zoro, Luffy, Sanji et Kakashi dans l'éditeur d'équipe, pièce par pièce, et une mèche sur l'œil.
+
 ## 1.2.2
 
 - Le mode shell ressemble à celui de Claude Code : « ! » tapé en premier devient un « ! » rose devant la commande, et Retour arrière au tout début le retire d'un coup.

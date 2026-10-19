@@ -30,8 +30,19 @@ export const GLASSES_COLORS = ['#121419', '#eef1f5', '#a8743a', '#c43c5a', '#4d8
 export const DEFAULT_LOOK: Look = {
   skin: '#f2c095', eyes: 'round', hair: 'short', hairColor: '#3b2a20', beard: 'none', beardColor: '#3b2a20', glasses: null,
   sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_HAT_COLOR,
-  top: 'tshirt', topColor: '#4d8dff', accentColor: '#8b919c', bottom: 'pants', bottomColor: '#2c3a66', shoes: 'sneakers', shoesColor: '#2a2d36', watch: false,
+  top: 'tshirt', topColor: '#4d8dff', accentColor: '#8b919c', bottom: 'pants', bottomColor: '#2c3a66', shoes: 'sneakers', shoesColor: '#2a2d36', watch: false, accessory: 'none',
 };
+
+/** The colours of the anime pieces (src/room/costumes.ts), fixed like the characters'. */
+export const COSTUME_COLORS = {
+  orange: '#f08a24', black: '#26272f', zipper: '#d5d8de', swirl: '#d0402e', band: '#26304f', bandage: '#ecebe4',
+  sandal: '#2f4f96', metal: '#c3cad6', metalLight: '#e6eaf0', metalDark: '#6b7383',
+  tee: '#f1f0ea', haramaki: '#3f8f44', trousers: '#262830', boots: '#1b1c22', gold: '#e8c048',
+  wado: '#f4f2ec', kitetsu: '#b2262a', kitetsuSheath: '#7a1a1e', shusui: '#18181d',
+  vest: '#d3302b', button: '#f2c440', shorts: '#3d6fc6', cuff: '#f4f2ea', straw: '#e9c45c', hatBand: '#c8302a', strap: '#7a4e2a', sole: '#c89a5a', scar: '#9a4a3a',
+  suit: '#1f2029', shirt: '#4b7dd3', tie: '#111116', shoe: '#121318', shine: '#9aa0ac', paper: '#f4f2ec', ember: '#f06a2a', smoke: '#c4c8d2',
+  flak: '#6f8c4a', navy: '#2b3654', glove: '#30313c', kakashiSandal: '#24365e',
+} as const;
 
 export const PEOPLE_INK = {
   outline: '#0a0b0f',

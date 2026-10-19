@@ -13,14 +13,22 @@ import type { Point } from './geometry.ts';
 const C = ROOM_PALETTE.room;
 const ART = { width: CANVAS_WIDTH / ART_SCALE, height: CANVAS_HEIGHT / ART_SCALE };
 const WALL = WALL_HEIGHT / ART_SCALE;
-const WALL_THICKNESS = 3;
+/** How far the walls reach out past the floor, in tiles: their top and their two cut ends show it. */
+const WALL_DEPTH = 0.35;
 const WAINSCOT = 12;
 const FLOOR_THICKNESS = 4;
+/** The stone slab under the floor, in art pixels: its height, then the step of its underside. */
+const SLAB = 6;
+const UNDERSIDE = 2;
 /** The glass of the windows, in art pixels above the floor. */
 export const WINDOW_GLASS = { low: 16, high: 38 };
 
 type Context = CanvasRenderingContext2D;
 const lift = (point: Point, z: number): Point => ({ x: point.x, y: point.y - z });
+const shift = (point: Point, by: Point): Point => ({ x: point.x + by.x, y: point.y + by.y });
+/** From a point of the room to the same point past the left wall, and past the back wall. */
+const outLeft = (point: Point) => shift(point, { x: toArt({ x: -WALL_DEPTH, y: 0 }).x - toArt({ x: 0, y: 0 }).x, y: toArt({ x: -WALL_DEPTH, y: 0 }).y - toArt({ x: 0, y: 0 }).y });
+const outBack = (point: Point) => shift(point, { x: toArt({ x: 0, y: -WALL_DEPTH }).x - toArt({ x: 0, y: 0 }).x, y: toArt({ x: 0, y: -WALL_DEPTH }).y - toArt({ x: 0, y: 0 }).y });
 /** A point on the back wall (y = 0): `x` in tiles along it, `z` in art pixels above the floor. */
 const onBackWall = (x: number, z: number) => lift(toArt({ x, y: 0 }), z);
 /** A point on the left wall (x = 0). */
@@ -48,6 +56,9 @@ function paintFloor(context: Context, layout: Layout) {
   const right = toArt({ x: ROOM.width, y: 0 });
   fillPolygon(context, [left, front, lift(front, -FLOOR_THICKNESS), lift(left, -FLOOR_THICKNESS)], C.floorEdge);
   fillPolygon(context, [front, right, lift(right, -FLOOR_THICKNESS), lift(front, -FLOOR_THICKNESS)], C.floorEdgeDark);
+  fillPolygon(context, [outLeft(left), left, lift(left, -FLOOR_THICKNESS), lift(outLeft(left), -FLOOR_THICKNESS)], C.floorEdge);
+  fillPolygon(context, [right, outBack(right), lift(outBack(right), -FLOOR_THICKNESS), lift(right, -FLOOR_THICKNESS)], C.floorEdgeDark);
+  paintSlab(context, lift(outLeft(left), -FLOOR_THICKNESS), lift(front, -FLOOR_THICKNESS), lift(outBack(right), -FLOOR_THICKNESS));
   // planks along x, two per tile, their joints staggered
   for (let y = 0; y < ROOM.depth * 2; y++) {
     const row = y / 2;
@@ -70,6 +81,22 @@ function paintFloor(context: Context, layout: Layout) {
   }
 }
 
+/** The room stands on a slab of stone floating in the sky: two faces under the floor's edge, then a narrower step below. */
+function paintSlab(context: Context, left: Point, front: Point, right: Point) {
+  const toward = (from: Point, to: Point, share: number): Point => ({ x: from.x + (to.x - from.x) * share, y: from.y + (to.y - from.y) * share });
+  const faces = (l: Point, f: Point, r: Point, height: number, light: string, dark: string) => {
+    fillPolygon(context, [l, f, lift(f, -height), lift(l, -height)], light);
+    fillPolygon(context, [f, r, lift(r, -height), lift(f, -height)], dark);
+  };
+  faces(left, front, right, SLAB, C.slab, C.slabDark);
+  line(context, left, front, C.slabLight);
+  line(context, front, right, C.slabLight);
+  line(context, lift(left, -SLAB / 2), lift(front, -SLAB / 2), C.slabSeam);
+  line(context, lift(front, -SLAB / 2), lift(right, -SLAB / 2), C.slabSeam);
+  const under = (point: Point) => lift(toward(point, front, 0.06), -SLAB);
+  faces(under(left), lift(front, -SLAB), under(right), UNDERSIDE, C.slabUnder, C.slabUnder);
+}
+
 function paintWalls(context: Context) {
   // the back wall (y = 0) faces the light, the left wall is a little darker
   backQuad(context, 0, ROOM.width, 0, WALL, C.wall);
@@ -84,11 +111,16 @@ function paintWalls(context: Context) {
   leftQuad(context, 0, ROOM.depth, WAINSCOT, WAINSCOT + 1, C.rail);
   backQuad(context, 0, ROOM.width, 0, 2, C.baseboard);
   leftQuad(context, 0, ROOM.depth, 0, 2, C.baseboard);
-  // the top of the walls shows their thickness
+  // the walls are solid: their top shows their thickness, and so does each cut end, at the front of the room
   const top = (point: Point) => lift(point, WALL);
   const far = toArt({ x: 0, y: 0 }), right = toArt({ x: ROOM.width, y: 0 }), left = toArt({ x: 0, y: ROOM.depth });
-  fillPolygon(context, [top(far), top(right), lift(top(right), WALL_THICKNESS), lift(top(far), WALL_THICKNESS)], C.wallTop);
-  fillPolygon(context, [top(left), top(far), lift(top(far), WALL_THICKNESS), lift(top(left), WALL_THICKNESS)], C.wallTopSide);
+  fillPolygon(context, [left, outLeft(left), top(outLeft(left)), top(left)], C.wallEnd);
+  fillPolygon(context, [right, outBack(right), top(outBack(right)), top(right)], C.wallEnd);
+  fillPolygon(context, [top(far), top(right), top(outBack(right)), top(outBack(far))], C.wallTop);
+  fillPolygon(context, [top(left), top(far), top(outLeft(far)), top(outLeft(left))], C.wallTopSide);
+  fillPolygon(context, [top(far), top(outBack(far)), top(outBack(outLeft(far))), top(outLeft(far))], C.wallTop);
+  line(context, top(outLeft(left)), top(left), C.wallTopEdge);
+  line(context, top(right), top(outBack(right)), C.wallTopEdge);
   line(context, far, top(far), C.wallStripe);
 }
 
