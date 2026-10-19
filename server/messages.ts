@@ -7,6 +7,7 @@ import { parseBirthday } from '../shared/festivals.ts';
 import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import { parseJobs } from '../shared/jobs.ts';
 import { parseLook } from '../shared/look.ts';
+import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
 import { CONVERSATION_ID } from './conversations.ts';
 import { asJson, asNumber, isJson } from './json.ts';
@@ -15,6 +16,7 @@ export const MAX_TEXT = 20_000;
 export const MAX_NAME = 40;
 /** Session tags are short labels. */
 export const MAX_TAG = 24;
+const MAX_SEARCH = 100;
 /** Pictures per message, and the size of one in base64 (Claude takes 5 MB a picture; the page shrinks them first). */
 export const MAX_IMAGES = 8;
 const MAX_IMAGE_BASE64 = Math.floor(5 * 1024 * 1024 * 4 / 3);
@@ -223,6 +225,27 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return name && text !== null && version !== undefined ? { t: 'writeNote', name, text, version } : null;
     }
     case 'metrics': return { t: 'metrics' };
+    case 'music': {
+      if (!MUSIC_APPS.includes(raw.app as MusicApp)) return null;
+      if (raw.action === undefined) return { t: 'music', app: raw.app as MusicApp };
+      const action = parseMusicAction(raw.action);
+      return action ? { t: 'music', app: raw.app as MusicApp, action } : null;
+    }
+    case 'musicLibrary': {
+      const query = boundedString(raw.query, MAX_SEARCH);
+      return query !== null ? { t: 'musicLibrary', query: query.trim() } : null;
+    }
+    default: return null;
+  }
+}
+
+function parseMusicAction(value: unknown): MusicAction | null {
+  if (!isJson(value)) return null;
+  switch (value.kind) {
+    case 'toggle': case 'next': case 'previous': return { kind: value.kind };
+    case 'volume': return typeof value.volume === 'number' && value.volume >= 0 && value.volume <= 100 ? { kind: 'volume', volume: value.volume } : null;
+    case 'playlist': { const name = boundedString(value.name, 200); return name ? { kind: 'playlist', name } : null; }
+    case 'track': return typeof value.id === 'string' && /^[0-9A-F]{16}$/.test(value.id) ? { kind: 'track', id: value.id } : null;
     default: return null;
   }
 }

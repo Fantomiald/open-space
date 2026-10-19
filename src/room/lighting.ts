@@ -47,6 +47,9 @@ const DAY = [
 const SUNRISE = 6.5;
 const SUNSET = 20.5;
 
+/** The hour of the clock, with its minutes as a fraction. */
+export const currentHour = () => { const now = new Date(); return now.getHours() + now.getMinutes() / 60; };
+
 export function lightingAt(hour: number): Lighting {
   const h = ((hour % 24) + 24) % 24;
   const next = DAY.findIndex((frame) => frame.hour > h);

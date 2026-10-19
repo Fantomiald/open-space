@@ -21,7 +21,7 @@ import { outfitFor } from './outfits.ts';
 import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
 import { Floor } from './floor.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
-import { lightingAt } from './lighting.ts';
+import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
 import { pictureInPictureSupported } from './pip.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
@@ -47,12 +47,20 @@ const PALETTE_VARIABLES = {
 } as CSSProperties;
 
 /** The time of day as a fractional hour (14:30 is 14.5). */
-const currentHour = () => { const now = new Date(); return now.getHours() + now.getMinutes() / 60; };
 
 /**
  * Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. `pip`: the small window the room is shown in
  * instead of the page (kept by App, so it stays open from one room to the other); `onOpenPip` opens it, from a click.
  */
+/** The sky of the windows, carried on to the page behind the room (--sky-top and --sky-bottom, read by tokens.css). */
+function showSky(document: Document, lighting: Lighting) {
+  const style = document.documentElement.style;
+  const top = css(lighting.skyTop), bottom = css(lighting.skyBottom);
+  if (style.getPropertyValue('--sky-top') === top && style.getPropertyValue('--sky-bottom') === bottom) return;
+  style.setProperty('--sky-top', top);
+  style.setProperty('--sky-bottom', bottom);
+}
+
 export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: FestivalDay; pip: Window | null; onOpenPip: () => void }) {
   const { festival, guests } = day;
   const sessions = useSessions((s) => s.sessions);
@@ -128,8 +136,10 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       last = now;
       const state = useSessions.getState();
       const hour = state.preview.hour ?? currentHour();
+      const lighting = lightingAt(hour);
+      showSky(host.document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting: lightingAt(hour), hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };

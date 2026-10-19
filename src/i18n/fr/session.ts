@@ -141,9 +141,14 @@ export const session = {
     /** what to do when the context fills up (the context chip of the header, and the /context view) */
     advice: {
       calm: 'Contexte de la conversation : voir le détail',
-      rising: 'Le contexte se remplit. Même tâche : /compact le résume. Autre chose : /clear repart de zéro.',
-      high: 'Contexte presque plein : Claude devient moins précis. Compacte, vide-le si la tâche change, ou passe à une autre session.',
+      rising: 'Le contexte se remplit : chaque message le relit en entier et use tes limites. Même tâche : compacte. Autre chose : vide-le.',
+      high: 'Contexte presque plein : Claude devient moins précis. Compacte, ou vide-le si la tâche change.',
     },
+    compactTitle: 'Résume la conversation en gardant ce qu’il faut pour continuer : où on en est, les décisions, ce qui reste, les fichiers clés.',
+    /** sent by the Compact buttons: /compact with what the summary must keep to go on without explaining anything again */
+    compactCommand: '/compact Garde ce qu’il faut pour continuer sans rien réexpliquer : où on en est (branche, fichiers non commités), chaque décision et pourquoi, ce que j’ai demandé ou refusé avec mes mots, ce qui reste à faire, les fichiers clés et les pièges déjà rencontrés.',
+    hide: 'Masquer',
+    level: (percent: string) => `Contexte à ${percent}`,
     compact: 'Compacter',
     clear: 'Vider',
     chip: (percent: string) => `Contexte ${percent}`,

@@ -3,10 +3,12 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { asideQuestion, nativeView } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
+import { contextLevel } from '../state/labels.ts';
+import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
-import { CloseIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
+import { AlertIcon, CloseIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
 import type { Attachments } from './useAttachments.ts';
 
 /**
@@ -93,6 +95,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
           </ol>
         </section>
       )}
+      <CompactHint session={session} />
       <AttachmentStrip attachments={attachments} />
       <CommandField
         id="composer-field" label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
@@ -109,6 +112,32 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Says, right where the user types, when a long conversation is worth compacting (every message reads it all again,
+ * which wears down the usage limits), with the button that does it, told what to keep to go on (compactCommand).
+ */
+function CompactHint({ session }: { session: SessionInfo }) {
+  const sendText = useSessions((s) => s.sendText);
+  const [, refresh] = useState(0);
+  const level = contextLevel(session.context);
+  const key = `${session.conversationId ?? session.id}:${level}`;
+  if ((level !== 'rising' && level !== 'high') || compactClosed(key)) return null;
+  const words = t.session.context;
+  const percent = Math.min(100, Math.round((session.context!.used / session.context!.max) * 100));
+  return (
+    <div className="cp-compact-hint" data-level={level} role="note">
+      <AlertIcon />
+      <span>{words.level(t.common.percent(percent))}</span>
+      <button type="button" className="cp-button" data-size="small" title={words.compactTitle} onClick={() => sendText(session.id, words.compactCommand)}>
+        {words.compact}
+      </button>
+      <button type="button" className="cp-icon-button" aria-label={words.hide} title={words.hide} onClick={() => { closeCompact(key); refresh((count) => count + 1); }}>
+        <CloseIcon />
+      </button>
+    </div>
   );
 }
 

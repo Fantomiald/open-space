@@ -1,5 +1,5 @@
-// What a visitor of the crew is doing (src/room/visitors.ts), as a tiny pixel icon in a bubble above their head,
-// shaped like a session's status (see paintStatus in draw.ts) but white, so it does not read as one.
+// What a visitor of the crew is doing (src/room/visitors.ts), as a tiny pixel icon in a white bubble above their head:
+// sessions show their status in their name tag (see paintNameTag in draw.ts), so the bubble does not read as one.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import type { Activity } from './visitors.ts';
 

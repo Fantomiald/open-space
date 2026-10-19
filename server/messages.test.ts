@@ -58,4 +58,17 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'aside', sessionId: 's1', question: '   ' }), null);
     assert.deepEqual(parseClientMessage({ t: 'asideClose', sessionId: 's1' }), { t: 'asideClose', sessionId: 's1' });
   });
+  it('drives only the known music apps, with actions in range', () => {
+    assert.deepEqual(parseClientMessage({ t: 'music', app: 'music' }), { t: 'music', app: 'music' });
+    assert.deepEqual(parseClientMessage({ t: 'music', app: 'spotify', action: { kind: 'next' } }), { t: 'music', app: 'spotify', action: { kind: 'next' } });
+    assert.deepEqual(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'volume', volume: 40 } }), { t: 'music', app: 'music', action: { kind: 'volume', volume: 40 } });
+    assert.deepEqual(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'playlist', name: 'le rap' } }), { t: 'music', app: 'music', action: { kind: 'playlist', name: 'le rap' } });
+    assert.deepEqual(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'track', id: 'A3666739BEC79A78' } }), { t: 'music', app: 'music', action: { kind: 'track', id: 'A3666739BEC79A78' } });
+    assert.equal(parseClientMessage({ t: 'music', app: 'vlc' }), null);
+    assert.equal(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'volume', volume: 140 } }), null);
+    assert.equal(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'track', id: '" & do shell script "x' } }), null);
+    assert.equal(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'quit' } }), null);
+    assert.deepEqual(parseClientMessage({ t: 'musicLibrary', query: '  joey ' }), { t: 'musicLibrary', query: 'joey' });
+    assert.equal(parseClientMessage({ t: 'musicLibrary', query: 'x'.repeat(101) }), null);
+  });
 });

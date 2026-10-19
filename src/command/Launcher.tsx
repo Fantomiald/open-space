@@ -142,7 +142,7 @@ export function Launcher() {
             </select>
           </label>
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
-          <button type="submit" className="cp-launcher__send" disabled={!ready}>{resuming ? words.resume : words.start}<SendIcon /></button>
+          <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>
         </div>
         </div>
       </form>

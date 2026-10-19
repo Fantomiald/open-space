@@ -3,7 +3,7 @@
  * read through the --room-* variables set by RoomView). Spacing and fonts come from tokens.css.
  * No animated blur or filter: the room must stay cheap to draw.
  */
-.cp-room { height: 100%; min-height: 18rem; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--color-void); }
+.cp-room { height: 100%; min-height: 18rem; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
 /* the stage keeps the canvas ratio (4:3) and takes the largest size that fits */
 .cp-room__fit { min-height: 0; container-type: size; display: grid; place-items: center; }
 .cp-room__stage { position: relative; width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; container-type: inline-size; background: var(--room-backdrop); border-radius: var(--radius-md); overflow: hidden; }
@@ -59,7 +59,7 @@
 .cp-room__pip { position: absolute; right: var(--space-2); bottom: var(--space-2); background: var(--room-more); color: var(--room-more-text); }
 /* the small window: the whole room, centred and scaled to the window (no cropping for narrow screens: it is small on
    purpose), and nothing else */
-body.cp-pip { margin: 0; background: var(--color-void); }
+body.cp-pip { margin: 0; background: var(--color-backdrop); }
 body.cp-pip .cp-room { position: fixed; inset: 0; padding: 0; min-height: 0; gap: 0; grid-template-rows: minmax(0, 1fr); }
 body.cp-pip .cp-room__stage { width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; border-radius: 0; }
 body.cp-pip .cp-room__zoom { width: 100%; left: 0; }

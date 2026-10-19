@@ -10,7 +10,7 @@ import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
 import { metricsBadgeAt } from './metrics.ts';
-import { festivalGlows, paintFestivalEffects, type Room } from './festivals.ts';
+import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
@@ -20,14 +20,13 @@ import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from 
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
 import { Visits, type Visitor } from './visitors.ts';
+import { stackLabels } from './labels.ts';
 
 /** How long a visitor at a birthday party wishes it, in ms. */
 const WISH_MS = 4000;
 /** Pixelify Sans only draws clean glyphs at some sizes; 11 room pixels is the smallest crisp one. */
 export const TAG_FONT = '500 11px "Pixelify Sans", monospace';
 const TAG_HEIGHT = 13;
-/** A name tag away from the pointer and from the open session: there to read, without hiding the room. */
-const FAINT_TAG_ALPHA = 0.45;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;
 
@@ -116,7 +115,7 @@ const raise = (point: Point, height: number): Point => ({ x: point.x, y: point.y
 
 /** A window's glass along the back wall, in tiles, and its height above the floor in room pixels. */
 interface Glass { fromX: number; toX: number; low: number; high: number }
-const glassesOf = (layout: Layout): Glass[] => layout.wallItems.filter((item) => item.kind === 'window')
+const glassesOf = (layout: Layout): Glass[] => windowsOf(layout)
   .map((item) => ({ fromX: item.fromX, toX: item.fromX + item.width, low: WINDOW_GLASS.low * ART_SCALE, high: WINDOW_GLASS.high * ART_SCALE }));
 
 /** Where the light of a window lands on the floor: its glass thrown into the room, longer when the sun is low. */
@@ -246,11 +245,27 @@ function lightMap(lighting: Lighting, lights: readonly Light[]): HTMLCanvasEleme
   return canvas;
 }
 
+let litCanvas: HTMLCanvasElement | null = null;
+
+/** The light map cut to what is painted: around the room the canvas stays clear, for the page's backdrop to show. */
+function litRoom(context: Context, map: HTMLCanvasElement): HTMLCanvasElement {
+  litCanvas ??= document.createElement('canvas');
+  const { width, height } = context.canvas;
+  if (litCanvas.width !== width || litCanvas.height !== height) { litCanvas.width = width; litCanvas.height = height; }
+  const lit = litCanvas.getContext('2d')!;
+  lit.globalCompositeOperation = 'copy';
+  lit.imageSmoothingEnabled = true;
+  lit.drawImage(map, 0, 0, width, height);
+  lit.globalCompositeOperation = 'destination-in';
+  lit.drawImage(context.canvas, 0, 0);
+  return litCanvas;
+}
+
 function paintLight(context: Context, lighting: Lighting, lights: readonly Light[]) {
   context.save();
-  context.imageSmoothingEnabled = true;
   context.globalCompositeOperation = 'multiply';
-  context.drawImage(lightMap(lighting, lights), 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.drawImage(litRoom(context, lightMap(lighting, lights)), 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.imageSmoothingEnabled = true;
   // and a little bloom around each light, over what it lights
   context.globalCompositeOperation = 'screen';
   for (const light of lights) {
@@ -332,40 +347,144 @@ function paintPerson(context: Context, sprites: SpriteSource, id: string, walker
   sprites.draw(context, id, pose, feet.x, feet.y);
 }
 
-/** A name tag centred above a head, its bottom at `bottom`. Returns the top and the right end of the tag. */
-function paintTag(context: Context, text: string, x: number, bottom: number, colour: string, framed: boolean, background: string = P.tag): { top: number; right: number } {
-  const width = Math.ceil(context.measureText(text).width) + 8;
-  const left = Math.round(x - width / 2);
-  const top = Math.round(bottom - TAG_HEIGHT);
-  context.fillStyle = background;
-  context.beginPath();
-  context.roundRect(left, top, width, TAG_HEIGHT, 3);
-  context.fill();
-  if (framed) { context.strokeStyle = P.selection; context.lineWidth = 1; context.stroke(); }
-  context.fillStyle = colour;
-  context.fillText(text, Math.round(x), top + 10);
-  return { top, right: left + width };
+/**
+ * A name tag: one pill of dark glass, like the page's badges, the same height for everyone. In it, from the left: the
+ * session's status as a round icon, the name, the word the user put on the session, the faces of its sub-agents.
+ */
+interface NameTag {
+  name: string;
+  colour: string;
+  status: Exclude<Status, null> | null;
+  tag: string | null;
+  /** whose sub-agents they are, for their faces */
+  sessionId: string;
+  agents: readonly Agent[];
+  /** the session open in the detail panel */
+  framed: boolean;
 }
 
-/** The sub-agents at work for a session: their faces in a little tag next to its name (three at most, then "+n"). */
-function paintAgents(context: Context, sprites: SpriteSource, sessionId: string, agents: readonly Agent[], left: number, top: number, time: number, reducedMotion: boolean) {
-  if (!agents.length) return;
-  const shown = agents.slice(0, 3);
-  const extra = agents.length - shown.length;
-  const width = 4 + shown.length * 9 + 3 + (extra ? 14 : 0);
-  context.fillStyle = P.tag;
+const TAG_PADDING = 6;
+const TAG_GAP = 3;
+const ICON_SIZE = 9;
+const HEAD_SIZE = 10;
+/** the faces overlap a little */
+const HEAD_STEP = 7;
+const SHOWN_AGENTS = 3;
+/** A name tag away from the pointer and from the open session, and not calling the user: there to read, without hiding the room. */
+const FAINT_TAG_ALPHA = 0.7;
+/** room pixels between the top of a head and its name tag */
+const TAG_LIFT = 5;
+/** the room a hairline takes between two parts of a tag, with the gaps on both sides */
+const SEPARATED = TAG_GAP * 2 + 1;
+
+/** The status glyphs, on a 5 x 5 grid in the middle of the icon (working is three dots, drawn apart). */
+const STATUS_GLYPHS: Readonly<Record<Exclude<Status, 'working' | null>, Glyph>> = {
+  permission: [[2, 0], [2, 1], [2, 2], [2, 4]],
+  question: [[1, 0], [2, 0], [3, 0], [3, 1], [2, 2], [2, 4]],
+  finished: [[0, 2], [1, 3], [2, 2], [3, 1], [4, 0]],
+  error: [[0, 0], [4, 0], [1, 1], [3, 1], [2, 2], [1, 3], [3, 3], [0, 4], [4, 4]],
+};
+
+const asks = (status: Status) => status === 'permission' || status === 'question';
+const textWidthOf = (context: Context, text: string) => Math.ceil(context.measureText(text).width);
+const extraAgents = (tag: NameTag) => Math.max(0, tag.agents.length - SHOWN_AGENTS);
+
+function tagWidth(context: Context, tag: NameTag): number {
+  let width = (tag.status ? 2 + ICON_SIZE + TAG_GAP : TAG_PADDING) + textWidthOf(context, tag.name) + TAG_PADDING;
+  if (tag.tag) width += SEPARATED + textWidthOf(context, tag.tag);
+  if (tag.agents.length) {
+    const shown = Math.min(tag.agents.length, SHOWN_AGENTS);
+    width += SEPARATED + HEAD_SIZE + (shown - 1) * HEAD_STEP;
+    if (extraAgents(tag)) width += TAG_GAP + textWidthOf(context, `+${extraAgents(tag)}`);
+  }
+  return width;
+}
+
+/** The hairline between two parts of a tag, after `x`; returns where the next part starts. */
+function separator(context: Context, x: number, top: number): number {
+  context.fillStyle = P.tagEdge;
+  context.fillRect(x + TAG_GAP, top + 3, 0.5, TAG_HEIGHT - 6);
+  return x + SEPARATED;
+}
+
+function paintTagIcon(context: Context, status: Exclude<Status, null>, left: number, top: number, time: number, reducedMotion: boolean) {
+  context.fillStyle = P.status[status];
   context.beginPath();
-  context.roundRect(left, top, width, TAG_HEIGHT, 3);
+  context.arc(left + ICON_SIZE / 2, top + ICON_SIZE / 2, ICON_SIZE / 2, 0, Math.PI * 2);
   context.fill();
-  // each agent bobs at its own pace: they are at work
+  const glyphLeft = left + 2, glyphTop = top + 2;
+  if (status === 'working') {
+    const lifted = reducedMotion ? -1 : Math.floor(time / 300) % 3;
+    for (const dot of [0, 1, 2]) rect(context, glyphLeft + dot * 2, glyphTop + 2 - (dot === lifted ? 1 : 0), 1, 1, P.statusInk);
+    return;
+  }
+  for (const [dx, dy] of STATUS_GLYPHS[status]) rect(context, glyphLeft + dx, glyphTop + dy, 1, 1, P.statusInk);
+}
+
+/** The sub-agents' faces, round, each bobbing at its own pace: they are at work. Three at most, then "+n". */
+function paintTagAgents(context: Context, sprites: SpriteSource, tag: NameTag, left: number, top: number, time: number, reducedMotion: boolean) {
+  const shown = tag.agents.slice(0, SHOWN_AGENTS);
   shown.forEach((agent, index) => {
     const bob = reducedMotion ? 0 : Math.floor((time + hash(agent.id) % 400) / 260) % 2;
-    sprites.drawHead(context, `${sessionId}/${agent.id}`, left + 2 + index * 9, top + 0.5 - bob, 12);
+    const x = left + index * HEAD_STEP + HEAD_SIZE / 2, y = top + TAG_HEIGHT / 2 - bob;
+    context.save();
+    context.beginPath();
+    context.arc(x, y, HEAD_SIZE / 2, 0, Math.PI * 2);
+    context.fillStyle = P.statusInk;
+    context.fill();
+    context.clip();
+    // the face sits low in the head's square: raised so the eyes are near the middle of the circle
+    sprites.drawHead(context, `${tag.sessionId}/${agent.id}`, x - 6, y - 8, 12);
+    context.restore();
+    context.strokeStyle = P.statusInk;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.arc(x, y, HEAD_SIZE / 2, 0, Math.PI * 2);
+    context.stroke();
   });
-  if (extra) {
-    context.fillStyle = P.tagText;
-    context.fillText(`+${extra}`, left + width - 8, top + 10);
+  if (!extraAgents(tag)) return;
+  context.fillStyle = P.quietTagText;
+  context.fillText(`+${extraAgents(tag)}`, left + HEAD_SIZE + (shown.length - 1) * HEAD_STEP + TAG_GAP, top + 10);
+}
+
+/** A name tag, its top left corner at (left, top); one that waits for the user bobs a little. */
+function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, left: number, top: number, time: number, reducedMotion: boolean) {
+  const width = tagWidth(context, tag);
+  const asking = asks(tag.status);
+  if (asking && !reducedMotion) top -= Math.floor(time / 600) % 2;
+  context.save();
+  context.textAlign = 'left';
+  if (asking) {
+    context.strokeStyle = P.askingTagHalo;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.roundRect(left - 1.5, top - 1.5, width + 3, TAG_HEIGHT + 3, TAG_HEIGHT / 2 + 1.5);
+    context.stroke();
   }
+  context.fillStyle = asking ? P.askingTag : P.tag;
+  context.beginPath();
+  context.roundRect(left, top, width, TAG_HEIGHT, TAG_HEIGHT / 2);
+  context.fill();
+  context.strokeStyle = tag.framed ? P.selection : asking ? P.askingTagEdge : tag.status === 'error' ? P.errorTagEdge : P.tagEdge;
+  context.lineWidth = tag.framed ? 1 : asking ? 0.75 : 0.5;
+  context.stroke();
+
+  let x = left + TAG_PADDING;
+  if (tag.status) {
+    paintTagIcon(context, tag.status, left + 2, top + 2, time, reducedMotion);
+    x = left + 2 + ICON_SIZE + TAG_GAP;
+  }
+  context.fillStyle = tag.colour;
+  context.fillText(tag.name, x, top + 10);
+  x += textWidthOf(context, tag.name);
+  if (tag.tag) {
+    x = separator(context, x, top);
+    context.fillStyle = P.sessionTag;
+    context.fillText(tag.tag, x, top + 10);
+    x += textWidthOf(context, tag.tag);
+  }
+  if (tag.agents.length) paintTagAgents(context, sprites, tag, separator(context, x, top), top, time, reducedMotion);
+  context.restore();
 }
 
 /** What the pet says ("Miaou !", "Ouaf ouaf !"…) above it, in a small white bubble. */
@@ -401,20 +520,6 @@ function paintIconBubble(context: Context, x: number, y: number, colour: string,
   rect(context, x, y + 5, 1, 2, colour);
   for (const [dx, dy] of glyph) rect(context, x + dx, y - 3 + dy, 1, 1, ink);
   context.restore();
-}
-
-/** The icon above a seated person: ! permission, ? question, ... working, a tick when a finished turn waits to be seen, x error. */
-function paintStatus(context: Context, status: Exclude<Status, null>, x: number, y: number, time: number, reducedMotion: boolean) {
-  const asking = status === 'permission' || status === 'question';
-  const pulse = asking && !reducedMotion ? Math.round(Math.sin(time / 220)) : 0;
-  const lifted = reducedMotion ? -1 : Math.floor(time / 300) % 3;
-  const glyph: Glyph = status === 'permission' ? EXCLAMATION
-    : status === 'question' ? [[-1, 0], [0, 0], [1, 0], [1, 1], [0, 2], [0, 4]]
-    : status === 'finished' ? [[-3, 2], [-2, 3], [-1, 2], [0, 1], [1, 0]]
-    : status === 'error' ? [[-2, 0], [2, 0], [-1, 1], [1, 1], [0, 2], [-1, 3], [1, 3], [-2, 4], [2, 4]]
-    : [0, 1, 2].map((dot) => [-3 + dot * 3, 2 - (dot === lifted ? 1 : 0)] as const);
-  // what waits for the user is drawn half as big again, so it shows from across the room
-  paintIconBubble(context, x, y + pulse, P.status[status], glyph, asking ? 1.5 : 1);
 }
 
 /** The badge over the numbers object while something new waits in its file: a dark "!" in a yellow bubble, half as big again, bobbing, its tail on `at`. */
@@ -458,8 +563,7 @@ export function roomCanvas(): { canvas: HTMLCanvasElement; context: Context } {
 
 export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene: Scene, sprites: SpriteSource, furniture: FurnitureSprites, options: FrameOptions) {
   const { lighting } = options;
-  context.fillStyle = P.backdrop;
-  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.drawImage(backdrop, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   const { layout } = scene.floor;
   context.drawImage(wallItems(layout, lighting, options.hour, options.festival, options.guests), 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -521,23 +625,39 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const metrics = options.metricsBadge ? layout.furniture.find(isMetricsPiece) : undefined;
   if (metrics) paintMetricsBadge(context, metricsBadgeAt(metrics), time);
 
-  // name tags and icons go on top of everything, so the furniture never hides them
+  // name tags and icons go on top of everything, so the furniture never hides them; a tag that would cover another moves up
   context.font = TAG_FONT;
   context.textAlign = 'center';
+  const tags: { tag: NameTag; x: number; bottom: number; faint: boolean }[] = [];
   for (const character of characters) {
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
     const feet = raise(toScreen(character.position), lift);
     const head = feet.y - sprites.height(characterPose(character, options), character.person.id);
     if (options.dozing && character.phase === 'seated') paintZzz(context, feet.x, head - 4, options.reducedMotion ? 0 : options.time, character.blinkOffset);
-    context.globalAlpha = isSelected(character) || options.hoveredId === character.person.id ? 1 : FAINT_TAG_ALPHA;
-    const tag = paintTag(context, character.person.name, feet.x, head - 2, P.tagText, isSelected(character));
-    // the session's tag right above its name, then what it waits for above both (the status at full strength: it calls the user)
-    const labelTop = character.person.tag ? paintTag(context, character.person.tag, feet.x, tag.top - 2, P.sessionTagText, false, P.sessionTag).top : tag.top;
-    context.globalAlpha = 1;
-    // the sub-agents at full strength, like the status: they show work going on
-    if (character.phase === 'seated') paintAgents(context, sprites, character.person.sessionId, character.person.agents, tag.right + 2, tag.top, options.time, options.reducedMotion);
-    if (character.phase === 'seated' && character.person.status) paintStatus(context, character.person.status, feet.x, labelTop - 16, options.time, options.reducedMotion);
+    // the status and the sub-agents only once at the desk: walking in or out, it is just someone passing by
+    const status = character.phase === 'seated' ? character.person.status : null;
+    const noticed = status !== null || isSelected(character) || options.hoveredId === character.person.id;
+    // what waits for the user stays at full strength, like the open session and the one under the pointer
+    const calling = status !== null && status !== 'working';
+    tags.push({
+      x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
+      tag: {
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag,
+        sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
+      },
+    });
   }
+  const playerFeet = toScreen(scene.player.position);
+  tags.push({
+    x: playerFeet.x, bottom: playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - TAG_LIFT, faint: options.hoveredId !== PLAYER_ID,
+    tag: { name: options.playerName, colour: P.playerTagText, status: null, tag: null, sessionId: PLAYER_ID, agents: [], framed: false },
+  });
+  const boxes = tags.map(({ tag, x, bottom }) => { const width = tagWidth(context, tag); return { left: Math.round(x - width / 2), top: Math.round(bottom - TAG_HEIGHT), width, height: TAG_HEIGHT }; });
+  stackLabels(boxes).forEach((top, index) => {
+    context.globalAlpha = tags[index].faint ? FAINT_TAG_ALPHA : 1;
+    paintNameTag(context, sprites, tags[index].tag, boxes[index].left, top, options.time, options.reducedMotion);
+  });
+  context.globalAlpha = 1;
   if (pet && choice) {
     const paws = toScreen(pet.position);
     drawHearts(context, pet, paws.x, paws.y);
@@ -550,7 +670,13 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const { pose, lift } = visitorPose(visitor, options);
     const feet = raise(toScreen(visitor.position), lift);
     const head = feet.y - sprites.height(pose, visitor.id);
-    const above = hovered ? paintTag(context, visitor.name, feet.x, head - 2, P.tagText, false).top : head;
+    let above = head;
+    if (hovered) {
+      const tag: NameTag = { name: visitor.name, colour: P.tagText, status: null, tag: null, sessionId: visitor.id, agents: [], framed: false };
+      const width = tagWidth(context, tag);
+      above = Math.round(head - TAG_LIFT - TAG_HEIGHT);
+      paintNameTag(context, sprites, tag, Math.round(feet.x - width / 2), above, options.time, options.reducedMotion);
+    }
     const bob = options.reducedMotion ? 0 : Math.round(Math.sin((options.time + visitor.blinkOffset) / 500));
     // at a birthday party, they first wish it out loud (the second of two after the first), then show what they do
     const celebrated = options.festival === 'birthday' ? options.guests.filter((name) => name !== visitor.name) : [];
@@ -558,8 +684,4 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (visitor.phase === 'staying' && wishing) paintSpeech(context, t.room.birthdayWish(celebrated), feet.x, above + 4);
     else if (visitor.phase === 'staying') paintActivity(context, visitor.spot.activity, feet.x, above - 1 + bob);
   }
-  const playerFeet = toScreen(scene.player.position);
-  context.globalAlpha = options.hoveredId === PLAYER_ID ? 1 : FAINT_TAG_ALPHA;
-  paintTag(context, options.playerName, playerFeet.x, playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - 2, P.playerTagText, false);
-  context.globalAlpha = 1;
 }

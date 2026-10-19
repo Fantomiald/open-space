@@ -7,6 +7,7 @@ import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ATTACHMENT_NAME, SHOWN_EXTENSIONS, VIDEO_EXTENSIONS } from './attachments.ts';
 import { TEXT_EXTENSIONS } from '../shared/protocol.ts';
+import { SPOTIFY_ARTWORK } from '../shared/music.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
@@ -56,7 +57,7 @@ const PAGE_SKELETON = '<!doctype html><meta charset="utf-8"><meta name="viewport
 export function createWebServer(options: WebServerOptions) {
   const { policy, port, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
   const csp = [
-    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${SPOTIFY_ARTWORK}`,
     "font-src 'self' data:", "media-src 'self' blob: data: https:", "worker-src 'self' blob:",
     `connect-src 'self' ws://localhost:${port} ws://127.0.0.1:${port}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
   ].join('; ');

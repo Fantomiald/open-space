@@ -163,7 +163,7 @@ export function ContextView({ sessionId, onBack }: ViewProps) {
         <div className="cp-context__advice" data-level={level} role="note">
           <p>{words.advice[level]}</p>
           <div className="cp-context__actions">
-            <button type="button" className="cp-button" data-size="small" onClick={() => run('/compact')}>{words.compact}</button>
+            <button type="button" className="cp-button" data-size="small" title={words.compactTitle} onClick={() => run(words.compactCommand)}>{words.compact}</button>
             <button type="button" className="cp-button" data-size="small" data-variant="quiet" onClick={() => run('/clear')}>{words.clear}</button>
           </div>
         </div>

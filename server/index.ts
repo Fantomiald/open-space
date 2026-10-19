@@ -33,6 +33,7 @@ import { openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { listNotes, readNote, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
+import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
 
@@ -102,6 +103,7 @@ await sessions.init();
 
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
+const musicApps = installedMusicApps();
 let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
 /** Tells every page when the badge of the numbers object comes or goes. */
 async function checkMetrics() {
@@ -134,6 +136,7 @@ function onConnection(socket: WebSocket) {
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked,
   });
   send({ t: 'metricsStatus', unread: metricsUnread });
+  send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
     if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
     let message: ClientMessage | null = null;
@@ -243,6 +246,8 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await checkMetrics();
       break;
     }
+    case 'music': send({ t: 'music', nowPlaying: message.action ? await controlMusic(message.app, message.action) : await nowPlaying(message.app) }); break;
+    case 'musicLibrary': send({ t: 'musicLibrary', query: message.query, ...await musicLibrary(message.query) }); break;
     case 'openTerminal': await openTerminal(defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir()); break;
   }
 }

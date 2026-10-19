@@ -5,6 +5,7 @@ import { useSessions, selectAttentionCount, type View } from '../state/sessions.
 import { BellIcon, CommandIcon, CrewIcon, DeskIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
 import { PreviewMenu } from './PreviewMenu.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
+import { Radio } from './Radio.tsx';
 
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge']] as const satisfies readonly (readonly [View, () => unknown, 'office' | 'lounge'])[];
 /** The palette opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both). */
@@ -34,25 +35,28 @@ export function Header() {
   const words = t.common.header;
   return (
     <header className="cp-header">
-      <div className="cp-header__brand">
-        <span className="cp-header__signal" data-connection={connection} title={connection === 'live' ? words.connected : words.disconnected} />
-        <h1 className="cp-sr-only">Open Space</h1>
-        {attention > 0 && <span className="cp-count" role="status" aria-label={words.waiting(attention)}>{attention}</span>}
+      <div className="cp-header__where">
+        <div className="cp-header__brand">
+          <span className="cp-header__signal" data-connection={connection} title={connection === 'live' ? words.connected : words.disconnected} />
+          <h1 className="cp-sr-only">Open Space</h1>
+          {attention > 0 && <span className="cp-count" role="status" aria-label={words.waiting(attention)}>{attention}</span>}
+        </div>
+        <nav className="cp-segmented" data-icons aria-label={words.rooms}>
+          {VIEWS.map(([id, ViewIcon, room]) => (
+            <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
+              <ViewIcon /><span className="cp-header__room-count" aria-hidden="true">({counts[room]})</span>
+            </button>
+          ))}
+        </nav>
       </div>
-      <nav className="cp-segmented" data-icons aria-label={words.rooms}>
-        {VIEWS.map(([id, ViewIcon, room]) => (
-          <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
-            <ViewIcon /><span className="cp-header__room-count" aria-hidden="true">({counts[room]})</span>
-          </button>
-        ))}
-      </nav>
+      <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
         <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} title={words.crewTitle}>
-          <CrewIcon /> {words.crew}
+          <CrewIcon /> <span className="cp-header__label">{words.crew}</span>
         </button>
         <button type="button" className="cp-button" data-variant="quiet" onClick={() => openPalette(true)}>
-          <CommandIcon /> {words.commands} <kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
+          <CommandIcon /> <span className="cp-header__label">{words.commands}</span> <kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
         </button>
         <button
           type="button" className="cp-icon-button" aria-pressed={sound} onClick={toggleSound}

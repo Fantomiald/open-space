@@ -126,6 +126,7 @@ export const settings: Dictionary['settings'] = {
     beard: 'Beard',
     hat: 'Hat',
     headphones: 'Headphones',
+    accessory: 'Accessory',
     festivalHats: 'During the holidays, their hat (Santa hat, bunny ears…) goes over yours.',
     top: 'Top',
     accents: { threePiece: 'Tie', tracksuit: 'Stripes', jacket: 'Underneath' },
@@ -136,20 +137,29 @@ export const settings: Dictionary['settings'] = {
     options: {
       eyes: { round: 'Round', wide: 'Wide', sleepy: 'Half-closed', lashes: 'With lashes', happy: 'Smiling' },
       hair: {
-        none: 'Shaved', buzz: 'Buzz cut', short: 'Short', sidePart: 'Side part', curly: 'Curly', quiff: 'Quiff', spiky: 'Spiky', mohawk: 'Mohawk',
+        none: 'Shaved', buzz: 'Buzz cut', short: 'Short', sidePart: 'Side part', sweep: 'Swept over one eye', curly: 'Curly', quiff: 'Quiff', spiky: 'Spiky', mohawk: 'Mohawk',
         afro: 'Afro', pigtails: 'Pigtails', bob: 'Bob', ponytail: 'Ponytail', bun: 'Bun', braids: 'Braids', long: 'Long', bangs: 'Long with bangs',
       },
       beard: { none: 'None', stubble: 'Stubble', mustache: 'Mustache', short: 'Short', chinstrap: 'Chinstrap', full: 'Full', long: 'Long', handlebar: 'Handlebar mustache', goatee: 'Goatee' },
       top: {
         tshirt: 'T-shirt', tank: 'Tank top', vneck: 'V-neck', polo: 'Polo', shirt: 'Shirt', hoodie: 'Hoodie', sweater: 'Turtleneck', jacket: 'Open jacket',
         suit: 'Suit', threePiece: 'Three-piece', tracksuit: 'Tracksuit', dress: 'Dress', blanket: 'Blanket', none: 'Shirtless',
+        narutoJacket: 'Naruto’s jacket', zoroShirt: 'Zoro’s T-shirt and haramaki', luffyVest: 'Luffy’s vest', sanjiSuit: 'Sanji’s suit', kakashiVest: 'Kakashi’s vest',
       },
-      bottom: { pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt', tracksuit: 'Tracksuit' },
-      shoes: { shoes: 'Shoes', sneakers: 'Sneakers', boots: 'Boots', heels: 'Heels', sandals: 'Sandals', flipflops: 'Flip-flops', barefoot: 'Barefoot' },
+      bottom: {
+        pants: 'Pants', shorts: 'Shorts', skirt: 'Skirt', tracksuit: 'Tracksuit',
+        narutoPants: 'Naruto’s pants', zoroPants: 'Zoro’s pants', luffyShorts: 'Luffy’s shorts', sanjiPants: 'Sanji’s pants', kakashiPants: 'Kakashi’s pants',
+      },
+      shoes: {
+        shoes: 'Shoes', sneakers: 'Sneakers', boots: 'Boots', heels: 'Heels', sandals: 'Sandals', flipflops: 'Flip-flops', barefoot: 'Barefoot',
+        narutoSandals: 'Naruto’s sandals', zoroBoots: 'Zoro’s boots', luffySandals: 'Luffy’s sandals', sanjiShoes: 'Sanji’s shoes', kakashiSandals: 'Kakashi’s sandals',
+      },
       hat: {
         none: 'None', cap: 'Cap', beanie: 'Beanie', beret: 'Beret', tophat: 'Top hat', party: 'Party hat', gold: 'Gold hat',
         santa: 'Santa hat', crown: 'Crown', bunny: 'Bunny ears',
+        leafBand: 'Naruto’s headband', leafBandTilted: 'Kakashi’s headband', bandana: 'Zoro’s bandana', strawHat: 'Luffy’s straw hat',
       },
+      accessory: { none: 'None', whiskers: 'Naruto’s whiskers', scar: 'Luffy’s scar', cigarette: 'Sanji’s cigarette', mask: 'Kakashi’s mask', swords: 'Zoro’s swords' },
     },
   },
   jobs: { cyber: 'Cyber', devops: 'DevOps', tech: 'Tech', product: 'Product', design: 'Design', data: 'Data', marketing: 'Marketing', hr: 'HR' },

@@ -9,6 +9,7 @@ import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord, run
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
+import { sessionStatus } from '../room/cast.ts';
 import { afterEvent, withPartial } from './partials.ts';
 import { questionAnswers } from './questions.ts';
 import { quotaWindowName, resetLabel, usageLevel } from '../lib/format.ts';
@@ -82,6 +83,14 @@ describe('attention queue', () => {
     assert.deepEqual(groups.working.map((s) => s.id).sort(), ['s', 'w']);
     assert.deepEqual(groups.idle.map((s) => s.id), ['ready']);
     assert.deepEqual(groups.stopped.map((s) => s.id).sort(), ['c', 'd']);
+  });
+
+  it('counts a session between turns as working while its background sub-agents work', () => {
+    const helper = { id: 't1', name: 'Bob', type: 'Explore' };
+    const groups = otherSessions([session('bg', 'wait', { turns: 0, subagents: [helper] }), session('ready', 'wait', { turns: 0 })]);
+    assert.deepEqual(groups.working.map((s) => s.id), ['bg']);
+    assert.deepEqual(groups.idle.map((s) => s.id), ['ready']);
+    assert.equal(sessionStatus(session('bg', 'wait', { turns: 0, subagents: [helper] }), {}), 'working');
   });
 
   it('detects sessions that just started waiting, not those already waiting, nor errors', () => {
@@ -191,8 +200,8 @@ describe('buildFeed', () => {
     assert.equal(contextLevel({ used: 50_000, max: 200_000 }), 'calm');
     assert.equal(contextLevel({ used: 110_000, max: 200_000 }), 'rising');
     assert.equal(contextLevel({ used: 160_000, max: 200_000 }), 'high');
-    assert.equal(contextLevel({ used: 250_000, max: 1_000_000 }), 'calm');
-    assert.equal(contextLevel({ used: 450_000, max: 1_000_000 }), 'rising', 'a long context gets less sharp, even in a big window');
+    assert.equal(contextLevel({ used: 150_000, max: 1_000_000 }), 'calm');
+    assert.equal(contextLevel({ used: 250_000, max: 1_000_000 }), 'rising', 'a long context gets less sharp and costs more, even in a big window');
     assert.equal(contextLevel({ used: 800_000, max: 1_000_000 }), 'high', 'red only once the meter is three quarters full');
   });
 

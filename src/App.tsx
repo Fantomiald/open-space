@@ -10,10 +10,10 @@ import { Header } from './command/Header.tsx';
 import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
 import { RoomView } from './room/RoomView.tsx';
+import { Sky } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useSmallWindow } from './room/pip.ts';
 import { useFestival } from './room/useFestival.ts';
-import { Radio } from './command/Radio.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { defaultFolder } from './lib/format.ts';
@@ -130,6 +130,7 @@ export function App() {
 
   return (
     <div className="cp-app">
+      <Sky festival={day.festival} />
       <Header />
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
@@ -137,7 +138,6 @@ export function App() {
         {/* keyed so a pending confirmation or rename never carries over to another session */}
         {selectedId ? <Detail key={selectedId} /> : <Launcher />}
       </main>
-      <Radio />
       <StatusPanel />
       <CommandPalette />
       <CrewDialog />

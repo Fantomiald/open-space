@@ -1,8 +1,9 @@
 // The people of the room in chibi pixel art: a big head on a small body, 16 x 25 art pixels, drawn from a Look
 // (shared/look.ts). Each pose is drawn once on its own little canvas, outlined, and kept.
-import { CLOTH_COLORS, HAIR_COLORS, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
+import { CLOTH_COLORS, COSTUME_COLORS, HAIR_COLORS, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { BEARD_STYLES, HAIR_STYLES, type HairStyle, type Look } from '../../shared/look.ts';
+import { costumeSleeve, isCostumeHat, paintAccessory, paintCostumeHat, paintCostumeLegs, paintCostumeTop, paintRaisedSleeve, paintSmoke, underCostume, type Body, type CostumeHat } from './costumes.ts';
 import { css, mix, rgb } from './lighting.ts';
 import { HAT_HEIGHT, NO_OUTFIT, outfitKey, wornOutfit, type Hat, type Outfit } from './outfits.ts';
 import { ART_SCALE, artCanvas, outline, shadedBall, tones, type Tones } from './pixel-art.ts';
@@ -20,16 +21,16 @@ const FEET = { x: 13, y: 41 };
 const HEAD = { x: 4, y: 11, size: 18 };
 /** The highest row of each hairstyle (0 is the top of a bald head): where a hat sits. */
 const HAIR_TOP: Readonly<Record<HairStyle, number>> = {
-  none: 0, buzz: 0, short: -1, sidePart: -1, curly: -2, quiff: -2, spiky: -2, mohawk: -3, afro: -3, pigtails: -1, bob: -1, ponytail: -1, bun: -3, braids: -1, long: -1, bangs: -1,
+  none: 0, buzz: 0, short: -1, sidePart: -1, sweep: -1, curly: -2, quiff: -2, spiky: -2, mohawk: -3, afro: -3, pigtails: -1, bob: -1, ponytail: -1, bun: -3, braids: -1, long: -1, bangs: -1,
 };
 /** Hairstyles that hide the ears from the front, and those that leave them to see from behind. */
 const COVERS_EARS: ReadonlySet<HairStyle> = new Set(['long', 'bob', 'bangs', 'braids']);
-const EARS_FROM_BEHIND: ReadonlySet<HairStyle> = new Set(['none', 'buzz', 'short', 'sidePart', 'quiff', 'spiky', 'mohawk', 'pigtails', 'ponytail', 'bun']);
+const EARS_FROM_BEHIND: ReadonlySet<HairStyle> = new Set(['none', 'buzz', 'short', 'sidePart', 'sweep', 'quiff', 'spiky', 'mohawk', 'pigtails', 'ponytail', 'bun']);
 /** Tops whose sleeves go down to the wrist. */
 const LONG_SLEEVES: ReadonlySet<Look['top']> = new Set(['suit', 'threePiece', 'tracksuit', 'shirt', 'hoodie', 'sweater', 'jacket']);
 
 /** Hats as rows of letters, their bottom row on the hair; `x` is their left column (the head is centred on 8). */
-const HATS: Readonly<Record<Exclude<Hat, 'party' | 'gold'>, { x: number; rows: readonly string[] }>> = {
+const HATS: Readonly<Record<Exclude<Hat, 'party' | 'gold' | CostumeHat>, { x: number; rows: readonly string[] }>> = {
   santa: { x: 1, rows: [
     '......rrrr.....',
     '....rrrrrrrr...',
@@ -141,6 +142,7 @@ function paintOutfit(R: Paint, P: (x: number, y: number, colour: string) => void
     }
   }
   if (!outfit.hat) return;
+  if (isCostumeHat(outfit.hat)) { paintCostumeHat(R, P, outfit.hat, back, up); return; }
   if (outfit.hat === 'party') { const colour = outfit.hatColor ?? F.balloons[hash(JSON.stringify(look)) % F.balloons.length]; cone(R, top + 1, colour, F.hatStripe, F.gold); return; }
   if (outfit.hat === 'gold') { cone(R, top + 1, F.gold, F.silver, F.silver); return; }
   const { x, rows } = HATS[outfit.hat];
@@ -158,7 +160,9 @@ function paintOutfit(R: Paint, P: (x: number, y: number, colour: string) => void
 function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
   // in swimwear, the blanket comes off: a tank top in the colour of the top, swim briefs, flip-flops
   const swim = outfit.swimwear === true;
-  const look: Look = swim ? { ...worn, top: worn.top === 'none' ? 'none' : 'tank', bottom: 'shorts', shoes: 'flipflops' } : worn;
+  const dressed: Look = swim ? { ...worn, top: worn.top === 'none' ? 'none' : 'tank', bottom: 'shorts', shoes: 'flipflops' } : worn;
+  // the anime pieces go over a bare body (costumes.ts)
+  const look = underCostume(dressed);
   const { canvas, context } = artCanvas(CANVAS.width, CANVAS.height);
   const R: Paint = (x, y, width, height, colour) => { context.fillStyle = colour; context.fillRect(ORIGIN.x + x, ORIGIN.y + y, width, height); };
   const P = (x: number, y: number, colour: string) => R(x, y, 1, 1, colour);
@@ -169,6 +173,7 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
   const lift = walk ? (frame.step ? [1, 0] : [0, 1]) : [0, 0];
   const skin = tones(look.skin), hair = tones(look.hairColor), fuzz = tones(blend(look.hairColor, look.skin)), beard = tones(look.beardColor), top = tones(look.topColor), bottom = tones(look.bottomColor);
   const accent = look.accentColor;
+  const body: Body = { back, sit, up, swing, lift, raising: frame.gesture === 'raising', typing: frame.gesture === 'typing' && !back, step: frame.step, skin, hair };
 
   // legs and feet, or the blanket that hides them
   if (look.top === 'blanket') {
@@ -208,6 +213,7 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
       });
       if (flared) { R(3, 19, 10, 1, flared.base); R(2, 20, 12, 1, flared.base); R(10, 19, 3, 2, flared.shade); }
     }
+    paintCostumeLegs(R, P, dressed, body);
     // the top: shaded from the left, and its own details
     const cloth = look.top === 'none' ? skin : top;
     const front = !back;
@@ -255,6 +261,7 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
       // typing, the near arm stops at the elbow: its forearm and hand lie on the desk, drawn after it (drawTypingHand)
       if (!(typing && column === NEAR_ARM.x)) R(column, 19 + up + offset, 2, 1, arm as string);
     });
+    paintCostumeTop(R, P, dressed, body);
     if (look.watch && !back && !typing) R(1, 18 + up + swing, 2, 1, INK.watch);
     // a water gun in the near hand, pointing ahead, its tank on top
     if (outfit.waterGun && !back && !typing) {
@@ -333,6 +340,11 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
       case 'short': ball(R, 8, 3 + up, 6.7, 3.6, hair); R(3, 4 + up, 9, 1, hair.base); P(2, 5 + up, hair.base); P(2, 6 + up, hair.base); break;
       // a side parting: the hair swept to one side, the parting a darker line
       case 'sidePart': ball(R, 8, 3 + up, 6.8, 3.7, hair); R(2, 4 + up, 9, 1, hair.base); R(2, 5 + up, 3, 1, hair.base); P(2, 6 + up, hair.base); P(11, 0 + up, hair.dark); P(11, 1 + up, hair.dark); P(10, 2 + up, hair.dark); break;
+      // swept to one side and down over the far eye
+      case 'sweep':
+        ball(R, 8, 3 + up, 6.8, 3.7, hair); R(2, 4 + up, 9, 1, hair.base); R(2, 5 + up, 3, 1, hair.base); P(2, 6 + up, hair.base);
+        R(9, 3 + up, 5, 2, hair.base); R(10, 5 + up, 4, 2, hair.base); R(10, 7 + up, 3, 1, hair.shade);
+        break;
       case 'curly':
         ball(R, 8, 2.8 + up, 7, 3.9, hair); tufts([[3, 1.5], [6, 0.2], [9.5, -0.2], [13, 1.2], [2.2, 4.2]]);
         R(3, 4 + up, 9, 1, hair.base); P(5, 5 + up, hair.base); P(9, 5 + up, hair.base); P(4, 1 + up, hair.light); P(9, 0 + up, hair.light);
@@ -376,7 +388,7 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
     switch (look.hair) {
       case 'none': P(5, 2 + up, skin.light); R(6, 12 + up, 5, 1, skin.shade); break;
       case 'buzz': ball(R, 8, 5 + up, 6.5, 6, fuzz); break;
-      case 'short': case 'sidePart': ball(R, 8, 5 + up, 6.7, 6.2, hair); break;
+      case 'short': case 'sidePart': case 'sweep': ball(R, 8, 5 + up, 6.7, 6.2, hair); break;
       case 'curly': ball(R, 8, 5 + up, 7, 6.4, hair); tufts([[3, 1.5], [6, 0.2], [9.5, -0.2], [13, 1.2], [2, 6], [14, 6]]); break;
       case 'quiff': ball(R, 8, 5 + up, 6.6, 6.2, hair); R(5, -1 + up, 8, 2, hair.base); R(7, -2 + up, 6, 1, hair.base); break;
       case 'spiky': ball(R, 8, 5 + up, 6.7, 6.2, hair); R(3, -1 + up, 2, 2, hair.base); R(6, -2 + up, 2, 3, hair.base); R(9, -2 + up, 2, 3, hair.light); R(12, -1 + up, 2, 2, hair.base); break;
@@ -390,6 +402,7 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
       case 'long': case 'bangs': ball(R, 8, 5.5 + up, 7.1, 6.6, hair); R(1, 6 + up, 15, 10, hair.base); R(1, 6 + up, 2, 10, hair.light); R(13, 6 + up, 3, 10, hair.shade); break;
     }
   }
+  paintAccessory(R, P, dressed, body);
   paintOutfit(R, P, look, outfit, back, up);
   if (frame.gesture === 'raising') {
     // the far arm raised, drawn over the hair and against the head so no outline runs between them; the hand waves.
@@ -401,7 +414,10 @@ function paint(worn: Look, frame: Frame, outfit: Outfit): HTMLCanvasElement {
     R(15, 5 + up, 2, 4, sleeve);
     R(15 + frame.step, 1 + up, 3, 4, skin.base);
   }
-  return outline(canvas, INK.outline);
+  paintRaisedSleeve(R, dressed, body);
+  outline(canvas, INK.outline);
+  paintSmoke(P, dressed, body);
+  return canvas;
 }
 
 function mirrored(source: HTMLCanvasElement): HTMLCanvasElement {
@@ -495,7 +511,7 @@ export function lookOfStranger(id: string): Look {
     hat: seed % 7 === 0 ? pick(['cap', 'beanie'] as const, 25) : 'none', hatColor: pick(CLOTH_COLORS, 27),
     top: pick(['tshirt', 'vneck', 'polo', 'suit', 'shirt', 'hoodie', 'sweater', 'jacket'] as const, 12),
     topColor: pick(CLOTH_COLORS, 14), accentColor: pick(CLOTH_COLORS, 18), bottom: seed % 5 === 0 ? 'shorts' : 'pants', bottomColor: pick(CLOTH_COLORS, 20),
-    shoes: pick(['sneakers', 'shoes', 'boots'] as const, 22), shoesColor: pick(CLOTH_COLORS, 23), watch: false,
+    shoes: pick(['sneakers', 'shoes', 'boots'] as const, 22), shoesColor: pick(CLOTH_COLORS, 23), watch: false, accessory: 'none',
   };
 }
 
@@ -518,7 +534,9 @@ export function chibiSprites(lookFor: (personId: string) => Look, outfitFor: (pe
       if (look.top === 'blanket') return;
       const skin = tones(look.skin);
       const longSleeves = look.top === 'suit' || look.top === 'threePiece' || look.top === 'tracksuit';
-      const forearm = longSleeves ? tones(look.topColor) : skin;
+      const sleeve = costumeSleeve(look.top);
+      const forearm = sleeve ? tones(sleeve) : longSleeves ? tones(look.topColor) : skin;
+      const palm = look.top === 'kakashiVest' ? tones(COSTUME_COLORS.glove) : skin;
       // the elbow, from where the mirrored sprite puts the near arm's last pixel (see paint: x 1-2, row 19, seated)
       const column = CANVAS.width - 1 - (ORIGIN.x + NEAR_ARM.x + 1);
       const elbow = { x: feet.x + (column - FEET.x + 1) * ART_SCALE, y: feet.y + (ORIGIN.y + NEAR_ARM.elbowY + 1 - FEET.y) * ART_SCALE };
@@ -540,7 +558,7 @@ export function chibiSprites(lookFor: (personId: string) => Look, outfitFor: (pe
       const mitten = ['.oo.', 'oooo', 'ssss'];
       for (const [line, row] of mitten.entries()) [...row].forEach((letter, column) => {
         if (letter === '.') return;
-        cell(end.x + (column - 2) * ART_SCALE, end.y + (line - 2) * ART_SCALE, letter === 'o' ? skin.base : skin.shade);
+        cell(end.x + (column - 2) * ART_SCALE, end.y + (line - 2) * ART_SCALE, letter === 'o' ? palm.base : palm.shade);
       });
     },
     drawHead(context, personId, x, y, size) {
