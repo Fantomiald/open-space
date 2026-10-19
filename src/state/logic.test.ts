@@ -3,8 +3,9 @@ import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
 import { contextLevel } from './labels.ts';
-import { asideQuestion, commandSuggestions, findCommands, nativeView } from './commands.ts';
+import { asideQuestion, commandSuggestions, findCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
+import { addTo, fitColumns, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn } from './stack.ts';
 import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
@@ -321,6 +322,34 @@ describe('slash commands', () => {
     assert.deepEqual(commandSuggestions(commands, '/compact '), [], 'a command without values');
   });
 
+  it('offers the values a skill lists in its argument hint, under its name or its alias', () => {
+    const skills: SlashCommand[] = [{ name: 'impeccable:impeccable', aliases: ['impeccable'], argumentHint: '[shape · audit|critique · polish|live] [target]' }];
+    assert.deepEqual(commandSuggestions(skills, '/impeccable ').map((c) => c.name), ['impeccable shape', 'impeccable audit', 'impeccable critique', 'impeccable polish', 'impeccable live']);
+    assert.deepEqual(commandSuggestions(skills, '/impeccable:impeccable po').map((c) => c.name), ['impeccable:impeccable polish']);
+    assert.equal(typedName(skills[0]), 'impeccable');
+    assert.deepEqual(hintValues('<model>'), [], 'a hint naming one thing');
+    assert.deepEqual(hintValues('[target]'), []);
+  });
+
+  it('finds the command typed under the caret, at the start or in the middle of a message', () => {
+    assert.deepEqual(commandAt('/kit', 4), { start: 0, typed: '/kit' });
+    assert.deepEqual(commandAt('fais-le avec /impec puis dis-moi', 19), { start: 13, typed: '/impec' });
+    assert.deepEqual(commandAt('lance /impeccable po', 20), { start: 6, typed: '/impeccable po' });
+    assert.equal(commandAt('lance /impeccable polish sur la page', 36), null, 'words after the value');
+    assert.equal(commandAt('un chemin src/app', 17), null, 'a slash inside a word');
+    assert.equal(commandAt('/kit:new mon idée', 17), null);
+  });
+
+  it('reads /model and /effort as a change of the session', () => {
+    assert.deepEqual(tuning('/model sonnet'), { model: 'sonnet' });
+    assert.deepEqual(tuning('/model default'), { model: '' });
+    assert.deepEqual(tuning(' /effort high '), { effort: 'high' });
+    assert.deepEqual(tuning('/effort auto'), { effort: '' });
+    assert.equal(tuning('/effort extreme'), null);
+    assert.equal(tuning('/model'), null);
+    assert.equal(tuning('/compact'), null);
+  });
+
   it('opens a view of its own for /mcp, /context and /usage typed alone', () => {
     assert.equal(nativeView('/mcp'), 'mcp');
     assert.equal(nativeView(' /context  '), 'context');
@@ -409,5 +438,51 @@ describe('side questions', () => {
     assert.equal(asideQuestion('dis /btw'), null);
     assert.deepEqual(commandSuggestions([], '/bt').map((command) => command.name), ['btw']);
     assert.deepEqual(commandSuggestions([{ name: 'btw' }], '/btw').length, 1, 'not twice when Claude Code lists it too');
+  });
+});
+
+describe('sessions open side by side', () => {
+  it('fills the right column, then opens a second, then refuses past six', () => {
+    let columns = addTo([['a']], 'b', 2)!;
+    columns = addTo(columns, 'c', 2)!;
+    assert.deepEqual(columns, [['a', 'b', 'c']]);
+    columns = addTo(columns, 'd', 2)!;
+    assert.deepEqual(columns, [['a', 'b', 'c'], ['d']]);
+    columns = addTo(addTo(columns, 'e', 2)!, 'f', 2)!;
+    assert.ok(isFull(columns, 2));
+    assert.equal(addTo(columns, 'g', 2), null);
+    assert.equal(addTo([['a', 'b', 'c']], 'd', 1), null, 'a window too narrow for a second column');
+  });
+
+  it('keeps every window in its column when one closes: only the ones under it move up', () => {
+    assert.deepEqual(removeFrom([['a', 'b', 'c'], ['d', 'e']], 'a'), [['b', 'c'], ['d', 'e']]);
+    assert.deepEqual(removeFrom([['a'], ['d', 'e']], 'a'), [['d', 'e']], 'an empty column goes');
+    assert.deepEqual(addTo([['b', 'c'], ['d', 'e']], 'x', 2), [['b', 'c', 'x'], ['d', 'e']], 'the hole is filled first');
+  });
+
+  it('shows a clicked session in the place of the one in use', () => {
+    assert.deepEqual(replaceIn([['a', 'b'], ['c']], 'b', 'x'), [['a', 'x'], ['c']]);
+  });
+
+  it('gives the keyboard to the window under the one closed, else above, else the other column', () => {
+    assert.equal(nextFocus([['a', 'b', 'c']], 'b'), 'c');
+    assert.equal(nextFocus([['a', 'b', 'c']], 'c'), 'b');
+    assert.equal(nextFocus([['a'], ['d']], 'a'), 'd');
+    assert.equal(nextFocus([['a']], 'a'), null);
+  });
+
+  it('places the windows: one column shares its height, two make thirds', () => {
+    assert.equal(placement([['a', 'b']]).rows, 2);
+    const { rows, slots } = placement([['a', 'b', 'c'], ['d']]);
+    assert.equal(rows, 3);
+    assert.deepEqual(slots.at(-1), { id: 'd', column: 1, row: 0 });
+  });
+
+  it('fits two columns from about 1100px, never more, and closes the one that no longer fits', () => {
+    assert.equal(maxColumns(390), 1);
+    assert.equal(maxColumns(1100), 1);
+    assert.equal(maxColumns(1280), 2);
+    assert.equal(maxColumns(3840), 2);
+    assert.deepEqual(fitColumns([['a'], ['b']], 1), [['a']]);
   });
 });

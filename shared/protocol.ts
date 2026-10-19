@@ -143,6 +143,8 @@ export interface SessionInfo {
   model: string;
   /** the model reported by Claude Code at init */
   activeModel: string;
+  /** chosen in the session; none = the model's default */
+  effort?: Effort;
   permissionMode: PermissionMode;
   /** the name the session's Claude was last told it has; differs from `name` after a rename (or for older sessions) */
   introducedAs?: string;
@@ -227,7 +229,15 @@ export interface UsageReport {
 export type Inspection = { view: 'mcp'; servers: McpServer[] } | { view: 'context'; usage: ContextUsage } | { view: 'usage'; report: UsageReport };
 export type InspectView = Inspection['view'];
 
-export interface SlashCommand { name: string; description?: string; argumentHint?: string }
+/** `aliases`: other names it answers to ("impeccable" for "impeccable:impeccable") */
+export interface SlashCommand { name: string; description?: string; argumentHint?: string; aliases?: string[] }
+
+/** How hard Claude thinks (Claude Code's --effort); a session without one runs at the model's default. */
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type Effort = (typeof EFFORTS)[number];
+
+/** A model Claude Code offers (from its initialize answer): `value` is what --model takes ('default' : its default). */
+export interface ModelChoice { value: string; label: string; description?: string; efforts: Effort[] }
 
 export type PermissionDecision = 'allow' | 'deny' | 'always';
 
@@ -338,6 +348,8 @@ export type ClientMessage =
   /** what a session changed in its files */
   | { t: 'changes'; sessionId: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
+  /** changes the model or the effort of a session, at once if its process runs, else from its next launch ('' : the default) */
+  | { t: 'tune'; sessionId: string; model?: string; effort?: Effort | '' }
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
   /** opens a terminal window on the user's computer, in the default folder */
   | { t: 'openTerminal' }
@@ -366,7 +378,7 @@ export type ClientMessage =
   | { t: 'musicLibrary'; query: string };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */
@@ -382,7 +394,11 @@ export type ServerMessage =
   /** the text of a message still being written by `who`, so far: not logged, the whole message follows as a `say` event */
   | { t: 'partial'; sessionId: string; who: string; text: string }
   | { t: 'log'; sessionId: string; events: LoggedEvent[]; truncated: boolean }
+  /** the commands of no folder in particular (the user's own, the plugins', Claude Code's) */
   | { t: 'commands'; commands: SlashCommand[] }
+  /** the commands of a session folder: the ones above and the folder's own */
+  | { t: 'folderCommands'; cwd: string; commands: SlashCommand[] }
+  | { t: 'models'; models: ModelChoice[] }
   | { t: 'directories'; directories: string[] }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }
   | { t: 'inspection'; sessionId: string; inspection: Inspection }

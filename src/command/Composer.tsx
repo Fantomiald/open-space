@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import type { SessionInfo } from '../../shared/protocol.ts';
+import { useCallback, useRef, useState } from 'react';
+import { EFFORTS, type Effort, type SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { asideQuestion, nativeView } from '../state/commands.ts';
+import { asideQuestion, nativeView, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
-import { contextLevel } from '../state/labels.ts';
+import { contextLevel, models } from '../state/labels.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
-import { AlertIcon, CloseIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
+import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon, TuneIcon } from './Icons.tsx';
 import type { Attachments } from './useAttachments.ts';
+import { useDismiss } from './useDismiss.ts';
 
 /**
  * The message field of a session. During a turn, what the user sends waits in a queue (kept by the server) shown above
@@ -28,6 +29,8 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const send = useSessions((s) => s.send);
   const openPalette = useSessions((s) => s.openPalette);
   const showPanel = useSessions((s) => s.showPanel);
+  // a small window (several open, this one not zoomed): icons beside a one-line field
+  const stacked = useSessions((s) => s.openIds.length > 1 && s.zoomedId !== session.id);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const queued = session.queued ?? [];
@@ -52,6 +55,9 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
     // "/mcp", "/context", "/usage": Open Space's own view of it, in the panel, instead of Claude Code's line of text
     const view = attachments.items.length ? null : nativeView(text);
     if (view) { showPanel(view); setText(''); return; }
+    // "/model sonnet", "/effort high": the same as the buttons below the field, so the session keeps it
+    const tune = attachments.items.length ? null : tuning(text);
+    if (tune) { if (send({ t: 'tune', sessionId: session.id, ...tune })) setText(''); return; }
     // the text and the pictures stay when they could not leave (not connected), so nothing is lost
     if (sendText(session.id, text.trim(), attachments.uploads, attachments.files)) { setText(''); attachments.clear(); }
   };
@@ -67,10 +73,24 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const placeholder = shellCommand !== null ? words.placeholderShell : stopped ? words.placeholderStopped
     : session.state === 'perm' ? words.placeholderPermission
       : busy ? words.placeholderBusy(session.name)
-        : words.placeholder;
+        : stacked ? words.placeholderShort : words.placeholder;
 
+  const sendLabel = shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send;
+  const field = (
+    <CommandField
+      id={`composer-field-${session.id}`} label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
+      onPaste={attachments.onPaste} shell cwd={session.cwd}
+    />
+  );
+  const tools = (
+    <div className="cp-composer__tools">
+      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} title={words.commands} onClick={() => openPalette(true)}><CommandIcon /></button>
+      <TuneMenu session={session} compact={stacked} />
+      <AttachButton attachments={attachments} />
+    </div>
+  );
   return (
-    <form className="cp-composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+    <form className="cp-composer" data-compact={stacked} onSubmit={(e) => { e.preventDefault(); submit(); }}>
       {queued.length > 0 && (
         <section className="cp-queue" aria-label={words.queueLabel}>
           <div className="cp-queue__head">
@@ -97,20 +117,21 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       )}
       <CompactHint session={session} />
       <AttachmentStrip attachments={attachments} />
-      <CommandField
-        id="composer-field" label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
-        onPaste={attachments.onPaste} shell
-      />
-      <div className="cp-composer__actions">
-        <div className="cp-composer__tools">
-          <button type="button" className="cp-button" onClick={() => openPalette(true)}>{words.commands}</button>
-          <RemoteButton session={session} />
-          <AttachButton attachments={attachments} />
+      {stacked ? (
+        // a small window: the tools as icons on the left of a one-line field, Enter to send
+        <div className="cp-composer__row">
+          {tools}
+          <div className="cp-composer__field">{field}</div>
         </div>
-        <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>
-          {shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send}
-        </button>
-      </div>
+      ) : (
+        <>
+          {field}
+          <div className="cp-composer__actions">
+            {tools}
+            <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>
+          </div>
+        </>
+      )}
     </form>
   );
 }
@@ -141,14 +162,76 @@ function CompactHint({ session }: { session: SessionInfo }) {
   );
 }
 
+/**
+ * The session's model and effort in one button (the bar has no room for two more), opening a panel to change them at
+ * once (see Session.tune). The models are Claude Code's own list, with the efforts each takes; until it was asked for,
+ * Open Space's short list and every effort.
+ */
+/** The session's model and effort: a chip that says them, or in a small window an icon that says them in its tooltip. */
+function TuneMenu({ session, compact }: { session: SessionInfo; compact: boolean }) {
+  const send = useSessions((s) => s.send);
+  const catalog = useSessions((s) => s.models);
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(open, box, close);
+  const words = t.composer.tune;
+  const chosen = session.model || 'default';
+  const choices: { value: string; label: string; description?: string; efforts: readonly Effort[] }[] = catalog.length
+    ? catalog
+    : models().map(([value, label]) => ({ value: value || 'default', label, efforts: EFFORTS }));
+  // a model given by its full name, or not offered any more, stays shown as it is
+  const options = choices.some((choice) => choice.value === chosen) ? choices : [...choices, { value: chosen, label: chosen, efforts: EFFORTS }];
+  const model = options.find((choice) => choice.value === chosen)!;
+  // the slider goes from the default effort ('') to the highest the model takes
+  const steps: (Effort | '')[] = ['', ...model.efforts];
+  const effort = session.effort && model.efforts.includes(session.effort) ? session.effort : '';
+  const effortName = (value: Effort | '') => (value ? words.efforts[value] : words.defaultEffort);
+  const summary = model.efforts.length > 0 ? `${shortModelName(model)} · ${effortName(effort)}` : shortModelName(model);
+  const tune = (change: { model?: string; effort?: Effort | '' }) => send({ t: 'tune', sessionId: session.id, ...change });
+  return (
+    <div className="cp-tune" ref={box}>
+      {compact ? (
+        <button
+          type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-controls={`tune-${session.id}`}
+          aria-label={`${words.title} : ${summary}`} title={summary} onClick={() => setOpen(!open)}
+        ><TuneIcon /></button>
+      ) : (
+        <button type="button" className="cp-button" aria-expanded={open} aria-controls={`tune-${session.id}`} title={words.title} onClick={() => setOpen(!open)}>
+          {shortModelName(model)}{model.efforts.length > 0 && <span className="cp-muted"> · {effortName(effort)}</span>}
+        </button>
+      )}
+      {open && (
+        <div className="cp-tune__panel" id={`tune-${session.id}`} role="group" aria-label={words.title}>
+          <label className="cp-popover-field">
+            <span>{words.model}</span>
+            <select value={chosen} onChange={(e) => tune({ model: e.target.value === 'default' ? '' : e.target.value })}>
+              {options.map((choice) => <option key={choice.value} value={choice.value}>{shortModelName(choice)}</option>)}
+            </select>
+          </label>
+          {steps.length > 1 && (
+            <label className="cp-popover-field">
+              <span>{words.effort} <output>{effortName(effort)}</output></span>
+              <input type="range" min={0} max={steps.length - 1} step={1} value={steps.indexOf(effort)} onChange={(e) => tune({ effort: steps[Number(e.target.value)] })} />
+            </label>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Opus 5.5", and "Par défaut" for Claude Code's default: its own name for it ("Default (recommended)") is long for a chip. */
+const shortModelName = (choice: { value: string; label: string }) => (choice.value === 'default' ? t.session.models.default : choice.label.replace(/\s*\(.*\)$/, ''));
+
 /** Remote Control: the phone, with a dot that says whether it is on; what it does and where it is at in its tooltip. */
-function RemoteButton({ session }: { session: SessionInfo }) {
+export function RemoteButton({ session }: { session: SessionInfo }) {
   const send = useSessions((s) => s.send);
   const words = t.session.remote;
   const state = session.remote?.state ?? 'off';
   return (
     <button
-      type="button" className="cp-icon-button cp-remote-button" data-state={state} aria-label="Remote Control" aria-pressed={!!session.remote}
+      type="button" className="cp-icon-button cp-remote-button" data-variant="outlined" data-state={state} aria-label="Remote Control" aria-pressed={!!session.remote}
       title={session.remote ? words.on(words.states[session.remote.state]) : words.off}
       onClick={() => send({ t: 'remoteControl', sessionId: session.id, enabled: !session.remote })}
     >

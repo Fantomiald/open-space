@@ -2,8 +2,6 @@
 // desks, or the break room, where the sessions put to rest doze on sofas. People come and go through the door, what is
 // said rises in speech bubbles, and clicking someone (or their bubble) opens their session in the detail panel.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { PictureInPictureIcon } from '../command/Icons.tsx';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
@@ -14,6 +12,7 @@ import type { FestivalDay } from '../../shared/festivals.ts';
 import type { Look } from '../../shared/look.ts';
 import { LOUNGE, OFFICE } from '../../shared/room-layout.ts';
 import { paintBackdrop } from './backdrop.ts';
+import { isFull, maxColumns } from '../state/stack.ts';
 import { BUBBLE_LANE, BUBBLE_ROW_HEIGHT, VISIBLE_ROWS, bubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import { planRoom, roomSessions, type RoomKind } from './cast.ts';
 import { chibiHead, chibiSprites, lookOfStranger } from './chibi.ts';
@@ -22,7 +21,6 @@ import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
 import { Floor } from './floor.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
-import { pictureInPictureSupported } from './pip.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
 import { showsMetricsBadge } from './metrics.ts';
@@ -48,10 +46,6 @@ const PALETTE_VARIABLES = {
 
 /** The time of day as a fractional hour (14:30 is 14.5). */
 
-/**
- * Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. `pip`: the small window the room is shown in
- * instead of the page (kept by App, so it stays open from one room to the other); `onOpenPip` opens it, from a click.
- */
 /** The sky of the windows, carried on to the page behind the room (--sky-top and --sky-bottom, read by tokens.css). */
 function showSky(document: Document, lighting: Lighting) {
   const style = document.documentElement.style;
@@ -61,18 +55,23 @@ function showSky(document: Document, lighting: Lighting) {
   style.setProperty('--sky-bottom', bottom);
 }
 
-export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: FestivalDay; pip: Window | null; onOpenPip: () => void }) {
+/** Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. */
+export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const { festival, guests } = day;
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
   const ready = useSessions((s) => s.claude !== null);
-  const selectedId = useSessions((s) => s.selectedId);
+  const openIds = useSessions((s) => s.openIds);
   const select = useSessions((s) => s.select);
+  const show = useSessions((s) => s.show);
+  const toggleOpen = useSessions((s) => s.toggleOpen);
+  /** a click opens the session alone; Shift+click adds it under the open ones (or takes it out) */
+  const open = (sessionId: string, event: { shiftKey: boolean }) => (event.shiftKey ? toggleOpen(sessionId) : show(sessionId));
   const crew = useSessions((s) => s.crew);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const zoom = useRef<HTMLDivElement>(null);
-  const selected = useRef(selectedId);
+  const selected = useRef(openIds);
   const crewRef = useRef(crew);
   crewRef.current = crew;
   const synced = useRef(false);
@@ -109,7 +108,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   const hidden = useMemo(() => inRoom.filter((session) => !plan.seats.has(session.id)), [inRoom, plan]);
   const [showHidden, setShowHidden] = useState(false);
 
-  useEffect(() => { selected.current = selectedId; }, [selectedId]);
+  useEffect(() => { selected.current = openIds; }, [openIds]);
 
   // the people already there when the room opens are seated at once; later ones walk in
   useEffect(() => {
@@ -118,15 +117,13 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
     synced.current = true;
   }, [scene, plan, ready]);
 
-  // in the small window, the room is drawn on that window's clock: the page's own tab is hidden then, and its timers slow down
   useEffect(() => {
-    const host = pip ?? window;
     const context = canvas.current!.getContext('2d')!;
     context.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     context.imageSmoothingEnabled = false;
     const backdrop = paintBackdrop(floor.layout, festival, room, guests);
     const dozing = room === 'lounge';
-    const reducedMotion = host.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let timer: number | undefined;
     let last = 0;
     const frame = () => {
@@ -137,25 +134,25 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       const state = useSessions.getState();
       const hour = state.preview.hour ?? currentHour();
       const lighting = lightingAt(hour);
-      showSky(host.document, lighting);
+      showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, selectedSessionId: selected.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, openSessionIds: selected.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
     const start = () => {
-      if (timer !== undefined || host.document.hidden) return;
+      if (timer !== undefined || document.hidden) return;
       last = performance.now();
       frame();
-      timer = host.setInterval(frame, FRAME_MS);
+      timer = window.setInterval(frame, FRAME_MS);
     };
-    const stop = () => { host.clearInterval(timer); timer = undefined; };
-    const onVisibility = () => (host.document.hidden ? stop() : start());
-    host.document.addEventListener('visibilitychange', onVisibility);
-    void host.document.fonts.load(TAG_FONT);
+    const stop = () => { window.clearInterval(timer); timer = undefined; };
+    const onVisibility = () => (document.hidden ? stop() : start());
+    document.addEventListener('visibilitychange', onVisibility);
+    void document.fonts.load(TAG_FONT);
     start();
-    return () => { stop(); host.document.removeEventListener('visibilitychange', onVisibility); };
-  }, [scene, floor, room, festival, guests, sprites, furniture, pip]);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [scene, floor, room, festival, guests, sprites, furniture]);
 
   useEffect(() => {
     let lastId = 0;
@@ -184,27 +181,29 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       const zoomedWidth = zoom.current!.clientWidth;
       setLayout({ width, scale: zoomedWidth / CANVAS_WIDTH, offset: (zoomedWidth - width) / 2 });
     };
-    // the observer of the window the stage is in (the page, or the small window)
-    const observer = new (element.ownerDocument.defaultView ?? window).ResizeObserver(measure);
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     measure();
     return () => observer.disconnect();
-  }, [pip]);
+  }, []);
 
   const roomPoint = (event: MouseEvent<HTMLCanvasElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     return { x: (event.clientX - box.left) * CANVAS_WIDTH / box.width, y: (event.clientY - box.top) * CANVAS_HEIGHT / box.height };
   };
 
+  // several sessions open are a layout the user built: a stray click must not close them all (each has its cross)
+  const leave = () => { if (useSessions.getState().openIds.length <= 1) select(null); };
+
   const onClick = (event: MouseEvent<HTMLCanvasElement>) => {
     const point = roomPoint(event);
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
-    if (character) { select(character.person.sessionId); return; }
+    if (character) { open(character.person.sessionId, event); return; }
     const visitor = scene.visits?.at(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open
-    if (!isInRoom(point)) { select(null); return; }
+    if (!isInRoom(point)) { leave(); return; }
     if (floor.isDoorAt(point)) { scene.walkPlayerOut(); return; }
     if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
     if (floor.isBoardAt(point)) { useSessions.getState().openBoard(true); return; }
@@ -225,7 +224,11 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
       : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
+    // with a session open, how to open another one under it instead
+    const sessionId = person && person !== PLAYER_ID ? scene.characterAt(point)?.person.sessionId : undefined;
+    const open = useSessions.getState().openIds;
     const text = visitor ? words.startWith(visitor.name)
+      : sessionId && open.length > 0 && !open.includes(sessionId) ? (isFull(useSessions.getState().columns, maxColumns(window.innerWidth)) ? words.openFull : words.openUnder)
       : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard
       : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
     setHintText(text);
@@ -239,13 +242,13 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
   };
   // the dark around the canvas, on a wide or tall panel: the same as the dark around the room in it
   const onBackdropClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.target instanceof Element && BACKDROP_CLASSES.some((name) => (event.target as Element).classList.contains(name))) select(null);
+    if (event.target instanceof Element && BACKDROP_CLASSES.some((name) => (event.target as Element).classList.contains(name))) leave();
   };
   const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
 
   const seated = plan.people.length;
   const description = room === 'lounge' ? t.room.description.lounge(seated) : t.room.description.office(seated);
-  const view = (
+  return (
     <div className="cp-room" onClick={onBackdropClick}>
       <div className="cp-room__fit">
         <div className="cp-room__stage" ref={stage} style={PALETTE_VARIABLES}>
@@ -258,13 +261,8 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
           </div>
           <div ref={hint} className="cp-room__hint-card" hidden={!hintText} aria-hidden="true">{hintText}</div>
           <div className="cp-room__bubbles" aria-hidden="true">
-            {bubbles.map((bubble) => <SpeechBubble key={bubble.id} bubble={bubble} layout={layout} onOpen={() => select(bubble.sessionId)} />)}
+            {bubbles.map((bubble) => <SpeechBubble key={bubble.id} bubble={bubble} layout={layout} onOpen={() => show(bubble.sessionId)} />)}
           </div>
-          {!pip && pictureInPictureSupported() && (
-            <button type="button" className="cp-icon-button cp-room__pip" aria-label={t.room.pip.open} title={t.room.pip.openTitle} onClick={onOpenPip}>
-              <PictureInPictureIcon />
-            </button>
-          )}
           {hidden.length > 0 && (
             <div className="cp-room__more">
               <button type="button" aria-expanded={showHidden} title={t.room.hidden.more(hidden.length)} onClick={() => setShowHidden((shown) => !shown)}>
@@ -272,7 +270,7 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
               </button>
               {showHidden && (
                 <ul aria-label={t.room.hidden.list}>
-                  {hidden.map((session) => <li key={session.id}><button type="button" onClick={() => { select(session.id); setShowHidden(false); }}>{session.name}</button></li>)}
+                  {hidden.map((session) => <li key={session.id}><button type="button" onClick={(e) => { open(session.id, e); setShowHidden(false); }}>{session.name}</button></li>)}
                 </ul>
               )}
             </div>
@@ -280,15 +278,6 @@ export function RoomView({ room, day, pip, onOpenPip }: { room: RoomKind; day: F
         </div>
       </div>
     </div>
-  );
-  if (!pip) return view;
-  return (
-    <>
-      <div className="cp-room" data-away>
-        <p className="cp-room__hint">{t.room.pip.away} <button type="button" className="cp-button" onClick={() => pip.close()}>{t.room.pip.bringBack}</button></p>
-      </div>
-      {createPortal(view, pip.document.body)}
-    </>
   );
 }
 

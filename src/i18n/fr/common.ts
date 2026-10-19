@@ -26,7 +26,6 @@ export const common = {
   header: {
     connected: 'Relié au serveur',
     disconnected: 'Pas relié au serveur',
-    waiting: (count: number) => `${count} en attente`,
     rooms: 'Pièce',
     office: 'Bureau',
     lounge: 'Salle de repos',

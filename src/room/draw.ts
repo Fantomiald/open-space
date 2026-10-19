@@ -36,7 +36,8 @@ export interface FrameOptions {
   time: number;
   reducedMotion: boolean;
   /** the session open in the detail panel */
-  selectedSessionId: string | null;
+  /** the sessions open in the right column: their people are framed */
+  openSessionIds: readonly string[];
   /** the light of the hour shown (see lighting.ts), and that hour */
   lighting: Lighting;
   hour: number;
@@ -572,7 +573,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const characters = [...scene.characters.values()];
   const seated = characters.filter((character) => character.phase === 'seated');
   const occupied = new Set(seated.map((character) => character.seat));
-  const isSelected = (character: Character) => character.person.sessionId === options.selectedSessionId;
+  const isSelected = (character: Character) => options.openSessionIds.includes(character.person.sessionId);
   const layers: Layer[] = [];
   const bossAtDesk = scene.playerSpot?.atDesk === true;
   for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: (on) => furniture.draw(on, piece) });

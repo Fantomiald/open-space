@@ -4,16 +4,12 @@ export const room: Dictionary['room'] = {
   you: 'You',
   birthdayWish: (names: readonly string[]) => `Happy birthday ${names.join(' and ')}!`,
   subagent: 'Sub-agent',
-  hint: { toLounge: 'Break room', toOffice: 'Open space', openTerminal: 'Open a terminal', openBoard: 'Whiteboard: your notes', openMetrics: 'Numbers', newMetrics: 'Numbers: something new', startWith: (name: string) => `Start a session with ${name}` },
+  /** Tab hides the open sessions to see the room, and brings them back */
+  stack: { show: (count: number) => `Show ${plural(count, 'conversation', 'conversations')}` },
+  hint: { openUnder: 'Shift+click: open it beside · Tab: see the room', openFull: 'Six windows at most: close one to open it beside', toLounge: 'Break room', toOffice: 'Open space', openTerminal: 'Open a terminal', openBoard: 'Whiteboard: your notes', openMetrics: 'Numbers', newMetrics: 'Numbers: something new', startWith: (name: string) => `Start a session with ${name}` },
   description: {
     lounge: (count) => `Break room: ${plural(count, 'session resting', 'sessions resting')}.`,
     office: (count) => `Office: ${plural(count, 'session', 'sessions')} at their desks.`,
-  },
-  pip: {
-    open: 'Mini window',
-    openTitle: 'The room in a small window on top of the others',
-    away: 'The room is in its mini window.',
-    bringBack: 'Bring it back here',
   },
   hidden: {
     more: (count) => `${plural(count, 'more session', 'more sessions')} without a seat`,

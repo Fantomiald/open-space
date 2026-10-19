@@ -4,15 +4,16 @@
 // On disk (OFFICE_DIR):  sessions.json  (the list, rewritten atomically)   logs/<session id>.jsonl  (one event per line)
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_PERMISSION_MODE, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand } from '../shared/protocol.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice } from '../shared/protocol.ts';
 import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import type { ShellRunner } from './shell.ts';
 import type { Aside, FolderCode, InspectView, McpAction, SessionChanges } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
-import type { ProcessFactory } from './claude-process.ts';
+import type { CatalogProbe, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, listConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
@@ -47,6 +48,8 @@ export interface SessionManagerDeps {
   askAside?: AsideRunner | null;
   /** runs a command typed with "!" (see shell.ts) */
   runShell?: ShellRunner;
+  /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
+  probeCatalog?: CatalogProbe | null;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -57,6 +60,11 @@ export class SessionManager {
   private logs = new Map<string, SessionLog>();
   private commandNames: string[] = [];
   private commandDetails = new Map<string, SlashCommand>();
+  /** the commands of each session folder, as probed (see probeFolder) */
+  private folderCommands = new Map<string, SlashCommand[]>();
+  private models: ModelChoice[] = [];
+  /** probes under way, by folder: one at a time per folder */
+  private probes = new Map<string, Promise<void>>();
   private commands: SlashCommand[] = [];
   private quota: Quota | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -96,6 +104,7 @@ export class SessionManager {
     this.save();
     this.sweep();
     void this.fillContexts();
+    void this.probeAll();
     // Remote Control was on when the server stopped: back on, on the same session of claude.ai
     for (const session of this.sessions.values()) {
       if (session.snapshot().remoteSession) session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control back on for ${session.snapshot().name}`, error));
@@ -169,8 +178,9 @@ export class SessionManager {
       log,
       broadcast: this.deps.broadcast,
       persist: () => this.save(),
-      onInitCommands: (names) => this.setCommandNames(names),
-      onCommandDetails: (details) => this.setCommandDetails(details),
+      // a process started: the folder's commands may have changed since they were probed (a skill added)
+      onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
+      onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
       onQuota: (quota) => { this.quota = quota; this.deps.broadcast({ t: 'quota', quota }); this.save(); },
       allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.deps.config.roots),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
@@ -200,6 +210,8 @@ export class SessionManager {
   // ── read side ──
   list(): SessionInfo[] { return [...this.sessions.values()].map((session) => session.snapshot()); }
   getCommands(): SlashCommand[] { return this.commands; }
+  getFolderCommands(): Record<string, SlashCommand[]> { return Object.fromEntries(this.folderCommands); }
+  getModels(): ModelChoice[] { return this.models; }
   getQuota(): Quota | null { return this.quota; }
 
   /**
@@ -298,6 +310,40 @@ export class SessionManager {
     this.save();
   }
 
+  /**
+   * The commands of no folder in particular (from the home folder, with the user's settings only), then those of each
+   * session folder, one after the other: a probe is a short claude process.
+   */
+  private async probeAll() {
+    if (!this.deps.probeCatalog) return;
+    await this.probeFolder(os.homedir(), true, true);
+    const folders = new Map([...this.sessions.values()].map((session) => [session.snapshot().cwd, !!session.snapshot().untrusted]));
+    for (const [cwd, untrusted] of folders) await this.probeFolder(cwd, untrusted);
+  }
+
+  /** Probes a folder unless it is being probed already; `global`: its commands become the commands of no folder. */
+  private probeFolder(cwd: string, untrusted: boolean, global = false): Promise<void> {
+    const probe = this.deps.probeCatalog;
+    const running = this.probes.get(cwd);
+    if (!probe || running) return running ?? Promise.resolve();
+    const done = probe(cwd, untrusted).then(({ commands, models }) => {
+      if (models.length && JSON.stringify(models) !== JSON.stringify(this.models)) {
+        this.models = models;
+        this.deps.broadcast({ t: 'models', models });
+      }
+      if (global) {
+        this.commands = commands;
+        this.deps.broadcast({ t: 'commands', commands });
+        this.save();
+      } else if (JSON.stringify(commands) !== JSON.stringify(this.folderCommands.get(cwd))) {
+        this.folderCommands.set(cwd, commands);
+        this.deps.broadcast({ t: 'folderCommands', cwd, commands });
+      }
+    }).catch((error) => this.deps.log(`cannot probe the commands of ${cwd}`, error)).finally(() => this.probes.delete(cwd));
+    this.probes.set(cwd, done);
+    return done;
+  }
+
   // ── commands from clients ──
   async create(options: SessionOptions): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
@@ -321,6 +367,7 @@ export class SessionManager {
     this.sessions.set(info.id, session);
     this.deps.broadcast({ t: 'session', session: session.snapshot() });
     this.save();
+    if (!this.folderCommands.has(cwd)) void this.probeFolder(cwd, !!info.untrusted);
     if (options.resumeId) {
       const found = (await listConversations(cwd, new Set(), this.deps.home)).find((conversation) => conversation.id === options.resumeId);
       session.showHistory(found?.title ?? st.sessions.untitledConversation, await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
@@ -343,6 +390,8 @@ export class SessionManager {
   unqueue(id: string, queueId: string) { this.session(id).unqueue(queueId); }
   sendNow(id: string) { this.session(id).sendNow(); }
   close(id: string) { return this.session(id).close(); }
+  tune(id: string, change: { model?: string; effort?: Effort | '' }) { return this.session(id).tune(change); }
+
   rename(id: string, name: string) {
     const clean = name.trim();
     if (!clean) throw new Error(st.sessions.emptyName);
@@ -423,6 +472,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
   if (!/^[\w-]{1,100}$/.test(id) || !cwd || !STATES.has(state)) return null;
   return {
     id, cwd, state: state as SessionInfo['state'], name: asString(raw.name, id.slice(0, 8)), model: asString(raw.model), activeModel: asString(raw.activeModel),
+    effort: (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort : undefined,
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,

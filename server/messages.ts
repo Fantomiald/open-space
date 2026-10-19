@@ -1,6 +1,6 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { isPermissionMode, type ClientMessage, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { EFFORTS, isPermissionMode, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
@@ -177,6 +177,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'log': return sessionId ? { t: 'log', sessionId, after: Math.max(0, Math.floor(asNumber(raw.after))) } : null;
     case 'directories': return { t: 'directories' };
     case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
+    case 'tune': {
+      if (!sessionId) return null;
+      const model = raw.model === undefined || (typeof raw.model === 'string' && (raw.model === '' || MODEL_PATTERN.test(raw.model))) ? raw.model as string | undefined : null;
+      const effort = raw.effort === undefined || raw.effort === '' || (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort | '' | undefined : null;
+      if (model === null || effort === null || (model === undefined && effort === undefined)) return null;
+      return { t: 'tune', sessionId, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) };
+    }
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
     case 'openTerminal': return { t: 'openTerminal' };
     case 'shell': {

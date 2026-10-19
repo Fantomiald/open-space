@@ -6,6 +6,7 @@ export const composer: Dictionary['composer'] = {
     placeholderPermission: 'A permission request above is waiting for your answer (a message here will wait for the turn to end)…',
     placeholderBusy: (name: string) => `${name} is working: your message reaches them without interrupting…`,
     placeholder: 'Write to this session, or / for a command (Enter sends, Shift+Enter adds a line)',
+    placeholderShort: 'Message, or / command',
     queueLabel: 'Queued messages',
     queued: (count: number) => plural(count, 'queued message', 'queued messages'),
     leaveAtTurnEnd: ', sent when the turn ends',
@@ -25,6 +26,13 @@ export const composer: Dictionary['composer'] = {
     queue: 'Queue',
     placeholderShell: 'Shell command, run in the session’s folder',
     run: 'Run',
+  },
+  tune: {
+    title: 'This session’s model and effort, changed at once',
+    model: 'Model',
+    effort: 'Effort',
+    defaultEffort: 'auto',
+    efforts: { low: 'low', medium: 'medium', high: 'high', xhigh: 'extra high', max: 'max' },
   },
   launcher: {
     label: 'New session',

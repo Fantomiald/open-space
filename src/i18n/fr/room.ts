@@ -9,16 +9,12 @@ export const room = {
   birthdayWish: (names: readonly string[]) => `Joyeux anniversaire ${names.join(' et ')} !`,
   subagent: 'Sous-agent',
   /** the card following the pointer over the door, the user's screen, the whiteboard or the numbers */
-  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
+  /** Tab hides the open sessions to see the room, and brings them back */
+  stack: { show: (count: number) => `Afficher ${plural(count, 'conversation', 'conversations')}` },
+  hint: { openUnder: 'Maj+clic : l’ouvrir à côté · Tab : voir la salle', openFull: '6 fenêtres au plus : ferme-en une pour l’ouvrir à côté', toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
     office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,
-  },
-  pip: {
-    open: 'Mini-fenêtre',
-    openTitle: 'La salle dans une petite fenêtre au-dessus des autres',
-    away: 'La salle est dans sa mini-fenêtre.',
-    bringBack: 'La remettre ici',
   },
   hidden: {
     more: (count: number) => `${plural(count, 'autre session', 'autres sessions')} sans place`,

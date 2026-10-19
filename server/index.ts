@@ -14,7 +14,7 @@ import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
 import type { ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import { createAsideRunner } from './aside.ts';
-import { createProcessFactory, findClaude } from './claude-process.ts';
+import { createCatalogProbe, createProcessFactory, findClaude } from './claude-process.ts';
 import { loadConfig } from './config.ts';
 import { Crew } from './crew.ts';
 import { buildClaudeEnvironment } from './environment.ts';
@@ -90,6 +90,7 @@ await crew.load();
 const sessions = new SessionManager({
   config,
   spawnProcess: claude ? createProcessFactory(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
+  probeCatalog: claude ? createCatalogProbe(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
@@ -132,7 +133,7 @@ function onConnection(socket: WebSocket) {
 
   send({
     t: 'hello', claude: claude ? { found: true, version: claude.version, path: claude.path } : { found: false }, roots: config.roots,
-    sessions: sessions.list(), commands: sessions.getCommands(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
+    sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked,
   });
   send({ t: 'metricsStatus', unread: metricsUnread });
@@ -198,6 +199,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;
+    case 'tune': await sessions.tune(message.sessionId, { ...(message.model !== undefined ? { model: message.model } : {}), ...(message.effort !== undefined ? { effort: message.effort } : {}) }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tag': sessions.tag(message.sessionId, message.tag); break;
     case 'rest': await sessions.rest(message.sessionId); break;

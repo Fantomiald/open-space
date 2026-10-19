@@ -7,9 +7,9 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import type { ImageUpload, PermissionMode } from '../shared/protocol.ts';
+import { EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
-import { asJson, asString, isJson, type Json } from './json.ts';
+import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 
 export interface ClaudeBinary { path: string; version: string }
 
@@ -40,6 +40,7 @@ export interface LaunchOptions {
   sessionId: string;
   resume: boolean;
   model: string;
+  effort?: Effort;
   permissionMode: PermissionMode;
   /** the session's name, given to Claude when the conversation starts, with the user's name and their note (Preferences) */
   name: string;
@@ -68,7 +69,7 @@ export interface LaunchOptions {
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -76,6 +77,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
     '--name', options.name,
   ];
   if (options.model) args.push('--model', options.model);
+  if (options.effort) args.push('--effort', options.effort);
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
@@ -94,6 +96,62 @@ export function identityPrompt(name: string, user = '', note = ''): string {
 
 /** Told in the next message when a session was renamed, or started before sessions had names. */
 export const renameNote = (name: string) => st.prompt.rename(name);
+
+/** What Claude Code offers in a folder: its slash commands (the folder's own included) and the models. */
+export interface Catalog { commands: SlashCommand[]; models: ModelChoice[] }
+
+export type CatalogProbe = (cwd: string, untrusted: boolean) => Promise<Catalog>;
+
+const PROBE_TIMEOUT_MS = 20000;
+const MAX_PROBED_DESCRIPTION = 200;
+
+/**
+ * Asks Claude Code for a folder's commands and models before any message is sent: a process that only gets the
+ * `initialize` control request, then stops (checked with 2.1.303: about 0.6 s, no API call, no conversation written).
+ * Without MCP servers (--strict-mcp-config): their prompts are not offered anyway (see isOffered), and starting them is slow.
+ */
+export function createCatalogProbe(binary: ClaudeBinary, environment: NodeJS.ProcessEnv): CatalogProbe {
+  return (cwd, untrusted) => new Promise((resolve, reject) => {
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-prompt-tool', 'stdio', '--strict-mcp-config'];
+    if (untrusted) args.push('--setting-sources', 'user');
+    const child = spawn(binary.path, args, { cwd, env: environment, stdio: ['pipe', 'pipe', 'ignore'], detached: true });
+    const end = () => { try { process.kill(-child.pid!, 'SIGTERM'); } catch { /* already gone */ } };
+    const timer = setTimeout(() => { end(); reject(new Error('no answer to initialize')); }, PROBE_TIMEOUT_MS);
+    readline.createInterface({ input: child.stdout }).on('line', (line) => {
+      let message: unknown;
+      try { message = JSON.parse(line); } catch { return; }
+      if (!isJson(message) || message.type !== 'control_response') return;
+      clearTimeout(timer);
+      end();
+      resolve(parseCatalog(asJson(asJson(message.response).response)));
+    });
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('close', () => { clearTimeout(timer); reject(new Error('claude ended before answering initialize')); });
+    child.stdin.on('error', () => { /* gone: "close" reports it */ });
+    child.stdin.write(`${JSON.stringify({ type: 'control_request', request_id: 'catalog', request: { subtype: 'initialize' } })}\n`);
+  });
+}
+
+const isEffort = (value: unknown): value is Effort => (EFFORTS as readonly unknown[]).includes(value);
+
+export function parseCatalog(response: Json): Catalog {
+  const commands = asArray(response.commands).map(asJson).filter((c) => asString(c.name)).map((c): SlashCommand => {
+    const aliases = asArray(c.aliases).filter((alias): alias is string => typeof alias === 'string' && !!alias);
+    return {
+      name: asString(c.name),
+      ...(asString(c.description) ? { description: asString(c.description).slice(0, MAX_PROBED_DESCRIPTION) } : {}),
+      ...(asString(c.argumentHint) ? { argumentHint: asString(c.argumentHint) } : {}),
+      ...(aliases.length ? { aliases } : {}),
+    };
+  });
+  const models = asArray(response.models).map(asJson).filter((m) => asString(m.value)).map((m): ModelChoice => ({
+    value: asString(m.value),
+    label: asString(m.displayName) || asString(m.value),
+    ...(asString(m.description) ? { description: asString(m.description) } : {}),
+    efforts: m.supportsEffort === false ? [] : asArray(m.supportedEffortLevels).filter(isEffort),
+  }));
+  return { commands, models };
+}
 
 export interface ExitInfo { code: number | null; signal: NodeJS.Signals | null; stderr: string }
 

@@ -42,7 +42,7 @@ export function PreviewMenu() {
       </button>
       {open && (
         <div className="cp-preview__panel" id="preview-menu" role="group" aria-label={words.panel}>
-          <label className="cp-preview__field">
+          <label className="cp-popover-field">
             <span>{words.festival}</span>
             <select value={festivalValue} onChange={(e) => chooseFestival(e.target.value)}>
               <option value="today">{words.today(today ? t.room.festivals[today] : words.todayNone)}</option>
@@ -50,7 +50,7 @@ export function PreviewMenu() {
               {FESTIVALS.map((festival) => <option key={festival} value={festival}>{t.room.festivals[festival]}</option>)}
             </select>
           </label>
-          <label className="cp-preview__field">
+          <label className="cp-popover-field">
             <span>{words.hour} <output>{preview.hour === undefined ? words.now(hourLabel(hour)) : hourLabel(hour)}</output></span>
             <input type="range" min={0} max={23.75} step={0.25} value={hour} onChange={(e) => setPreview({ ...preview, hour: Number(e.target.value) })} />
           </label>

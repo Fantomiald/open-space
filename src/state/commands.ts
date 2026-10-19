@@ -1,5 +1,5 @@
 // Which slash commands the palette offers, in which order. Pure functions.
-import type { InspectView, SlashCommand } from '../../shared/protocol.ts';
+import { EFFORTS, type Effort, type InspectView, type SlashCommand } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 
 /**
@@ -27,11 +27,27 @@ const OPTIONS: Readonly<Record<string, readonly string[]>> = {
   'output-style': ['default', 'Proactive', 'Concise', 'Explanatory', 'Learning'],
 };
 
+/**
+ * The values an argument hint lists, when its first group offers several: "[shape · audit|polish] [target]" gives
+ * shape, audit, polish. A hint naming one thing ("<model>", "[target]") gives none.
+ */
+export function hintValues(hint: string): string[] {
+  const group = /^[[<]([^\]>]*)/.exec(hint.trim())?.[1] ?? '';
+  const values = group.split(/[|·]/).map((value) => value.trim()).filter((value) => /^[\w.:-]+$/.test(value));
+  return values.length > 1 ? values : [];
+}
+
+/** The name to type: a plugin's skill by its short alias when it has one ("impeccable", not "impeccable:impeccable"). */
+export const typedName = (command: SlashCommand) => command.aliases?.find((alias) => !alias.includes(':')) ?? command.name;
+
+const answersTo = (command: SlashCommand, name: string) => command.name === name || !!command.aliases?.includes(name);
+
 /** While `text` is a command with options and its value being typed ("/effort h"): the values to suggest, else none. */
-function optionSuggestions(text: string): SlashCommand[] {
-  const typing = /^\/([\w-]+) (\S*)$/.exec(text);
-  const values = typing ? OPTIONS[typing[1]] : undefined;
-  if (!typing || !values) return [];
+function optionSuggestions(commands: readonly SlashCommand[], text: string): SlashCommand[] {
+  const typing = /^\/(\S+) (\S*)$/.exec(text);
+  if (!typing) return [];
+  const hint = commands.find((command) => answersTo(command, typing[1]))?.argumentHint;
+  const values = OPTIONS[typing[1]] ?? (hint ? hintValues(hint) : []);
   const words = t.common.commandOptions as Readonly<Record<string, Readonly<Record<string, string>> | undefined>>;
   return values.filter((value) => value.toLowerCase().startsWith(typing[2].toLowerCase()))
     .map((value) => ({ name: `${typing[1]} ${value}`, description: words[typing[1]]?.[value] }));
@@ -76,7 +92,30 @@ export function commandSuggestions(commands: readonly SlashCommand[], text: stri
   const typing = /^\/(\S*)$/.exec(text);
   const own = ownCommands();
   const all = [...own, ...commands.filter((command) => !own.some((ownCommand) => ownCommand.name === command.name))];
-  return typing ? findCommands(all, typing[1]) : optionSuggestions(text);
+  return typing ? findCommands(all, typing[1]) : optionSuggestions(all, text);
+}
+
+/**
+ * What "/model <name>" or "/effort <level>" asks for ('' : the default), else null: Open Space changes the session
+ * itself, so that it keeps the choice when its process is launched again. "/effort auto" is the default effort.
+ */
+export function tuning(text: string): { model: string } | { effort: Effort | '' } | null {
+  const [, command, value] = /^\/(model|effort)\s+(\S+)$/.exec(text.trim()) ?? [];
+  if (command === 'model') return { model: value === 'default' ? '' : value };
+  if (command === 'effort' && value === 'auto') return { effort: '' };
+  if (command === 'effort' && (EFFORTS as readonly string[]).includes(value)) return { effort: value as Effort };
+  return null;
+}
+
+/**
+ * The command being typed where the caret is, at the start of the message or after a space in the middle of it
+ * ("fais-le avec /impec", "/impeccable po"): where it starts and its text, else null.
+ */
+export function commandAt(text: string, caret: number): { start: number; typed: string } | null {
+  const match = /(?:^|\s)(\/\S*(?: \S*)?)$/.exec(text.slice(0, caret));
+  if (!match) return null;
+  // "/a b" mid-sentence is a value only when "/a" is the whole first word (see optionSuggestions)
+  return { start: caret - match[1].length, typed: match[1] };
 }
 
 /** The question of a "/btw <question>" message (empty when there is none yet), or null for any other message. */
