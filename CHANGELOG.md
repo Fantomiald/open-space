@@ -1,5 +1,10 @@
 # Versions
 
+## 1.2.2
+
+- Le mode shell ressemble à celui de Claude Code : « ! » tapé en premier devient un « ! » rose devant la commande, et Retour arrière au tout début le retire d'un coup.
+- Les fichiers texte qu'une session envoie (Markdown, txt, json, csv…) s'ouvrent en grand dans la visionneuse, le Markdown mis en forme avec ses blocs de code copiables.
+
 ## 1.2.1
 
 - Échap arrête aussi les commandes `!` de la session ouverte qui tournent encore, en plus d'interrompre son tour.

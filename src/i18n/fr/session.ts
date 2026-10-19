@@ -34,7 +34,6 @@ export const session = {
   },
   remote: {
     states: { connecting: 'connexion…', connected: 'connectée', failed: 'coupée' },
-    open: 'Ouvrir sur claude.ai (elle est aussi dans l’app Claude)',
     off: 'Remote Control : coupé. Clique pour la continuer depuis ton téléphone ou claude.ai',
     on: (state: string) => `Remote Control : ${state}. Clique pour couper`,
   },
@@ -70,8 +69,8 @@ export const session = {
       note: 'Claude la verra avec ton prochain message.',
     },
     /** the files a session sent (SendUserFile) and the picture viewer */
-    files: { open: 'Voir en grand', play: 'Lire la vidéo', download: 'Télécharger', missing: 'pas gardé (trop gros ou introuvable)' },
-    viewer: { close: 'Fermer', original: 'Ouvrir l’original', onClaude: 'Ouvrir sur claude.ai' },
+    files: { read: 'Lire', open: 'Voir en grand', play: 'Lire la vidéo', download: 'Télécharger', missing: 'pas gardé (trop gros ou introuvable)' },
+    viewer: { loading: 'Chargement…', unreadable: 'Impossible de lire ce fichier.', close: 'Fermer', original: 'Ouvrir l’original', onClaude: 'Ouvrir sur claude.ai' },
     /** a page a session published on claude.ai (its Artifact tool) */
     artifact: { open: (title: string) => `Voir « ${title} » en grand`, enlarge: 'Voir en grand', onClaude: 'Ouvrir sur claude.ai, dans un nouvel onglet' },
     compacted: (auto: boolean, before: number, after: number) => `Conversation ${auto ? 'compactée automatiquement' : 'compactée'} : ${tokenCount(before, 'fr-FR')} → ${tokenCount(after, 'fr-FR')} jetons`,

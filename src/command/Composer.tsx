@@ -96,7 +96,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       <AttachmentStrip attachments={attachments} />
       <CommandField
         id="composer-field" label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
-        onPaste={attachments.onPaste}
+        onPaste={attachments.onPaste} shell
       />
       <div className="cp-composer__actions">
         <div className="cp-composer__tools">
@@ -104,7 +104,6 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
           <RemoteButton session={session} />
           <AttachButton attachments={attachments} />
         </div>
-        {shellCommand !== null && <p className="cp-composer__mode">{words.shellMode}</p>}
         <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>
           {shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send}
         </button>

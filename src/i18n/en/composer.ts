@@ -24,7 +24,6 @@ export const composer: Dictionary['composer'] = {
     resumeAndSend: 'Resume and send',
     queue: 'Queue',
     placeholderShell: 'Shell command, run in the session’s folder',
-    shellMode: 'Shell mode: without Claude, who sees it with your next message',
     run: 'Run',
   },
   launcher: {

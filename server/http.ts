@@ -6,6 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ATTACHMENT_NAME, SHOWN_EXTENSIONS, VIDEO_EXTENSIONS } from './attachments.ts';
+import { TEXT_EXTENSIONS } from '../shared/protocol.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
@@ -143,6 +144,10 @@ export function createWebServer(options: WebServerOptions) {
       const extension = path.extname(name).slice(1);
       // a video is played, by ranges: the browser asks for the parts it needs to start, then to jump ahead
       if (VIDEO_EXTENSIONS.has(extension) && !url.searchParams.has('name')) { serveRanges(stored, req, res); return; }
+      if (TEXT_EXTENSIONS.has(extension) && !url.searchParams.has('name')) {
+        await serveFile(stored, res, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Security-Policy': 'sandbox' });
+        return;
+      }
       // pictures are shown; any other file a session sent never runs in the page: it is downloaded
       const shown = SHOWN_EXTENSIONS.has(extension) && !url.searchParams.has('name');
       await serveFile(stored, res, {

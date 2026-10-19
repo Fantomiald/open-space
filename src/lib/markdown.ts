@@ -1,5 +1,5 @@
 // Markdown displayed safely (assistant messages): raw HTML is escaped, only http(s)/mailto links (opened in a new tab),
-// remote images are replaced by their alt text. Code blocks get a copy button (Feed.tsx copies them).
+// remote images are replaced by their alt text. Code blocks get a copy button (copyCodeOnClick copies them).
 import { Marked } from 'marked';
 import { t } from '../i18n/index.ts';
 
@@ -34,4 +34,3 @@ marked.use({
 export function mdToHtml(text: string): string {
   return marked.parse(text, { async: false }) as string;
 }
-

@@ -64,6 +64,9 @@ export type OfficeEvent =
  * big, gone); `image`: shown in the thread (png, jpeg, gif, webp, svg); `page`: an HTML page shown in a preview, unless
  * Claude sent it as a mere attachment; `video`: played in the page; any other file is offered for download.
  */
+/** Sent files read in the viewer (Markdown rendered), served as plain text so they never run in the page. */
+export const TEXT_EXTENSIONS: ReadonlySet<string> = new Set(['md', 'markdown', 'txt', 'log', 'csv', 'tsv', 'json', 'yaml', 'yml', 'toml']);
+
 export interface SentFile { title: string; stored: string | null; image: boolean; page?: true; video?: true; size: number }
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }

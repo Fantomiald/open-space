@@ -17,10 +17,19 @@ interface Props {
   rows?: number;
   /** pasting into the field (a screenshot is attached, see useAttachments) */
   onPaste?: (event: ClipboardEvent) => void;
+  /** "!" typed first turns the field into a shell command, as in Claude Code (see below) */
+  shell?: boolean;
 }
 
-/** A message field that suggests the slash commands as soon as the text starts with "/" (Tab or Enter completes). */
-export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste }, ref) {
+/**
+ * A message field that suggests the slash commands as soon as the text starts with "/" (Tab or Enter completes). With
+ * `shell`, like Claude Code's bash mode: a "!" typed first becomes a prompt in front of the field instead of text (the
+ * value keeps it: "!ls"), and Backspace at the very start takes it away, back to a message.
+ */
+export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste, shell = false }, ref) {
+  const shellMode = shell && value.startsWith('!');
+  // the space after the "!" is the prompt's, not the command's
+  const shown = shellMode ? value.slice(1).replace(/^ +/, '') : value;
   const [active, setActive] = useState(0);
   /** the user closed the suggestions with Escape; they come back on the next keystroke */
   const [dismissed, setDismissed] = useState(false);
@@ -50,6 +59,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
       // Enter on a name already typed in full sends it; otherwise Tab and Enter complete the name
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && value !== `/${current.name}`)) { e.preventDefault(); complete(current); return; }
     }
+    if (shellMode && e.key === 'Backspace' && e.currentTarget.selectionStart === 0 && e.currentTarget.selectionEnd === 0) { e.preventDefault(); edit(shown); return; }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit(); }
   };
 
@@ -70,11 +80,14 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
           ))}
         </ul>
       )}
-      <textarea
-        id={id} ref={ref} value={value} rows={rows} data-composer data-command={value.startsWith('/')} data-shell={value.startsWith('!')}
-        aria-autocomplete="list" aria-controls={current ? listId : undefined} aria-activedescendant={current ? `${listId}-${current.name}` : undefined}
-        placeholder={placeholder} onChange={(e) => edit(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
-      />
+      <div className="cp-command-field" data-shell={shellMode}>
+        {shellMode && <span className="cp-command-field__prompt" aria-hidden="true">!</span>}
+        <textarea
+          id={id} ref={ref} value={shown} rows={rows} data-composer data-command={value.startsWith('/')}
+          aria-autocomplete="list" aria-controls={current ? listId : undefined} aria-activedescendant={current ? `${listId}-${current.name}` : undefined}
+          placeholder={placeholder} onChange={(e) => edit(shellMode ? `!${e.target.value.replace(/^ +/, '')}` : e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
+        />
+      </div>
     </>
   );
 });

@@ -34,7 +34,6 @@ export const session: Dictionary['session'] = {
   },
   remote: {
     states: { connecting: 'connecting…', connected: 'connected', failed: 'cut off' },
-    open: 'Open on claude.ai (it’s in the Claude app too)',
     off: 'Remote Control: off. Click to continue it from your phone or claude.ai',
     on: (state: string) => `Remote Control: ${state}. Click to turn it off`,
   },
@@ -67,8 +66,8 @@ export const session: Dictionary['session'] = {
       empty: '(no output)',
       note: 'Claude will see it with your next message.',
     },
-    files: { open: 'View large', play: 'Play the video', download: 'Download', missing: 'not kept (too big or gone)' },
-    viewer: { close: 'Close', original: 'Open the original', onClaude: 'Open on claude.ai' },
+    files: { read: 'Read', open: 'View large', play: 'Play the video', download: 'Download', missing: 'not kept (too big or gone)' },
+    viewer: { loading: 'Loading…', unreadable: 'This file cannot be read.', close: 'Close', original: 'Open the original', onClaude: 'Open on claude.ai' },
     artifact: { open: (title: string) => `View “${title}” large`, enlarge: 'View large', onClaude: 'Open on claude.ai, in a new tab' },
     compacted: (auto: boolean, before: number, after: number) => `Conversation ${auto ? 'compacted automatically' : 'compacted'}: ${tokenCount(before, 'en-US')} → ${tokenCount(after, 'en-US')} tokens`,
     cleared: 'New conversation: Claude starts from scratch (/clear).',

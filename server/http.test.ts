@@ -62,6 +62,7 @@ before(async () => {
   writeFileSync(path.join(base, 'attachments', `${'a'.repeat(64)}.png`), 'PNG');
   writeFileSync(path.join(base, 'attachments', `${'b'.repeat(64)}.html`), '<script>alert(1)</script>');
   writeFileSync(path.join(base, 'attachments', `${'d'.repeat(64)}.mp4`), '0123456789');
+  writeFileSync(path.join(base, 'attachments', `${'e'.repeat(64)}.md`), '# Énigmes\n<script>alert(1)</script>');
   writeFileSync(path.join(base, 'attachments', `${'c'.repeat(64)}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
   port = await freePort();
   server = createWebServer({
@@ -154,6 +155,15 @@ describe('HTTP requests', () => {
     const res = await fetch(`http://127.0.0.1:${port}/attachments/${'c'.repeat(64)}.svg`, { headers: { Cookie: COOKIE } });
     assert.equal(res.headers.get('content-type'), 'image/svg+xml');
     assert.match(res.headers.get('content-security-policy') ?? '', /^sandbox; default-src 'none'/);
+  });
+
+  it('shows a text file as plain text that can run nothing, and downloads it when asked under its name', async () => {
+    const text = `http://127.0.0.1:${port}/attachments/${'e'.repeat(64)}.md`;
+    const res = await fetch(text, { headers: { Cookie: COOKIE } });
+    assert.deepEqual([res.headers.get('content-type'), res.headers.get('content-security-policy'), await res.text()], ['text/plain; charset=utf-8', 'sandbox', '# Énigmes\n<script>alert(1)</script>']);
+    const named = await fetch(`${text}?name=enigmes.md`, { headers: { Cookie: COOKIE } });
+    assert.equal(named.headers.get('content-disposition'), 'attachment; filename="enigmes.md"');
+    assert.equal((await fetch(text)).status, 401);
   });
 
   it('keeps a file sent from Open Space’s own page with the cookie, under its name, and refuses it from anywhere else', async () => {
