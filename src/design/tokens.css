@@ -53,6 +53,8 @@
   /* the one gap between floating things, and between them and the window's edge */
   --gutter: 0.75rem;
   --detail-width: 31rem;
+  /* focus mode's session list, beside the windows */
+  --list-width: 18rem;
   --content-max: 70rem;
   --breakpoint-narrow: 60rem; /* documentation only: media queries cannot read custom properties */
 
@@ -64,6 +66,7 @@
   --color-surface-raised: #182033;
   /* around the room: the sky of its windows at the room's hour (--sky-top, --sky-bottom set by RoomView), night until then */
   --color-backdrop: linear-gradient(180deg, var(--sky-top, #0b1430) 0%, var(--sky-bottom, #24366e) 100%);
+  /* focus mode: no sky, the night it starts from, whatever the hour */
   /*
    * frosted glass: a tint over the sky and the room blurred (--frost, an image src/room/Sky.tsx keeps up to date, fixed
    * to the viewport so each pane shows what is behind it), a hairline edge lit from above. Not backdrop-filter:

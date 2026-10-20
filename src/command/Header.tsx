@@ -2,14 +2,16 @@ import { useMemo } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { roomSessions } from '../room/cast.ts';
 import { useSessions, type View } from '../state/sessions.ts';
-import { BellIcon, CommandIcon, CrewIcon, DeskIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
+import { BellIcon, CommandIcon, CrewIcon, DeskIcon, FocusIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
 import { PreviewMenu } from './PreviewMenu.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge']] as const satisfies readonly (readonly [View, () => unknown, 'office' | 'lounge'])[];
-/** The palette opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both). */
-const PALETTE_KEYS = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K';
+const MODIFIER = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+/** The palette opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both); focus mode, with Cmd+. or Ctrl+. */
+const PALETTE_KEYS = `${MODIFIER} K`;
+const FOCUS_KEYS = `${MODIFIER} .`;
 
 export function Header() {
   const view = useSessions((s) => s.view);
@@ -45,6 +47,10 @@ export function Header() {
               <ViewIcon /><span className="cp-header__room-count" aria-hidden="true">({counts[room]})</span>
             </button>
           ))}
+          <span className="cp-header__divider" aria-hidden="true" />
+          <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} title={words.focusTitle(FOCUS_KEYS)} onClick={() => setView(view === 'focus' ? 'salle' : 'focus')}>
+            <FocusIcon />
+          </button>
         </nav>
       </div>
       <Radio />

@@ -1,10 +1,12 @@
 // Where every session is at, pinned to the bottom left corner of the screen in both views: what waits for the user
 // (to answer, allow, read or check, the most urgent first, with how long it has waited), then who is at work and for
-// how long. A click opens the session; the title folds the panel down to its counts.
+// how long, then who is ready for a message (read, not stopped). A click opens the session; the title folds the panel
+// down to its counts.
 import { useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatDuration } from '../lib/format.ts';
 import { useNow } from '../lib/useNow.ts';
+import { roomSessions } from '../room/cast.ts';
 import { todoLabel } from '../state/labels.ts';
 import { attentionQueue, otherSessions } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -23,9 +25,11 @@ export function StatusPanel() {
   const [folded, setFolded] = useState(readFolded);
   const waiting = useMemo(() => attentionQueue(Object.values(sessions), seen), [sessions, seen]);
   const working = useMemo(() => otherSessions(Object.values(sessions), seen).working, [sessions, seen]);
+  // the office's idle ones, as the room seats them (not the resting ones, in the break room)
+  const ready = useMemo(() => roomSessions(Object.values(sessions), seen, 'office')[2], [sessions, seen]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(working.length ? 1000 : 30_000);
-  if (!waiting.length && !working.length) return null;
+  if (!waiting.length && !working.length && !ready.length) return null;
   const words = t.session.status;
   const fold = () => { setFolded(!folded); writeFolded(!folded); };
   return (
@@ -34,6 +38,7 @@ export function StatusPanel() {
         <span className="cp-status__title">{words.title}</span>
         {waiting.length > 0 && <span className="cp-status__count" data-kind="waiting" title={words.waiting}>{waiting.length}</span>}
         {working.length > 0 && <span className="cp-status__count" data-kind="working" title={words.working}>{working.length}</span>}
+        {ready.length > 0 && <span className="cp-status__count" data-kind="ready" title={words.ready}>{ready.length}</span>}
         {folded ? <ChevronUpIcon /> : <ChevronDownIcon />}
       </button>
       {!folded && (
@@ -68,6 +73,22 @@ export function StatusPanel() {
                         {session.subagents.length > 0 && <span className="cp-status__note">{words.subagents(session.subagents.length)}</span>}
                       </span>
                       <span className="cp-status__time">{formatDuration(now - (session.busySince ?? session.stateSince))}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ready.length > 0 && (
+            <div className="cp-status__group">
+              <h2 className="cp-status__group-title">{words.ready}</h2>
+              <ul className="cp-status__list">
+                {ready.map((session) => (
+                  <li key={session.id}>
+                    <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
+                      <span className="cp-status__dot" aria-hidden="true" />
+                      <span className="cp-status__label">{session.name}</span>
+                      <span className="cp-status__time">{formatDuration(now - session.stateSince)}</span>
                     </button>
                   </li>
                 ))}

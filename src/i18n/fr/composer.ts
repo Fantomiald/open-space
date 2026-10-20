@@ -38,6 +38,8 @@ export const composer = {
   },
   launcher: {
     label: 'Nouvelle session',
+    close: 'Fermer, sans lancer de session (Échap)',
+    replaces: (name: string) => `Six fenêtres ouvertes : la nouvelle session prendra la place de ${name}.`,
     conversation: 'Conversation',
     newConversation: 'Nouvelle conversation',
     resume: 'Reprendre',

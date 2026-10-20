@@ -13,7 +13,7 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
-import { addTo, fitColumns, maxColumns, nextFocus, removeFrom, replaceIn, type Columns } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, maxColumns, nextFocus, removeFrom, replaceIn, retile, ROOM_TILING, type Columns } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
@@ -24,7 +24,11 @@ const writeLayout = (columns: Columns, selectedId: string | null) => writePrefer
 
 /** stopped: the bridge does not answer; unpaired: it answers but this browser has no valid session cookie */
 export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
-export type View = 'salle' | 'repos';
+/** The office, the break room, or focus mode: the sessions listed beside their windows, without the room. */
+export type View = 'salle' | 'repos' | 'focus';
+
+export const tilingOf = (view: View) => (view === 'focus' ? FOCUS_TILING : ROOM_TILING);
+export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
@@ -123,6 +127,8 @@ interface CommandPostState {
   preview: { festival?: Festival | null; hour?: number };
   setPreview: (preview: { festival?: Festival | null; hour?: number }) => void;
   newSession: NewSessionDraft | null;
+  /** focus mode: the launcher shown as one more window beside the open sessions, rather than in their place */
+  launcherOpen: boolean;
   toasts: Toast[];
   /** a session was asked for: the next unknown one that appears gets selected */
   awaitingNew: boolean;
@@ -134,7 +140,10 @@ interface CommandPostState {
   receive: (message: ServerMessage) => void;
   /** opens this session alone (null: none) */
   select: (sessionId: string | null) => void;
-  /** a click on a session: brought forward if it is open, else shown in place of the one the keyboard is in */
+  /**
+   * a click on a session: brought forward if it is open, else shown in place of the one the keyboard is in (in focus
+   * mode, beside the open ones while there is room)
+   */
   show: (sessionId: string) => void;
   /** Shift+click: adds the session beside the open ones (nothing when there is no room left), or takes it out */
   toggleOpen: (sessionId: string) => void;
@@ -169,6 +178,7 @@ interface CommandPostState {
   /** someone of the crew becomes the user (their perso in the room) */
   becomeSelf: (name: string) => boolean;
   openNewSession: (draft: NewSessionDraft | null) => void;
+  closeLauncher: () => void;
   toast: (kind: Toast['kind'], text: string) => void;
 
   createSession: (options: SessionOptions) => void;
@@ -239,7 +249,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   zoomedId: null,
   stackHidden: false,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
-  view: readPreference<string>('view', 'salle') === 'repos' ? 'repos' : 'salle',
+  view: (['repos', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
@@ -254,6 +264,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   searchOpen: false,
   preview: {},
   newSession: null,
+  launcherOpen: false,
   toasts: [],
   awaitingNew: false,
   seen: readPreference<SeenSequences>('seen', {}),
@@ -297,8 +308,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         set({ sessions: { ...previous, [message.session.id]: message.session } });
         if (s.awaitingNew && !previous[message.session.id]) {
           // a new session with several open joins them when there is room, else takes the place of the one in use
-          set({ awaitingNew: false });
-          const fits = s.openIds.length > 1 && addTo(s.columns, message.session.id, maxColumns(window.innerWidth));
+          // in focus mode it opens where the launcher's window was (the same place in the grid) and that window closes
+          set({ awaitingNew: false, launcherOpen: false });
+          const fits = s.openIds.length > 1 && addTo(s.columns, message.session.id, maxColumnsIn(s.view), tilingOf(s.view));
           if (fits) get().toggleOpen(message.session.id);
           else get().show(message.session.id);
         }
@@ -388,8 +400,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const s = get();
     set({ stackHidden: false });
     if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
+    const beside = s.view === 'focus' && s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), FOCUS_TILING);
+    if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
     if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
-    s.arrange(replaceIn(s.columns, s.selectedId, sessionId));
+    s.arrange(replaceIn(s.columns, s.selectedId, sessionId, tilingOf(s.view)));
     s.focus(sessionId);
   },
 
@@ -401,7 +415,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       if (s.openIds.length > 1) s.closeOpen(sessionId);
       return;
     }
-    const columns = addTo(s.columns, sessionId, maxColumns(window.innerWidth));
+    const columns = addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
     if (!columns) return;
     set({ zoomedId: null });
     s.arrange(columns);
@@ -424,14 +438,17 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   closeOpen: (sessionId) => {
     const s = get();
     const next = s.selectedId === sessionId ? nextFocus(s.columns, sessionId) : s.selectedId;
-    s.arrange(removeFrom(s.columns, sessionId));
+    s.arrange(removeFrom(s.columns, sessionId, tilingOf(s.view)));
     if (next) s.focus(next);
     else s.select(null);
   },
 
   arrange: (columns) => {
     const openIds = columns.flat();
-    set((state) => ({ columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null }));
+    set((state) => ({
+      columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null,
+      launcherOpen: state.launcherOpen && openIds.length > 0,
+    }));
     writeLayout(columns, get().selectedId);
   },
 
@@ -439,9 +456,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   fitOpen: () => {
     const s = get();
-    const columns = fitColumns(s.columns, maxColumns(window.innerWidth));
-    if (columns.length === s.columns.length) return;
+    const max = maxColumnsIn(s.view), tiling = tilingOf(s.view);
+    const columns = fitColumns(s.columns, max, tiling);
+    if (JSON.stringify(columns) === JSON.stringify(s.columns)) return;
     for (const id of s.openIds.filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
+    get().arrange(fitColumns(get().columns, max, tiling));
   },
 
   showPanel: (view) => {
@@ -459,7 +478,20 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ seen });
   },
 
-  setView: (view) => { writePreference('view', view); set({ view, enteredThroughDoor: true }); },
+  setView: (view) => {
+    const s = get();
+    writePreference('view', view);
+    if (view !== 'focus') set({ launcherOpen: false });
+    // from one room to the other the user walks through the door; out of focus mode they are back at their desk
+    set({ view, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
+    if (tilingOf(view) === tilingOf(s.view)) return;
+    const columns = retile(s.columns, maxColumnsIn(view), tilingOf(view));
+    s.arrange(columns);
+    if (s.selectedId && !columns.flat().includes(s.selectedId)) {
+      if (columns[0]) s.focus(columns[0][0]);
+      else s.select(null);
+    }
+  },
 
   toggleSound: () => {
     const sound = !get().sound;
@@ -484,11 +516,17 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),
   becomeSelf: (name) => get().send({ t: 'becomeSelf', name }),
-  /** The launcher shows when no session is open: a draft closes the open one and goes to the launcher's field. */
+  /**
+   * The launcher shows when no session is open: a draft closes the open one and goes to the launcher's field. In focus
+   * mode the open ones stay, and the launcher opens beside them.
+   */
   openNewSession: (draft) => {
-    if (draft) get().select(null);
+    const s = get();
+    if (draft && s.view === 'focus' && s.openIds.length) set({ launcherOpen: true, zoomedId: null, stackHidden: false });
+    else if (draft) s.select(null);
     set({ newSession: draft });
   },
+  closeLauncher: () => set({ launcherOpen: false }),
 
   createSession: (options) => { set({ awaitingNew: true }); lastCreate = options; get().send({ t: 'create', options }); },
   answerTrust: (choice) => {

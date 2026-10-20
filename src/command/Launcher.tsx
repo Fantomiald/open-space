@@ -8,7 +8,7 @@ import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
-import { SendIcon } from './Icons.tsx';
+import { CloseIcon, SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 
@@ -16,9 +16,11 @@ import { PersonPicker } from './PersonPicker.tsx';
 /**
  * Where a session starts when none is open: a message field at the bottom, with its folder (the default one when left empty),
  * model and permissions; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
- * which opens in its place. N puts the focus here; Shift+N starts a session at once (see App.tsx).
+ * which opens in its place. N puts the focus here; Shift+N starts a session at once (see App.tsx). `onClose`: shown as
+ * a window beside the open sessions (focus mode), it can be closed; `replacing`: the session the new one will take the
+ * place of, when no room is left.
  */
-export function Launcher() {
+export function Launcher({ onClose, replacing }: { onClose?: () => void; replacing?: string }) {
   const roots = useSessions((s) => s.roots);
   const directories = useSessions((s) => s.directories);
   const found = useSessions((s) => s.conversations);
@@ -90,13 +92,14 @@ export function Launcher() {
           <button type="button" aria-pressed={!resuming} onClick={() => setResuming(false)}>{words.newConversation}</button>
           <button type="button" aria-pressed={resuming} onClick={() => setResuming(true)}>{words.resume}</button>
         </div>
+        {onClose && <button type="button" className="cp-icon-button cp-launcher__close" aria-label={words.close} title={words.close} onClick={onClose}><CloseIcon /></button>}
       </div>
 
       <div className="cp-launcher__body">
         {!resuming ? (
           <div className="cp-launcher__intro">
             <h2>{words.title}</h2>
-            <p>{words.intro}</p>
+            <p>{replacing ? words.replaces(replacing) : words.intro}</p>
             <ul className="cp-launcher__keys">
               <li><kbd className="cp-kbd">N</kbd> {words.newRequest}</li>
               <li><kbd className="cp-kbd">{words.shiftN}</kbd> {words.startNow(homeRelative(defaultFolder(roots, preferences.defaultFolder)))}</li>

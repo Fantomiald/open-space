@@ -31,6 +31,8 @@ export const common: Dictionary['common'] = {
     rooms: 'Room',
     office: 'Office',
     lounge: 'Break room',
+    focus: 'Focus',
+    focusTitle: (keys) => `Focus: the sessions as a list, without the room (${keys})`,
     roomSessions: (room, sessions) => `${room}: ${sessions}`,
     session: 'session',
     sessions: 'sessions',

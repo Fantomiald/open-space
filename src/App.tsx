@@ -9,6 +9,7 @@ import { Header } from './command/Header.tsx';
 import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
 import { RoomView } from './room/RoomView.tsx';
+import { SessionList } from './command/SessionList.tsx';
 import { Sky } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useFestival } from './room/useFestival.ts';
@@ -90,6 +91,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const state = useSessions.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); state.openPalette(!state.paletteOpen); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return; }
       // Cmd+F with a session open searches its thread (the browser's own search does not see folded actions)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && state.selectedId && !document.querySelector('dialog[open]')) {
         e.preventDefault();
@@ -101,6 +103,8 @@ export function App() {
       // message field); otherwise, outside a field, it hides the panel. A dialog, or the command suggestions of a field,
       // take it first.
       if (e.key === 'Escape' && !e.isComposing && !document.querySelector('dialog[open]')) {
+        // the launcher open beside the sessions (focus mode) closes first
+        if (state.launcherOpen) { e.preventDefault(); state.closeLauncher(); return; }
         const session = state.selectedId ? state.sessions[state.selectedId] : undefined;
         const shells = session ? runningShells(state.logs[session.id] ?? []) : [];
         const working = session && isRunning(session) && session.state !== 'starting';
@@ -115,8 +119,8 @@ export function App() {
       }
       // Tab, outside a field: the open sessions step aside to see and click the room, and come back (Shift+Tab still
       // moves the focus). In the message field it does nothing, so a Tab pressed while writing neither hides the
-      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it.
-      if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && state.openIds.length && !document.querySelector('dialog[open]')) {
+      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it. Focus mode has no room to see.
+      if (e.key === 'Tab' && state.view !== 'focus' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && state.openIds.length && !document.querySelector('dialog[open]')) {
         const target = e.target instanceof HTMLElement ? e.target : null;
         if (target?.matches('.cp-composer textarea')) {
           e.preventDefault();
@@ -156,15 +160,17 @@ export function App() {
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
   return (
-    <div className="cp-app">
+    <div className="cp-app" data-view={view}>
       <Sky festival={day.festival} />
       <Header />
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
-        <div className="cp-main__content"><RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/></div>
+        <div className="cp-main__content">
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
+        </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>
-      <StatusPanel />
+      {view !== 'focus' && <StatusPanel />}
       <CommandPalette />
       <CrewDialog />
       <SettingsDialog />

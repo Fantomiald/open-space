@@ -88,7 +88,7 @@ export function Detail({ sessionId }: { sessionId: string }) {
         <div className="cp-detail__title">
           {editing === 'name' ? field('name') : (
             <h2>
-              {session.name}
+              <span className="cp-detail__name">{session.name}</span>
               <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
             </h2>
           )}

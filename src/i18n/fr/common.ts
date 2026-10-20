@@ -29,6 +29,8 @@ export const common = {
     rooms: 'Pièce',
     office: 'Bureau',
     lounge: 'Salle de repos',
+    focus: 'Focus',
+    focusTitle: (keys: string) => `Focus : les sessions en liste, sans la salle (${keys})`,
     roomSessions: (room: string, sessions: string) => `${room} : ${sessions}`,
     session: 'session',
     sessions: 'sessions',
