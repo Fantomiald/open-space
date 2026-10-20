@@ -1,5 +1,10 @@
 # Versions
 
+## 1.5.3
+
+- Un sous-agent relancé par un message (SendMessage) revient dans la salle avec son type et sa tâche, même s'il avait été lancé par un process précédent de la conversation, et son rapport arrive à sa place.
+- Une conversation qui change de taille (mode focus, autre disposition des fenêtres) reste collée en bas si elle y était, et réordonner les fenêtres ne remet plus leur fil en haut.
+
 ## 1.5.2
 
 - Une fenêtre agrandie se remet à sa place quand on clique une autre session dans la liste ou la carte État, même quand les six places sont prises : la session cliquée prend la main, sans être agrandie.

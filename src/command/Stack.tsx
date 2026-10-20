@@ -26,6 +26,9 @@ export function Stack() {
   const withLauncher = launcherOpen ? addTo(columns, LAUNCHER, maxColumnsIn(view), tiling) : null;
   const zoomed = launcherOpen && !withLauncher ? LAUNCHER : zoomedId;
   const { rows, slots } = placement(withLauncher ?? columns, tiling);
+  // the grid places each slot from its data attributes, so the DOM keeps one order whatever the layout: React moving a
+  // window to reorder them (focus mode tiles from the other side) would reset where its thread was scrolled to
+  const ordered = slots.toSorted((a, b) => a.id.localeCompare(b.id));
   const several = slots.length > 1;
   return (
     <>
@@ -33,7 +36,7 @@ export function Stack() {
         className="cp-stack" data-count={slots.length} data-columns={(withLauncher ?? columns).length} data-rows={rows} data-zoomed={zoomed !== null}
         data-hidden={hidden} aria-hidden={hidden || undefined}
       >
-        {slots.map(({ id, column, row, span }) => (
+        {ordered.map(({ id, column, row, span }) => (
           <div
             key={id} className="cp-stack__slot" data-column={column} data-row={row} data-span={span} data-zoomed={zoomed === id}
             data-compact={several && zoomed !== id}

@@ -3,11 +3,13 @@
 // ~/.claude/projects/<the folder, every character but letters and digits turned into "-">/<session id>.jsonl.
 // That format is Claude Code's own and undocumented: only a few fields are read, from the start of a file (its title
 // and first message) and from its end (the last exchanges), and anything unexpected is skipped.
+import { readFileSync } from 'node:fs';
 import { open, readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Conversation } from '../shared/protocol.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
+import type { AgentLaunch } from './normalizer.ts';
 
 export const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Enough of a file's start to find its title and first message, and of its end to find the last exchanges. */
@@ -17,6 +19,22 @@ const LIST_LIMIT = 40;
 const TEXT_MAX = 2000;
 
 export const projectFolder = (cwd: string, home = os.homedir()) => path.join(home, '.claude', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'));
+
+/**
+ * How a sub-agent of a conversation was launched, from the record Claude Code keeps next to its transcript
+ * (<conversation>/subagents/agent-<agentId>.meta.json: { agentType, description, toolUseId, … }, checked with 2.1.303).
+ * Read synchronously: the stream waits for it, and the file is a few hundred bytes.
+ */
+export function agentLaunch(cwd: string, conversationId: string, agentId: string, home = os.homedir()): AgentLaunch | null {
+  if (!/^\w+$/.test(agentId)) return null;
+  try {
+    const meta = asJson(JSON.parse(readFileSync(path.join(projectFolder(cwd, home), conversationId, 'subagents', `agent-${agentId}.meta.json`), 'utf8')));
+    const call = asString(meta.toolUseId);
+    return call ? { call, type: asString(meta.agentType) } : null;
+  } catch {
+    return null;
+  }
+}
 
 async function readSlice(file: string, fromEnd: boolean, length: number): Promise<string> {
   const handle = await open(file, 'r');
