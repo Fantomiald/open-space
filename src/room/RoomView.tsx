@@ -25,6 +25,8 @@ import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
 import type { Pose } from './sprites.ts';
 import { showsMetricsBadge } from './metrics.ts';
+import { useRoomFrame } from './useRoomFrame.ts';
+import { ArrangeHint } from './ArrangeHint.tsx';
 import { boardContent } from './whiteboard.ts';
 
 const FRAME_MS = 1000 / 15;
@@ -74,6 +76,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const zoom = useRef<HTMLDivElement>(null);
+  useRoomFrame(stage, room);
   const selected = useRef(openIds);
   const crewRef = useRef(crew);
   crewRef.current = crew;
@@ -240,9 +243,10 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const card = hint.current;
     if (!card || !text) return;
     // right of the pointer, or left of it near the right edge
-    const box = stage.current!.getBoundingClientRect();
-    const x = event.clientX - box.left, y = event.clientY - box.top;
-    const left = x + 16 + card.offsetWidth > box.width ? x - 10 - card.offsetWidth : x + 16;
+    // in the stage's own pixels: the room may be zoomed out (useRoomFrame.ts)
+    const box = stage.current!.getBoundingClientRect(), scale = box.width / stage.current!.offsetWidth;
+    const x = (event.clientX - box.left) / scale, y = (event.clientY - box.top) / scale;
+    const left = x + 16 + card.offsetWidth > stage.current!.offsetWidth ? x - 10 - card.offsetWidth : x + 16;
     card.style.transform = `translate(${Math.round(left)}px, ${Math.round(y + 10)}px)`;
   };
   // the dark around the canvas, on a wide or tall panel: the same as the dark around the room in it
@@ -282,6 +286,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
           )}
         </div>
       </div>
+      <ArrangeHint />
     </div>
   );
 }

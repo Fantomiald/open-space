@@ -10,7 +10,15 @@ export const room = {
   subagent: 'Sous-agent',
   /** the card following the pointer over the door, the user's screen, the whiteboard or the numbers */
   /** Tab hides the open sessions to see the room, and brings them back */
-  stack: { show: (count: number) => `Afficher ${plural(count, 'conversation', 'conversations')}` },
+  stack: {
+    show: (count: number) => `Afficher ${plural(count, 'conversation', 'conversations')}`,
+    resizeColumns: 'Largeur des colonnes',
+    resizeRows: 'Hauteur des fenêtres',
+    resizeStack: 'Largeur des fenêtres',
+    resizeTitle: 'Tirer pour redimensionner, double-clic pour répartir',
+  },
+  /** the line in the corner of the room until the room or a window was moved by hand */
+  arrange: { title: 'Astuce', move: 'glisser : bouger la salle ou une fenêtre', zoom: 'molette : zoomer', close: 'Compris' },
   hint: { openUnder: 'Maj+clic : l’ouvrir à côté · Tab : voir la salle', openFull: '6 fenêtres au plus : ferme-en une pour l’ouvrir à côté', toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,

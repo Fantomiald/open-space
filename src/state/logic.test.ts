@@ -471,11 +471,11 @@ describe('sessions open side by side', () => {
     assert.equal(nextFocus([['a']], 'a'), null);
   });
 
-  it('places the windows: one column shares its height, two make thirds', () => {
+  it('places the windows: each column shares its height, a window alone takes all of it', () => {
     assert.equal(placement([['a', 'b']]).rows, 2);
     const { rows, slots } = placement([['a', 'b', 'c'], ['d']]);
     assert.equal(rows, 3);
-    assert.deepEqual(slots.at(-1), { id: 'd', column: 1, row: 0, span: 1 });
+    assert.deepEqual(slots.at(-1), { id: 'd', column: 1, row: 0, span: 3 });
   });
 
   it('in focus mode, opens the newest on the left, three columns, then splits the first, the second, the third, and refuses past six', () => {
@@ -488,14 +488,16 @@ describe('sessions open side by side', () => {
     assert.deepEqual(columns, [['e', 'd'], ['c', 'b'], ['a']]);
     columns = addTo(columns, 'f', 3, FOCUS_TILING)!;
     assert.deepEqual(columns, [['f', 'e'], ['d', 'c'], ['b', 'a']]);
+    assert.deepEqual(addTo([['c'], ['b', 'x'], ['a']], 'd', 3, FOCUS_TILING), [['d', 'c'], ['b', 'x'], ['a']], 'a shape set by hand is kept');
     assert.ok(isFull(columns, 3, FOCUS_TILING));
     assert.equal(addTo(columns, 'g', 3, FOCUS_TILING), null);
   });
 
-  it('in focus mode, moves every window along when one closes, is replaced or no longer fits', () => {
-    assert.deepEqual(removeFrom([['e', 'd'], ['c', 'b'], ['a']], 'e', FOCUS_TILING), [['d', 'c'], ['b'], ['a']]);
+  it('in focus mode, keeps the columns when one closes or is replaced, and fills a column that went', () => {
+    assert.deepEqual(removeFrom([['e', 'd'], ['c', 'b'], ['a']], 'e', FOCUS_TILING), [['d'], ['c', 'b'], ['a']]);
+    assert.deepEqual(removeFrom([['d', 'c'], ['b'], ['a']], 'b', FOCUS_TILING), [['d'], ['c'], ['a']]);
     assert.deepEqual(removeFrom([['b'], ['a']], 'b', FOCUS_TILING), [['a']]);
-    assert.deepEqual(replaceIn([['f', 'e'], ['d', 'c'], ['b', 'a']], 'c', 'x', FOCUS_TILING), [['x', 'f'], ['e', 'd'], ['b', 'a']]);
+    assert.deepEqual(replaceIn([['f', 'e'], ['d', 'c'], ['b', 'a']], 'c', 'x'), [['f', 'e'], ['d', 'x'], ['b', 'a']]);
     assert.deepEqual(fitColumns([['e', 'd'], ['c', 'b'], ['a']], 2, FOCUS_TILING), [['e', 'd'], ['c', 'b']], 'the oldest close');
     assert.deepEqual(fitColumns([['c', 'b'], ['a']], 3, FOCUS_TILING), [['c'], ['b'], ['a']], 'a wider window spreads them out');
   });

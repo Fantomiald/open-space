@@ -1,7 +1,7 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, Paperclip, Pause, Pencil,
+  AppWindow, ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil,
   Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, Zap, type LucideIcon,
 } from 'lucide-react';
 
@@ -10,7 +10,12 @@ const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} s
 export const PlusIcon = icon(Plus);
 /** Focus mode: the sessions as a list beside their windows. */
 export const FocusIcon = icon(PanelLeft);
+export const FoldListIcon = icon(PanelLeftClose);
+export const UnfoldListIcon = icon(PanelLeftOpen);
 export const InfoIcon = icon(Info);
+/** The windows laid out in a grid, or each placed by hand. */
+export const GridIcon = icon(LayoutGrid);
+export const FreeWindowsIcon = icon(AppWindow);
 export const CrewIcon = icon(Users);
 export const CommandIcon = icon(Command);
 export const BellIcon = ({ muted }: { muted: boolean }) => (muted ? <BellOffIcon /> : <BellOnIcon />);

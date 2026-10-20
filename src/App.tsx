@@ -16,6 +16,7 @@ import { useFestival } from './room/useFestival.ts';
 import { Stack } from './command/Stack.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
+import { useAltKey } from './lib/drag.ts';
 import { defaultFolder } from './lib/format.ts';
 import { runningShells } from './state/feed.ts';
 import { isRunning } from './state/labels.ts';
@@ -26,6 +27,8 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
 export function App() {
+  // Alt held shows the grab cursors over the room and the windows (drag.ts)
+  useAltKey();
   const view = useSessions((s) => s.view);
   const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
   const day = useFestival();

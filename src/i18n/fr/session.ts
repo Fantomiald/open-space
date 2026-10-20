@@ -215,6 +215,8 @@ export const session = {
     hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées' },
     open: 'Clic : l’ouvrir à côté des autres, ou y aller si elle est ouverte',
     collapse: (group: string) => `Replier ou déplier : ${group}`,
+    fold: 'Replier la liste',
+    unfold: 'Déplier la liste',
     ago: (duration: string) => `il y a ${duration}`,
     empty: 'Aucune session pour l’instant : lance la première à droite.',
   },

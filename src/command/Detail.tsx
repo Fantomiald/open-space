@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { buildFeed } from '../state/feed.ts';
@@ -10,6 +10,7 @@ import { AsidePanel } from './AsidePanel.tsx';
 import { ChangesView, LineCounts } from './Changes.tsx';
 import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
 import { Composer, RemoteButton } from './Composer.tsx';
+import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { AgentBack, Feed } from './Feed.tsx';
 import { CloseIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
@@ -52,7 +53,8 @@ const NO_DRAFTS: Readonly<Record<string, string>> = {};
  * One open session over the room. Several can be open side by side (Shift+click, see Stack): the one the user is in
  * (`selectedId`) is `active`, and only it shows the search bar and the views other than the thread; one can be zoomed.
  */
-export function Detail({ sessionId }: { sessionId: string }) {
+/** Kept from being drawn again while a window is carried or resized: only its own session changes it. */
+export const Detail = memo(function Detail({ sessionId }: { sessionId: string }) {
   const active = useSessions((s) => s.selectedId === sessionId);
   const session = useSessions((s) => s.sessions[sessionId]);
   const events = useSessions((s) => s.logs[sessionId]) ?? NO_EVENTS;
@@ -65,6 +67,8 @@ export function Detail({ sessionId }: { sessionId: string }) {
   const zoomed = useSessions((s) => s.zoomedId === sessionId);
   const zoom = useSessions((s) => s.zoom);
   const toggleZoom = () => zoom(zoomed ? null : sessionId);
+  // its title bar carries it elsewhere in the stack
+  const carry = use(WindowDragContext);
   const searchOpen = useSessions((s) => s.searchOpen) && active;
   const openSearch = useSessions((s) => s.openSearch);
   const seen = useSessions((s) => s.seen);
@@ -114,7 +118,9 @@ export function Detail({ sessionId }: { sessionId: string }) {
     >
       <DropOverlay attachments={attachments} />
       {/* a double click on the head, outside its buttons, zooms it (as on a window's title bar) */}
-      <header className="cp-detail__head" onDoubleClick={(e) => { if (several && !(e.target as Element).closest('button, input, form')) toggleZoom(); }}>
+      <header
+        className="cp-detail__head" onPointerDown={(e) => { if (carry && !(e.target as Element).closest(INTERACTIVE)) carry(session.id, e); }}
+        onDoubleClick={(e) => { if (several && !(e.target as Element).closest('button, input, form')) toggleZoom(); }}>
         <div className="cp-detail__title">
           {editing === 'name' ? field('name') : (
             <h2>
@@ -185,4 +191,4 @@ export function Detail({ sessionId }: { sessionId: string }) {
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>
   );
-}
+});
