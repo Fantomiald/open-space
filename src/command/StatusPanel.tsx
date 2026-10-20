@@ -1,10 +1,11 @@
 // Where every session is at, pinned to the bottom left corner of the screen in both views: what waits for the user
 // (to answer, allow, read or check, the most urgent first, with how long it has waited), then who is at work and for
 // how long, then who is ready for a message (read, not stopped). A click opens the session; the title folds the panel
-// down to its counts.
-import { useMemo, useState } from 'react';
+// down to its counts, a group's title folds that group away (both remembered in this browser).
+import { type ReactNode, useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatDuration } from '../lib/format.ts';
+import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { roomSessions } from '../room/cast.ts';
 import { todoLabel } from '../state/labels.ts';
@@ -16,6 +17,22 @@ const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
 const writeFolded = (folded: boolean) => { try { localStorage.setItem(FOLDED_KEY, String(folded)); } catch { /* not kept: it folds for this visit only */ } };
 
+type Group = 'waiting' | 'working' | 'ready';
+
+function StatusGroup({ group, count, folded, onFold, children }: { group: Group; count: number; folded: boolean; onFold: () => void; children: ReactNode }) {
+  const words = t.session.status;
+  return (
+    <div className="cp-status__group">
+      <h2 className="cp-status__group-title">
+        <button type="button" aria-expanded={!folded} aria-controls={`status-${group}`} title={t.session.list.collapse(words[group])} onClick={onFold}>
+          <ChevronDownIcon /> {words[group]}{folded && <span className="cp-status__note">{count}</span>}
+        </button>
+      </h2>
+      <ul className="cp-status__list" id={`status-${group}`} hidden={folded}>{children}</ul>
+    </div>
+  );
+}
+
 export function StatusPanel() {
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
@@ -23,6 +40,13 @@ export function StatusPanel() {
   const openIds = useSessions((s) => s.openIds);
   const toggleOpen = useSessions((s) => s.toggleOpen);
   const [folded, setFolded] = useState(readFolded);
+  const [foldedGroups, setFoldedGroups] = useState(() => readPreference<Group[]>('statusFolded', []));
+  const foldGroup = (group: Group) => {
+    const next = foldedGroups.includes(group) ? foldedGroups.filter((other) => other !== group) : [...foldedGroups, group];
+    writePreference('statusFolded', next);
+    setFoldedGroups(next);
+  };
+  const groupProps = (group: Group, count: number) => ({ group, count, folded: foldedGroups.includes(group), onFold: () => foldGroup(group) });
   const waiting = useMemo(() => attentionQueue(Object.values(sessions), seen), [sessions, seen]);
   const working = useMemo(() => otherSessions(Object.values(sessions), seen).working, [sessions, seen]);
   // the office's idle ones, as the room seats them (not the resting ones, in the break room)
@@ -44,9 +68,7 @@ export function StatusPanel() {
       {!folded && (
         <div className="cp-status__body">
           {waiting.length > 0 && (
-            <div className="cp-status__group">
-              <h2 className="cp-status__group-title">{words.waiting}</h2>
-              <ul className="cp-status__list">
+            <StatusGroup {...groupProps('waiting', waiting.length)}>
                 {waiting.map(({ session, kind }) => (
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
@@ -56,13 +78,10 @@ export function StatusPanel() {
                     </button>
                   </li>
                 ))}
-              </ul>
-            </div>
+            </StatusGroup>
           )}
           {working.length > 0 && (
-            <div className="cp-status__group">
-              <h2 className="cp-status__group-title">{words.working}</h2>
-              <ul className="cp-status__list">
+            <StatusGroup {...groupProps('working', working.length)}>
                 {working.map((session) => (
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind="working" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
@@ -76,13 +95,10 @@ export function StatusPanel() {
                     </button>
                   </li>
                 ))}
-              </ul>
-            </div>
+            </StatusGroup>
           )}
           {ready.length > 0 && (
-            <div className="cp-status__group">
-              <h2 className="cp-status__group-title">{words.ready}</h2>
-              <ul className="cp-status__list">
+            <StatusGroup {...groupProps('ready', ready.length)}>
                 {ready.map((session) => (
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
@@ -92,8 +108,7 @@ export function StatusPanel() {
                     </button>
                   </li>
                 ))}
-              </ul>
-            </div>
+            </StatusGroup>
           )}
         </div>
       )}
