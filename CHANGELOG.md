@@ -1,5 +1,12 @@
 # Versions
 
+## 1.8.0
+
+- Open Space devient une vraie app Mac (Electron) : `npm run app` construit un `.dmg` Apple Silicon et Intel. Le serveur tourne dans l'app, plus besoin de terminal ni d'onglet ; fermer la fenêtre laisse tourner les sessions, quitter l'app les arrête.
+- Notifications natives à son nom (un clic ouvre la session), ton perso en icône du Dock et le nombre de sessions qui t'attendent en pastille.
+- Si `npm start` tourne déjà, l'app s'ouvre dessus au lieu d'en lancer un second.
+- `npm run app:release` : app signée Developer ID et notarisée par Apple, qui s'ouvre sans avertissement sur n'importe quel Mac ; `app:publish` la met sur une release GitHub, d'où les apps installées se mettent à jour seules.
+
 ## 1.7.0
 
 - La salle se déplace (⌥ + glisser) et se zoome (⌥ + molette ou pincement), sans sortir de la page ; ⌥ + double-clic la remet à sa place. Une astuce en bas de page le dit, jusqu'au premier usage.

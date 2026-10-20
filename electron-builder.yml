@@ -1,0 +1,32 @@
+# The macOS app (npm run app): release/Open Space-<version>-<arch>.dmg, plus the .zip and latest-mac.yml that
+# electron-updater reads from the GitHub release. Everything the app runs is bundled in out/ (vite.desktop.config.ts),
+# so no node_modules ships.
+appId: io.github.fantomiald.open-space
+productName: Open Space
+copyright: Fantomiald
+directories:
+  output: release
+  buildResources: desktop/build
+files:
+  - out/**/*
+  - package.json
+  - "!node_modules/**/*"
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  entitlements: desktop/build/entitlements.mac.plist
+  entitlementsInherit: desktop/build/entitlements.mac.plist
+  extendInfo:
+    # asked once, the first time Open Space drives Music or Spotify (the radio) or opens a terminal
+    NSAppleEventsUsageDescription: Open Space pilote Musique ou Spotify pour la radio du bureau, et ouvre ton terminal.
+dmg:
+  artifactName: Open Space-${version}-${arch}.${ext}
+publish:
+  provider: github
+  owner: Fantomiald
+  repo: open-space
