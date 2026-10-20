@@ -1063,6 +1063,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-crew__list { mask-image: linear-gradient(to bottom, transparent, #000 var(--more-above), #000 calc(100% - var(--more-below)), transparent); animation: cp-more linear both; animation-timeline: scroll(self); }
 .cp-status__group { display: grid; gap: var(--space-1); }
 .cp-status__group-title { margin: 0; font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--color-text-muted); }
+.cp-status__group-title > button { display: flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.cp-status__group-title > button:hover { color: var(--color-text); }
+.cp-status__group-title .cp-icon { width: 0.75rem; height: 0.75rem; transition: transform var(--duration) var(--easing); }
+.cp-status__group-title > button[aria-expanded='false'] .cp-icon { transform: rotate(-90deg); }
+.cp-status__list[hidden] { display: none; }
 .cp-status__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
 .cp-status__item {
   width: 100%; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-width) solid transparent; border-radius: var(--radius-md);
