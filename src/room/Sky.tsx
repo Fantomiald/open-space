@@ -10,6 +10,10 @@ const FESTIVAL_MS = 100;
 /** CSS pixels per pixel of the frost, and how often it follows what moves behind the panes. */
 const FROST_PIXEL = 12;
 const FROST_MS = 1000;
+const FROST_EVENT = 'cp:frost';
+
+/** The frost follows at once what was just moved behind the panes (the room), rather than within FROST_MS. */
+export const refreshFrost = () => window.dispatchEvent(new Event(FROST_EVENT));
 
 /**
  * The sky behind the page, at the room's hour (or the hour being tried): painted again each quarter of an hour; its
@@ -60,8 +64,9 @@ export function Sky({ festival }: { festival: Festival | null }) {
 function frost(skies: readonly HTMLCanvasElement[]) {
   const root = document.documentElement;
   const sharp = document.createElement('canvas'), blurred = document.createElement('canvas');
-  let shown: string | null = null, waiting = false;
+  let shown: string | null = null, waiting = false, again = false;
   const update = () => {
+    if (waiting) again = true;
     if (document.hidden || waiting) return;
     const width = Math.ceil(window.innerWidth / FROST_PIXEL), height = Math.ceil(window.innerHeight / FROST_PIXEL);
     for (const canvas of [sharp, blurred]) if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
@@ -94,15 +99,20 @@ function frost(skies: readonly HTMLCanvasElement[]) {
         root.style.setProperty('--frost', `url(${url})`);
         if (shown) URL.revokeObjectURL(shown);
         shown = url;
-      }, () => URL.revokeObjectURL(url)).finally(() => { waiting = false; });
+      }, () => URL.revokeObjectURL(url)).finally(() => {
+        waiting = false;
+        if (again) { again = false; update(); }
+      });
     });
   };
   update();
   const timer = window.setInterval(update, FROST_MS);
   window.addEventListener('resize', update);
+  window.addEventListener(FROST_EVENT, update);
   return () => {
     window.clearInterval(timer);
     window.removeEventListener('resize', update);
+    window.removeEventListener(FROST_EVENT, update);
     root.style.removeProperty('--frost');
     if (shown) URL.revokeObjectURL(shown);
   };

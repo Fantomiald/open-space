@@ -1,5 +1,14 @@
 # Versions
 
+## 1.7.0
+
+- La salle se déplace (⌥ + glisser) et se zoome (⌥ + molette ou pincement), sans sortir de la page ; ⌥ + double-clic la remet à sa place. Une astuce en bas de page le dit, jusqu'au premier usage.
+- Les fenêtres se prennent par leur barre de titre (ou n'importe où avec ⌥) : en grille, on les réordonne, on les change de colonne, on en met une seule dans sa colonne en la lâchant près du bord d'une colonne ; dans la salle comme en mode focus.
+- Les gouttières entre colonnes et entre fenêtres se tirent pour redimensionner, le bord de la pile aussi ; double-clic pour répartir. Une colonne partage toute sa hauteur entre ses fenêtres.
+- Mode libre (bascule Grille / Libre dans l'en-tête) : on place et redimensionne chaque fenêtre où on veut, avec des aimants (⌘ pour les couper) ; contre un bord elle prend la moitié de l'écran, dans un coin le quart, en haut tout l'écran. Repasser en Grille range tout.
+- Mode focus : la liste des sessions se replie aux seules têtes, et les conversations prennent la place ; « Nouvelle session » passe en bas.
+- Tailles, positions et cadrage de la salle restent d'une visite à l'autre.
+
 ## 1.6.0
 
 - L'en-tête d'une conversation ne garde qu'agrandir, pause (quand elle travaille), « ⋯ » et fermer : chercher (⌘F), activer Remote Control, repos et éteindre passent dans le menu « ⋯ ». Remote Control allumé reste visible avec son état.

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { roomSessions } from '../room/cast.ts';
-import { useSessions, type View } from '../state/sessions.ts';
-import { BellIcon, CommandIcon, CrewIcon, DeskIcon, FocusIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
+import { arrangementOf, useSessions, type View } from '../state/sessions.ts';
+import { BellIcon, CommandIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SettingsIcon, SofaIcon, SoundIcon } from './Icons.tsx';
 import { PreviewMenu } from './PreviewMenu.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
@@ -27,6 +27,9 @@ export function Header() {
   const openSettings = useSessions((s) => s.openSettings);
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
+  const windowMode = useSessions((s) => s.windowModeRequest ?? s.windowMode[arrangementOf(s.view)]);
+  const requestWindowMode = useSessions((s) => s.requestWindowMode);
+  const windowsOpen = useSessions((s) => s.openIds.length > 0);
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
@@ -51,6 +54,18 @@ export function Header() {
           <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} title={words.focusTitle(FOCUS_KEYS)} onClick={() => setView(view === 'focus' ? 'salle' : 'focus')}>
             <FocusIcon />
           </button>
+          {/* the windows in a grid or placed by hand (wide screens only, where they can be moved) */}
+          {windowsOpen && (
+            <>
+              <span className="cp-header__divider cp-header__windows" aria-hidden="true" />
+              <button type="button" className="cp-header__windows" aria-pressed={windowMode === 'grid'} aria-label={words.gridWindows} title={words.gridWindowsTitle} onClick={() => requestWindowMode('grid')}>
+                <GridIcon />
+              </button>
+              <button type="button" className="cp-header__windows" aria-pressed={windowMode === 'free'} aria-label={words.freeWindows} title={words.freeWindowsTitle(MODIFIER)} onClick={() => requestWindowMode('free')}>
+                <FreeWindowsIcon />
+              </button>
+            </>
+          )}
         </nav>
       </div>
       <Radio />

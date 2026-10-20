@@ -1,7 +1,7 @@
 // Focus mode's list of every session, in place of the room: what waits for the user, who works, who is ready for a
 // message, who rests. Each with its face (the crew member's look, as in the room), its state as a sign on the face, its
 // tag, its last words and how long it has been so. A click opens it beside the open ones (or goes to it when open); a
-// group folds away (remembered in this browser).
+// group folds away, and the whole list down to the faces (remembered in this browser).
 import { useMemo, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
@@ -14,7 +14,7 @@ import { chibiHead, lookOfStranger } from '../room/chibi.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
-import { ChevronDownIcon, PlusIcon } from './Icons.tsx';
+import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
 
 /** The sign on a face, the same as over a head in the room; none for a session that is ready or resting. */
 const SIGNS: Readonly<Record<Exclude<Status, null>, string>> = { permission: '!', question: '?', finished: '✓', error: '×', working: '…' };
@@ -33,6 +33,11 @@ export function SessionList() {
     writePreference('listFolded', next);
     setFolded(next);
   };
+  const [narrow, setNarrow] = useState(() => readPreference('listNarrow', false));
+  const toggleNarrow = () => {
+    writePreference('listNarrow', !narrow);
+    setNarrow(!narrow);
+  };
   const groups = useMemo(() => {
     const all = Object.values(sessions);
     const [waiting, working, ready] = roomSessions(all, seen, 'office');
@@ -50,10 +55,13 @@ export function SessionList() {
   const words = t.session.list;
 
   return (
-    <nav className="cp-list" aria-label={words.title}>
-      <button type="button" className="cp-button cp-list__new" data-variant={openIds.length ? undefined : 'primary'} onClick={() => openNewSession({})}>
-        <PlusIcon /> {words.new} <kbd className="cp-kbd">N</kbd>
-      </button>
+    <nav className="cp-list" aria-label={words.title} data-narrow={narrow}>
+      <div className="cp-list__head">
+        <h2 className="cp-list__heading">{words.title}</h2>
+        <button type="button" className="cp-icon-button" aria-expanded={!narrow} aria-label={narrow ? words.unfold : words.fold} title={narrow ? words.unfold : words.fold} onClick={toggleNarrow}>
+          {narrow ? <UnfoldListIcon /> : <FoldListIcon />}
+        </button>
+      </div>
       <div className="cp-list__body">
         {groups.map(([group, list]) => (
           <section key={group} className="cp-list__group" data-group={group}>
@@ -72,7 +80,8 @@ export function SessionList() {
                 return (
                   <li key={session.id}>
                     <button
-                      type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)} title={words.open}
+                      type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)}
+                      title={narrow ? session.name : words.open} aria-label={narrow ? session.name : undefined}
                       onClick={() => show(session.id)}
                     >
                       <span className="cp-list__face">
@@ -97,8 +106,14 @@ export function SessionList() {
             </ul>
           </section>
         ))}
-        {groups.length === 0 && <p className="cp-list__empty">{words.empty}</p>}
+        {groups.length === 0 && !narrow && <p className="cp-list__empty">{words.empty}</p>}
       </div>
+      <button
+        type="button" className="cp-button cp-list__new" data-variant={openIds.length ? undefined : 'primary'} aria-label={narrow ? words.new : undefined} title={narrow ? `${words.new} (N)` : undefined}
+        onClick={() => openNewSession({})}
+      >
+        <PlusIcon /> <span className="cp-list__new-label">{words.new}</span> <kbd className="cp-kbd">N</kbd>
+      </button>
     </nav>
   );
 }

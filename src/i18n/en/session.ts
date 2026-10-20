@@ -204,6 +204,8 @@ export const session: Dictionary['session'] = {
     hints: { waiting: '', working: '', ready: 'read', resting: 'stopped' },
     open: 'Click: open it beside the others, or go to it when open',
     collapse: (group: string) => `Fold or unfold: ${group}`,
+    fold: 'Fold the list',
+    unfold: 'Unfold the list',
     ago: (duration: string) => `${duration} ago`,
     empty: 'No session yet: start the first one on the right.',
   },

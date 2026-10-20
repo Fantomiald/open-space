@@ -57,6 +57,8 @@ h1, h2, p { margin: 0; }
 .cp-header__divider { align-self: center; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
 [aria-pressed='true'] + .cp-header__divider { margin-left: calc(var(--space-1) + var(--space-3)); }
 .cp-header__divider:has(+ [aria-pressed='true']) { margin-right: calc(var(--space-1) + var(--space-3)); }
+/* the windows can only be moved on a wide screen: the switch between grid and free windows shows there only */
+@media (max-width: 60rem) { .cp-header__windows { display: none; } }
 .cp-header__brand { display: flex; align-items: center; gap: var(--space-2); }
 .cp-header__title { font-size: var(--text-md); font-weight: var(--weight-bold); letter-spacing: 0.01em; }
 /* a status light: lit when the bridge is connected */
@@ -134,16 +136,28 @@ h1, h2, p { margin: 0; }
 @media (min-width: 60.01rem) {
   .cp-main { grid-template-columns: minmax(0, 1fr) calc(var(--detail-width) + var(--gutter)); }
   .cp-main__content { grid-column: 1; grid-row: 1; }
+  /* the room, moved by hand, may pass under the windows (useRoomFrame.ts keeps it inside the page) */
+  .cp-main:not([data-view='focus']) > .cp-main__content { overflow: visible; }
   .cp-main > :is(.cp-stack, .cp-launcher) { grid-column: 2; grid-row: 1; z-index: 1; margin: var(--gutter) var(--gutter) var(--gutter) 0; }
   /* more columns spread left over the room, never as far as the status card (stack.ts counts how many fit) */
   .cp-main > .cp-stack:not([data-columns='1']) {
     grid-column: 1 / -1; justify-self: end;
     width: min(calc(var(--columns) * var(--detail-width) + (var(--columns) - 1) * var(--gutter)), calc(100vw - 20rem - 3 * var(--gutter)));
   }
+  /*
+   * measured, the stack over the room spans the page (less the gutter) and lays its windows out itself: the grid on the
+   * right, as wide as its columns or as pulled by hand, or the windows placed by hand anywhere (Stack.tsx)
+   */
+  .cp-main:not([data-view='focus']) > .cp-stack[data-placed='true'] { grid-column: 1 / -1; justify-self: stretch; width: auto; margin: var(--gutter); }
+  .cp-main > .cp-stack[data-placed='true'] { pointer-events: none; }
+  .cp-main > .cp-stack[data-placed='true'] > * { pointer-events: auto; }
+  /* placed by hand, the windows may cover the status card */
+  .cp-main > .cp-stack[data-mode='free'] { z-index: 4; }
   .cp-stack[data-columns='2'] { --columns: 2; }
   .cp-stack[data-columns='3'] { --columns: 3; }
   /* focus mode: the session list on the left, the windows (or the launcher) fill the rest */
-  .cp-main[data-view='focus'] { grid-template-columns: var(--list-width) minmax(0, 1fr); }
+  .cp-main[data-view='focus'] { grid-template-columns: var(--list-width) minmax(0, 1fr); transition: grid-template-columns 200ms var(--easing); }
+  .cp-main[data-view='focus']:has(.cp-list[data-narrow='true']) { --list-width: 4.75rem; }
   .cp-main[data-view='focus'] > .cp-main__content { padding: var(--gutter) 0 var(--gutter) var(--gutter); }
   .cp-main[data-view='focus'] > :is(.cp-stack, .cp-launcher) { grid-column: 2; justify-self: stretch; width: auto; margin: var(--gutter); }
   /* the launcher in the middle of the free space (or of its window), as a chat app opens */
@@ -303,11 +317,57 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-stack__slot[data-row='0'] { grid-row: 1; }
 .cp-stack__slot[data-row='1'] { grid-row: 2; }
 .cp-stack__slot[data-row='2'] { grid-row: 3; }
-/* focus mode: a window alone in its column takes its whole height */
+/* a window alone in its column takes its whole height */
 .cp-stack__slot[data-span='2'] { grid-row: 1 / span 2; }
+.cp-stack__slot[data-span='3'] { grid-row: 1 / span 3; }
 /* zoomed: it covers the whole grid, the others stay where they are underneath (hidden, still scrolled where they were) */
 .cp-stack__slot[data-zoomed='true'] { grid-area: 1 / 1 / -1 / -1; z-index: 1; }
 .cp-stack[data-zoomed='true'] > .cp-stack__slot:not([data-zoomed='true']) { visibility: hidden; }
+/* once the stack is measured (wide screens), each window sits at its box (Stack.tsx, windows.ts) and glides to the next one */
+.cp-stack[data-placed='true'] { position: relative; }
+.cp-stack[data-placed='true'] > .cp-stack__slot { position: absolute; left: 0; top: 0; grid-area: auto; translate: var(--x) var(--y); width: var(--w); height: var(--h); }
+.cp-stack[data-gliding='true'] > .cp-stack__slot { transition: translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .cp-stack[data-gliding='true'] > .cp-stack__slot { transition: none; } }
+/* a window carried by its title bar (or by Alt+drag): it follows the pointer, lifted, over the place it would land in */
+.cp-stack[data-dragging='true'] { user-select: none; cursor: grabbing; }
+.cp-stack__slot[data-carried] { z-index: 3; }
+.cp-stack[data-gliding='true'] > .cp-stack__slot[data-carried] { transition: none; }
+.cp-stack__slot[data-carried]::before {
+  content: ''; position: absolute; inset: 0; border-radius: var(--radius-xl); border: var(--border-width) dashed var(--glass-edge); background: rgb(255 255 255 / 0.04);
+}
+.cp-stack__slot[data-carried] > * { translate: var(--drag-x, 0) var(--drag-y, 0); scale: 1.02; box-shadow: var(--shadow-overlay); pointer-events: none; }
+:root[data-alt] .cp-stack[data-placed='true'] .cp-detail { cursor: grab; }
+/* the gutters between the windows, pulled to resize them (GridHandles.tsx); a line of the accent shows while pulled */
+.cp-stack__gutter { position: absolute; left: 0; top: 0; translate: var(--x) var(--y); width: var(--w); height: var(--h); z-index: 2; touch-action: none; }
+.cp-stack__gutter[data-axis='x'] { cursor: col-resize; }
+.cp-stack__gutter[data-axis='y'] { cursor: row-resize; }
+.cp-stack__gutter::after { content: ''; position: absolute; border-radius: 1px; background: var(--color-accent); opacity: 0; transition: opacity 120ms; }
+.cp-stack__gutter[data-axis='x']::after { inset: var(--space-4) calc(50% - 1px); }
+.cp-stack__gutter[data-axis='y']::after { inset: calc(50% - 1px) var(--space-4); }
+.cp-stack__gutter:hover::after { opacity: 0.35; }
+.cp-stack__gutter[data-pulling]::after { opacity: 1; }
+.cp-stack:has(.cp-stack__gutter[data-pulling]) { user-select: none; }
+.cp-stack:has(.cp-stack__gutter[data-pulling]) > .cp-stack__slot { transition: none; }
+/* free windows: the front one last (--z), lifted while carried, with the zone of the screen and the magnets' guides drawn */
+.cp-stack[data-mode='free'] > .cp-stack__slot { z-index: var(--z, 1); }
+.cp-stack[data-mode='free'] > .cp-stack__slot[data-zoomed='true'] { z-index: 50; }
+.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried] { z-index: 60; }
+.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried]::before { content: none; }
+.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried] > * { translate: none; }
+.cp-stack[data-gliding='true'] > .cp-stack__slot[data-resizing] { transition: none; }
+.cp-stack__handle { position: absolute; z-index: 2; touch-action: none; }
+.cp-stack__handle[data-edge='n'] { top: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+.cp-stack__handle[data-edge='s'] { bottom: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
+.cp-stack__handle[data-edge='e'] { right: -3px; top: 12px; bottom: 12px; width: 6px; cursor: ew-resize; }
+.cp-stack__handle[data-edge='w'] { left: -3px; top: 12px; bottom: 12px; width: 6px; cursor: ew-resize; }
+.cp-stack__handle:is([data-edge='nw'], [data-edge='ne'], [data-edge='sw'], [data-edge='se']) { width: 14px; height: 14px; }
+.cp-stack__handle[data-edge='nw'] { top: -3px; left: -3px; cursor: nwse-resize; }
+.cp-stack__handle[data-edge='se'] { bottom: -3px; right: -3px; cursor: nwse-resize; }
+.cp-stack__handle[data-edge='ne'] { top: -3px; right: -3px; cursor: nesw-resize; }
+.cp-stack__handle[data-edge='sw'] { bottom: -3px; left: -3px; cursor: nesw-resize; }
+.cp-stack__zone, .cp-stack__guide { position: absolute; left: 0; top: 0; translate: var(--x) var(--y); width: var(--w); height: var(--h); pointer-events: none; }
+.cp-stack__zone { z-index: 55; border-radius: var(--radius-xl); border: var(--border-width) solid var(--glass-edge); background: rgb(255 255 255 / 0.06); box-shadow: var(--glass-shadow); }
+.cp-stack__guide { z-index: 70; background: var(--color-accent); }
 /* Tab: they slide out to the right and fade, still mounted; visibility goes last so they stay painted while they leave */
 .cp-stack { transition: opacity 180ms ease-out, translate 220ms ease-out, visibility 0s 0s; }
 .cp-stack[data-hidden='true'] { opacity: 0; translate: 1.5rem 0; visibility: hidden; pointer-events: none; transition: opacity 160ms ease-in, translate 200ms ease-in, visibility 0s 200ms; }
@@ -1473,7 +1533,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-2);
   border-radius: var(--radius-xl); background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow);
 }
+.cp-list__head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-1) 0 var(--space-3); }
+.cp-list__heading { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-bold); }
 .cp-list__new { flex: none; justify-content: center; height: var(--pill-height); margin: 0 var(--space-1); border-radius: 999px; }
+/* folded down to the faces: the title, the group names, the words and the times go, the new session is a + */
+.cp-list[data-narrow='true'] { padding-inline: var(--space-1); }
+.cp-list[data-narrow='true'] .cp-list__head { justify-content: center; padding: 0; }
+.cp-list[data-narrow='true'] :is(.cp-list__heading, .cp-list__title, .cp-list__text, .cp-list__new-label, .cp-list__new .cp-kbd) { display: none; }
+.cp-list[data-narrow='true'] .cp-list__body { gap: var(--space-2); scrollbar-width: none; }
+.cp-list[data-narrow='true'] .cp-list__group + .cp-list__group { padding-top: var(--space-2); border-top: var(--border-width) solid var(--color-border); }
+.cp-list[data-narrow='true'] .cp-list__items[hidden] { display: grid; }
+.cp-list[data-narrow='true'] .cp-list__item { justify-content: center; min-height: 0; padding: var(--space-2) 0; }
+.cp-list[data-narrow='true'] .cp-list__new { width: var(--pill-height); margin: 0 auto; padding: 0; }
 .cp-list__body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--space-3); }
 .cp-list__group, .cp-list__items { display: grid; gap: 2px; }
 .cp-list__items[hidden] { display: none; }

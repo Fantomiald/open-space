@@ -13,8 +13,10 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
-import { addTo, fitColumns, FOCUS_TILING, maxColumns, nextFocus, removeFrom, replaceIn, retile, ROOM_TILING, type Columns } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, replaceIn, retile, ROOM_TILING, type Columns, type DropSlot } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
+import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowMode, type WindowsPreference } from './windows.ts';
+import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
 
@@ -28,6 +30,12 @@ export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
 export type View = 'salle' | 'repos' | 'focus';
 
 export const tilingOf = (view: View) => (view === 'focus' ? FOCUS_TILING : ROOM_TILING);
+export const arrangementOf = (view: View): Arrangement => (view === 'focus' ? 'focus' : 'room');
+export type { Arrangement };
+
+const savedWindows = sanitizeWindows(readPreference('windows', null));
+const writeWindows = (state: CommandPostState) =>
+  writePreference('windows', { mode: state.windowMode, free: state.free, sizes: state.gridSizes, stackWidth: state.stackWidth } satisfies WindowsPreference);
 export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
@@ -101,6 +109,16 @@ interface CommandPostState {
   zoomedId: string | null;
   /** Tab: the open sessions stay open but step aside, to see and click the room */
   stackHidden: boolean;
+  /** the grid's columns and rows resized by hand, for each arrangement (null: shared out evenly) */
+  gridSizes: Record<Arrangement, GridSizes | null>;
+  /** the width of the windows over the room pulled by hand, in fractions of the page's (null: as many columns as they need) */
+  stackWidth: number | null;
+  /** the windows of each arrangement in the grid, or placed by hand */
+  windowMode: Record<Arrangement, WindowMode>;
+  /** where the windows placed by hand are, by arrangement */
+  free: Record<Arrangement, FreeLayout>;
+  /** the mode asked for in the header, which the stack applies (it knows where the windows are on the screen) */
+  windowModeRequest: WindowMode | null;
   view: View;
   /** false until the user changes room: they then come in through the door instead of sitting at their desk */
   enteredThroughDoor: boolean;
@@ -154,6 +172,19 @@ interface CommandPostState {
   closeOpen: (sessionId: string) => void;
   /** sets the open windows (stack.ts makes them), kept for the next visit */
   arrange: (columns: Columns) => void;
+  /** a window dragged to another place of the grid */
+  moveWindow: (sessionId: string, to: DropSlot) => void;
+  /** the grid of the current arrangement resized by hand */
+  resizeGrid: (sizes: GridSizes | null) => void;
+  setStackWidth: (width: number | null) => void;
+  requestWindowMode: (mode: WindowMode | null) => void;
+  /** the windows of the current arrangement leave the grid, each where it was (boxes in fractions of their area) */
+  freeWindows: (boxes: Record<string, Box>) => void;
+  /** the windows placed by hand go back to the grid, in the order given */
+  tidyWindows: (columns: Columns) => void;
+  /** a window placed by hand moved or resized (in fractions of its area); it comes to the front */
+  placeWindow: (sessionId: string, box: Box) => void;
+  raiseWindow: (sessionId: string) => void;
   hideStack: (hidden: boolean) => void;
   /** after the window shrank: the column that no longer fits closes */
   fitOpen: () => void;
@@ -248,6 +279,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openIds: [],
   zoomedId: null,
   stackHidden: false,
+  gridSizes: savedWindows.sizes,
+  stackWidth: savedWindows.stackWidth,
+  windowMode: savedWindows.mode,
+  free: savedWindows.free,
+  windowModeRequest: null,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
   view: (['repos', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   enteredThroughDoor: false,
@@ -330,7 +366,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const { [message.sessionId]: _seen, ...seen } = s.seen;
         writePreference('seen', seen);
         writeDraft(message.sessionId, '');
-        set({ sessions, logs, seen });
+        set({ sessions, logs, seen, free: withoutWindow(s.free, message.sessionId) });
+        writeWindows(get());
         if (s.openIds.includes(message.sessionId)) get().closeOpen(message.sessionId);
         break;
       }
@@ -404,7 +441,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
     if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
     set({ zoomedId: null });
-    s.arrange(replaceIn(s.columns, s.selectedId, sessionId, tilingOf(s.view)));
+    s.arrange(replaceIn(s.columns, s.selectedId, sessionId));
     s.focus(sessionId);
   },
 
@@ -446,11 +483,64 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   arrange: (columns) => {
     const openIds = columns.flat();
+    const arrangement = arrangementOf(get().view);
     set((state) => ({
+      gridSizes: { ...state.gridSizes, [arrangement]: keepSizes(state.columns, columns, state.gridSizes[arrangement]) },
       columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null,
       launcherOpen: state.launcherOpen && openIds.length > 0,
     }));
     writeLayout(columns, get().selectedId);
+    writeWindows(get());
+  },
+
+  moveWindow: (sessionId, to) => {
+    const s = get();
+    s.arrange(moveIn(s.columns, sessionId, to, maxColumnsIn(s.view), tilingOf(s.view)));
+  },
+
+  resizeGrid: (sizes) => {
+    set((state) => ({ gridSizes: { ...state.gridSizes, [arrangementOf(state.view)]: sizes } }));
+    writeWindows(get());
+  },
+
+  setStackWidth: (width) => {
+    set({ stackWidth: width });
+    writeWindows(get());
+  },
+
+  requestWindowMode: (mode) => set({ windowModeRequest: mode }),
+
+  freeWindows: (boxes) => {
+    const arrangement = arrangementOf(get().view);
+    set((state) => ({
+      windowMode: { ...state.windowMode, [arrangement]: 'free' }, windowModeRequest: null,
+      free: { ...state.free, [arrangement]: { boxes: { ...state.free[arrangement].boxes, ...boxes }, order: state.openIds.filter((id) => boxes[id]) } },
+    }));
+    writeWindows(get());
+  },
+
+  tidyWindows: (columns) => {
+    const arrangement = arrangementOf(get().view);
+    get().arrange(columns);
+    set((state) => ({ windowMode: { ...state.windowMode, [arrangement]: 'grid' }, windowModeRequest: null }));
+    writeWindows(get());
+  },
+
+  placeWindow: (sessionId, box) => {
+    const arrangement = arrangementOf(get().view);
+    set((state) => {
+      const { boxes, order } = state.free[arrangement];
+      return { free: { ...state.free, [arrangement]: { boxes: { ...boxes, [sessionId]: box }, order: [...order.filter((id) => id !== sessionId), sessionId] } } };
+    });
+    writeWindows(get());
+  },
+
+  raiseWindow: (sessionId) => {
+    const arrangement = arrangementOf(get().view);
+    const { boxes, order } = get().free[arrangement];
+    if (order.at(-1) === sessionId || !boxes[sessionId]) return;
+    set((state) => ({ free: { ...state.free, [arrangement]: { boxes, order: [...order.filter((id) => id !== sessionId), sessionId] } } }));
+    writeWindows(get());
   },
 
   hideStack: (hidden) => set({ stackHidden: hidden && get().openIds.length > 0 }),
@@ -487,7 +577,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ view, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
     if (tilingOf(view) === tilingOf(s.view)) return;
     const columns = retile(s.columns, maxColumnsIn(view), tilingOf(view));
+    // the other arrangement keeps the sizes it was given: the windows are laid out again, not changed
+    const sizes = s.gridSizes;
     s.arrange(columns);
+    set({ gridSizes: sizes });
+    writeWindows(get());
     if (s.selectedId && !columns.flat().includes(s.selectedId)) {
       if (columns[0]) s.focus(columns[0][0]);
       else s.select(null);

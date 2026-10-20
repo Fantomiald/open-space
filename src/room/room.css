@@ -7,6 +7,12 @@
 /* the stage keeps the canvas ratio (4:3) and takes the largest size that fits */
 .cp-room__fit { min-height: 0; container-type: size; display: grid; place-items: center; }
 .cp-room__stage { position: relative; width: min(100cqw, 133.33cqh); aspect-ratio: 4 / 3; container-type: inline-size; background: var(--room-backdrop); border-radius: var(--radius-md); overflow: hidden; }
+/* moved with Alt+drag and zoomed with Alt+wheel (useRoomFrame.ts); the frame comes as variables, none on small screens */
+.cp-room__stage { translate: var(--room-x, 0) var(--room-y, 0); scale: var(--room-scale, 1); transform-origin: 0 0; }
+.cp-room__stage[data-settling] { transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1), scale 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+:root[data-alt] .cp-room__stage, :root[data-alt] .cp-room__canvas { cursor: grab; }
+.cp-room__stage[data-dragging], .cp-room__stage[data-dragging] .cp-room__canvas { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { .cp-room__stage[data-settling] { transition: none; } }
 .cp-room__zoom { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 4 / 3; }
 .cp-room__canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: pointer; }
 /* narrow screens: the empty corners of the room are cropped (the door stays in view), so people and tags stay readable */
@@ -45,6 +51,23 @@
   border-right: 2px solid var(--room-bubble-ink); border-bottom: 2px solid var(--room-bubble-ink); transform: translateX(-50%) rotate(45deg);
 }
 
+/* the hint about Alt, in the bottom corner of the room, until it was used once (ArrangeHint.tsx); wide screens only */
+/* the Alt tip, at the bottom of the page beside the status card (fixed, so it stays put while the room moves); light, to
+   read as a tip */
+.cp-room__arrange {
+  position: fixed; left: calc(20rem + 2 * var(--gutter)); bottom: var(--gutter); z-index: 3; max-width: 19rem; display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-text); color: var(--color-accent-text);
+  box-shadow: var(--shadow-raised); font: var(--weight-medium) var(--text-sm) / 1.4 var(--font-ui);
+}
+.cp-room__arrange ul { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); }
+.cp-room__arrange kbd {
+  display: inline-grid; place-items: center; min-width: 1.375rem; height: 1.375rem; padding: 0 0.35em; border: var(--border-width) solid currentColor; border-bottom-width: 2px;
+  border-radius: var(--radius-sm); font: inherit; line-height: 1; opacity: 0.85;
+}
+.cp-room__arrange button { display: grid; place-items: center; width: 24px; height: 24px; margin-top: -2px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; opacity: 0.6; cursor: pointer; }
+.cp-room__arrange button:hover { opacity: 1; }
+.cp-room__arrange .cp-icon { width: 14px; height: 14px; }
+@media (max-width: 60rem) { .cp-room__arrange { display: none; } }
 .cp-room__more { position: absolute; top: var(--space-2); right: var(--space-2); display: grid; justify-items: end; gap: var(--space-1); }
 .cp-room__more > button {
   padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-sm);
