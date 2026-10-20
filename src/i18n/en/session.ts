@@ -198,7 +198,7 @@ export const session: Dictionary['session'] = {
     new: 'New session',
     groups: { waiting: 'To see', working: 'At work', ready: 'Ready', resting: 'Resting' },
     hints: { waiting: '', working: '', ready: 'read', resting: 'stopped' },
-    open: 'Click: open it beside the others, or close it when open',
+    open: 'Click: open it beside the others, or go to it when open',
     collapse: (group: string) => `Fold or unfold: ${group}`,
     ago: (duration: string) => `${duration} ago`,
     empty: 'No session yet: start the first one on the right.',

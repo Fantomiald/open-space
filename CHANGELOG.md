@@ -1,9 +1,13 @@
 # Versions
 
+## 1.5.1
+
+- Mode focus : un clic sur une session déjà ouverte dans la liste va sur sa fenêtre au lieu de la fermer ; on la ferme avec sa croix.
+
 ## 1.5.0
 
 - Mode focus, pour bosser en public sans le pixel art : l'icône après le trait de l'en-tête (ou ⌘ . / Ctrl .) remplace la salle par la liste de toutes les sessions, rangées en À voir, Au travail, Prêtes (lues, en attente d'un message) et Au repos (arrêtées). Chacune avec la tête de son perso, son état en signe sur la tête, son prénom, son tag, ses derniers mots et depuis quand (« il y a 10 min » pour celles qui attendent). Chaque groupe se replie. Le ciel reste, à l'heure, sans personne.
-- En mode focus, un clic sur une session l'ouvre à côté des autres, un autre clic la ferme. La dernière ouverte arrive en haut à gauche et les autres glissent : trois colonnes, puis la première se coupe en deux, puis la deuxième, puis la troisième (six au plus). Nouvelle session (N) ne ferme rien : le lanceur s'ouvre comme une fenêtre de plus, Échap le ferme. Rien d'ouvert : le lanceur au milieu. Le champ de message reste sous une question ou une autorisation en attente.
+- En mode focus, un clic sur une session l'ouvre à côté des autres. La dernière ouverte arrive en haut à gauche et les autres glissent : trois colonnes, puis la première se coupe en deux, puis la deuxième, puis la troisième (six au plus). Nouvelle session (N) ne ferme rien : le lanceur s'ouvre comme une fenêtre de plus, Échap le ferme. Rien d'ouvert : le lanceur au milieu. Le champ de message reste sous une question ou une autorisation en attente.
 - La carte État a un groupe « Prêtes », et chacun de ses groupes se replie d'un clic sur son titre.
 
 ## 1.4.0

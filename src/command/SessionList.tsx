@@ -1,6 +1,6 @@
 // Focus mode's list of every session, in place of the room: what waits for the user, who works, who is ready for a
 // message, who rests. Each with its face (the crew member's look, as in the room), its state as a sign on the face, its
-// tag, its last words and how long it has been so. A click opens it beside the open ones, another click closes it; a
+// tag, its last words and how long it has been so. A click opens it beside the open ones (or goes to it when open); a
 // group folds away (remembered in this browser).
 import { useMemo, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
@@ -26,7 +26,6 @@ export function SessionList() {
   const openIds = useSessions((s) => s.openIds);
   const selectedId = useSessions((s) => s.selectedId);
   const show = useSessions((s) => s.show);
-  const closeOpen = useSessions((s) => s.closeOpen);
   const openNewSession = useSessions((s) => s.openNewSession);
   const [folded, setFolded] = useState(() => readPreference<string[]>('listFolded', []));
   const fold = (group: string) => {
@@ -73,7 +72,7 @@ export function SessionList() {
                   <li key={session.id}>
                     <button
                       type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)} title={words.open}
-                      onClick={() => (openIds.includes(session.id) ? closeOpen(session.id) : show(session.id))}
+                      onClick={() => show(session.id)}
                     >
                       <span className="cp-list__face">
                         <img src={faceOf(session)} alt="" width={36} height={36} />

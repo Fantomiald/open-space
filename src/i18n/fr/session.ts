@@ -209,7 +209,7 @@ export const session = {
     new: 'Nouvelle session',
     groups: { waiting: 'À voir', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos' },
     hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées' },
-    open: 'Clic : l’ouvrir à côté des autres, ou la fermer si elle est ouverte',
+    open: 'Clic : l’ouvrir à côté des autres, ou y aller si elle est ouverte',
     collapse: (group: string) => `Replier ou déplier : ${group}`,
     ago: (duration: string) => `il y a ${duration}`,
     empty: 'Aucune session pour l’instant : lance la première à droite.',
