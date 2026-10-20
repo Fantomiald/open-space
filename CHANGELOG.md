@@ -1,5 +1,11 @@
 # Versions
 
+## 1.5.0
+
+- Mode focus, pour bosser en public sans le pixel art : l'icône après le trait de l'en-tête (ou ⌘ . / Ctrl .) remplace la salle par la liste de toutes les sessions, rangées en À voir, Au travail, Prêtes (lues, en attente d'un message) et Au repos (arrêtées). Chacune avec la tête de son perso, son état en signe sur la tête, son prénom, son tag, ses derniers mots et depuis quand (« il y a 10 min » pour celles qui attendent). Chaque groupe se replie. Le ciel reste, à l'heure, sans personne.
+- En mode focus, un clic sur une session l'ouvre à côté des autres, un autre clic la ferme. La dernière ouverte arrive en haut à gauche et les autres glissent : trois colonnes, puis la première se coupe en deux, puis la deuxième, puis la troisième (six au plus). Nouvelle session (N) ne ferme rien : le lanceur s'ouvre comme une fenêtre de plus, Échap le ferme. Rien d'ouvert : le lanceur au milieu. Le champ de message reste sous une question ou une autorisation en attente.
+- La carte État a un groupe « Prêtes », et chacun de ses groupes se replie d'un clic sur son titre.
+
 ## 1.4.0
 
 - Maj+clic sur un agent (dans la salle ou la liste d'état) ouvre sa conversation avec celles déjà ouvertes : trois l'une au-dessus de l'autre, puis une nouvelle colonne vers la gauche, sans jamais couvrir la carte d'état ; les colonnes rétrécissent pour tenir (6 au plus, pour que la salle reste visible). Dans ces petites fenêtres, les outils passent en icônes à gauche d'un champ d'une ligne (commandes, modèle et effort, pièce jointe), sans onglets de sous-agents. Remote Control remonte dans l'en-tête, à droite de la loupe. Chaque fenêtre fait un tiers de la hauteur dès la deuxième colonne. Tab, hors d'un champ, les fait glisser hors de vue pour voir et cliquer la salle, Tab les ramène ; Maj+Tab garde la navigation au clavier. Un clic dans le vide ne ferme rien quand plusieurs sont ouvertes. Chaque fenêtre garde sa place : en fermer une ne fait remonter que celles du dessous, et rien n'est rechargé. Un clic sur un agent le montre à la place de la fenêtre active, un clic dans le vide ne ferme rien. Le bouton Agrandir (ou un double-clic sur l'en-tête) en montre une seule, Échap revient. Une fenêtre ouverte mais pas active qui finit sonne et reste « à voir ». La disposition revient au rechargement de la page.
