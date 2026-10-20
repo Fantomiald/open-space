@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { buildFeed } from '../state/feed.ts';
 import { isRunning } from '../state/labels.ts';
@@ -9,15 +10,42 @@ import { AsidePanel } from './AsidePanel.tsx';
 import { ChangesView, LineCounts } from './Changes.tsx';
 import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
 import { Composer, RemoteButton } from './Composer.tsx';
-import { Feed } from './Feed.tsx';
-import { CloseIcon, MaximizeIcon, MinimizeIcon, PauseIcon, PencilIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { AgentBack, Feed } from './Feed.tsx';
+import { CloseIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { useAttachments } from './useAttachments.ts';
+import { useDismiss } from './useDismiss.ts';
 
 const NO_EVENTS: never[] = [];
+
+/** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
+function SessionMenu({ session, searchOpen, onSearch, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onSwitchOff: () => void }) {
+  const send = useSessions((s) => s.send);
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(open, box, close);
+  const words = t.session.detail;
+  const pick = (action: () => void) => () => { action(); close(); };
+  return (
+    <div className="cp-detail__more" ref={box}>
+      <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} title={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
+      {open && (
+        <div className="cp-detail__menu" role="menu" aria-label={words.more}>
+          <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">⌘F</kbd></button>
+          {!session.remote && (
+            <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>
+          )}
+          {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(() => send({ t: 'rest', sessionId: session.id }))}><RestIcon />{words.rest}</button>}
+          <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
+        </div>
+      )}
+    </div>
+  );
+}
 const NO_DRAFTS: Readonly<Record<string, string>> = {};
 
 /**
@@ -52,6 +80,8 @@ export function Detail({ sessionId }: { sessionId: string }) {
   }, [sessionId, live, turns, helpers, send]);
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
+  // the sub-agent whose thread is shown, null for the conversation
+  const [agent, setAgent] = useState<string | null>(null);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
   // panel by session, so another session starts without them)
   const attachments = useAttachments();
@@ -93,6 +123,7 @@ export function Detail({ sessionId }: { sessionId: string }) {
             </h2>
           )}
           <StateBadge session={session} kind={attentionKind(session, seen)} />
+          <AgentBack sessionId={session.id} items={feed.items} agent={agent} setAgent={setAgent} />
           <div className="cp-detail__controls">
             {several && (
               <button
@@ -100,15 +131,12 @@ export function Detail({ sessionId }: { sessionId: string }) {
                 aria-label={zoomed ? t.session.detail.unzoom : t.session.detail.zoom} title={zoomed ? t.session.detail.unzoomTitle : t.session.detail.zoomTitle} onClick={toggleZoom}
               >{zoomed ? <MinimizeIcon /> : <MaximizeIcon />}</button>
             )}
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.search} aria-pressed={searchOpen} title={t.session.detail.searchTitle} onClick={() => openSearch(!searchOpen)}><SearchIcon /></button>
-            <RemoteButton session={session} />
             {isRunning(session) && (
               <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle} disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
             )}
-            {!session.resting && (
-              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.rest} title={t.session.detail.restTitle} onClick={() => send({ t: 'rest', sessionId: session.id })}><RestIcon /></button>
-            )}
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.switchOff} title={t.session.detail.switchOffTitle} onClick={() => setSwitchingOff(true)}><PowerIcon /></button>
+            {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
+            {session.remote && <RemoteButton session={session} />}
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -152,7 +180,7 @@ export function Detail({ sessionId }: { sessionId: string }) {
         : panelView === 'mcp' ? <McpView sessionId={session.id} cwd={session.cwd} onBack={back} />
           : panelView === 'context' ? <ContextView sessionId={session.id} onBack={back} />
             : panelView === 'usage' ? <UsageView sessionId={session.id} onBack={back} />
-              : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} />}
+              : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} agent={agent} setAgent={setAgent} />}
       <AsidePanel session={session} />
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>

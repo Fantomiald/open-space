@@ -6,7 +6,7 @@ import { formatDuration } from '../lib/format.ts';
 import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
-import { ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
+import { BackIcon, ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { Prose } from './Prose.tsx';
@@ -24,6 +24,20 @@ function AgentFace({ sessionId, agent }: { sessionId: string; agent: Subagent })
       <img src={head} alt="" width={22} height={22} />
       <span className="cp-feed__agent-dot" aria-hidden="true" />
     </span>
+  );
+}
+
+/**
+ * A small window has no room for the thread's tabs: while a sub-agent's thread is shown, its face sits in the head,
+ * and a click goes back to the conversation (the sub-agents stay one click away on their lines in it).
+ */
+export function AgentBack({ sessionId, items, agent, setAgent }: { sessionId: string; items: readonly FeedItem[]; agent: string | null; setAgent: (agentId: string | null) => void }) {
+  const shown = items.find((item): item is Subagent => item.kind === 'subagent' && item.agentId === agent);
+  if (!shown) return null;
+  return (
+    <button type="button" className="cp-detail__agent-back" aria-label={t.session.feed.backFrom(shown.name)} title={t.session.feed.backFrom(shown.name)} onClick={() => setAgent(null)}>
+      <BackIcon /><AgentFace sessionId={sessionId} agent={shown} />
+    </button>
   );
 }
 
@@ -304,7 +318,7 @@ function PeerMessage({ item, speaker }: { item: FeedItem & { kind: 'peer' }; spe
 /** What the pill counts as new while the user reads higher up: what was said or asked, not the tool calls. */
 const UNREAD_KINDS: ReadonlySet<ThreadEntry['kind']> = new Set(['assistant', 'peer', 'permission', 'subagent', 'notice', 'files', 'artifact']);
 
-/** "Mijoté pendant 10 s · fini à 22:53": how long the turn took and when it ended, like Claude Code's own line. */
+/** "Brewed for 10 s · done 22:53": how long the turn took and when it ended, like Claude Code's own line. */
 function turnLine(item: FeedItem & { kind: 'turn' }) {
   const words = t.session.feed;
   const duration = formatDuration(item.ms);
@@ -340,8 +354,10 @@ function Working({ items, speaker }: { items: readonly FeedItem[]; speaker: stri
  * `working`: the session is at it, so its thread ends on a typing indicator until something arrives. `drafts`: the
  * messages still being written, by who writes them ("chef" or a sub-agent id), shown as they grow.
  */
-export function Feed({ feed, sessionId, loading, speaker, working, drafts }: { feed: FeedData; sessionId: string; loading: boolean; speaker: string; working: boolean; drafts: Readonly<Record<string, string>> }) {
-  const [agent, setAgent] = useState<string | null>(null);
+export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent, setAgent }: {
+  feed: FeedData; sessionId: string; loading: boolean; speaker: string; working: boolean; drafts: Readonly<Record<string, string>>;
+  agent: string | null; setAgent: (agentId: string | null) => void;
+}) {
   // a picture, a page, a video or a text of the thread opened in large
   const [viewing, setViewing] = useState<Viewed | null>(null);
   const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed.items]);
