@@ -403,6 +403,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const beside = s.view === 'focus' && s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), FOCUS_TILING);
     if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
     if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
+    set({ zoomedId: null });
     s.arrange(replaceIn(s.columns, s.selectedId, sessionId, tilingOf(s.view)));
     s.focus(sessionId);
   },
