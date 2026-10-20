@@ -1,5 +1,9 @@
 # Versions
 
+## 1.5.2
+
+- Une fenêtre agrandie se remet à sa place quand on clique une autre session dans la liste ou la carte État, même quand les six places sont prises : la session cliquée prend la main, sans être agrandie.
+
 ## 1.5.1
 
 - Mode focus : un clic sur une session déjà ouverte dans la liste va sur sa fenêtre au lieu de la fermer ; on la ferme avec sa croix.
