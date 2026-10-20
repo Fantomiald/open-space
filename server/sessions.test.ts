@@ -22,6 +22,8 @@ class FakeProcess implements ProcessHandle {
   remoteCalls: boolean[] = [];
   remoteTitles: string[] = [];
   controls: Record<string, unknown>[] = [];
+  /** the control subtypes Claude Code refuses, as it does ultracode when dynamic workflows are off */
+  refused = new Set<string>();
   stopCalls: number[] = [];
   launch: LaunchOptions;
   handlers: ProcessHandlers;
@@ -38,6 +40,7 @@ class FakeProcess implements ProcessHandle {
   /** answers the control requests like Claude Code would (Remote Control, the MCP servers) */
   control(request: Record<string, unknown>) {
     this.controls.push(request);
+    if (this.refused.has(String(request.subtype))) return Promise.reject(new Error('refused'));
     if (request.subtype === 'remote_control') { this.remoteCalls.push(request.enabled === true); if (request.name) this.remoteTitles.push(String(request.name)); }
     if (request.subtype === 'remote_control') return Promise.resolve(request.enabled ? { session_url: 'https://claude.ai/code/session_test', bridge_session_id: 'cse_test' } : {});
     if (request.subtype === 'mcp_status') return Promise.resolve({ mcpServers: [{ name: 'docs', status: 'connected', config: { type: 'stdio' }, source: 'project', tools: [{ name: 'search' }] }] });
@@ -811,6 +814,37 @@ describe('process life cycle', () => {
     manager.send(id, 'again');
     assert.equal(processes[1].launch.effort, 'max');
     assert.equal(processes[1].launch.model, '');
+    await manager.shutdown();
+  });
+
+  it('starts a session with the effort and ultracode chosen in the launcher', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), model: 'opus', effort: 'xhigh', ultracode: true, text: 'hello' });
+    assert.equal(processes[0].launch.effort, 'xhigh');
+    assert.equal(processes[0].launch.ultracode, true);
+    assert.equal(find(id).ultracode, true);
+    await manager.shutdown();
+  });
+
+  it('turns ultracode on at once, launches with it afterwards, changes the permission mode, and stays off when Claude Code refuses ultracode', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), model: 'opus', text: 'hello' });
+    await manager.tune(id, { ultracode: true });
+    assert.deepEqual(processes[0].controls, [{ subtype: 'apply_flag_settings', settings: { ultracode: true } }]);
+    assert.equal(find(id).ultracode, true);
+    await manager.close(id);
+    manager.send(id, 'again');
+    assert.equal(processes[1].launch.ultracode, true);
+    await manager.tune(id, { ultracode: false });
+    assert.equal(find(id).ultracode, undefined);
+    await manager.tune(id, { permissionMode: 'plan' });
+    assert.deepEqual(processes[1].controls.at(-1), { subtype: 'set_permission_mode', mode: 'plan' });
+    assert.equal(find(id).permissionMode, 'plan');
+    processes[1].refused.add('apply_flag_settings');
+    await assert.rejects(manager.tune(id, { ultracode: true }));
+    assert.equal(find(id).ultracode, undefined);
     await manager.shutdown();
   });
 

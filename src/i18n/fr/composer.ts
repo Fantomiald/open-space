@@ -30,11 +30,13 @@ export const composer = {
     run: 'Exécuter',
   },
   tune: {
-    title: 'Modèle et effort de cette session, changés tout de suite',
+    title: 'Modèle, effort, permissions et ultracode',
     model: 'Modèle',
     effort: 'Effort',
+    permissions: 'Permissions',
     defaultEffort: 'auto',
     efforts: { low: 'bas', medium: 'moyen', high: 'élevé', xhigh: 'très élevé', max: 'max' },
+    ultracode: 'ultracode',
   },
   launcher: {
     label: 'Nouvelle session',

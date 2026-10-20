@@ -59,6 +59,14 @@ function parseOptions(raw: unknown): SessionOptions | null {
     if (typeof options.model !== 'string' || (options.model !== '' && !MODEL_PATTERN.test(options.model))) return null;
     result.model = options.model;
   }
+  if (options.effort !== undefined) {
+    if (!(EFFORTS as readonly unknown[]).includes(options.effort)) return null;
+    result.effort = options.effort as Effort;
+  }
+  if (options.ultracode !== undefined) {
+    if (typeof options.ultracode !== 'boolean') return null;
+    result.ultracode = options.ultracode;
+  }
   if (options.permissionMode !== undefined) {
     if (!isPermissionMode(options.permissionMode)) return null;
     result.permissionMode = options.permissionMode;
@@ -181,8 +189,14 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       if (!sessionId) return null;
       const model = raw.model === undefined || (typeof raw.model === 'string' && (raw.model === '' || MODEL_PATTERN.test(raw.model))) ? raw.model as string | undefined : null;
       const effort = raw.effort === undefined || raw.effort === '' || (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort | '' | undefined : null;
-      if (model === null || effort === null || (model === undefined && effort === undefined)) return null;
-      return { t: 'tune', sessionId, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) };
+      const ultracode = raw.ultracode === undefined || typeof raw.ultracode === 'boolean' ? raw.ultracode : null;
+      const permissionMode = raw.permissionMode === undefined || isPermissionMode(raw.permissionMode) ? raw.permissionMode : null;
+      if (model === null || effort === null || ultracode === null || permissionMode === null) return null;
+      if (model === undefined && effort === undefined && ultracode === undefined && permissionMode === undefined) return null;
+      return {
+        t: 'tune', sessionId, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}), ...(ultracode !== undefined ? { ultracode } : {}),
+        ...(permissionMode !== undefined ? { permissionMode } : {}),
+      };
     }
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
     case 'openTerminal': return { t: 'openTerminal' };

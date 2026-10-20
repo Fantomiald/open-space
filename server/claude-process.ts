@@ -41,6 +41,7 @@ export interface LaunchOptions {
   resume: boolean;
   model: string;
   effort?: Effort;
+  ultracode?: boolean;
   permissionMode: PermissionMode;
   /** the session's name, given to Claude when the conversation starts, with the user's name and their note (Preferences) */
   name: string;
@@ -69,7 +70,7 @@ export interface LaunchOptions {
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -78,6 +79,8 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   ];
   if (options.model) args.push('--model', options.model);
   if (options.effort) args.push('--effort', options.effort);
+  // a settings key of its own, so that it holds at any effort (`--effort ultracode` would replace the level)
+  if (options.ultracode) args.push('--settings', JSON.stringify({ ultracode: true }));
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');

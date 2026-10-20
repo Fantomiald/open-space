@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
+import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
 import { defaultFolder, formatDuration, homeRelative } from '../lib/format.ts';
-import { modeLabel, models } from '../state/labels.ts';
 import { availability, stillFree } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
@@ -11,11 +10,12 @@ import { useAttachments } from './useAttachments.ts';
 import { CloseIcon, SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
+import { TuneMenu } from './TuneMenu.tsx';
 
 
 /**
  * Where a session starts when none is open: a message field at the bottom, with its folder (the default one when left empty),
- * model and permissions; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
+ * model, effort, permissions and ultracode; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
  * which opens in its place. N puts the focus here; Shift+N starts a session at once (see App.tsx). `onClose`: shown as
  * a window beside the open sessions (focus mode), it can be closed; `replacing`: the session the new one will take the
  * place of, when no room is left.
@@ -40,6 +40,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const [folder, setFolder] = useState('');
   const preferences = useSessions((s) => s.preferences);
   const [model, setModel] = useState(preferences.model);
+  const [effort, setEffort] = useState<Effort>();
+  const [ultracode, setUltracode] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(preferences.permissionMode);
   // the settings arrive with the server's hello, maybe after the launcher showed
   useEffect(() => { setModel(preferences.model); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.permissionMode]);
@@ -70,13 +72,20 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     return () => window.clearTimeout(timer);
   }, [resuming, cwd, live, send]);
 
+  const tune = (change: TuneChange) => {
+    if (change.model !== undefined) setModel(change.model);
+    if (change.effort !== undefined) setEffort(change.effort || undefined);
+    if (change.ultracode !== undefined) setUltracode(change.ultracode);
+    if (change.permissionMode !== undefined) setPermissionMode(change.permissionMode);
+  };
+
   const ready = (resuming ? resumeId !== null : true) && !attachments.preparing;
   const start = () => {
     if (!ready || !cwd) return;
     const message = text.trim();
     const images = attachments.uploads;
     const files = attachments.files;
-    createSession({ cwd, model, permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
+    createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
     setText('');
     attachments.clear();
     setResumeId(null);
@@ -134,16 +143,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
           <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
-          <label className="cp-chip" data-select>
-            <span className="cp-sr-only">{words.model}</span>
-            <select value={model} onChange={(e) => setModel(e.target.value)}>{models().map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-          </label>
-          <label className="cp-chip" data-select title={modeLabel(permissionMode)}>
-            <span className="cp-sr-only">{words.permissions}</span>
-            <select value={permissionMode} onChange={(e) => setPermissionMode(e.target.value as PermissionMode)}>
-              {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
-            </select>
-          </label>
+          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} />
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
           <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>
         </div>

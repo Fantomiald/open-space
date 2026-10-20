@@ -68,6 +68,13 @@ describe('parseCatalog', () => {
     const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', effort: 'high', permissionMode: 'auto', name: 'Ana' });
     assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), ['--effort', 'high']);
   });
+
+  it('passes ultracode as a setting, next to the effort', () => {
+    const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', effort: 'high', ultracode: true, permissionMode: 'auto', name: 'Ana' });
+    assert.deepEqual(args.slice(args.indexOf('--settings'), args.indexOf('--settings') + 2), ['--settings', '{"ultracode":true}']);
+    assert.ok(args.includes('--effort'));
+    assert.ok(!buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', permissionMode: 'auto', name: 'Ana' }).includes('--settings'));
+  });
 });
 
 describe('server language', () => {

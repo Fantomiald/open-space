@@ -8,6 +8,10 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: '', effort: '' }), { t: 'tune', sessionId: 's1', model: '', effort: '' });
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', effort: 'xhigh' }), { t: 'tune', sessionId: 's1', effort: 'xhigh' });
     assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', effort: 'turbo' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', ultracode: true }), { t: 'tune', sessionId: 's1', ultracode: true });
+    assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', ultracode: 'yes' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', permissionMode: 'plan' }), { t: 'tune', sessionId: 's1', permissionMode: 'plan' });
+    assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', permissionMode: 'bypassPermissions' }), null);
     assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1', model: '--settings x' }), null);
     assert.equal(parseClientMessage({ t: 'tune', sessionId: 's1' }), null);
   });
@@ -16,6 +20,9 @@ describe('parseClientMessage', () => {
   it('accepts every well-formed message', () => {
     assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/a/b', model: 'haiku', permissionMode: 'plan', name: 'Zoé', text: '/kit:new' } }),
       { t: 'create', options: { cwd: '/a/b', model: 'haiku', permissionMode: 'plan', name: 'Zoé', text: '/kit:new' } });
+    assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/a', effort: 'max', ultracode: true } }), { t: 'create', options: { cwd: '/a', effort: 'max', ultracode: true } });
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/a', effort: 'turbo' } }), null);
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/a', ultracode: 1 } }), null);
     assert.deepEqual(parseClientMessage({ t: 'reply', sessionId: 's1', requestId: 'r-1', answers: { 'Which one?': 'A, B' } }), { t: 'reply', sessionId: 's1', requestId: 'r-1', answers: { 'Which one?': 'A, B' } });
     assert.deepEqual(parseClientMessage({ t: 'send', sessionId: 'abc-123', text: 'hello' }), { t: 'send', sessionId: 'abc-123', text: 'hello' });
     assert.deepEqual(parseClientMessage({ t: 'answer', sessionId: 's1', requestId: 'r-1', decision: 'always' }), { t: 'answer', sessionId: 's1', requestId: 'r-1', decision: 'always' });
