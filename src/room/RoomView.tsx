@@ -23,6 +23,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './g
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
+import type { Pose } from './sprites.ts';
 import { showsMetricsBadge } from './metrics.ts';
 import { boardContent } from './whiteboard.ts';
 
@@ -31,6 +32,8 @@ const FRAME_MS = 1000 / 15;
 /** `scale`: CSS pixels per canvas pixel. `offset`: how much of the canvas is cropped on the left (narrow screens zoom in). */
 interface StageLayout { width: number; scale: number; offset: number }
 const PRUNE_EVERY_MS = 250;
+const STANDING: Pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: false, gesture: 'none' };
+
 /** The boxes around the canvas: a click there is a click on the dark around the room. */
 const BACKDROP_CLASSES = ['cp-room', 'cp-room__fit', 'cp-room__stage', 'cp-room__zoom'];
 
@@ -98,6 +101,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const [sprites] = useState(() => chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
     : outfitFor(festival, scene.nameOf(personId), false, guests)));
+  // a click reaches someone up to the top of their hat
+  useEffect(() => { scene.heightOf = (personId) => sprites.height(STANDING, personId); }, [scene, sprites]);
   const [furniture] = useState(() => pixelFurniture(boardContent(festival, guests)));
   const [bubbles, setBubbles] = useState<readonly Bubble[]>([]);
   const [layout, setLayout] = useState<StageLayout>({ width: 0, scale: 1, offset: 0 });
@@ -200,7 +205,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
     if (character) { open(character.person.sessionId, event); return; }
-    const visitor = scene.visits?.at(point);
+    const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open
     if (!isInRoom(point)) { leave(); return; }
@@ -218,7 +223,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const point = roomPoint(event);
     const person = scene.personAt(point);
     // a session in front of a visitor, the door or the desk takes the click (the user, seated behind their laptop, does not)
-    const visitor = person && person !== PLAYER_ID ? null : scene.visits?.at(point) ?? null;
+    const visitor = person && person !== PLAYER_ID ? null : scene.visitorAt(point);
     hoveredId.current = visitor?.id ?? person;
     const thing: HoveredThing = (person && person !== PLAYER_ID) || visitor ? null
       : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;

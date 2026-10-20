@@ -5,7 +5,7 @@
 // Pure: RoomView steps it with the free names and the hour, draw.ts paints the visitors.
 import type { Activity, VisitSpot } from '../../shared/room-layout.ts';
 import type { Floor } from './floor.ts';
-import { distance, facingVector, toScreen, type Point } from './geometry.ts';
+import { distance, facingVector, onFigure, toScreen, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
 import type { Walker } from './scene.ts';
 import { blinkOffsetOf } from './sprites.ts';
@@ -155,13 +155,12 @@ export class Visits {
   /** Seated on a sofa, rather than standing. */
   static sitting(visitor: Visitor) { return visitor.phase === 'staying' && visitor.spot.lift !== undefined; }
 
-  /** The visitor under a canvas point (the one in front when two overlap), not those leaving. */
-  at(point: Point): Visitor | null {
+  /** The visitor under a canvas point (the one in front when two overlap), not those leaving; `heightOf`: see Scene. */
+  at(point: Point, heightOf: (personId: string) => number): Visitor | null {
     const hits = [...this.visitors.values()].filter((visitor) => {
       if (visitor.phase === 'leaving' || visitor.outside > 0) return false;
-      const feet = toScreen(visitor.position);
-      const top = feet.y - (Visits.sitting(visitor) ? visitor.spot.lift ?? 0 : 0) - 50;
-      return Math.abs(point.x - feet.x) <= 14 && point.y >= top && point.y <= feet.y + 4;
+      const lift = Visits.sitting(visitor) ? visitor.spot.lift ?? 0 : 0;
+      return onFigure(toScreen(visitor.position), point, lift + heightOf(visitor.id));
     });
     return hits.sort((a, b) => b.position.x + b.position.y - (a.position.x + a.position.y))[0] ?? null;
   }

@@ -1,5 +1,12 @@
 # Versions
 
+## 1.5.4
+
+- Un seul panneau pour le modèle, l'effort, les permissions et ultracode, dans une conversation (tout change tout de suite, même les permissions) et dans Nouvelle session, qui tient de nouveau sur une ligne.
+- Ultracode se coche par session (un éclair sur le bouton quand il est actif) ; il n'est proposé que si les workflows dynamiques sont activés dans Claude Code.
+- Le curseur d'effort chauffe en montant (couleur et lueur), et le max pulse et scintille.
+- Dans la salle, un clic sur un agent compte jusqu'en haut de son chapeau, et l'agent devant l'animal prend le clic.
+
 ## 1.5.3
 
 - Un sous-agent relancé par un message (SendMessage) revient dans la salle avec son type et sa tâche, même s'il avait été lancé par un process précédent de la conversation, et son rapport arrive à sa place.
