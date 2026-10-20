@@ -62,6 +62,10 @@ export const isInRoom = (screen: Point) => insideConvex(screen, ROOM_OUTLINE);
 /** Draw order of things standing on the floor: the further back, the earlier. */
 export const depthOf = (tile: Point) => tile.x + tile.y;
 
+/** A canvas point on someone whose feet are at `feet` on screen: `top`, from the floor to the top of their head or hat. */
+export const onFigure = (feet: Point, point: Point, top: number) =>
+  Math.abs(point.x - feet.x) <= 14 && point.y >= feet.y - top && point.y <= feet.y + 4;
+
 export const tileCenter = (tile: Point): Point => ({ x: Math.floor(tile.x) + 0.5, y: Math.floor(tile.y) + 0.5 });
 
 /** A floor heading for one of the eight directions, 0 to 7 clockwise from the back wall's (2: +x, 4: +y). */

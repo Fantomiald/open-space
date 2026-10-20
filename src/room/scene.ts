@@ -6,7 +6,7 @@ import { t } from '../i18n/index.ts';
 import type { Person, RoomPlan } from './cast.ts';
 import { createPet, cuddle, stepPet, type Pet } from './pet.ts';
 import type { Floor } from './floor.ts';
-import { depthOf, facingVector, tileCenter, toScreen, type Point } from './geometry.ts';
+import { depthOf, facingVector, onFigure, tileCenter, toScreen, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
 import { blinkOffsetOf, type Direction } from './sprites.ts';
 import { Visits } from './visitors.ts';
@@ -36,12 +36,6 @@ export function directionOf(heading: Point): Direction {
 /** Moves a walker along its path at walking speed. Returns true when it reached the end of its path. */
 const advance = (walker: Walker, ms: number) => advanceAlong(walker, WALK_SPEED * ms / 1000);
 
-/** A canvas point on someone, roughly their sprite's box above their feet. */
-function covers(walker: Walker, point: Point): boolean {
-  const feet = toScreen(walker.position);
-  return Math.abs(point.x - feet.x) <= 14 && point.y >= feet.y - 50 && point.y <= feet.y + 4;
-}
-
 export class Scene {
   readonly floor: Floor;
   readonly characters = new Map<string, Character>();
@@ -50,6 +44,8 @@ export class Scene {
   /** where the user sits, or null while they stand or walk */
   playerSpot: PlayerSpot | null;
   private headingFor: PlayerSpot | null = null;
+  /** How tall someone is drawn, from their feet to the top of their head or hat: RoomView sets it from the sprites. */
+  heightOf: (personId: string) => number = () => 52;
   /** walking to the door, to go to the other room */
   private goingOut = false;
   /** set once the user reached the door: the view moves to the other room */
@@ -133,9 +129,21 @@ export class Scene {
     if (this.pet) stepPet(this.pet, ms, this.floor);
   }
 
+  /** A canvas point on someone, their sprite's box above their feet, raised as high as they sit. */
+  private covers(walker: Walker, personId: string, lift: number, point: Point): boolean {
+    return onFigure(toScreen(walker.position), point, lift + this.heightOf(personId));
+  }
+
+  private coversCharacter(character: Character, point: Point): boolean {
+    const lift = character.phase === 'seated' ? this.floor.seatLift(character.seat) : 0;
+    return this.covers(character, character.person.id, lift, point);
+  }
+
+  private coversPlayer = (point: Point) => this.covers(this.player, PLAYER_ID, this.playerSpot?.lift ?? 0, point);
+
   /** The person under a canvas point (the one in front when several overlap); people walking out cannot be picked. */
   characterAt(point: Point): Character | null {
-    const hits = [...this.characters.values()].filter((character) => character.phase !== 'leaving' && covers(character, point));
+    const hits = [...this.characters.values()].filter((character) => character.phase !== 'leaving' && this.coversCharacter(character, point));
     hits.sort((a, b) => depthOf(b.position) - depthOf(a.position));
     return hits[0] ?? null;
   }
@@ -143,8 +151,8 @@ export class Scene {
   /** Who is under a canvas point, the user included (PLAYER_ID): their name tag shows in full. */
   personAt(point: Point): string | null {
     const character = this.characterAt(point);
-    if (character && !(covers(this.player, point) && depthOf(this.player.position) > depthOf(character.position))) return character.person.id;
-    return covers(this.player, point) ? PLAYER_ID : null;
+    if (character && !(this.coversPlayer(point) && depthOf(this.player.position) > depthOf(character.position))) return character.person.id;
+    return this.coversPlayer(point) ? PLAYER_ID : null;
   }
 
   walkPlayerTo(tile: Point) {
@@ -179,11 +187,19 @@ export class Scene {
     this.player.path = this.floor.pathToDoor(this.player.position);
   }
 
-  /** True when a canvas point falls on the pet; it gets a cuddle (it speaks, and hearts float up). */
+  /** The visitor under a canvas point, if visitors come to this room. */
+  visitorAt(point: Point) {
+    return this.visits?.at(point, this.heightOf) ?? null;
+  }
+
+  /** True when a canvas point falls on the pet, with no one in front of it there; it gets a cuddle (it speaks, and hearts float up). */
   pokePet(point: Point): boolean {
     if (!this.pet) return false;
     const paws = toScreen(this.pet.position);
     if (Math.abs(point.x - paws.x) > 16 || point.y < paws.y - 28 || point.y > paws.y + 4) return false;
+    const depth = depthOf(this.pet.position);
+    const front = [this.characterAt(point), this.visitorAt(point)].some((someone) => someone && depthOf(someone.position) > depth);
+    if (front) return false;
     cuddle(this.pet);
     return true;
   }

@@ -10,7 +10,7 @@ import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/f
 import { outfitFor } from './outfits.ts';
 import { Floor } from './floor.ts';
 import { distance, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
-import { Scene, directionOf } from './scene.ts';
+import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
@@ -315,6 +315,21 @@ describe('scene', () => {
     assert.equal(scene.pokePet({ x: paws.x, y: paws.y - 10 }), true);
     assert.equal(isSpeaking(scene.pet!), true);
     assert.equal(scene.pokePet({ x: paws.x + 60, y: paws.y }), false);
+  });
+
+  it('gives a click to whoever stands in front: a session before the pet behind it, up to the top of their hat', () => {
+    const scene = officeScene();
+    const pet = scene.pet!;
+    const position = { x: pet.position.x + 0.5, y: pet.position.y + 0.5 };
+    const person = { id: 'front', sessionId: 'front' } as Character['person'];
+    scene.characters.set('front', { person, seat: 0, phase: 'entering', position, heading: { x: 1, y: 0 }, path: [], blinkOffset: 0 });
+    const paws = toScreen(pet.position);
+    assert.equal(scene.pokePet({ x: paws.x, y: paws.y - 10 }), false, 'the session in front takes it');
+    const feet = toScreen(position);
+    const hat = { x: feet.x, y: feet.y - 64 };
+    assert.equal(scene.characterAt(hat), null, 'above the head');
+    scene.heightOf = () => 70;
+    assert.equal(scene.characterAt(hat)?.person.id, 'front', 'on the party hat');
   });
 
   it('walks the user out through the door when it is clicked, and brings them in through it in the other room', () => {
