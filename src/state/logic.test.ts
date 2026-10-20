@@ -5,7 +5,7 @@ import { availability, stillFree } from './availability.ts';
 import { contextLevel } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
-import { addTo, fitColumns, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
 import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
@@ -475,7 +475,43 @@ describe('sessions open side by side', () => {
     assert.equal(placement([['a', 'b']]).rows, 2);
     const { rows, slots } = placement([['a', 'b', 'c'], ['d']]);
     assert.equal(rows, 3);
-    assert.deepEqual(slots.at(-1), { id: 'd', column: 1, row: 0 });
+    assert.deepEqual(slots.at(-1), { id: 'd', column: 1, row: 0, span: 1 });
+  });
+
+  it('in focus mode, opens the newest on the left, three columns, then splits the first, the second, the third, and refuses past six', () => {
+    let columns: string[][] = [];
+    for (const id of ['a', 'b', 'c']) columns = addTo(columns, id, 3, FOCUS_TILING)!;
+    assert.deepEqual(columns, [['c'], ['b'], ['a']]);
+    columns = addTo(columns, 'd', 3, FOCUS_TILING)!;
+    assert.deepEqual(columns, [['d', 'c'], ['b'], ['a']]);
+    columns = addTo(columns, 'e', 3, FOCUS_TILING)!;
+    assert.deepEqual(columns, [['e', 'd'], ['c', 'b'], ['a']]);
+    columns = addTo(columns, 'f', 3, FOCUS_TILING)!;
+    assert.deepEqual(columns, [['f', 'e'], ['d', 'c'], ['b', 'a']]);
+    assert.ok(isFull(columns, 3, FOCUS_TILING));
+    assert.equal(addTo(columns, 'g', 3, FOCUS_TILING), null);
+  });
+
+  it('in focus mode, moves every window along when one closes, is replaced or no longer fits', () => {
+    assert.deepEqual(removeFrom([['e', 'd'], ['c', 'b'], ['a']], 'e', FOCUS_TILING), [['d', 'c'], ['b'], ['a']]);
+    assert.deepEqual(removeFrom([['b'], ['a']], 'b', FOCUS_TILING), [['a']]);
+    assert.deepEqual(replaceIn([['f', 'e'], ['d', 'c'], ['b', 'a']], 'c', 'x', FOCUS_TILING), [['x', 'f'], ['e', 'd'], ['b', 'a']]);
+    assert.deepEqual(fitColumns([['e', 'd'], ['c', 'b'], ['a']], 2, FOCUS_TILING), [['e', 'd'], ['c', 'b']], 'the oldest close');
+    assert.deepEqual(fitColumns([['c', 'b'], ['a']], 3, FOCUS_TILING), [['c'], ['b'], ['a']], 'a wider window spreads them out');
+  });
+
+  it('in focus mode, starts from the left and lets a window alone in its column take its height', () => {
+    const { rows, slots } = placement([['d', 'c'], ['b'], ['a']], FOCUS_TILING);
+    assert.equal(rows, 2);
+    assert.deepEqual(slots.find(({ id }) => id === 'd'), { id: 'd', column: 2, row: 0, span: 1 }, 'the first column is the last from the right');
+    assert.deepEqual(slots.find(({ id }) => id === 'b'), { id: 'b', column: 1, row: 0, span: 2 });
+  });
+
+  it('lays the open windows out again when focus mode comes or goes, closing the ones with no room', () => {
+    assert.deepEqual(retile([['a', 'b', 'c'], ['d']], 3, FOCUS_TILING), [['d', 'c'], ['b'], ['a']], 'the last opened first');
+    assert.deepEqual(retile([['d', 'c'], ['b'], ['a']], 2), [['a', 'b', 'c'], ['d']], 'and back in the order they were opened');
+    assert.deepEqual(retile([['f', 'e'], ['d', 'c'], ['b', 'a']], 1), [['a', 'b', 'c']]);
+    assert.equal(maxColumns(1440, FOCUS_TILING), 3, 'three columns beside the list on a laptop');
   });
 
   it('fits two columns from about 1100px, never more, and closes the one that no longer fits', () => {

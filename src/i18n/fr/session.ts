@@ -203,11 +203,23 @@ export const session = {
     withdraw: 'Retirer la question',
     closeTitle: 'Fermer',
   },
+  /** focus mode's list of sessions, beside their windows */
+  list: {
+    title: 'Sessions',
+    new: 'Nouvelle session',
+    groups: { waiting: 'À voir', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos' },
+    hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées' },
+    open: 'Clic : l’ouvrir à côté des autres, ou la fermer si elle est ouverte',
+    collapse: (group: string) => `Replier ou déplier : ${group}`,
+    ago: (duration: string) => `il y a ${duration}`,
+    empty: 'Aucune session pour l’instant : lance la première à droite.',
+  },
   /** where the sessions are at, in the corner of the screen */
   status: {
     title: 'État',
     waiting: 'À toi',
     working: 'Au travail',
+    ready: 'Prêtes',
     starting: 'démarre',
     subagents: (count: number) => (count === 1 ? '1 sous-agent' : `${count} sous-agents`),
     fold: 'Replier',

@@ -49,6 +49,14 @@ h1, h2, p { margin: 0; }
 .cp-header .cp-icon-button { width: var(--control-height); }
 .cp-header__where .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
 .cp-header__where .cp-segmented button { height: 100%; }
+/*
+ * between the two rooms and focus mode: two ways of looking, not three rooms. It sits as far from what shows on each
+ * side: a pressed button shows its edge, the others only their icon (inside --space-3 of padding), so the side of the
+ * pressed one gets that padding as extra room.
+ */
+.cp-header__divider { align-self: center; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
+[aria-pressed='true'] + .cp-header__divider { margin-left: calc(var(--space-1) + var(--space-3)); }
+.cp-header__divider:has(+ [aria-pressed='true']) { margin-right: calc(var(--space-1) + var(--space-3)); }
 .cp-header__brand { display: flex; align-items: center; gap: var(--space-2); }
 .cp-header__title { font-size: var(--text-md); font-weight: var(--weight-bold); letter-spacing: 0.01em; }
 /* a status light: lit when the bridge is connected */
@@ -133,6 +141,19 @@ h1, h2, p { margin: 0; }
     width: min(calc(var(--columns) * var(--detail-width) + (var(--columns) - 1) * var(--gutter)), calc(100vw - 20rem - 3 * var(--gutter)));
   }
   .cp-stack[data-columns='2'] { --columns: 2; }
+  .cp-stack[data-columns='3'] { --columns: 3; }
+  /* focus mode: the session list on the left, the windows (or the launcher) fill the rest */
+  .cp-main[data-view='focus'] { grid-template-columns: var(--list-width) minmax(0, 1fr); }
+  .cp-main[data-view='focus'] > .cp-main__content { padding: var(--gutter) 0 var(--gutter) var(--gutter); }
+  .cp-main[data-view='focus'] > :is(.cp-stack, .cp-launcher) { grid-column: 2; justify-self: stretch; width: auto; margin: var(--gutter); }
+  /* the launcher in the middle of the free space (or of its window), as a chat app opens */
+  .cp-main[data-view='focus'] .cp-launcher { justify-content: center; }
+  .cp-main[data-view='focus'] .cp-launcher > * { width: min(100%, 44rem); margin-inline: auto; }
+  .cp-main[data-view='focus'] .cp-launcher__head { display: flex; justify-content: center; border-bottom: 0; }
+  .cp-main[data-view='focus'] .cp-launcher__body { flex: 0 1 auto; }
+  .cp-main[data-view='focus'] .cp-launcher__intro { justify-items: center; text-align: center; }
+  .cp-main[data-view='focus'] .cp-launcher__intro p { max-width: 46ch; }
+  .cp-main[data-view='focus'] .cp-launcher__keys { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2) var(--space-5); }
 }
 @media (max-width: 60rem) {
   .cp-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
@@ -165,6 +186,7 @@ h1, h2, p { margin: 0; }
   .cp-main .cp-launcher__composer { padding: var(--space-2); }
   .cp-main .cp-launcher__box textarea { min-height: 2.75rem; }
   .cp-app .cp-room { padding: 0 var(--gutter); }
+  .cp-main[data-view='focus'] > .cp-main__content { padding: 0 var(--gutter); }
   /* the field's settings on one row: smaller chips, the folder takes what is left, and the start button is a round arrow */
   .cp-main .cp-launcher__options { flex-wrap: nowrap; gap: var(--space-1); }
   .cp-main .cp-launcher__options :is(.cp-chip select, .cp-chip input, .cp-person__trigger) { height: 1.75rem; padding-left: var(--space-2); font-size: var(--text-xs); }
@@ -277,9 +299,12 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-stack__slot { min-width: 0; min-height: 0; display: grid; }
 .cp-stack__slot[data-column='0'] { grid-column: -2; }
 .cp-stack__slot[data-column='1'] { grid-column: -3; }
+.cp-stack__slot[data-column='2'] { grid-column: -4; }
 .cp-stack__slot[data-row='0'] { grid-row: 1; }
 .cp-stack__slot[data-row='1'] { grid-row: 2; }
 .cp-stack__slot[data-row='2'] { grid-row: 3; }
+/* focus mode: a window alone in its column takes its whole height */
+.cp-stack__slot[data-span='2'] { grid-row: 1 / span 2; }
 /* zoomed: it covers the whole grid, the others stay where they are underneath (hidden, still scrolled where they were) */
 .cp-stack__slot[data-zoomed='true'] { grid-area: 1 / 1 / -1 / -1; z-index: 1; }
 .cp-stack[data-zoomed='true'] > .cp-stack__slot:not([data-zoomed='true']) { visibility: hidden; }
@@ -289,19 +314,27 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) { .cp-stack, .cp-stack[data-hidden='true'] { translate: none; } }
 /* a small window keeps its height for the thread: a one-line field, no tabs, a tighter head */
 .cp-stack__slot[data-compact='true'] .cp-composer textarea { height: 2.5rem; min-height: 0; resize: none; overflow-y: auto; }
+/* a long hint stays on the field's one line, cut short, rather than wrap under it */
+.cp-stack__slot[data-compact='true'] .cp-composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cp-stack__slot[data-compact='true'] .cp-thread__bar { display: none; }
 .cp-stack[data-rows='3'] > [data-compact='true'] .cp-detail__line { display: none; }
 .cp-stack__slot[data-compact='true'] .cp-detail__head { gap: var(--space-1); padding: var(--space-2) var(--space-3); }
 .cp-stack__slot[data-compact='true'] .cp-detail__title h2 { font-size: var(--text-lg); }
 /* the state as its dot alone, its words in the tooltip: the head has six buttons to fit */
 .cp-stack__slot[data-compact='true'] .cp-detail__title .cp-badge { font-size: 0; gap: 0; padding: 0 0.45rem; }
+/* three columns (focus mode): smaller buttons, a long name cut short, renaming from the window made bigger */
+.cp-stack[data-columns='3'] > [data-compact='true'] .cp-detail__title { gap: var(--space-2); }
+.cp-stack[data-columns='3'] > [data-compact='true'] .cp-detail__title h2 > .cp-icon-button { display: none; }
+.cp-stack[data-columns='3'] > [data-compact='true'] .cp-detail__controls { flex: none; gap: 2px; }
+.cp-stack[data-columns='3'] > [data-compact='true'] .cp-detail__controls .cp-icon-button { width: 1.75rem; height: 1.75rem; }
 /* with several, the one the keyboard goes to has its edge lit; one waiting for an answer, the permission tone */
 .cp-stack:not([data-count='1']) .cp-detail[data-active='true'] { border-color: color-mix(in srgb, var(--color-accent) 55%, transparent); }
 .cp-stack:not([data-count='1']) .cp-detail:is([data-attention='permission'], [data-attention='question']) { border-color: color-mix(in srgb, var(--tone-permission) 60%, transparent); }
-/* a question or a permission in a small window takes the field's place (it says to answer above anyway) and scrolls if it must */
+/* a question or a permission in a small window over the room takes the field's place (it says to answer above anyway) and
+   scrolls if it must; focus mode's windows are tall enough for both */
 .cp-detail > :is(.cp-permission, .cp-question) { flex: 0 1 auto; min-height: 0; overflow: auto; }
 .cp-permission__detail { min-height: 2.25rem; }
-.cp-stack__slot[data-compact='true'] > .cp-detail:is([data-attention='permission'], [data-attention='question']) > .cp-composer { display: none; }
+.cp-main:not([data-view='focus']) .cp-stack__slot[data-compact='true'] > .cp-detail:is([data-attention='permission'], [data-attention='question']) > .cp-composer { display: none; }
 /* what "always" allows moves to that button's tooltip */
 .cp-stack__slot[data-compact='true'] .cp-permission__always { display: none; }
 .cp-stack__slot[data-compact='true'] .cp-detail > :is(.cp-permission, .cp-question) { margin: var(--space-2) var(--space-3) var(--space-2); padding: var(--space-2) var(--space-3); }
@@ -322,6 +355,7 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-detail__head { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
 .cp-detail__title { display: flex; align-items: center; gap: var(--space-3); }
 .cp-detail__title h2 { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-xl); min-width: 0; }
+.cp-detail__name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cp-detail__controls { margin-left: auto; display: flex; gap: var(--space-1); }
 .cp-detail__edit input { font-size: var(--text-md); }
 .cp-detail__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
@@ -1019,6 +1053,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-status__count { display: inline-grid; place-items: center; min-width: var(--count-height); height: var(--count-height); padding: 0 var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: var(--weight-bold); font-variant-numeric: tabular-nums; }
 .cp-status__count[data-kind='waiting'] { background: var(--tone-permission); color: var(--color-accent-text); }
 .cp-status__count[data-kind='working'] { background: var(--tone-work-soft); color: var(--tone-work); }
+.cp-status__count[data-kind='ready'] { background: var(--tone-idle-soft); color: var(--tone-idle); }
 .cp-status__body { display: grid; gap: var(--space-3); max-height: 18rem; overflow-y: auto; }
 /* a list longer than the card fades out at the edge with more beyond it (a scroll-driven mask: none when it does not scroll) */
 @property --more-above { syntax: '<length>'; inherits: false; initial-value: 0px; }
@@ -1042,6 +1077,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-status__dot { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--tone-reply); }
 .cp-status__item[data-kind='permission'] .cp-status__dot, .cp-status__item[data-kind='question'] .cp-status__dot { background: var(--tone-permission); box-shadow: 0 0 0 3px var(--tone-permission-soft); }
 .cp-status__item[data-kind='error'] .cp-status__dot { background: var(--tone-error); }
+.cp-status__item[data-kind='ready'] .cp-status__dot { background: var(--tone-idle); }
 .cp-status__item[data-kind='working'] .cp-status__dot { background: var(--tone-work); animation: cp-status-pulse 1.6s ease-in-out infinite; }
 @keyframes cp-status-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .cp-status__item[data-kind='working'] .cp-status__dot { animation: none; } }
@@ -1063,7 +1099,10 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 
 /* ── The launcher: the right column while no session is open ── */
 .cp-launcher { position: relative; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
-.cp-launcher__head { flex: none; padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-launcher__head { position: relative; flex: none; padding: var(--space-3) var(--space-4); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-launcher__close { position: absolute; top: 50%; right: var(--space-3); translate: 0 -50%; }
+/* a small window beside the open sessions (focus mode): the keyboard shortcuts give way to the field */
+.cp-main .cp-stack__slot[data-compact='true'] .cp-launcher__keys { display: none; }
 .cp-launcher__body { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: var(--space-4); display: grid; align-content: end; gap: var(--space-3); }
 .cp-launcher__intro { display: grid; gap: var(--space-3); }
 .cp-launcher__intro h2 { font-size: var(--text-xl); text-wrap: balance; }
@@ -1321,3 +1360,55 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   background: var(--glass-strong); border: var(--border-width) solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--glass-shadow);
 }
 
+
+/* ── Focus mode's session list (SessionList.tsx) ── */
+.cp-main__content:has(> .cp-list) { display: grid; overflow: hidden; }
+.cp-list {
+  --color-surface-raised: rgb(255 255 255 / 0.08); --color-border: rgb(255 255 255 / 0.07);
+  min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-xl); background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow);
+}
+.cp-list__new { flex: none; justify-content: center; height: var(--pill-height); margin: 0 var(--space-1); border-radius: 999px; }
+.cp-list__body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--space-3); }
+.cp-list__group, .cp-list__items { display: grid; gap: 2px; }
+.cp-list__items[hidden] { display: none; }
+.cp-list__items { list-style: none; margin: 0; padding: 0; }
+.cp-list__title { margin: 0; font-size: var(--text-xs); font-weight: var(--weight-bold); }
+.cp-list__title > button {
+  width: 100%; display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-3); border: 0; border-radius: var(--radius-sm);
+  background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
+}
+.cp-list__title > button:hover { background: var(--color-surface-raised); }
+.cp-list__title > button > :not(.cp-list__hint) { flex: none; }
+.cp-list__title .cp-icon { align-self: center; width: 0.75rem; height: 0.75rem; color: var(--color-text-muted); transition: transform var(--duration) var(--easing); }
+.cp-list__title > button[aria-expanded='false'] .cp-icon { transform: rotate(-90deg); }
+.cp-list__hint { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: var(--weight-regular); color: var(--color-text-muted); }
+.cp-list__item {
+  width: 100%; min-height: 3.25rem; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+  border: var(--border-width) solid transparent; border-radius: var(--radius-md); background: none; color: var(--color-text); text-align: left;
+  transition: background var(--duration) var(--easing);
+}
+.cp-list__item:hover { background: var(--color-surface-raised); }
+.cp-list__item[aria-current='true'] { background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-color: color-mix(in srgb, var(--color-accent) 32%, transparent); }
+/* the open one the keyboard goes to, lit like its window's edge */
+.cp-list__item[data-active='true'] { border-color: color-mix(in srgb, var(--color-accent) 55%, transparent); }
+.cp-list__face { position: relative; flex: none; width: 2.25rem; height: 2.25rem; }
+.cp-list__face img { width: 100%; height: 100%; image-rendering: pixelated; }
+.cp-list__group[data-group='resting'] .cp-list__face img { filter: grayscale(0.7); opacity: 0.75; }
+/* the state as a sign on the face, as over a head in the room */
+.cp-list__sign {
+  position: absolute; right: -0.25rem; bottom: -0.25rem; display: grid; place-items: center; width: 1.125rem; height: 1.125rem; border-radius: 50%;
+  font-size: 0.6875rem; font-weight: var(--weight-bold); line-height: 1; box-shadow: 0 0 0 2px var(--glass-strong);
+}
+.cp-list__item:is([data-status='permission'], [data-status='question']) .cp-list__sign { background: var(--tone-permission); color: var(--tone-permission-soft); }
+.cp-list__item[data-status='finished'] .cp-list__sign { background: var(--tone-reply); color: var(--tone-reply-soft); }
+.cp-list__item[data-status='error'] .cp-list__sign { background: var(--tone-error); color: var(--tone-error-soft); }
+.cp-list__item[data-status='working'] .cp-list__sign { background: var(--tone-work); color: var(--tone-work-soft); }
+.cp-list__text { flex: 1; min-width: 0; display: grid; }
+.cp-list__line { min-width: 0; display: flex; align-items: baseline; gap: var(--space-2); }
+.cp-list__name { flex: none; font-weight: var(--weight-medium); }
+.cp-list__last { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-list__tag { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; align-self: center; line-height: calc(var(--badge-height) - 2 * var(--border-width)); }
+.cp-list__agents { flex: none; font-size: var(--text-xs); font-weight: var(--weight-bold); color: var(--tone-work); }
+.cp-list__time { flex: none; margin-left: auto; font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.cp-list__empty { margin: 0; padding: var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
