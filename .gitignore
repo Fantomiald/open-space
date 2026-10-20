@@ -57,3 +57,4 @@ src/zz-*
 # Operating system files
 .DS_Store
 Thumbs.db
+.impeccable/
