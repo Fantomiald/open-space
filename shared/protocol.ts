@@ -145,6 +145,8 @@ export interface SessionInfo {
   activeModel: string;
   /** chosen in the session; none = the model's default */
   effort?: Effort;
+  /** Claude Code's ultracode: a workflow of several agents on every task, at any effort */
+  ultracode?: boolean;
   permissionMode: PermissionMode;
   /** the name the session's Claude was last told it has; differs from `name` after a rename (or for older sessions) */
   introducedAs?: string;
@@ -236,6 +238,9 @@ export interface SlashCommand { name: string; description?: string; argumentHint
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type Effort = (typeof EFFORTS)[number];
 
+/** What the session's model panel changes ('' : the default); what is left out stays as it is. */
+export interface TuneChange { model?: string; effort?: Effort | ''; ultracode?: boolean; permissionMode?: PermissionMode }
+
 /** A model Claude Code offers (from its initialize answer): `value` is what --model takes ('default' : its default). */
 export interface ModelChoice { value: string; label: string; description?: string; efforts: Effort[] }
 
@@ -248,6 +253,8 @@ export interface SessionOptions {
   /** absolute path, must be inside one of the configured roots */
   cwd: string;
   model?: string;
+  effort?: Effort;
+  ultracode?: boolean;
   permissionMode?: PermissionMode;
   name?: string;
   /** first message to send, e.g. "/kit:new" */
@@ -348,8 +355,8 @@ export type ClientMessage =
   /** what a session changed in its files */
   | { t: 'changes'; sessionId: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
-  /** changes the model or the effort of a session, at once if its process runs, else from its next launch ('' : the default) */
-  | { t: 'tune'; sessionId: string; model?: string; effort?: Effort | '' }
+  /** changes the model, the effort, ultracode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
+  | ({ t: 'tune'; sessionId: string } & TuneChange)
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
   /** opens a terminal window on the user's computer, in the default folder */
   | { t: 'openTerminal' }

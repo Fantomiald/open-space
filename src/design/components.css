@@ -1144,6 +1144,12 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 .cp-chip input::placeholder { color: var(--color-text-muted); }
 .cp-chip select:hover, .cp-chip input:hover { border-color: var(--color-border-strong); }
+/* in the launcher, the model button is one more chip of the row */
+.cp-launcher__options .cp-tune > .cp-tune__chip {
+  height: 2rem; padding: 0 var(--space-3); border-color: var(--color-border); font-weight: var(--weight-regular); line-height: calc(2rem - 2 * var(--border-width));
+}
+.cp-launcher__options .cp-tune > .cp-tune__chip:hover:not(:disabled) { background: var(--color-surface); border-color: var(--color-border-strong); }
+.cp-launcher__options .cp-tune { min-width: 0; }
 .cp-launcher__send {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: var(--space-2); height: 2rem; padding: 0 var(--space-3) 0 var(--space-4);
   border: 0; border-radius: 999px; background: var(--color-accent); color: var(--color-accent-text); font-size: var(--text-sm); font-weight: var(--weight-bold);
@@ -1326,6 +1332,77 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-tune__panel {
   position: absolute; bottom: calc(100% + var(--space-2)); left: 0; z-index: 20; width: 16rem; display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4);
   background: var(--glass-strong); border: var(--border-width) solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--glass-shadow);
+}
+/*
+ * The effort heats up as it rises, as in Claude Code: the slider fills and glows from cool to hot, the level takes
+ * its colour, and max shimmers. Ultracode gets a rainbow edge that turns, on the panel and on the chip.
+ */
+.cp-tune {
+  position: relative; --heat: var(--color-accent); --glow: 0px;
+  --rainbow: var(--tone-work), var(--tone-reply), var(--tone-permission), var(--tone-error), var(--tone-peer), var(--color-accent), var(--tone-work);
+}
+.cp-tune[data-effort='low'] { --heat: var(--tone-work); --glow: 3px; }
+.cp-tune[data-effort='medium'] { --heat: var(--tone-reply); --glow: 5px; }
+.cp-tune[data-effort='high'] { --heat: var(--tone-permission); --glow: 8px; }
+.cp-tune[data-effort='xhigh'] { --heat: var(--tone-error); --glow: 11px; }
+.cp-tune[data-effort='max'] { --heat: var(--tone-peer); --glow: 15px; }
+.cp-tune__level { color: var(--heat); transition: color var(--duration) var(--easing); }
+.cp-tune[data-effort='auto'] .cp-tune__level { color: inherit; }
+.cp-effort output { color: var(--heat); font-weight: var(--weight-medium); transition: color var(--duration) var(--easing); }
+.cp-tune[data-effort='auto'] .cp-effort output { color: var(--color-text-muted); font-weight: var(--weight-regular); }
+.cp-effort input[type='range']::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, var(--color-accent), var(--heat)) 0 0 / var(--fill) 100% no-repeat, var(--track);
+}
+.cp-effort input[type='range']::-moz-range-progress { background: linear-gradient(90deg, var(--color-accent), var(--heat)); }
+.cp-effort input[type='range']::-webkit-slider-thumb {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.45), 0 0 var(--glow) calc(var(--glow) / 3) color-mix(in srgb, var(--heat) 70%, transparent);
+  transition: box-shadow var(--duration) var(--easing);
+}
+.cp-effort input[type='range']::-moz-range-thumb { box-shadow: 0 1px 3px rgb(0 0 0 / 0.45), 0 0 var(--glow) calc(var(--glow) / 3) color-mix(in srgb, var(--heat) 70%, transparent); }
+.cp-tune[data-effort='max'] .cp-effort input[type='range']::-webkit-slider-thumb { animation: cp-effort-throb 1.4s ease-in-out infinite; }
+.cp-tune[data-effort='max'] .cp-effort input[type='range']::-moz-range-thumb { animation: cp-effort-throb 1.4s ease-in-out infinite; }
+/* max and ultracode: the words themselves shimmer */
+.cp-tune[data-effort='max'] :is(.cp-effort output, .cp-tune__level), .cp-ultracode:has(input:checked) strong {
+  background: linear-gradient(90deg, var(--rainbow)) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: cp-shimmer 2.4s linear infinite;
+}
+/* the ultracode switch */
+.cp-ultracode { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); cursor: pointer; }
+.cp-ultracode > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cp-ultracode strong { font-weight: var(--weight-medium); }
+.cp-ultracode .cp-icon { color: var(--color-text-muted); transition: color var(--duration) var(--easing); }
+/* the lightning of ultracode, lit when it is on: in the panel, and before the model in the button */
+.cp-ultracode:has(input:checked) .cp-icon, .cp-tune__ultracode { color: var(--tone-permission); }
+.cp-tune__ultracode { display: inline-block; margin-right: var(--space-1); vertical-align: -0.2em; }
+.cp-tune__ultracode .cp-icon { width: 0.95rem; height: 0.95rem; }
+.cp-ultracode input {
+  flex: none; position: relative; appearance: none; width: 2.125rem; height: 1.25rem; margin: 0; border-radius: 999px; background: var(--track); cursor: pointer;
+  transition: background var(--duration) var(--easing), box-shadow var(--duration) var(--easing);
+}
+.cp-ultracode input::before {
+  content: ''; position: absolute; top: 3px; left: 3px; width: calc(1.25rem - 6px); aspect-ratio: 1; border-radius: 50%; background: var(--selected);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.45); transition: translate var(--duration) var(--easing);
+}
+.cp-ultracode input:checked { background: linear-gradient(90deg, var(--rainbow)) 0 0 / 200% 100%; animation: cp-shimmer 2.4s linear infinite; box-shadow: 0 0 12px color-mix(in srgb, var(--tone-peer) 55%, transparent); }
+.cp-ultracode input:checked::before { translate: calc(2.125rem - 1.25rem) 0; }
+.cp-ultracode input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+/* ultracode on: a rainbow edge turning around the panel and the chip */
+@property --ultracode-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.cp-tune__chip { position: relative; }
+.cp-tune[data-ultracode] :is(.cp-tune__panel, .cp-tune__chip)::after {
+  content: ''; position: absolute; inset: 0; padding: 1.5px; border-radius: inherit; pointer-events: none;
+  background: conic-gradient(from var(--ultracode-angle), var(--rainbow));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: cp-ultracode-turn 3.6s linear infinite;
+}
+.cp-tune[data-ultracode] .cp-tune__panel { box-shadow: var(--glass-shadow), 0 0 28px color-mix(in srgb, var(--tone-peer) 22%, transparent); }
+@keyframes cp-effort-throb { 50% { box-shadow: 0 1px 3px rgb(0 0 0 / 0.45), 0 0 22px 7px color-mix(in srgb, var(--heat) 80%, transparent); } }
+@keyframes cp-shimmer { to { background-position: -200% 0; } }
+@keyframes cp-ultracode-turn { to { --ultracode-angle: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .cp-effort output, .cp-tune__level, .cp-ultracode strong, .cp-ultracode input,
+  .cp-tune[data-ultracode] :is(.cp-tune__panel, .cp-tune__chip)::after { animation: none; }
+  .cp-tune[data-effort='max'] .cp-effort input[type='range']::-webkit-slider-thumb, .cp-tune[data-effort='max'] .cp-effort input[type='range']::-moz-range-thumb { animation: none; }
 }
 .cp-launcher__attach { flex: none; }
 .cp-queue__images { display: inline-flex; align-items: center; gap: 2px; flex: none; color: var(--color-text-muted); font-size: var(--text-xs); }

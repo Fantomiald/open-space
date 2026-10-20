@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice } from '../shared/protocol.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
 import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
@@ -360,6 +360,8 @@ export class SessionManager {
     // a resumed conversation keeps its id: the session goes on with it through --resume
     const info = newSessionInfo({ id: options.resumeId ?? randomUUID(), name, cwd, model: options.model ?? '', permissionMode: options.permissionMode ?? DEFAULT_PERMISSION_MODE }, this.now());
     if (options.resumeId) info.resumable = true;
+    if (options.effort) info.effort = options.effort;
+    if (options.ultracode) info.ultracode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -390,7 +392,7 @@ export class SessionManager {
   unqueue(id: string, queueId: string) { this.session(id).unqueue(queueId); }
   sendNow(id: string) { this.session(id).sendNow(); }
   close(id: string) { return this.session(id).close(); }
-  tune(id: string, change: { model?: string; effort?: Effort | '' }) { return this.session(id).tune(change); }
+  tune(id: string, change: TuneChange) { return this.session(id).tune(change); }
 
   rename(id: string, name: string) {
     const clean = name.trim();
@@ -473,6 +475,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
   return {
     id, cwd, state: state as SessionInfo['state'], name: asString(raw.name, id.slice(0, 8)), model: asString(raw.model), activeModel: asString(raw.activeModel),
     effort: (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort : undefined,
+    ultracode: raw.ultracode === true || undefined,
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,

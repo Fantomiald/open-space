@@ -28,11 +28,13 @@ export const composer: Dictionary['composer'] = {
     run: 'Run',
   },
   tune: {
-    title: 'This session’s model and effort, changed at once',
+    title: 'Model, effort, permissions and ultracode',
     model: 'Model',
     effort: 'Effort',
+    permissions: 'Permissions',
     defaultEffort: 'auto',
     efforts: { low: 'low', medium: 'medium', high: 'high', xhigh: 'extra high', max: 'max' },
+    ultracode: 'ultracode',
   },
   launcher: {
     label: 'New session',
