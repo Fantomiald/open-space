@@ -37,7 +37,8 @@ export function SessionList() {
     const all = Object.values(sessions);
     const [waiting, working, ready] = roomSessions(all, seen, 'office');
     const [resting] = roomSessions(all, seen, 'lounge');
-    return ([['waiting', waiting], ['working', working], ['ready', ready], ['resting', resting]] as const).filter(([, list]) => list.length > 0);
+    const readyLatestFirst = [...ready].sort((a, b) => b.stateSince - a.stateSince);
+    return ([['waiting', waiting], ['working', working], ['ready', readyLatestFirst], ['resting', resting]] as const).filter(([, list]) => list.length > 0);
   }, [sessions, seen]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(groups.some(([group]) => group === 'working') ? 1000 : 30_000);

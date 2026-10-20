@@ -4,7 +4,7 @@
 
 Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis ton navigateur.
 
-![Le bureau d'Open Space : des sessions à leur poste, deux lèvent la main pour une question](docs/images/office.png)
+![Le bureau d'Open Space : des sessions à leur poste avec leur prénom et leur tag au-dessus, le panneau État en bas à gauche, et une conversation ouverte à droite](docs/images/office.png)
 
 Chaque session est un perso assis à son poste. Il tape quand il travaille, lève la main quand il a besoin de toi, sourit quand il a fini. Un clic sur lui ouvre son fil à droite, et tu réponds sans changer de fenêtre. Plus besoin de jongler entre six terminaux pour savoir qui attend quoi.
 
@@ -12,36 +12,54 @@ Open Space lance le `claude` installé sur ta machine. Tes skills, tes plugins, 
 
 ## Ce que tu y fais
 
-- **Lancer des sessions** dans tes dossiers de projets, chacune avec un prénom de ton équipe. Leurs réponses s'écrivent en direct dans le fil.
-- **Voir où en est chacun** dans le panneau État, en bas à gauche : ce qui t'attend et depuis quand, qui travaille et depuis combien de temps.
+### Piloter tes sessions
+
+- **Lancer des sessions** dans tes dossiers de projets, chacune avec un prénom de ton équipe et un tag si tu veux. L'étiquette au-dessus de chaque agent montre les deux, avec son état. Leurs réponses s'écrivent en direct dans le fil.
+- **Voir où en est chacun** dans le panneau État, en bas à gauche : ce qui t'attend et depuis quand, qui travaille et depuis combien de temps, qui est prêt pour un nouveau message.
+- **En ouvrir plusieurs à la fois** : Maj+clic sur un agent ouvre sa conversation à côté des autres, six au plus. Tab les fait glisser hors de vue pour voir la salle, Tab les ramène.
+- **Passer en mode focus** (l'icône du bandeau, ou Cmd+.) : la salle laisse la place à la liste de toutes tes sessions, rangées selon ce qu'elles attendent, et celles que tu ouvres s'alignent côte à côte. Pratique quand quelqu'un regarde ton écran.
+- **Changer le modèle, l'effort et les permissions** d'une session dans un seul panneau sous son champ, tout de suite et même en pleine tâche. Ultracode y est aussi, par session, quand les workflows dynamiques sont activés dans Claude Code.
+- **Être prévenu** par un son et une notification macOS quand une session a fini ou t'attend, même onglet fermé.
+- **Mettre une session au repos** dans la salle de repos : elle libère son processus et revient avec ton prochain message.
+- **La reprendre sur ton téléphone** avec Remote Control : un bouton, et elle apparaît dans claude.ai/code et l'app Claude.
+
+### Dans la conversation
+
 - **Répondre sans terminal** : les autorisations (Oui, Non, Toujours) et les questions de Claude, une par onglet comme dans Claude Code.
 - **Écrire pendant qu'une session travaille** : ton message rejoint le tour en cours sans l’interrompre (Claude le lit à sa prochaine étape) ; une commande `/` attend la fin du tour, ou part tout de suite avec « Envoyer maintenant ». Et `/btw ta question` pose une question à côté, sans interrompre ni polluer la conversation.
 - **Joindre n'importe quel fichier** : coller une capture (Cmd+V), glisser des fichiers sur le panneau, ou passer par le trombone. Les images partent comme images ; un zip, un PDF ou un CSV part avec son chemin, que Claude ouvre avec ses outils, comme dans le terminal.
-- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Margot où elle en est »). Leurs messages s'affichent dans le fil.
-- **Suivre les sous-agents** : leurs têtes à côté du nom de la session, un onglet par sous-agent au travail avec ce qu'il écrit, puis son rapport dans « Terminés ».
-- **Voir ce qu'une session a changé** : `+X −Y` dans son en-tête, puis chaque fichier avec son diff, comme dans Claude Code.
-- **Garder un œil sur le contexte** : une jauge dans l'en-tête de la session change de couleur quand la conversation se remplit, et `/context` montre ce qui la remplit, avec les boutons pour compacter ou repartir de zéro (`/compact`, `/clear`).
-- **Les vues de Claude Code dans la page** : `/mcp` liste les serveurs MCP et permet de les reconnecter, de s'y connecter ou de les couper ; `/usage` montre tes limites et ta semaine. Les commandes à option (`/model`, `/effort`…) proposent leurs valeurs.
+- **Taper `/` n'importe où dans un message** pour choisir une commande : le champ connaît les commandes et les skills du dossier de la session, avec leurs options (`/model`, `/effort`, les sous-commandes d'un skill).
 - **Lancer une commande shell** avec `!` devant, dans le dossier de la session, sans passer par Claude : il la voit avec ton prochain message, comme dans le terminal.
-- **Voir les fichiers que Claude t'envoie** dans le fil : images et schémas SVG, pages HTML en aperçu, en grand d'un clic. Les autres fichiers se téléchargent. Une page que Claude publie sur claude.ai (un artifact) s'affiche en aperçu : un clic pour la voir en grand, ou l'ouvrir sur claude.ai.
 - **Ne pas perdre un message en cours** : ce que tu tapes reste dans le champ de chaque session quand tu passes d'une session à l'autre.
-- **La reprendre sur ton téléphone** avec Remote Control : un bouton, et elle apparaît dans claude.ai/code et l'app Claude.
+- **Chercher** dans un fil avec Cmd+F, copier un bloc de code d'un clic.
+
+### Suivre le travail
+
+- **Laisser les sessions se parler** : chacune porte son prénom, les autres la trouvent par lui (« demande à Margot où elle en est »). Leurs messages s'affichent dans le fil.
+- **Suivre les sous-agents** : leurs têtes sur l'étiquette de la session, un onglet par sous-agent au travail avec ce qu'il écrit, puis son rapport dans « Terminés ». Une session dont les sous-agents travaillent en arrière-plan continue de taper à son poste.
+- **Voir ce qu'une session a changé** : `+X −Y` dans son en-tête, puis chaque fichier avec son diff, comme dans Claude Code.
+- **Garder un œil sur le contexte** : une jauge dans l'en-tête de la session change de couleur quand la conversation se remplit, et le champ propose de compacter. `/context` montre ce qui la remplit, avec les boutons pour compacter ou repartir de zéro (`/compact`, `/clear`).
+- **Les vues de Claude Code dans la page** : `/mcp` liste les serveurs MCP et permet de les reconnecter, de s'y connecter ou de les couper ; `/usage` montre tes limites et ta semaine.
+- **Voir les fichiers que Claude t'envoie** dans le fil : images et schémas SVG, vidéos, fichiers Markdown et texte, pages HTML en aperçu, en grand d'un clic. Les autres fichiers se téléchargent. Une page que Claude publie sur claude.ai (un artifact) s'affiche en aperçu : un clic pour la voir en grand, ou l'ouvrir sur claude.ai.
+
+### Autour du bureau
+
 - **Ouvrir un terminal** en cliquant sur l'écran de ton bureau.
 - **Lire et modifier tes notes du jour** sur le tableau blanc du bureau : un onglet par fichier Markdown de `~/Journal` (ou du dossier choisi dans les Réglages), que tes sessions peuvent aussi remplir.
 - **Suivre un fichier de chiffres** (facultatif) : donne un fichier Markdown dans les Réglages, et une pile de billets apparaît sur ton bureau ; un clic affiche le fichier, un « ! » rouge flotte au-dessus quand il a changé depuis ta dernière visite.
-- **Être prévenu** par un son et une notification macOS quand une session a fini ou t'attend, même onglet fermé.
-- **Mettre une session au repos** dans la salle de repos, ou garder le bureau dans une mini-fenêtre au-dessus de tes autres apps.
-- **Chercher** dans un fil avec Cmd+F, copier un bloc de code d'un clic.
+- **Mettre de la musique** : la radio du bandeau joue des webradios lo-fi. Sur Mac, elle peut piloter Musique ou Spotify à la place, avec la pochette, le morceau et, pour Musique, tes playlists.
 
 Le tableau montre les fichiers `.md` de ton dossier de notes, un onglet par fichier, et tu peux y écrire directement. Tes sessions Claude peuvent les tenir à jour aussi : ajoute à ton `CLAUDE.md` une ligne comme `Quand une tâche est finie, ajoute une ligne dans ~/Journal/<projet>.md`. L'objet chiffres marche pareil avec n'importe quel fichier Markdown que tes scripts ou une session réécrivent (chiffres, stats, suivi) ; laisse son réglage vide et il n'apparaît pas dans le bureau.
 
+![Le mode focus : la liste des sessions à gauche, quatre conversations ouvertes côte à côte](docs/images/focus.png)
+
 ## Ton équipe, ton bureau
 
-Tu crées ton perso au premier lancement, puis toute ton équipe dans **Équipe** : 16 coiffures, 9 barbes, 14 hauts, des chapeaux, des lunettes de soleil, des peaux de toutes les couleurs. Une session qui porte le prénom d'un membre prend son look. Donne-leur un métier (Tech, Cyber, Produit, RH…) : une demande lancée sans choisir la personne va à quelqu'un de libre dont le métier colle, ou choisis-la toi-même dans le lanceur.
+Tu crées ton perso au premier lancement, puis toute ton équipe dans **Équipe** : 17 coiffures, 9 barbes, 14 hauts, des chapeaux, des lunettes de soleil, des peaux de toutes les couleurs, et des tenues d'anime (Naruto, Zoro, Luffy, Sanji, Kakashi) à porter pièce par pièce. Une session qui porte le prénom d'un membre prend son look. Donne-leur un métier (Tech, Cyber, Produit, RH…) : une demande lancée sans choisir la personne va à quelqu'un de libre dont le métier colle, ou choisis-la toi-même dans le lanceur.
 
 Un animal se balade dans le bureau : un chat, un chien (7 races), un canard en plastique pour le débogage, un capybara, un axolotl, Rocky de *Projet Dernière Chance*, ou Clawd, la mascotte de Claude Code. Clique dessus, il te répond à sa façon.
 
-Le bureau suit l'heure de la journée et se déguise pour 14 fêtes : Noël, Halloween, le Nouvel An chinois, Songkran, le 14 juillet, et l'anniversaire de chaque membre de ton équipe. L'icône calendrier du bandeau te laisse les essayer toutes.
+Le bureau flotte dans un ciel en pixel art qui suit l'heure de la journée : nuages qui dérivent, étoiles et lune la nuit, neige à Noël, feux d'artifice au Nouvel An et au 14 juillet. Il se déguise pour 14 fêtes : Noël, Halloween, le Nouvel An chinois, Songkran, le 14 juillet, et l'anniversaire de chaque membre de ton équipe. L'icône calendrier du bandeau te laisse les essayer toutes.
 
 ![La salle de repos décorée pour Noël](docs/images/christmas.png)
 
@@ -74,7 +92,7 @@ python3 scripts/macos-app.py
 - Le serveur n'écoute que sur ta machine (`127.0.0.1`) et refuse tout navigateur sans le cookie d'autorisation.
 - Les sessions ne travaillent que dans les dossiers que tu as choisis.
 - Un dossier dont les réglages lancent du code (hooks, serveurs MCP du projet) ne démarre qu'après ton accord. Sans accord, la session tourne sans ces réglages.
-- Les variables `ANTHROPIC_*` et tes autres secrets de shell ne sont pas transmis aux sessions. Le serveur n'appelle rien sur internet.
+- Les variables `ANTHROPIC_*` et tes autres secrets de shell ne sont pas transmis aux sessions. Le serveur n'appelle rien sur internet (la radio passe directement par ton navigateur).
 - Les nouvelles sessions partent en mode **Auto** : Claude décide et te demande quand c'est risqué. Choisis « Demande à chaque fois » dans les réglages si tu préfères tout valider.
 
 ## Réglages avancés
@@ -91,8 +109,8 @@ python3 scripts/macos-app.py
 ## À savoir
 
 - L'interface est en français ou en anglais (Réglages).
-- Testé sur macOS, avec des navigateurs Chromium (Chrome, Arc). Les notifications et l'app du Dock sont propres à macOS.
-- Open Space s'appuie sur le mode `claude -p` en stream-json, dont certaines options ne sont pas documentées. Tout a été vérifié avec Claude Code 2.1.302 : une version plus récente peut casser une fonction, ouvre une issue si ça t'arrive.
+- Testé sur macOS, avec des navigateurs Chromium (Chrome, Arc). Les notifications, l'app du Dock et la télécommande de Musique et Spotify sont propres à macOS.
+- Open Space s'appuie sur le mode `claude -p` en stream-json, dont certaines options ne sont pas documentées. Tout a été vérifié avec Claude Code 2.1.302 et 2.1.303 : une version plus récente peut casser une fonction, ouvre une issue si ça t'arrive.
 
 ## Développer
 
@@ -111,6 +129,7 @@ Le fonctionnement interne (serveur, protocole, salle, ce qui a été vérifié a
 
 - Parti de [bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) (MIT). Le serveur, le protocole et l'interface ont été réécrits ; le copyright d'origine reste dans [LICENSE](LICENSE).
 - Polices [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) et [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icônes [Lucide](https://lucide.dev) (ISC).
+- Les tenues d'anime sont un clin d'œil de fan à *Naruto* et *One Piece*, sans lien avec leurs auteurs ni leurs éditeurs.
 - Rocky vient du roman *Project Hail Mary* d'Andy Weir : un clin d'œil de fan, sans lien avec l'auteur ni l'éditeur.
 - Clawd est la mascotte de Claude Code, redessinée ici en clin d'œil de fan. Open Space n'est pas un produit d'Anthropic. Claude et Claude Code sont des marques d'Anthropic.
 

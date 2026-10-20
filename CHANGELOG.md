@@ -1,5 +1,12 @@
 # Versions
 
+## 1.6.0
+
+- L'en-tête d'une conversation ne garde qu'agrandir, pause (quand elle travaille), « ⋯ » et fermer : chercher (⌘F), activer Remote Control, repos et éteindre passent dans le menu « ⋯ ». Remote Control allumé reste visible avec son état.
+- Sous-agents dans la mosaïque : les onglets restent en fenêtre pleine ou demi-hauteur ; en tiers de hauteur, une pastille flèche + tête dans l'en-tête montre qu'on est dans un sous-agent et ramène à la conversation.
+- Les sessions « Prêtes » (carte État et liste du mode focus) sont rangées de la plus récente à la plus ancienne.
+- README à jour (EN et FR) : fonctions rangées en quatre parties, nouvelles captures (salle, mode focus, Noël).
+
 ## 1.5.4
 
 - Un seul panneau pour le modèle, l'effort, les permissions et ultracode, dans une conversation (tout change tout de suite, même les permissions) et dans Nouvelle session, qui tient de nouveau sur une ligne.

@@ -312,11 +312,15 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-stack { transition: opacity 180ms ease-out, translate 220ms ease-out, visibility 0s 0s; }
 .cp-stack[data-hidden='true'] { opacity: 0; translate: 1.5rem 0; visibility: hidden; pointer-events: none; transition: opacity 160ms ease-in, translate 200ms ease-in, visibility 0s 200ms; }
 @media (prefers-reduced-motion: reduce) { .cp-stack, .cp-stack[data-hidden='true'] { translate: none; } }
-/* a small window keeps its height for the thread: a one-line field, no tabs, a tighter head */
+/* a small window keeps its height for the thread: a one-line field, a tighter head, and at a third of the height no
+   tabs (AgentBack instead) */
 .cp-stack__slot[data-compact='true'] .cp-composer textarea { height: 2.5rem; min-height: 0; resize: none; overflow-y: auto; }
 /* a long hint stays on the field's one line, cut short, rather than wrap under it */
 .cp-stack__slot[data-compact='true'] .cp-composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cp-stack__slot[data-compact='true'] .cp-thread__bar { display: none; }
+.cp-stack[data-rows='3'] > [data-span='1'][data-compact='true'] .cp-thread__bar { display: none; }
+.cp-stack[data-rows='3'] > [data-span='1'][data-compact='true'] .cp-detail__agent-back { display: inline-flex; }
+.cp-stack__slot[data-compact='true'] .cp-detail__controls { flex: none; }
+.cp-stack__slot[data-compact='true'] .cp-detail__title { min-width: 0; }
 .cp-stack[data-rows='3'] > [data-compact='true'] .cp-detail__line { display: none; }
 .cp-stack__slot[data-compact='true'] .cp-detail__head { gap: var(--space-1); padding: var(--space-2) var(--space-3); }
 .cp-stack__slot[data-compact='true'] .cp-detail__title h2 { font-size: var(--text-lg); }
@@ -604,6 +608,25 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 .cp-thread__finished-list button:hover, .cp-thread__finished-list button[aria-current='true'] { background: var(--color-surface); }
 /* a sub-agent's face, its status in a dot at the corner */
+/* a session's other actions, in a menu under the head's "⋯" (SessionMenu in Detail.tsx) */
+.cp-detail__more { position: relative; display: flex; }
+.cp-detail__menu {
+  position: absolute; z-index: 7; right: 0; top: calc(100% + var(--space-1)); display: grid; min-width: 15rem; padding: var(--space-1);
+}
+.cp-detail__menu button {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--color-text); text-align: left; font-size: var(--text-sm); white-space: nowrap;
+}
+.cp-detail__menu button:hover, .cp-detail__menu button:focus-visible { background: var(--color-surface); }
+.cp-detail__menu button[data-variant='danger'] { color: var(--tone-error); }
+.cp-detail__menu .cp-kbd { margin-left: auto; }
+/* a small window's way back from a sub-agent's thread, in its head (see AgentBack) */
+.cp-detail__agent-back {
+  display: none; flex: none; align-items: center; gap: var(--space-1); padding: 3px var(--space-2) 3px var(--space-1);
+  border: var(--border-width) solid var(--color-accent); border-radius: 999px; background: var(--color-accent-soft); color: var(--color-text);
+}
+.cp-detail__agent-back:hover { background: var(--color-surface-raised); }
+.cp-detail__agent-back > .cp-icon { width: 1rem; height: 1rem; }
 .cp-agent-face { position: relative; flex: none; display: inline-flex; width: 22px; height: 22px; }
 .cp-agent-face img { width: 22px; height: 22px; image-rendering: pixelated; }
 .cp-agent-face .cp-feed__agent-dot { position: absolute; right: -2px; bottom: -1px; width: 0.5rem; height: 0.5rem; border: 2px solid var(--color-surface); box-sizing: content-box; }
@@ -1438,7 +1461,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
  * Menus that open over the glass (the person, the folder, the finished sessions, the room's other people): denser glass,
  * since the panel's own surfaces are translucent and would let the text under them show through.
  */
-.cp-thread__finished-list, .cp-person__panel, .cp-folder__panel, .cp-room .cp-room__more ul {
+.cp-thread__finished-list, .cp-detail__menu, .cp-person__panel, .cp-folder__panel, .cp-room .cp-room__more ul {
   background: var(--glass-strong); border: var(--border-width) solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--glass-shadow);
 }
 

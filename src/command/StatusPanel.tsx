@@ -49,8 +49,8 @@ export function StatusPanel() {
   const groupProps = (group: Group, count: number) => ({ group, count, folded: foldedGroups.includes(group), onFold: () => foldGroup(group) });
   const waiting = useMemo(() => attentionQueue(Object.values(sessions), seen), [sessions, seen]);
   const working = useMemo(() => otherSessions(Object.values(sessions), seen).working, [sessions, seen]);
-  // the office's idle ones, as the room seats them (not the resting ones, in the break room)
-  const ready = useMemo(() => roomSessions(Object.values(sessions), seen, 'office')[2], [sessions, seen]);
+  // the office's idle ones (not the resting ones, in the break room), the most recently ready first
+  const ready = useMemo(() => [...roomSessions(Object.values(sessions), seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [sessions, seen]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(working.length ? 1000 : 30_000);
   if (!waiting.length && !working.length && !ready.length) return null;

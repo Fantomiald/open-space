@@ -1,7 +1,7 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, ExternalLink, File, FileText, Image, Info, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, Paperclip, Pause, Pencil,
+  ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, Paperclip, Pause, Pencil,
   Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, Zap, type LucideIcon,
 } from 'lucide-react';
 
@@ -42,6 +42,7 @@ export const DeskIcon = icon(Monitor);
 export const SofaIcon = icon(Sofa);
 /** Putting a session to rest. */
 export const RestIcon = icon(Moon);
+export const MoreIcon = icon(Ellipsis);
 export const PauseIcon = icon(Pause);
 export const PlayIcon = icon(Play);
 export const NextIcon = icon(SkipForward);
