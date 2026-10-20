@@ -363,6 +363,14 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts }: { f
     const el = scroller.current;
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   }, [entries.length, agent, working]);
+  // the window resized (another view tiles the sessions differently): a thread at the bottom stays there
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => { if (stuck.current) el.scrollTop = el.scrollHeight; });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   // scrolled up: how many entries the thread had then; what came since shows in a pill that brings the user down
   const [awayFrom, setAwayFrom] = useState<number | null>(null);
   // a message starts being written: the thread stops following, so it reads at the user's pace as it grows (the

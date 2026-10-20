@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { lastContextUse, lastExchanges, listConversations, projectFolder } from './conversations.ts';
+import { agentLaunch, lastContextUse, lastExchanges, listConversations, projectFolder } from './conversations.ts';
 
 const home = mkdtempSync(path.join(os.tmpdir(), 'office-conversations-'));
 after(() => rmSync(home, { recursive: true, force: true }));
@@ -76,3 +76,20 @@ describe('Claude Code conversations on disk', () => {
   });
 });
 
+
+describe('How a sub-agent was launched', () => {
+  const subagents = path.join(projectFolder(cwd, home), A, 'subagents');
+  mkdirSync(subagents, { recursive: true });
+  writeFileSync(path.join(subagents, 'agent-af0bd0a530450e836.meta.json'), line({ agentType: 'opus', description: 'Vidéos', toolUseId: 'toolu_01XrkihB9qTwFQgufxpbKzLp', requestShape: 'background' }));
+  writeFileSync(path.join(subagents, 'agent-a2c808b20819e745d.meta.json'), 'not json');
+
+  it('reads its Agent call and type from the record next to the transcript', () => {
+    assert.deepEqual(agentLaunch(cwd, A, 'af0bd0a530450e836', home), { call: 'toolu_01XrkihB9qTwFQgufxpbKzLp', type: 'opus' });
+  });
+
+  it('gives nothing for an unknown, unreadable or suspicious id', () => {
+    assert.equal(agentLaunch(cwd, A, 'a0000000000000000', home), null);
+    assert.equal(agentLaunch(cwd, A, 'a2c808b20819e745d', home), null);
+    assert.equal(agentLaunch(cwd, A, '../../x', home), null);
+  });
+});

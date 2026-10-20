@@ -8,6 +8,7 @@ import { tail } from '../shared/activity.ts';
 import type { AttentionKind, Effort, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
@@ -297,6 +298,7 @@ export class Session {
       }),
       names: this.subagentNames,
       peerName: this.deps.peerName,
+      agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
       { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },

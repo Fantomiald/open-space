@@ -17,6 +17,9 @@ export interface ToolRequest { requestId: string; who: string; tool: string; inp
 
 export type AskEvent = Extract<OfficeEvent, { k: 'ask' }>;
 
+/** The Agent call that first started a sub-agent, and the sub-agent's type. */
+export interface AgentLaunch { call: string; type: string }
+
 export interface NormalizerOptions {
   emit: (event: OfficeEvent) => void;
   onInit: (info: InitInfo) => void;
@@ -40,6 +43,8 @@ export interface NormalizerOptions {
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
   peerName?: (address: string) => string;
+  /** how a sub-agent was launched, by its agentId: one woken up again may come from an earlier process of the conversation */
+  agentLaunch?: (agentId: string) => AgentLaunch | null;
 }
 
 export class Normalizer {
@@ -55,6 +60,10 @@ export class Normalizer {
   private publishing = new Set<string>();
   /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
   private agentTasks = new Map<string, string>();
+  /** what each SendMessage call said: a sub-agent it wakes up again works on it */
+  private sentMessages = new Map<string, string>();
+  /** the Task call of each sub-agent woken up again, by the SendMessage call that woke it up */
+  private revived = new Map<string, string>();
   /** sub-agents currently working (called, not yet gone) */
   readonly present = new Set<string>();
 
@@ -167,10 +176,26 @@ export class Normalizer {
           name: asString(c.name), description: cut(c.description, 200) || undefined, argumentHint: asString(c.argumentHint) || undefined,
         })));
         break;
+      case 'task_started': {
+        // a sub-agent woken up again by a SendMessage call, after its end or after the process that launched it
+        // stopped: its messages carry the id of the Agent call that first started it, its end the id of the SendMessage
+        // call (fixtures/subagent-revived.jsonl, 2.1.303)
+        const via = asString(message.tool_use_id);
+        if (message.task_type !== 'local_agent' || !this.sentMessages.has(via)) break;
+        const agentId = asString(message.task_id);
+        const launch = this.options.agentLaunch?.(agentId) ?? null;
+        const call = this.agentTasks.get(agentId) ?? launch?.call;
+        if (!call || this.present.has(call)) break;
+        this.revived.set(via, call);
+        this.agentTasks.set(agentId, call);
+        this.hire(call, launch?.type ?? '', asString(message.description), this.sentMessages.get(via) ?? '');
+        break;
+      }
       case 'task_notification': {
         // the end of a task, sub-agents included (in the background or not, it comes before the Task call's result).
         // The report is in handback_report when the sub-agent handed it back; the summary then only says so.
-        const id = asString(message.tool_use_id);
+        const raw = asString(message.tool_use_id);
+        const id = this.revived.get(raw) ?? raw;
         if (!id || !message.status) break;
         const report = asString(asJson(message.handback_report).text) || asString(message.summary);
         if (report.trim() && this.present.has(id) && !this.reported.has(id)) {
@@ -181,6 +206,12 @@ export class Normalizer {
         break;
       }
     }
+  }
+
+  private hire(id: string, type: string, task: string, prompt: string) {
+    this.present.add(id);
+    this.hired.add(id);
+    this.options.emit({ k: 'hire', id, type, name: this.pickName(), task: cut(task || type, 48), prompt: cut(prompt, 2000) });
   }
 
   private leave(id: string, ok: boolean, usage: Json = {}) {
@@ -219,10 +250,7 @@ export class Normalizer {
     // a page, not an asset upload nor a read, list or delete
     if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && input.asset !== true && input.file_path) this.publishing.add(id);
     if (name === 'Agent' || name === 'Task') {
-      const type = asString(input.subagent_type);
-      this.present.add(id);
-      this.hired.add(id);
-      this.options.emit({ k: 'hire', id, type, name: this.pickName(), task: cut(input.description || type, 48), prompt: cut(input.prompt, 2000) });
+      this.hire(id, asString(input.subagent_type), asString(input.description), asString(input.prompt));
     } else if (name === 'TodoWrite' && who === 'chef') {
       const items: PlanItem[] = asArray(input.todos).map(asJson).map((todo) => ({
         text: cut(todo.content ?? todo.activeForm, 90),
@@ -232,6 +260,7 @@ export class Normalizer {
     } else if (name === 'SendMessage') {
       const to = asString(input.to);
       const recipient = this.options.peerName?.(to) ?? to;
+      this.sentMessages.set(id, asString(input.message));
       this.options.emit({ k: 'act', who, id, tool: name, detail: cut(st.normalizer.sentTo(recipient || st.normalizer.recipientUnknown, asString(input.summary) || asString(input.message)), 160) });
     } else {
       this.options.emit({ k: 'act', who, id, tool: name, detail: actDetail(name, input, st.normalizer.searchIn) });

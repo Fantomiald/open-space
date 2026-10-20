@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import type { OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
 import { asJson } from './json.ts';
-import { Normalizer, describeRequest, ruleText, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, ruleText, type AgentLaunch, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
 
-function createNormalizer(peerName?: (address: string) => string) {
+function createNormalizer(peerName?: (address: string) => string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
   const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
   const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[] };
   const normalizer = new Normalizer({
@@ -13,14 +13,14 @@ function createNormalizer(peerName?: (address: string) => string) {
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
-    names: new Set(), peerName, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
+    names: new Set(), peerName, agentLaunch, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
 }
 
 /** Replays a captured stream-json file (real `claude -p` output, see fixtures/) through a Normalizer. */
-function replay(fixture: string) {
-  const created = createNormalizer();
+function replay(fixture: string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
+  const created = createNormalizer(undefined, agentLaunch);
   const refused: string[] = [];
   const lines = readFileSync(new URL(`./fixtures/${fixture}.jsonl`, import.meta.url), 'utf8').split('\n').filter(Boolean);
   for (const line of lines) {
@@ -162,6 +162,40 @@ describe('Normalizer on a real sub-agent with its text forwarded', () => {
     assert.deepEqual(events.filter((event) => event.k === 'leave').map((event) => event.k === 'leave' && event.ok), [true]);
     assert.ok(!events.some((event) => event.k === 'act' && event.tool === 'SubagentHandback'));
     assert.ok(!events.some((event) => event.k === 'act_done' && event.id === agentId));
+  });
+});
+
+describe('Normalizer on a real sub-agent woken up again by SendMessage after its process ended', () => {
+  // the process that launched it was stopped while it worked; this one resumes the conversation, then sends it a message
+  const launchCall = 'toolu_011wextvJCeHP1eMLv9u8B19';
+  const sendCall = 'toolu_01CvPKKY8zjziCkGFB8uLnUi';
+  const asked: string[] = [];
+  const { events } = replay('subagent-revived', (agentId) => {
+    asked.push(agentId);
+    return agentId === 'a7aee1b457a5fc39d' ? { call: launchCall, type: 'general-purpose' } : null;
+  });
+
+  it('hires it again under the id of the Agent call its messages carry', () => {
+    const hires = events.filter((event) => event.k === 'hire');
+    assert.equal(hires.length, 1);
+    assert.ok(hires[0].k === 'hire' && hires[0].id === launchCall && hires[0].type === 'general-purpose' && hires[0].task === 'Sleeper');
+    assert.match(hires[0].k === 'hire' ? hires[0].prompt : '', /^Run Bash `sleep 15` once more/);
+    assert.deepEqual(asked, ['a7aee1b457a5fc39d']);
+    assert.ok(events.some((event) => event.k === 'act' && event.who === launchCall && event.tool === 'Bash'));
+  });
+
+  it('lets it leave when its end comes under the id of the SendMessage call', () => {
+    assert.deepEqual(events.filter((event) => event.k === 'leave').map((event) => event.k === 'leave' && [event.who, event.ok]), [[launchCall, true]]);
+    assert.ok(!events.some((event) => 'who' in event && event.who === sendCall));
+  });
+
+  it('passes on its report', () => {
+    assert.deepEqual(events.filter((event) => event.k === 'report').map((event) => event.k === 'report' && [event.who, event.text]), [[launchCall, 'done\n\nresumed']]);
+  });
+
+  it('cannot place it without its launch record, and shows nothing then', () => {
+    const { events: blind } = replay('subagent-revived');
+    assert.ok(!blind.some((event) => event.k === 'hire' || event.k === 'leave'));
   });
 });
 
