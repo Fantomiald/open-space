@@ -36,6 +36,7 @@ import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
+import { appPort } from './app-port.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -272,6 +273,7 @@ server.listen(config.port, HOST, () => {
   console.log(claude ? `  Claude Code ${claude.version} (${claude.path})` : st.console.claudeMissing);
   console.log(st.console.stopHint);
   console.log('');
+  appPort?.postMessage({ t: 'ready', link: pairLink });
   if (process.argv.includes('--open') && !DEV) {
     // open tabs reconnect on their own: a new one only when none came back
     setTimeout(() => {

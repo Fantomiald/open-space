@@ -1,6 +1,6 @@
 {
   "name": "open-space",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis le navigateur.",
   "author": "Fantomiald",
@@ -19,6 +19,7 @@
     "dashboard"
   ],
   "type": "module",
+  "main": "out/desktop/main.js",
   "engines": {
     "node": ">=22.18"
   },
@@ -27,9 +28,14 @@
     "dev": "node scripts/dev.ts",
     "build": "vite build",
     "serve": "node server/index.ts",
-    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p desktop/tsconfig.json",
     "lint": "biome lint",
-    "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"src/**/*.test.ts\""
+    "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"src/**/*.test.ts\"",
+    "app:build": "rm -rf out && vite build --outDir out/dist --emptyOutDir --logLevel warn && vite build -c vite.desktop.config.ts --logLevel warn",
+    "app:dev": "npm run app:build && electron .",
+    "app": "npm run app:build && electron-builder --mac -c.mac.identity=-",
+    "app:release": "npm run app:build && electron-builder --mac",
+    "app:publish": "npm run app:build && electron-builder --mac --publish always"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
@@ -49,6 +55,9 @@
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.9",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   }

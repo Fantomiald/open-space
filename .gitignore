@@ -58,3 +58,7 @@ src/zz-*
 .DS_Store
 Thumbs.db
 .impeccable/
+
+# The macOS app: its bundled code and the packaged .dmg (npm run app)
+out/
+release/

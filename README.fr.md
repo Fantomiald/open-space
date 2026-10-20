@@ -78,14 +78,19 @@ npm start
 
 Le premier lancement te pose quatre questions : ton prénom et ton perso, les dossiers où les sessions ont le droit de travailler (Open Space te propose ceux qui contiennent des projets), puis tes habitudes : modèle et autorisations par défaut, son, notifications, animal. Tout se change ensuite dans **Équipe** et **Réglages**.
 
-### Sur Mac : l'app du Dock
+### Sur Mac : l'app
 
 ```bash
-pip3 install pillow
-python3 scripts/macos-app.py
+npm run app
 ```
 
-Ça crée `~/Applications/Open Space.app`, avec ton perso en icône. L'ouvrir lance le serveur et la page, la quitter arrête le serveur. Les notifications s'affichent alors à son nom et avec ton perso. Relance le script si tu changes de look ou si tu déplaces le projet.
+Ça construit `release/Open Space-<version>-arm64.dmg` (Mac Apple Silicon) et `-x64.dmg` (Mac Intel). Glisse Open Space dans Applications : l'ouvrir lance le serveur dans l'app, sans terminal ni onglet ; la quitter arrête les sessions (elles se reprennent au prochain lancement). Fermer la fenêtre ne les arrête pas : l'icône du Dock la rouvre, et les notifications arrivent toujours, à son nom ; un clic ouvre la session. Le Dock montre ton perso et le nombre de sessions qui t'attendent. Si Open Space tourne déjà (`npm start`), l'app s'ouvre dessus et le laisse tourner quand tu la quittes.
+
+`npm run app:dev` lance l'app depuis le projet, sans l'empaqueter.
+
+`npm run app` signe l'app en ad hoc : sur un autre Mac, macOS la bloque au premier lancement (**Réglages Système > Confidentialité et sécurité > Ouvrir quand même**). Pour la partager, `npm run app:release` la signe avec ton certificat « Developer ID Application » et la fait notariser par Apple ; il lui faut une clé API App Store Connect dans `APPLE_API_KEY` (chemin du `.p8`), `APPLE_API_KEY_ID` et `APPLE_API_ISSUER`. `npm run app:publish` fait pareil et met les fichiers dans une release GitHub en brouillon (`GH_TOKEN`) : les apps installées se mettent à jour toutes seules depuis la dernière release publiée.
+
+L'ancienne app du Dock (`python3 scripts/macos-app.py`, qui lance `npm start`) marche toujours.
 
 ## Sécurité
 

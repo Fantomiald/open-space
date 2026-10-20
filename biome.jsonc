@@ -3,7 +3,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["server/**", "shared/**", "src/**", "scripts/**/*.{ts,mjs}", "!src/zz-*", "!server/fixtures"]
+    "includes": ["server/**", "shared/**", "src/**", "desktop/**/*.ts", "scripts/**/*.{ts,mjs}", "!src/zz-*", "!server/fixtures"]
   },
   "formatter": { "enabled": false },
   "assist": { "enabled": false },

@@ -80,14 +80,19 @@ The first launch asks four things: your first name and your character, the folde
 
 The interface follows your browser's language, French or English. You can switch it in **Settings**.
 
-### On a Mac: the Dock app
+### On a Mac: the app
 
 ```bash
-pip3 install pillow
-python3 scripts/macos-app.py
+npm run app
 ```
 
-This creates `~/Applications/Open Space.app`, with your character as its icon. Opening it starts the server and the page; quitting it stops the server. Notifications then show under its name, with your character. Run the script again if you change your look or move the project.
+This builds `release/Open Space-<version>-arm64.dmg` (Apple Silicon Macs) and `-x64.dmg` (Intel Macs). Drag Open Space into Applications: opening it starts the server inside the app, with no terminal or browser tab; quitting it stops the sessions (they resume at the next launch). Closing the window does not stop them: the Dock icon opens it again, and notifications still come, under its name; a click opens the session. The Dock shows your character and how many sessions wait for you. If Open Space is already running (`npm start`), the app opens it and leaves it running when you quit.
+
+`npm run app:dev` runs the app from the project, without packaging it.
+
+`npm run app` signs the app ad hoc: on another Mac, macOS blocks it at first launch (**System Settings > Privacy & Security > Open Anyway**). To share it, `npm run app:release` signs it with your "Developer ID Application" certificate and has Apple notarize it; it needs an App Store Connect API key in `APPLE_API_KEY` (path to the `.p8`), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`. `npm run app:publish` does the same and puts the files in a draft GitHub release (`GH_TOKEN`): installed apps update themselves from the latest published release.
+
+The former Dock app (`python3 scripts/macos-app.py`, which runs `npm start`) still works.
 
 ## Security
 
