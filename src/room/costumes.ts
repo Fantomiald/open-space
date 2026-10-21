@@ -39,24 +39,24 @@ export function costumeSleeve(top: Look['top']): string | null {
 }
 
 /** The rows of a letter grid, `x`, `y` its top left corner; `colours` maps each letter. */
-function grid(P: Dot, x: number, y: number, rows: readonly string[], colours: Readonly<Record<string, string>>) {
+export function grid(P: Dot, x: number, y: number, rows: readonly string[], colours: Readonly<Record<string, string>>) {
   for (const [line, row] of rows.entries()) [...row].forEach((letter, column) => { if (colours[letter]) P(x + column, y + line, colours[letter]); });
 }
 
 /** The rows `from` to `to` of the head's own ball (the skin of chibi.ts): what a mask covers. */
-function headRows(P: Dot, from: number, to: number, up: number, cloth: Tones) {
+export function headRows(P: Dot, from: number, to: number, up: number, cloth: Tones) {
   for (let y = from; y <= to; y++) for (let x = 0; x <= 16; x++) {
     const nx = (x + 0.5 - 8) / 6.4, ny = (y + 0.5 - 6.5) / 6.6;
     if (nx * nx + ny * ny <= 1) P(x, y + up, x > 11 ? cloth.shade : x < 4 ? cloth.light : cloth.base);
   }
 }
 
-function torso(R: Paint, b: Body, cloth: Tones) {
+export function torso(R: Paint, b: Body, cloth: Tones) {
   R(3, 13 + b.up, 10, 7, cloth.base); R(3, 13 + b.up, 2, 7, cloth.light); R(11, 13 + b.up, 2, 7, cloth.shade);
 }
 
 /** Sleeves from the shoulder, `rows` long (5: to the wrist); `cuff` colours their last row. */
-function sleeves(R: Paint, b: Body, cloth: Tones, rows: number, cuff?: string) {
+export function sleeves(R: Paint, b: Body, cloth: Tones, rows: number, cuff?: string) {
   for (const [x, offset, colour] of [[1, b.swing, cloth.light], [13, -b.swing, cloth.shade]] as const) {
     if (b.raising && x === 13) continue;
     R(x, 14 + b.up + offset, 2, rows, colour);
@@ -65,17 +65,17 @@ function sleeves(R: Paint, b: Body, cloth: Tones, rows: number, cuff?: string) {
 }
 
 /** Each leg, standing or walking: `x` its left column, `last` its lowest row (the ankle). Seated, the legs are one band. */
-function eachLeg(b: Body, draw: (x: number, last: number, side: 0 | 1) => void) {
+export function eachLeg(b: Body, draw: (x: number, last: number, side: 0 | 1) => void) {
   if (b.sit) return;
   draw(4, 22 - b.lift[0], 0);
   draw(9, 22 - b.lift[1], 1);
 }
 
-function eachFoot(b: Body, draw: (x: number, y: number) => void) {
+export function eachFoot(b: Body, draw: (x: number, y: number) => void) {
   eachLeg(b, (x, last) => draw(x, last + 1));
 }
 
-function trousers(R: Paint, b: Body, cloth: Tones) {
+export function trousers(R: Paint, b: Body, cloth: Tones) {
   if (b.sit) { R(4, 21, 8, 3, cloth.base); R(4, 23, 8, 1, cloth.shade); return; }
   eachLeg(b, (x, last, side) => R(x, 19, 3, last - 18, side ? cloth.shade : cloth.base));
 }

@@ -4,6 +4,7 @@
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
 import type { CatPattern, DogBreed, PetChoice, PetColors } from '../../shared/pets.ts';
+import { speciesPainters } from './pet-species.ts';
 import type { Floor } from './floor.ts';
 import { ROOM, tileCenter, type Point } from './geometry.ts';
 import { advanceAlong, type Mover } from './paths.ts';
@@ -92,8 +93,8 @@ const CANVAS = { width: 22, height: 17 };
 /** Where the paws touch the floor on the canvas. */
 const FEET = { x: 10, y: 15 };
 
-type Paint = (x: number, y: number, width: number, height: number, colour: string) => void;
-type Dot = (x: number, y: number, colour: string) => void;
+export type Paint = (x: number, y: number, width: number, height: number, colour: string) => void;
+export type Dot = (x: number, y: number, colour: string) => void;
 type Drawn = Exclude<PetChoice, { kind: 'none' }>;
 
 /** The fur a pet is drawn in: the one the user picked, else its pattern's, breed's or kind's. */
@@ -103,7 +104,8 @@ export function furOf(choice: Drawn): string {
     case 'cat': return C.cats[choice.variant];
     case 'dog': return C.dogs[choice.variant];
     case 'rocky': return C.rocky.shell;
-    default: return C[choice.kind];
+    case 'duck': case 'capybara': case 'axolotl': case 'clawd': return C[choice.kind];
+    default: return C.species[choice.kind];
   }
 }
 
@@ -288,6 +290,8 @@ function paintClawd(R: Paint, P: Dot, fur: Tones, activity: PetActivity, frame: 
   if (activity === 'sleep') { R(7, top + 2, 2, 1, C.black); R(11, top + 2, 2, 1, C.black); } else { R(7, top + 1, 1, 2, C.black); R(12, top + 1, 1, 2, C.black); }
 }
 
+const SPECIES = speciesPainters((R, P, fur, activity, frame) => paintCat(R, P, 'calico', {}, fur, activity, frame));
+
 function paint(choice: Drawn, activity: PetActivity, frame: 0 | 1): HTMLCanvasElement {
   const { canvas, context } = artCanvas(CANVAS.width, CANVAS.height);
   const R: Paint = (x, y, width, height, colour) => { context.fillStyle = colour; context.fillRect(x + 3, y + 4, width, height); };
@@ -301,6 +305,7 @@ function paint(choice: Drawn, activity: PetActivity, frame: 0 | 1): HTMLCanvasEl
     case 'axolotl': paintAxolotl(R, P, fur, activity, frame); break;
     case 'rocky': paintRocky(R, P, fur, activity, frame); break;
     case 'clawd': paintClawd(R, P, fur, activity, frame); break;
+    default: SPECIES[choice.kind](R, P, fur, activity, frame);
   }
   return outline(canvas, ROOM_PALETTE.furniture.outline);
 }

@@ -20,6 +20,7 @@ import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
 import { Floor } from './floor.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
+import { themedLighting } from './themes/index.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName } from './scene.ts';
 import type { Pose } from './sprites.ts';
@@ -138,7 +139,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       last = now;
       const state = useSessions.getState();
       const hour = state.preview.hour ?? currentHour();
-      const lighting = lightingAt(hour);
+      const lighting = themedLighting(lightingAt(hour));
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
       paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, openSessionIds: selected.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });

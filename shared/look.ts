@@ -2,21 +2,31 @@
 // (src/room/chibi.ts); the crew editor picks them. Shared so the server can check what it stores.
 import { DEFAULT_HAT_COLOR } from '../src/design/people-palette.ts';
 
-export const HAIR_STYLES = ['none', 'buzz', 'short', 'sidePart', 'sweep', 'curly', 'quiff', 'spiky', 'mohawk', 'afro', 'pigtails', 'bob', 'ponytail', 'bun', 'braids', 'long', 'bangs'] as const;
+/** Dress-up pieces (src/room/wardrobe.ts and wardrobe-head.ts), after the everyday ones in each list. */
+export const WARDROBE_HAIR = ['topknot', 'dreadlocks', 'mullet', 'punkSpikes', 'wavy', 'coils', 'undercut', 'geisha', 'twinTails', 'vikingBraids', 'emo', 'tonsure'] as const;
+export const WARDROBE_EYES = ['angry', 'wink', 'tired', 'starry', 'sparkly', 'cyborg', 'laughing'] as const;
+export const WARDROBE_TOPS = [
+  'bomber', 'kimono', 'spacesuit', 'armor', 'wizardCape', 'pirateShirt', 'hawaiian', 'sailor', 'labCoat', 'chainmail', 'captainVest', 'cardigan', 'apron', 'overalls', 'jersey', 'bikerJacket',
+] as const;
+export const WARDROBE_BOTTOMS = ['hakama', 'pleatedSkirt', 'cargo', 'swimShorts', 'greaves', 'kilt', 'joggers'] as const;
+export const WARDROBE_SHOES = ['geta', 'pirateBoots', 'spaceBoots', 'clogs', 'rollerSkates', 'flippers', 'sabatons'] as const;
+export const WARDROBE_HATS = ['spaceHelmet', 'tricorne', 'wizardHat', 'greatHelm', 'hachimaki', 'sunHat', 'catEars', 'flowerCrown', 'cowboyHat'] as const;
+export const WARDROBE_ACCESSORIES = ['visor', 'goggles', 'eyePatch', 'monocle', 'earbuds', 'lei', 'parrot', 'backSword', 'katana', 'staff', 'jetpack', 'backpack', 'guitar'] as const;
+export const HAIR_STYLES = ['none', 'buzz', 'short', 'sidePart', 'sweep', 'curly', 'quiff', 'spiky', 'mohawk', 'afro', 'pigtails', 'bob', 'ponytail', 'bun', 'braids', 'long', 'bangs', ...WARDROBE_HAIR] as const;
 export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'short', 'chinstrap', 'full', 'long', 'handlebar', 'goatee'] as const;
 /** Anime pieces (src/room/costumes.ts): drawn in the character's colours, not the look's. */
 export const COSTUME_TOPS = ['narutoJacket', 'zoroShirt', 'luffyVest', 'sanjiSuit', 'kakashiVest'] as const;
 export const COSTUME_BOTTOMS = ['narutoPants', 'zoroPants', 'luffyShorts', 'sanjiPants', 'kakashiPants'] as const;
 export const COSTUME_SHOES = ['narutoSandals', 'zoroBoots', 'luffySandals', 'sanjiShoes', 'kakashiSandals'] as const;
 export const COSTUME_HATS = ['leafBand', 'leafBandTilted', 'bandana', 'strawHat'] as const;
-export const TOPS = ['tshirt', 'tank', 'vneck', 'polo', 'shirt', 'hoodie', 'sweater', 'jacket', 'suit', 'threePiece', 'tracksuit', 'dress', 'blanket', 'none', ...COSTUME_TOPS] as const;
-export const BOTTOMS = ['pants', 'shorts', 'skirt', 'tracksuit', ...COSTUME_BOTTOMS] as const;
-export const SHOES = ['shoes', 'sneakers', 'boots', 'heels', 'sandals', 'flipflops', 'barefoot', ...COSTUME_SHOES] as const;
+export const TOPS = ['tshirt', 'tank', 'vneck', 'polo', 'shirt', 'hoodie', 'sweater', 'jacket', 'suit', 'threePiece', 'tracksuit', 'dress', 'blanket', 'none', ...COSTUME_TOPS, ...WARDROBE_TOPS] as const;
+export const BOTTOMS = ['pants', 'shorts', 'skirt', 'tracksuit', ...COSTUME_BOTTOMS, ...WARDROBE_BOTTOMS] as const;
+export const SHOES = ['shoes', 'sneakers', 'boots', 'heels', 'sandals', 'flipflops', 'barefoot', ...COSTUME_SHOES, ...WARDROBE_SHOES] as const;
 /** What one wears on the head: the festivals put some of the same on everyone (src/room/outfits.ts), over this one. */
-export const HATS = ['none', 'cap', 'beanie', 'beret', 'tophat', 'party', 'gold', 'santa', 'crown', 'bunny', ...COSTUME_HATS] as const;
-/** What else goes with an anime look: whiskers, a scar, a cigarette, a mask, three swords at the hip. */
-export const ACCESSORIES = ['none', 'whiskers', 'scar', 'cigarette', 'mask', 'swords'] as const;
-export const EYES = ['round', 'wide', 'sleepy', 'lashes', 'happy'] as const;
+export const HATS = ['none', 'cap', 'beanie', 'beret', 'tophat', 'party', 'gold', 'santa', 'crown', 'bunny', ...COSTUME_HATS, ...WARDROBE_HATS] as const;
+/** What else one wears: anime touches (whiskers, a scar, a cigarette, a mask, three swords at the hip), then the wardrobe's gear. */
+export const ACCESSORIES = ['none', 'whiskers', 'scar', 'cigarette', 'mask', 'swords', ...WARDROBE_ACCESSORIES] as const;
+export const EYES = ['round', 'wide', 'sleepy', 'lashes', 'happy', ...WARDROBE_EYES] as const;
 
 export type HairStyle = (typeof HAIR_STYLES)[number];
 export type BeardStyle = (typeof BEARD_STYLES)[number];

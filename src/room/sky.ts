@@ -14,7 +14,7 @@ const F = P.festive;
 type Context = CanvasRenderingContext2D;
 
 /** A stable number from 0 to n - 1 for a key; mixed further than hash(), whose low bits barely change from one index to the next. */
-function pick(key: string, n: number): number {
+export function pick(key: string, n: number): number {
   let value = hash(key);
   value = Math.imul(value ^ (value >>> 16), 0x85ebca6b);
   value = Math.imul(value ^ (value >>> 13), 0xc2b2ae35);

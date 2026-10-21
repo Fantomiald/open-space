@@ -122,6 +122,17 @@ export const ROOM_PALETTE = {
     /** Claude Code's mascot, in its clay orange */
     clawd: '#d97757',
     rocky: { shell: '#8a5a2c', light: '#c08a4a', dark: '#5a3a1c' },
+    /** the later pets' own colour (src/room/pet-species.ts), before the user picks another */
+    species: {
+      robotDog: '#a9b4c6', alien: '#7fd36a', dragon: '#4fae6a', ghostCat: '#e4e8fb', parrot: '#e8443a', crab: '#e8604a', turtle: '#7a8a3a',
+      owl: '#9a7a52', fox: '#e0702a', redPanda: '#c4502a', slime: '#6aa8ff', octopus: '#e86a8a', manekiNeko: '#f4f4f6', golem: '#8b919c',
+      firefly: '#e8f56a', penguin: '#2a2d36', rabbit: '#c9a07a', hedgehog: '#8a5a3a',
+    },
+    /** what the later pets wear whatever their colour: a robot's visor, a dragon's belly and flame, a parrot's wing… */
+    robotEye: '#5ff0ff', alienTip: '#ff8ab4', dragonBelly: '#f2d48a', flame: '#ff8a3d', flameCore: '#ffe27a', ghostEyes: '#7fe8ff',
+    parrotWing: '#3a7ae0', parrotBand: '#f2c14e', parrotBeak: '#e8e2d0', parrotFeet: '#8b919c', clawGap: '#5a1f1a',
+    turtleSkin: '#9ac46a', turtleRim: '#e3c89a', owlEyes: '#f2c14e', owlBeak: '#e3a04a', pandaDark: '#3a2620',
+    manekiPatch: '#e08a3c', coin: '#f2c14e', golemGlow: '#7fe8ff', fireflyBody: '#3a3540', fireflyWing: '#cfe3f2', hedgehogFace: '#e8cfa8',
   },
 
   /** the day cycle (src/room/lighting.ts): tints multiplied over the room, sky colours, and the light sources */

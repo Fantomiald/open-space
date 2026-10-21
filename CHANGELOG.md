@@ -1,5 +1,12 @@
 # Versions
 
+## 1.10.0
+
+- Thèmes du bureau (Réglages > Bureau) : Navette spatiale, Tokyo néon, Donjon, Plage, Bateau pirate et Cabane en forêt. Murs, sol, porte, fenêtres, ciel, lumières et tous les meubles changent, au bureau comme au salon ; les fêtes s'y posent toujours.
+- Ce qui bouge et brille dans un thème (flammes, néons, hologrammes) passe derrière les gens et les meubles devant.
+- 71 nouveaux habits dans l'équipe : coiffures, yeux, hauts, bas, chaussures, chapeaux et accessoires (jetpack, perroquet sur l'épaule, katana, guitare…).
+- 18 nouveaux animaux : renard, panda roux, lapin, hérisson, hibou, perroquet, pingouin, tortue, crabe, poulpe, luciole, chat fantôme, maneki-neko, chien robot, alien, dragon, slime et golem.
+
 ## 1.9.2
 
 - Un clic sur une session l'ouvre à côté des autres, sans Maj ; au-delà de six fenêtres, elle prend la place de la fenêtre active.

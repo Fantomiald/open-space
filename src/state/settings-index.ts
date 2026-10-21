@@ -14,7 +14,7 @@ export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',
-  festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office',
+  theme: 'office', festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office',
   journalFolder: 'notes', metricsFile: 'notes',
   version: 'about', claude: 'about', links: 'about', dockApp: 'about',
 };

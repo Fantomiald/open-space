@@ -13,6 +13,8 @@ import { metricsBadgeAt } from './metrics.ts';
 import { STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
+import { roomTheme, themeKit } from './themes/index.ts';
+import type { ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
@@ -62,6 +64,27 @@ export interface FrameOptions {
 
 /** Something drawn in depth order: a piece of furniture, a person, the pet. */
 interface Layer { depth: number; paint: (context: Context) => void }
+
+let effectsCanvas: { canvas: HTMLCanvasElement; context: Context } | null = null;
+/**
+ * The theme's effects, after the light: painted in depth order with the room, each erased where whoever or whatever
+ * stands in front of it is drawn (the room itself is already on the canvas, it is only used to cut the effects out).
+ */
+function paintThemeEffects(context: Context, effects: readonly ThemeEffect[], layers: readonly Layer[]) {
+  if (!effects.length) return;
+  effectsCanvas ??= roomCanvas();
+  const { canvas, context: on } = effectsCanvas;
+  on.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const nearest = Math.min(...effects.map((effect) => effect.depth));
+  const steps = [...effects.map((effect) => ({ ...effect, cut: false })), ...layers.filter((layer) => layer.depth > nearest).map((layer) => ({ ...layer, cut: true }))];
+  // an effect at the depth of a piece comes after it, so the piece itself never cuts it
+  for (const step of steps.sort((a, b) => a.depth - b.depth || Number(b.cut) - Number(a.cut))) {
+    on.globalCompositeOperation = step.cut ? 'destination-out' : 'source-over';
+    step.paint(on);
+  }
+  on.globalCompositeOperation = 'source-over';
+  context.drawImage(canvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
 
 let highlightCanvas: { canvas: HTMLCanvasElement; context: Context } | null = null;
 /**
@@ -164,6 +187,7 @@ function paintSunlight(context: Context, lighting: Lighting, glasses: readonly G
   context.globalCompositeOperation = 'screen';
   for (const glass of glasses) polygon(context, lightPatch(glass, lighting), css(lighting.beamColor, 0.5 * lighting.beam));
   context.restore();
+  if (themeKit()?.wallBeam === false) return;
   context.save();
   clipTo(context, ROOM_OUTLINE);
   context.globalCompositeOperation = 'screen';
@@ -189,28 +213,32 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
   const glasses = glassesOf(layout);
   const lights: Light[] = [];
   const above = (x: number, y: number, height: number) => raise(toScreen({ x, y }), height);
+  const lamps = themeKit()?.officeLamps !== false;
+  const screen = themeKit()?.screenLight ?? P.light.screen;
   for (const piece of layout.furniture) {
     const { x, y } = piece;
-    if (piece.kind === 'floorLamp') lights.push({ at: above(x + 0.5, y + 0.5, 52), radius: 140, colour: P.light.lamp, strength: 1 });
+    if (piece.kind === 'floorLamp' && lamps) lights.push({ at: above(x + 0.5, y + 0.5, 52), radius: 140, colour: P.light.lamp, strength: 1 });
     if (piece.kind === 'bossDesk') {
-      lights.push({ at: above(x + 2.8, y + 0.2, 34), radius: 90, colour: P.light.boss, strength: 0.9 });
-      if (bossAtDesk) lights.push({ at: above(x + 1.5, y + 0.2, 30), radius: 90, colour: P.light.screen, strength: 1 });
+      if (lamps) lights.push({ at: above(x + 2.8, y + 0.2, 34), radius: 90, colour: P.light.boss, strength: 0.9 });
+      if (bossAtDesk) lights.push({ at: above(x + 1.5, y + 0.2, 30), radius: 90, colour: screen, strength: 1 });
     }
-    if (piece.kind === 'counter') lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
+    if (piece.kind === 'counter' && lamps) lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
     if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 68), radius: 80, colour: P.light.screen, strength: 0.7 });
     if (piece.kind === 'ticker') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 78), radius: 70, colour: P.light.screenIdle, strength: 0.5 });
-    if (piece.kind === 'cooler') lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
+    if (piece.kind === 'cooler' && lamps) lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {
       // the screen of whoever sits at a desk is on and lights their face, at work or not (their hands and their status
       // already tell which)
-      if (occupied.has(seatAt(layout, piece))) lights.push({ at: above(x + 0.6, y + 0.2, 30), radius: 90, colour: P.light.screen, strength: 1 });
+      if (occupied.has(seatAt(layout, piece))) lights.push({ at: above(x + 0.6, y + 0.2, 30), radius: 90, colour: screen, strength: 1 });
     }
   }
-  lights.push({ at: above(0.3, layout.door.y + 0.65, 26), radius: 120, colour: P.light.corridor, strength: 1 });
-  for (const item of layout.wallItems) if (item.kind === 'tv') lights.push({ at: above(item.fromX + item.width / 2, 0.6, 34), radius: 130, colour: P.light.screen, strength: 0.8 });
-  for (const glass of glasses) lights.push({ at: above((glass.fromX + glass.toX) / 2, 0.4, 50), radius: 120, colour: P.light.city, strength: 0.5 * lighting.stars });
+  const door = themeKit()?.doorLight ?? P.light.corridor;
+  if (door) lights.push({ at: above(0.3, layout.door.y + 0.65, 26), radius: 120, colour: door, strength: 1 });
+  for (const item of layout.wallItems) if (item.kind === 'tv') lights.push({ at: above(item.fromX + item.width / 2, 0.6, 34), radius: 130, colour: screen, strength: 0.8 });
+  if (lamps) for (const glass of glasses) lights.push({ at: above((glass.fromX + glass.toX) / 2, 0.4, 50), radius: 120, colour: P.light.city, strength: 0.5 * lighting.stars });
   if (options.festival) lights.push(...festivalGlows(options.festival, options.room, layout));
+  for (const light of themeKit()?.lights?.(layout, lighting) ?? []) lights.push({ at: above(light.x, light.y, light.height), radius: light.radius, colour: light.colour, strength: light.strength });
   return lights;
 }
 
@@ -522,10 +550,10 @@ function paintMetricsBadge(context: Context, at: Point, time: number) {
   paintIconBubble(context, at.x, at.y - 12 + bob, P.metricsBadge, EXCLAMATION, 1.5, P.outline);
 }
 
-const wallCache = new Map<Layout, { key: number; canvas: HTMLCanvasElement }>();
+const wallCache = new Map<Layout, { key: string; canvas: HTMLCanvasElement }>();
 /** What hangs on a room's walls (windows, clock, TV), painted again every quarter of an hour. */
 function wallItems(layout: Layout, lighting: Lighting, hour: number, festival: Festival | null, guests: readonly string[]): HTMLCanvasElement {
-  const key = Math.round(hour * 4);
+  const key = `${roomTheme()}@${Math.round(hour * 4)}`;
   let cached = wallCache.get(layout);
   if (cached?.key !== key) { cached = { key, canvas: paintWallItems(layout, lighting, hour, festival, guests) }; wallCache.set(layout, cached); }
   return cached.canvas;
@@ -603,6 +631,8 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   paintLight(context, lighting, lightsOf(layout, occupied, bossAtDesk, lighting, options));
   const time = options.reducedMotion ? 0 : options.time;
   paintSteam(context, time, layout.furniture);
+  const kit = themeKit();
+  if (kit?.effects) paintThemeEffects(context, kit.effects(layout, time, lighting, options.hour), layers);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
     const headOf = (walker: Walker, lift: number, height: number) => { const feet = raise(toScreen(walker.position), lift); return { x: feet.x, y: feet.y - height + 14 }; };

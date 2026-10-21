@@ -2,7 +2,7 @@
 // The rest of the page uses these names, so an icon is changed here only.
 import {
   AppWindow, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil,
-  Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn, Clock, Folder, Copy, Languages, PartyPopper, Activity, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, type LucideIcon,
+  Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn, Clock, Folder, Copy, Languages, PartyPopper, Activity, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -97,6 +97,7 @@ export const CoffeeIcon = icon(Coffee);
 export const GaugeIcon = icon(Gauge);
 export const TimerIcon = icon(Timer);
 export const SparklesIcon = icon(Sparkles);
+export const PaletteIcon = icon(Palette);
 export const ThinkingIcon = icon(Brain);
 export const DuplicateIcon = icon(CopyPlus);
 export const CompactIcon = icon(Shrink);

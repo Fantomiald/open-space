@@ -8,9 +8,12 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, WALL_HEIGHT } from './geometry.
 import { css, mix, type Lighting } from './lighting.ts';
 import { ART_SCALE, artCanvas, fillPolygon, shadedBall, toArt, tones } from './pixel-art.ts';
 import { hash } from './sprites.ts';
+import { themeKit } from './themes/index.ts';
 import type { Point } from './geometry.ts';
 
 const C = ROOM_PALETTE.room;
+/** The colours of the room's structure in the theme it is dressed in (what only the office has keeps using C). */
+const structure = () => themeKit()?.structure ?? C;
 const ART = { width: CANVAS_WIDTH / ART_SCALE, height: CANVAS_HEIGHT / ART_SCALE };
 const WALL = WALL_HEIGHT / ART_SCALE;
 /** How far the walls reach out past the floor, in tiles: their top and their two cut ends show it. */
@@ -51,6 +54,8 @@ function line(context: Context, from: Point, to: Point, colour: string) {
 }
 
 function paintFloor(context: Context, layout: Layout) {
+  const C = structure();
+  const kit = themeKit();
   const front = toArt({ x: ROOM.width, y: ROOM.depth });
   const left = toArt({ x: 0, y: ROOM.depth });
   const right = toArt({ x: ROOM.width, y: 0 });
@@ -59,8 +64,9 @@ function paintFloor(context: Context, layout: Layout) {
   fillPolygon(context, [outLeft(left), left, lift(left, -FLOOR_THICKNESS), lift(outLeft(left), -FLOOR_THICKNESS)], C.floorEdge);
   fillPolygon(context, [right, outBack(right), lift(outBack(right), -FLOOR_THICKNESS), lift(right, -FLOOR_THICKNESS)], C.floorEdgeDark);
   paintSlab(context, lift(outLeft(left), -FLOOR_THICKNESS), lift(front, -FLOOR_THICKNESS), lift(outBack(right), -FLOOR_THICKNESS));
+  if (kit?.paintFloor) kit.paintFloor(context, layout);
   // planks along x, two per tile, their joints staggered
-  for (let y = 0; y < ROOM.depth * 2; y++) {
+  else for (let y = 0; y < ROOM.depth * 2; y++) {
     const row = y / 2;
     let x = -((y * 7) % 3) * 0.5;
     while (x < ROOM.width) {
@@ -72,6 +78,7 @@ function paintFloor(context: Context, layout: Layout) {
       x += length;
     }
   }
+  if (kit?.rugs === false) return;
   for (const rug of layout.rugs) {
     const colours = tones(C.rugs[rug.colour]);
     floorQuad(context, rug.x, rug.y, rug.width, rug.depth, colours.dark);
@@ -83,6 +90,7 @@ function paintFloor(context: Context, layout: Layout) {
 
 /** The room stands on a slab of stone floating in the sky: two faces under the floor's edge, then a narrower step below. */
 function paintSlab(context: Context, left: Point, front: Point, right: Point) {
+  const C = structure();
   const toward = (from: Point, to: Point, share: number): Point => ({ x: from.x + (to.x - from.x) * share, y: from.y + (to.y - from.y) * share });
   const faces = (l: Point, f: Point, r: Point, height: number, light: string, dark: string) => {
     fillPolygon(context, [l, f, lift(f, -height), lift(l, -height)], light);
@@ -95,22 +103,26 @@ function paintSlab(context: Context, left: Point, front: Point, right: Point) {
   line(context, lift(front, -SLAB / 2), lift(right, -SLAB / 2), C.slabSeam);
   const under = (point: Point) => lift(toward(point, front, 0.06), -SLAB);
   faces(under(left), lift(front, -SLAB), under(right), UNDERSIDE, C.slabUnder, C.slabUnder);
+  themeKit()?.paintSlab?.(context, left, front, right, SLAB, UNDERSIDE);
 }
 
-function paintWalls(context: Context) {
+function paintWalls(context: Context, layout: Layout) {
+  const C = structure();
+  const kit = themeKit();
   // the back wall (y = 0) faces the light, the left wall is a little darker
   backQuad(context, 0, ROOM.width, 0, WALL, C.wall);
   leftQuad(context, 0, ROOM.depth, 0, WALL, C.wallSide);
-  for (let x = 0.25; x < ROOM.width; x += 0.5) line(context, onBackWall(x, WAINSCOT + 1), onBackWall(x, WALL), C.wallStripe);
-  for (let y = 0.25; y < ROOM.depth; y += 0.5) line(context, onLeftWall(y, WAINSCOT + 1), onLeftWall(y, WALL), C.wallSideStripe);
+  if (!kit?.paintWalls) for (let x = 0.25; x < ROOM.width; x += 0.5) line(context, onBackWall(x, WAINSCOT + 1), onBackWall(x, WALL), C.wallStripe);
+  if (!kit?.paintWalls) for (let y = 0.25; y < ROOM.depth; y += 0.5) line(context, onLeftWall(y, WAINSCOT + 1), onLeftWall(y, WALL), C.wallSideStripe);
   backQuad(context, 0, ROOM.width, 0, WAINSCOT, C.wainscot);
   leftQuad(context, 0, ROOM.depth, 0, WAINSCOT, C.wainscotSide);
-  for (let x = 1; x < ROOM.width; x++) line(context, onBackWall(x, 2), onBackWall(x, WAINSCOT - 1), C.wainscotLine);
-  for (let y = 1; y < ROOM.depth; y++) line(context, onLeftWall(y, 2), onLeftWall(y, WAINSCOT - 1), C.wainscotLine);
+  if (!kit?.paintWalls) for (let x = 1; x < ROOM.width; x++) line(context, onBackWall(x, 2), onBackWall(x, WAINSCOT - 1), C.wainscotLine);
+  if (!kit?.paintWalls) for (let y = 1; y < ROOM.depth; y++) line(context, onLeftWall(y, 2), onLeftWall(y, WAINSCOT - 1), C.wainscotLine);
   backQuad(context, 0, ROOM.width, WAINSCOT, WAINSCOT + 1, C.rail);
   leftQuad(context, 0, ROOM.depth, WAINSCOT, WAINSCOT + 1, C.rail);
   backQuad(context, 0, ROOM.width, 0, 2, C.baseboard);
   leftQuad(context, 0, ROOM.depth, 0, 2, C.baseboard);
+  kit?.paintWalls?.(context, layout);
   // the walls are solid: their top shows their thickness, and so does each cut end, at the front of the room
   const top = (point: Point) => lift(point, WALL);
   const far = toArt({ x: 0, y: 0 }), right = toArt({ x: ROOM.width, y: 0 }), left = toArt({ x: 0, y: ROOM.depth });
@@ -126,6 +138,8 @@ function paintWalls(context: Context) {
 
 function paintDoor(context: Context, layout: Layout) {
   const DOOR = { from: layout.door.y, to: layout.door.y + DOOR_SIZE.width, height: DOOR_SIZE.height / ART_SCALE };
+  const kit = themeKit();
+  if (kit?.paintDoor) return kit.paintDoor(context, DOOR.from, DOOR.to, DOOR.height);
   leftQuad(context, DOOR.from - 0.15, DOOR.to + 0.15, 0, DOOR.height + 2, C.doorFrame);
   leftQuad(context, DOOR.from, DOOR.to, 0, DOOR.height, C.doorway);
   // the corridor's light on the doorway's floor; no door leaf, so the outline drawn on hover (draw.ts) fits the opening
@@ -135,7 +149,7 @@ function paintDoor(context: Context, layout: Layout) {
 /** The floor, the rugs, the walls (dressed for the festival, if any) and the door, painted once at art resolution. */
 export function paintBackdrop(layout: Layout, festival: Festival | null, room: Room, guests: readonly string[] = []): HTMLCanvasElement {
   const { canvas, context } = artCanvas(ART.width, ART.height);
-  paintWalls(context);
+  paintWalls(context, layout);
   if (festival) paintFestivalWalls(context, festival, room, guests);
   paintFloor(context, layout);
   if (festival) paintFestivalFloor(context, festival);
@@ -214,10 +228,12 @@ function paintClock(context: Context, item: WallItem, hour: number) {
 /** The windows (with the sky and the city of the hour), the clock and the TV. */
 export function paintWallItems(layout: Layout, lighting: Lighting, hour: number, festival: Festival | null, guests: readonly string[] = []): HTMLCanvasElement {
   const { canvas, context } = artCanvas(ART.width, ART.height);
+  const kit = themeKit();
+  const windows = layout.wallItems.filter((item) => item.kind === 'window');
   for (const item of layout.wallItems) {
-    if (item.kind === 'tv') paintTv(context, item, festival, guests);
-    if (item.kind === 'window') paintWindow(context, item, lighting);
-    if (item.kind === 'clock') paintClock(context, item, hour);
+    if (item.kind === 'tv') kit?.paintTv && !festival ? kit.paintTv(context, item) : paintTv(context, item, festival, guests);
+    if (item.kind === 'window') kit?.paintWindow ? kit.paintWindow(context, item, lighting, windows.indexOf(item), windows.length) : paintWindow(context, item, lighting);
+    if (item.kind === 'clock') kit?.paintClock ? kit.paintClock(context, item, hour) : paintClock(context, item, hour);
   }
   return canvas;
 }

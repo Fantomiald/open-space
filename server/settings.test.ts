@@ -19,9 +19,12 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ language: 'de' }), {}, 'a language Open Space does not speak');
     assert.deepEqual(parsePreferences({ pet: { kind: 'dog', variant: 'pug', colors: { fur: '#7fd36a', belly: 'red', eyes: 3 } } }).pet, { kind: 'dog', variant: 'pug', colors: { fur: '#7fd36a' } }, 'only valid colours');
     assert.deepEqual(parsePreferences({ pet: { kind: 'rocky', colors: {} } }).pet, { kind: 'rocky' });
-    assert.equal(parsePreferences({ pet: { kind: 'dragon' } }).pet, undefined);
+    assert.equal(parsePreferences({ pet: { kind: 'unicorn' } }).pet, undefined);
+    assert.deepEqual(parsePreferences({ pet: { kind: 'dragon', variant: 'red', colors: { fur: '#e8645a' } } }).pet, { kind: 'dragon', colors: { fur: '#e8645a' } }, 'a later pet, its colour kept');
     assert.deepEqual(parsePreferences({ pet: { kind: 'cat', variant: 'grey' } }).pet, { kind: 'cat', variant: 'plain', colors: { fur: '#8b919c' } }, 'a coat named after its colour becomes a plain cat of that colour');
     assert.deepEqual(parsePreferences({ pet: { kind: 'duck' } }).pet, { kind: 'duck' });
+    assert.equal(parsePreferences({ theme: 'pirate' }).theme, 'pirate');
+    assert.equal(parsePreferences({ theme: 'moon' }).theme, undefined, 'an unknown theme is left out');
     assert.deepEqual(parsePreferences({ effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false, reduceMotion: 'yes' }), { effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false });
     assert.deepEqual(parsePreferences({ effort: 'ultra', timeFormat: 'swatch' }), {});
     assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {
