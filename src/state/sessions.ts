@@ -9,7 +9,7 @@ import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -161,6 +161,8 @@ interface CommandPostState {
   claudeDefaults: ClaudeDefaults;
   /** where the last `claude update` asked from the page is (null: none since the page opened) */
   claudeUpdate: ClaudeUpdate | null;
+  /** who Claude Code is signed in as (null until the server has asked it) */
+  claudeAccount: ClaudeAccount | null;
   /** a new Open Space the Mac app found (null outside the app, or when there is none) */
   appUpdate: AppUpdate | null;
   /** folders offered at the onboarding, once asked for */
@@ -242,6 +244,9 @@ interface CommandPostState {
   openSettings: (open: boolean, section?: SettingsSection, row?: string) => void;
   /** runs `claude update` on the server */
   updateClaude: () => void;
+  /** runs `claude auth login` (the browser opens) or `claude auth logout` on the server */
+  claudeLogin: () => void;
+  claudeLogout: () => void;
   /** lets the waiting sessions on an older Claude Code go, so that their next message starts the new one */
   restartOutdated: () => void;
   /** restarts the Mac app on the new Open Space it downloaded */
@@ -357,6 +362,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   rootsLocked: false,
   claudeDefaults: { current: {}, outputStyles: [] },
   claudeUpdate: null,
+  claudeAccount: null,
   appUpdate: null,
   rootSuggestions: null,
   sound: readPreference('sound', true),
@@ -479,6 +485,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'directories': set({ directories: message.directories }); break;
       case 'claude': set({ claude: message.claude }); break;
       case 'claudeUpdate': set({ claudeUpdate: message.update }); break;
+      case 'claudeAccount': set({ claudeAccount: message.account }); break;
       case 'appUpdate': set({ appUpdate: message.update }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
       case 'inspection': {
@@ -685,6 +692,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   setPreview: (preview) => set({ preview }),
   openCrew: (open) => set({ crewOpen: open }),
   updateClaude: () => { get().send({ t: 'updateClaude' }); },
+  claudeLogin: () => { get().send({ t: 'claudeLogin' }); },
+  claudeLogout: () => { get().send({ t: 'claudeLogout' }); },
   restartOutdated: () => { get().send({ t: 'restartOutdated' }); },
   restartApp: () => { get().send({ t: 'restartApp' }); },
   checkApp: () => { get().send({ t: 'checkApp' }); },

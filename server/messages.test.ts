@@ -38,6 +38,8 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'log', sessionId: 's1', after: 12.9 }), { t: 'log', sessionId: 's1', after: 12 });
     assert.deepEqual(parseClientMessage({ t: 'directories' }), { t: 'directories' });
     assert.deepEqual(parseClientMessage({ t: 'updateClaude', extra: 1 }), { t: 'updateClaude' });
+    assert.deepEqual(parseClientMessage({ t: 'claudeLogin', email: 'x' }), { t: 'claudeLogin' });
+    assert.deepEqual(parseClientMessage({ t: 'claudeLogout' }), { t: 'claudeLogout' });
     assert.deepEqual(parseClientMessage({ t: 'restartOutdated' }), { t: 'restartOutdated' });
     assert.deepEqual(parseClientMessage({ t: 'restartApp' }), { t: 'restartApp' });
   });

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import { EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
+import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 
@@ -35,13 +35,45 @@ export async function readVersion(file: string): Promise<string | null> {
  * use is Claude Code's own, asked for by the user. Resolves with what it printed, rejects when it failed.
  */
 export function runUpdate(file: string, environment: NodeJS.ProcessEnv): Promise<string> {
+  return runClaude(file, ['update'], environment, 300_000);
+}
+
+/** a sign-in left open in the browser stops waiting after this */
+const LOGIN_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * `claude auth login` opens the browser and waits for its sign-in (Claude Code's callback on localhost); the credentials
+ * it stores are then the ones every new `claude` uses. `claude auth logout` removes them.
+ * ponytail: no field for the code the CLI asks for when the browser cannot open; the browser on this computer can.
+ */
+export function runAuth(file: string, environment: NodeJS.ProcessEnv, action: 'login' | 'logout'): Promise<string> {
+  return runClaude(file, ['auth', action], environment, action === 'login' ? LOGIN_TIMEOUT_MS : 30_000);
+}
+
+function runClaude(file: string, args: string[], environment: NodeJS.ProcessEnv, timeout: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, ['update'], { env: environment, timeout: 300_000 }, (error, stdout, stderr) => {
+    execFile(file, args, { env: environment, timeout }, (error, stdout, stderr) => {
       if (!error) { resolve(stdout); return; }
+      if (error.killed) { reject(new Error(st.process.timedOut)); return; }
       const lines = `${stderr}\n${stdout}`.split('\n').map((line) => line.trim()).filter(Boolean);
       reject(new Error(lines.at(-1) ?? error.message));
     });
   });
+}
+
+/** Who Claude Code is signed in as, or null when it does not answer (signed out, it prints the same JSON with exit code 1). */
+export function readAccount(file: string, environment: NodeJS.ProcessEnv): Promise<ClaudeAccount | null> {
+  return new Promise((resolve) => {
+    execFile(file, ['auth', 'status', '--json'], { env: environment, timeout: 15_000 }, (_error, stdout) => {
+      try { resolve(parseAccount(JSON.parse(stdout))); } catch { resolve(null); }
+    });
+  });
+}
+
+export function parseAccount(status: unknown): ClaudeAccount | null {
+  if (!isJson(status) || typeof status.loggedIn !== 'boolean') return null;
+  if (!status.loggedIn) return { loggedIn: false };
+  return { loggedIn: true, email: asString(status.email), org: asString(status.orgName), plan: asString(status.subscriptionType) };
 }
 
 /** Finds the `claude` executable without going through terminal aliases. Relative PATH entries are ignored. */

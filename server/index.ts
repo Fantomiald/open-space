@@ -12,9 +12,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import type { AppUpdate, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import { createAsideRunner } from './aside.ts';
-import { createCatalogProbe, createProcessFactory, findClaude, readVersion, runUpdate } from './claude-process.ts';
+import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
 import { Crew } from './crew.ts';
 import { changedSettings } from '../shared/claude-settings.ts';
@@ -158,6 +158,18 @@ async function checkClaudeVersion() {
   installedClaude = version;
   broadcast({ t: 'claude', claude: claudeInfo() });
 }
+/** who Claude Code is signed in as, as last told to the pages; read again when a page connects (a terminal login changes it too) */
+let account: ClaudeAccount | null = null;
+/** a `claude auth login` or `logout` is running: another click waits for it */
+let signing = false;
+/** Reads the account again and tells the pages when it changed, or always after a login or logout (`failed`: why it did not work). */
+async function checkAccount(after?: { failed?: string }) {
+  const found = claude && await readAccount(claude.path, buildClaudeEnvironment(process.env, config.passthrough));
+  const next = found ?? account ?? { loggedIn: false };
+  const changed = JSON.stringify(next) !== JSON.stringify(account);
+  account = next;
+  if (changed || after) broadcast({ t: 'claudeAccount', account: after?.failed ? { ...next, failed: after.failed } : next });
+}
 // the conversations left alone long enough are compacted, one at a time (Preferences.idleCompact)
 setInterval(() => sessions.compactIdle(settings.preferences.idleCompact), 60_000).unref();
 setInterval(() => { checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error)); }, CLAUDE_CHECK_MS).unref();
@@ -187,6 +199,8 @@ function onConnection(socket: WebSocket) {
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
+  if (account) send({ t: 'claudeAccount', account });
+  if (!signing) checkAccount().catch((error: unknown) => log('cannot read the Claude Code account', error));
   readClaudeDefaults(os.homedir()).then((found) => {
     if (JSON.stringify(found) === JSON.stringify(claudeDefaults)) return;
     claudeDefaults = found;
@@ -303,6 +317,23 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       } finally {
         updating = false;
       }
+      break;
+    }
+    case 'claudeLogin':
+    case 'claudeLogout': {
+      if (!claude || signing) break;
+      signing = true;
+      const action = message.t === 'claudeLogin' ? 'login' : 'logout';
+      broadcast({ t: 'claudeAccount', account: { ...(account ?? { loggedIn: false }), busy: action } });
+      let failed: string | undefined;
+      try {
+        await runAuth(claude.path, buildClaudeEnvironment(process.env, config.passthrough), action);
+      } catch (error) {
+        failed = error instanceof Error ? error.message : String(error);
+      } finally {
+        signing = false;
+      }
+      await checkAccount({ failed });
       break;
     }
     case 'restartOutdated': if (installedClaude) sessions.releaseOutdated(installedClaude); break;

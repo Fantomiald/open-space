@@ -16,7 +16,7 @@ export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   roots: 'folders', defaultFolder: 'folders',
   theme: 'office', festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office',
   journalFolder: 'notes', metricsFile: 'notes',
-  version: 'about', claude: 'about', links: 'about', dockApp: 'about',
+  version: 'about', claude: 'about', account: 'about', links: 'about', dockApp: 'about',
 };
 
 /** The rows that are also in Claude Code's /config, by their name there: shown on the row, and found by it. */

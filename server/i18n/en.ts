@@ -45,6 +45,7 @@ export const en: ServerDictionary = {
   process: {
     stopped: 'Claude Code stopped.',
     refused: 'Claude Code refused.',
+    timedOut: 'Claude Code took too long to answer.',
   },
   aside: {
     tooLong: 'The side question took too long.',
