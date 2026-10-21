@@ -79,6 +79,12 @@ export const settings = {
     on: 'activé', off: 'désactivé',
     claudeSays: (value: string) => `Claude Code : ${value}`,
     update: {
+      appReady: (version: string) => `Open Space ${version} est prêt`,
+      appReadyHint: 'Redémarre l’app pour l’installer : tes sessions reprennent où elles en étaient.',
+      appDownloading: (version: string) => `Open Space ${version} se télécharge`,
+      appDownloadingHint: 'Tu pourras redémarrer dessus dans un instant.',
+      appRestart: 'Redémarrer',
+      appRestarting: 'Redémarrage…',
       installed: (version: string) => `Claude Code ${version} est installé`,
       outdated: (count: number, old: string) => `${plural(count, 'session tourne', 'sessions tournent')} encore en ${old}. Celles au travail passeront à la nouvelle version à leur prochaine pause.`,
       restart: 'Relancer celles qui attendent',

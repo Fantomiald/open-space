@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
-import { defaultFolder, formatDuration, homeRelative } from '../lib/format.ts';
+import { defaultFolder, formatAgo, homeRelative } from '../lib/format.ts';
 import { availability, stillFree } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
@@ -123,7 +123,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
                   <li key={conversation.id}>
                     <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); field.current?.focus(); }}>
                       <span className="cp-resume__title">{conversation.title}</span>
-                      <span className="cp-resume__when">{words.ago(formatDuration(Date.now() - conversation.updatedAt))}</span>
+                      <span className="cp-resume__when">{formatAgo(Date.now() - conversation.updatedAt)}</span>
                       {conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}
                     </button>
                   </li>

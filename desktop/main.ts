@@ -9,12 +9,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserWindow, Menu, Notification, app, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
-import type { AppMessage } from '../server/app-port.ts';
+import type { AppMessage, AppNews } from '../server/app-port.ts';
+import type { AppUpdate } from '../shared/protocol.ts';
 import { loadConfig } from '../server/config.ts';
 import { ROOM_PALETTE } from '../src/design/room-palette.ts';
 
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE = path.join(OUT, 'server', 'index.js');
+/** how often the app looks for a new Open Space, besides at launch */
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
 /** a bridge that stops sooner than this after it started is broken: it is not started again */
 const STEADY_AFTER_MS = 10_000;
 /** the room behind the page while it loads, so the window does not flash white */
@@ -30,6 +33,10 @@ let bridge: UtilityProcess | null = null;
 /** where the window goes: the /pair link, which sets the session cookie, then the page */
 let page = '';
 let quitting = false;
+/** the new Open Space found, told to every bridge started */
+let update: AppUpdate | null = null;
+/** asked from the page: once the bridge has stopped, the app restarts on the new version */
+let installing = false;
 /** the notifications shown, kept so their click handler is not collected with them */
 const shown = new Set<Notification>();
 
@@ -66,11 +73,14 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
   child.stderr?.on('data', (chunk: Buffer) => log(chunk.toString().trimEnd()));
   return new Promise((resolve, reject) => {
     child.on('message', (message: AppMessage) => {
-      if (message.t === 'ready') resolve(message.link);
+      if (message.t === 'ready') { resolve(message.link); if (update) tell(update); }
       else if (message.t === 'notify') showNotification(message.title, message.body, message.sessionId);
+      else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; child.kill(); }
     });
     child.once('exit', (code) => {
       bridge = null;
+      // the sessions are saved: Squirrel replaces the app and opens the new one
+      if (installing) { electronUpdater.autoUpdater.quitAndInstall(); return; }
       if (quitting) { app.quit(); return; }
       log(`  !  the bridge stopped (${code})`);
       if (Date.now() - startedAt < STEADY_AFTER_MS) { reject(new Error(`exit ${code}`)); return; }
@@ -188,12 +198,25 @@ function followAvatar() {
   } catch { /* the bundle's icon stays */ }
 }
 
-function checkForUpdates() {
+function tell(found: AppUpdate) {
+  update = found;
+  bridge?.postMessage({ t: 'update', update: found } satisfies AppNews);
+}
+
+/**
+ * Looks for a new Open Space at launch and every hour, and downloads it: the settings then offer to restart on it
+ * (a red dot on their button). Quitting the app installs it too.
+ */
+function watchForUpdates() {
   if (!app.isPackaged) return;
   const { autoUpdater } = electronUpdater;
   autoUpdater.logger = null;
+  autoUpdater.on('update-available', (info: { version: string }) => tell({ state: 'downloading', version: info.version }));
+  autoUpdater.on('update-downloaded', (info: { version: string }) => tell({ state: 'ready', version: info.version }));
   // an unsigned build cannot be updated in place: the error is only logged
-  autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => log(`  !  update: ${error instanceof Error ? error.message : error}`));
+  const check = () => autoUpdater.checkForUpdates().catch((error: unknown) => log(`  !  update: ${error instanceof Error ? error.message : error}`));
+  void check();
+  setInterval(() => { if (update?.state !== 'ready') void check(); }, UPDATE_CHECK_MS);
 }
 
 async function start() {
@@ -220,7 +243,7 @@ async function start() {
     }
   }
   void window?.loadURL(page);
-  checkForUpdates();
+  watchForUpdates();
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();

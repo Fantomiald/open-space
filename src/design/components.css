@@ -51,14 +51,8 @@ h1, h2, p { margin: 0; }
 .cp-header .cp-icon-button { width: var(--control-height); }
 :is(.cp-header__where, .cp-header__windows) .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
 :is(.cp-header__where, .cp-header__windows) .cp-segmented button { height: 100%; }
-/*
- * between the two rooms and focus mode: two ways of looking, not three rooms. It sits as far from what shows on each
- * side: a pressed button shows its edge, the others only their icon (inside --space-3 of padding), so the side of the
- * pressed one gets that padding as extra room.
- */
-.cp-header__divider { align-self: center; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
-[aria-pressed='true'] + .cp-header__divider { margin-left: calc(var(--space-1) + var(--space-3)); }
-.cp-header__divider:has(+ [aria-pressed='true']) { margin-right: calc(var(--space-1) + var(--space-3)); }
+/* between the two rooms and focus mode: two ways of looking, not three rooms. Same margins whichever is pressed, so the pill keeps its width. */
+.cp-header__divider { align-self: center; flex: none; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
 /* the windows can only be moved on a wide screen: the switch between grid and free windows shows there only */
 @media (max-width: 60rem) { .cp-header__windows { display: none; } }
 .cp-header__title { font-size: var(--text-md); font-weight: var(--weight-bold); letter-spacing: 0.01em; }
@@ -1578,6 +1572,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-list[data-narrow='true'] .cp-list__group + .cp-list__group { padding-top: var(--space-2); border-top: var(--border-width) solid var(--color-border); }
 .cp-list[data-narrow='true'] .cp-list__items[hidden] { display: grid; }
 .cp-list[data-narrow='true'] .cp-list__item { justify-content: center; min-height: 0; padding: var(--space-2) 0; }
+/* a face of the folded list says who it is, beside the list */
+.cp-list__peek {
+  position: fixed; z-index: 8; left: var(--x); top: var(--y); transform: translateY(-50%); display: grid; gap: 2px; width: max-content; max-width: 18rem;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--menu-solid); border: var(--border-width) solid var(--glass-edge);
+  box-shadow: var(--shadow-overlay); pointer-events: none;
+}
+.cp-list__peek-state { font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-list__peek-state:is([data-status='permission'], [data-status='question']) { color: var(--tone-permission); }
+.cp-list__peek-state[data-status='working'] { color: var(--tone-work); }
+.cp-list__peek-state[data-status='finished'] { color: var(--tone-reply); }
+.cp-list__peek-state[data-status='error'] { color: var(--tone-error); }
+.cp-list__peek-last { font-size: var(--text-xs); color: var(--color-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cp-list[data-narrow='true'] .cp-list__new { width: var(--pill-height); margin: 0 auto; padding: 0; }
 .cp-list__body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--space-3); }
 .cp-list__group, .cp-list__items { display: grid; gap: 2px; }
@@ -1607,9 +1613,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-face[data-resting='true'] img { filter: grayscale(0.7); opacity: 0.75; }
 /* the state as a sign on the face, as over a head in the room */
 .cp-face__sign {
-  position: absolute; right: -0.25rem; bottom: -0.25rem; display: grid; place-items: center; width: 1.125rem; height: 1.125rem; border-radius: 50%;
-  font-size: 0.6875rem; font-weight: var(--weight-bold); line-height: 1; box-shadow: 0 0 0 2px var(--glass-strong);
+  position: absolute; right: -0.25rem; bottom: -0.25rem; width: 1.125rem; height: 1.125rem; border-radius: 50%;
+  fill: currentColor; shape-rendering: crispEdges; box-shadow: 0 0 0 2px var(--glass-strong);
 }
+/* as on the room's name tags: the dots lift one after the other (WORKING_STEP_MS each), a sign that waits for the user bobs */
+@media (prefers-reduced-motion: no-preference) {
+  .cp-face[data-status='working'] .cp-face__sign rect { animation: cp-face-dot 900ms step-end infinite; }
+  .cp-face[data-status='working'] .cp-face__sign rect:nth-child(2) { animation-delay: -600ms; }
+  .cp-face[data-status='working'] .cp-face__sign rect:nth-child(3) { animation-delay: -300ms; }
+  .cp-face:is([data-status='permission'], [data-status='question']) .cp-face__sign { animation: cp-face-bob 1200ms step-end infinite; }
+}
+@keyframes cp-face-dot { 0% { transform: translateY(-1px); } 33.333% { transform: none; } }
+@keyframes cp-face-bob { 0% { transform: none; } 50% { transform: translateY(-2px); } }
 .cp-face:is([data-status='permission'], [data-status='question']) .cp-face__sign { background: var(--tone-permission); color: var(--tone-permission-soft); }
 .cp-face[data-status='finished'] .cp-face__sign { background: var(--tone-reply); color: var(--tone-reply-soft); }
 .cp-face[data-status='error'] .cp-face__sign { background: var(--tone-error); color: var(--tone-error-soft); }

@@ -4,7 +4,7 @@
 // down to its counts, a group's title folds that group away (both remembered in this browser).
 import { type ReactNode, useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { formatDuration } from '../lib/format.ts';
+import { formatAge } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { roomSessions } from '../room/cast.ts';
@@ -52,7 +52,7 @@ export function StatusPanel() {
   // the office's idle ones (not the resting ones, in the break room), the most recently ready first
   const ready = useMemo(() => [...roomSessions(Object.values(sessions), seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [sessions, seen]);
   // the times go on by the second while someone works, by the minute otherwise
-  const now = useNow(working.length ? 1000 : 30_000);
+  const now = useNow(15_000);
   if (!waiting.length && !working.length && !ready.length) return null;
   const words = t.session.status;
   const fold = () => { setFolded(!folded); writeFolded(!folded); };
@@ -74,7 +74,7 @@ export function StatusPanel() {
                     <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">{todoLabel(session, kind)}</span>
-                      <span className="cp-status__time">{formatDuration(now - session.stateSince)}</span>
+                      <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
                     </button>
                   </li>
                 ))}
@@ -93,7 +93,7 @@ export function StatusPanel() {
                         {session.subagents.length > 0 && <span className="cp-status__note">{words.subagents(session.subagents.length)}</span>}
                         {session.background && <span className="cp-status__note">{words.background(session.background.length)}</span>}
                       </span>
-                      <span className="cp-status__time">{formatDuration(now - (session.busySince ?? session.stateSince))}</span>
+                      <span className="cp-status__time">{formatAge(now - (session.busySince ?? session.stateSince))}</span>
                     </button>
                   </li>
                 ))}
@@ -106,7 +106,7 @@ export function StatusPanel() {
                     <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">{session.name}</span>
-                      <span className="cp-status__time">{formatDuration(now - session.stateSince)}</span>
+                      <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
                     </button>
                   </li>
                 ))}

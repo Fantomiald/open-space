@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import type { ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AppUpdate, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import { createAsideRunner } from './aside.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readVersion, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
@@ -79,6 +79,14 @@ const applyRoots = () => { if (!config.rootsLocked) config.roots = settings.pref
 applyRoots();
 /** set once a stop signal arrived: no new message is handled, no new process starts */
 let stopping = false;
+
+/** A new Open Space the Mac app found, as it last said. */
+let appUpdate: AppUpdate | null = null;
+appPort?.on('message', ({ data }) => {
+  if (data.t !== 'update') return;
+  appUpdate = data.update;
+  broadcast({ t: 'appUpdate', update: appUpdate });
+});
 
 function broadcast(message: ServerMessage) {
   const payload = JSON.stringify(message);
@@ -160,7 +168,7 @@ function onConnection(socket: WebSocket) {
   send({
     t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
-    preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults,
+    preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   readClaudeDefaults(os.homedir()).then((found) => {
@@ -262,6 +270,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       break;
     }
     case 'restartOutdated': if (installedClaude) sessions.releaseOutdated(installedClaude); break;
+    case 'restartApp': if (appUpdate?.state === 'ready') appPort?.postMessage({ t: 'restart' }); break;
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
     case 'saveMember':

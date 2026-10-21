@@ -9,6 +9,8 @@ export const common: Dictionary['common'] = {
   },
   copied: 'Copied',
   since: (duration) => `for ${duration}`,
+  justNow: 'now',
+  ago: (duration) => `${duration} ago`,
   percent: (value) => `${value}%`,
   reset: {
     today: 'today',
@@ -47,6 +49,7 @@ export const common: Dictionary['common'] = {
     settings: 'Settings',
     settingsTitle: (keys: string) => `Settings (${keys})`,
     settingsUpdate: 'Settings: a new version of Claude Code is installed',
+    settingsAppUpdate: 'Settings: a new version of Open Space is ready',
   },
   notices: {
     connecting: 'Connecting to the server…',
