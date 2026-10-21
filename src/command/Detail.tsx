@@ -1,7 +1,7 @@
 import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { buildFeed } from '../state/feed.ts';
+import { buildFeed, publishedPages } from '../state/feed.ts';
 import { backgroundWork, isRunning } from '../state/labels.ts';
 import { attentionKind } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -15,6 +15,7 @@ import { AgentBack, Feed } from './Feed.tsx';
 import { CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
+import { PublishedPages } from './PublishedPages.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { useAttachments } from './useAttachments.ts';
@@ -76,6 +77,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const openSearch = useSessions((s) => s.openSearch);
   const seen = useSessions((s) => s.seen);
   const feed = useMemo(() => buildFeed(events), [events]);
+  const pages = useMemo(() => publishedPages(feed.items), [feed]);
   const changes = useSessions((s) => s.changes[sessionId]);
   const live = useSessions((s) => s.connection === 'live');
   const panelView = useSessions((s) => (active ? s.panelView : 'thread'));
@@ -164,6 +166,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <span>{t.session.files(changes.files.length)}</span>
             </button>
           )}
+          {pages.length > 0 && <PublishedPages pages={pages} />}
           {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         </div>
         {switchingOff && (

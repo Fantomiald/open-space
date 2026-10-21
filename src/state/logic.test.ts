@@ -6,7 +6,7 @@ import { contextLevel, stateLabel, toneOf } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
 import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
-import { buildFeed, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
+import { buildFeed, publishedPages, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
@@ -195,6 +195,16 @@ describe('buildFeed', () => {
     const words = [{ doing: 'a', done: 'A' }, { doing: 'b', done: 'B' }];
     assert.equal(turnWord(5, words).done, turnWord(5, words).done);
     assert.equal(turnWord(5, words).doing, 'b');
+  });
+
+  it('lists the pages published on claude.ai once each, the latest first, with the title of their last publish', () => {
+    const events: OfficeEvent[] = [
+      { k: 'artifact', who: 'chef', title: 'Plan', url: 'https://claude.ai/artifact/a', stored: null },
+      { k: 'artifact', who: 't1', title: 'Report', url: 'https://claude.ai/artifact/b', stored: null },
+      { k: 'artifact', who: 'chef', title: 'Plan v2', url: 'https://claude.ai/artifact/a', stored: null },
+    ];
+    const items = buildFeed(events.map((ev, index) => logged(index + 1, ev))).items;
+    assert.deepEqual(publishedPages(items), [{ url: 'https://claude.ai/artifact/a', title: 'Plan v2' }, { url: 'https://claude.ai/artifact/b', title: 'Report' }]);
   });
 
   it('shows a command run with "!" with its output once it ended, outside the turns', () => {

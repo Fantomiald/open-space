@@ -147,6 +147,19 @@ export const turnWord = (startId: number, words: readonly { doing: string; done:
 export interface ToolRun { id: number; kind: 'tools'; tools: (FeedItem & { kind: 'tool' })[] }
 export type ThreadEntry = Exclude<FeedItem, { kind: 'tool' }> | ToolRun;
 
+export interface PublishedPage { url: string; title: string }
+
+/** The pages the session published on claude.ai, the latest first: a page published again keeps its place at the top with its new title. */
+export function publishedPages(items: readonly FeedItem[]): PublishedPage[] {
+  const pages = new Map<string, PublishedPage>();
+  for (const item of items) {
+    if (item.kind !== 'artifact') continue;
+    pages.delete(item.url);
+    pages.set(item.url, { url: item.url, title: item.title });
+  }
+  return [...pages.values()].reverse();
+}
+
 /**
  * What one tab of the thread shows. The conversation (`agent` null): the user, the session's own agent, the
  * questions and permissions of everyone, one card per sub-agent, the turns. A sub-agent's tab: only what it said and

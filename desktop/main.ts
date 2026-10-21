@@ -76,6 +76,7 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
       if (message.t === 'ready') { resolve(message.link); if (update) tell(update); }
       else if (message.t === 'notify') showNotification(message.title, message.body, message.sessionId);
       else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; child.kill(); }
+      else if (message.t === 'check') checkNow();
     });
     child.once('exit', (code) => {
       bridge = null;
@@ -203,18 +204,35 @@ function tell(found: AppUpdate) {
   bridge?.postMessage({ t: 'update', update: found } satisfies AppNews);
 }
 
+const lookForUpdate = () => electronUpdater.autoUpdater.checkForUpdates();
+
+/** Looks for a new Open Space when asked from the settings, and tells the page what came of it. */
+function checkNow() {
+  if (!app.isPackaged) { tell({ state: 'failed', text: 'dev build' }); return; }
+  tell({ state: 'checking' });
+  lookForUpdate().then(
+    (found) => { if (!found?.isUpdateAvailable) tell({ state: 'upToDate' }); },
+    (error: unknown) => tell({ state: 'failed', text: error instanceof Error ? error.message : String(error) }),
+  );
+}
+
 /**
- * Looks for a new Open Space at launch and every hour, and downloads it: the settings then offer to restart on it
- * (a red dot on their button). Quitting the app installs it too.
+ * Looks for a new Open Space at launch and every hour, and downloads it: the bridge restarts the app on it once no
+ * session has work under way, or the settings do at once. Quitting the app installs it too.
  */
 function watchForUpdates() {
   if (!app.isPackaged) return;
   const { autoUpdater } = electronUpdater;
   autoUpdater.logger = null;
-  autoUpdater.on('update-available', (info: { version: string }) => tell({ state: 'downloading', version: info.version }));
+  autoUpdater.on('update-available', (info: { version: string }) => tell({ state: 'downloading', version: info.version, percent: 0 }));
+  // told at each whole percent, not at every chunk
+  autoUpdater.on('download-progress', (progress: { percent: number }) => {
+    const percent = Math.floor(progress.percent);
+    if (update?.state === 'downloading' && percent > update.percent) tell({ ...update, percent });
+  });
   autoUpdater.on('update-downloaded', (info: { version: string }) => tell({ state: 'ready', version: info.version }));
   // an unsigned build cannot be updated in place: the error is only logged
-  const check = () => autoUpdater.checkForUpdates().catch((error: unknown) => log(`  !  update: ${error instanceof Error ? error.message : error}`));
+  const check = () => lookForUpdate().catch((error: unknown) => log(`  !  update: ${error instanceof Error ? error.message : error}`));
   void check();
   setInterval(() => { if (update?.state !== 'ready') void check(); }, UPDATE_CHECK_MS);
 }
