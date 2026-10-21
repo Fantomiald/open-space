@@ -17,6 +17,8 @@ export const MAX_NAME = 40;
 /** Session tags are short labels. */
 export const MAX_TAG = 24;
 const MAX_SEARCH = 100;
+/** The search over every session's threads takes a few words. */
+const MAX_QUERY = 200;
 /** Pictures per message, and the size of one in base64 (Claude takes 5 MB a picture; the page shrinks them first). */
 export const MAX_IMAGES = 8;
 const MAX_IMAGE_BASE64 = Math.floor(5 * 1024 * 1024 * 4 / 3);
@@ -184,6 +186,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'log': return sessionId ? { t: 'log', sessionId, after: Math.max(0, Math.floor(asNumber(raw.after))) } : null;
     case 'directories': return { t: 'directories' };
+    case 'updateClaude': return { t: 'updateClaude' };
+    case 'duplicate': return sessionId ? { t: 'duplicate', sessionId } : null;
+    case 'restartOutdated': return { t: 'restartOutdated' };
     case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
     case 'tune': {
       if (!sessionId) return null;
@@ -246,6 +251,12 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return name && text !== null && version !== undefined ? { t: 'writeNote', name, text, version } : null;
     }
     case 'metrics': return { t: 'metrics' };
+    case 'search': {
+      const query = boundedString(raw.query, MAX_QUERY);
+      const id = asNumber(raw.id, -1);
+      return query !== null && Number.isInteger(id) && id >= 0 ? { t: 'search', id, query } : null;
+    }
+    case 'costs': return { t: 'costs', ...(raw.fresh === true ? { fresh: true } : {}) };
     case 'music': {
       if (!MUSIC_APPS.includes(raw.app as MusicApp)) return null;
       if (raw.action === undefined) return { t: 'music', app: raw.app as MusicApp };

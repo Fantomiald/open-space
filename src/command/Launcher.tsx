@@ -40,11 +40,11 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const [folder, setFolder] = useState('');
   const preferences = useSessions((s) => s.preferences);
   const [model, setModel] = useState(preferences.model);
-  const [effort, setEffort] = useState<Effort>();
+  const [effort, setEffort] = useState<Effort | undefined>(preferences.effort || undefined);
   const [ultracode, setUltracode] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(preferences.permissionMode);
   // the settings arrive with the server's hello, maybe after the launcher showed
-  useEffect(() => { setModel(preferences.model); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.permissionMode]);
+  useEffect(() => { setModel(preferences.model); setEffort(preferences.effort || undefined); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.effort, preferences.permissionMode]);
   const [text, setText] = useState('');
   const [resumeId, setResumeId] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);

@@ -1,11 +1,13 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { Look } from './look.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
+import type { CostReport } from './usage.ts';
 
 export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'completed' }
 
@@ -52,7 +54,7 @@ export type OfficeEvent =
   /** a page Claude published on claude.ai with its Artifact tool: its address there, and `stored` the copy of its HTML under /attachments/ (null when it could not be kept) */
   | { k: 'artifact'; who: string; title: string; url: string; stored: string | null }
   /** the conversation was summarized to free its context (/compact, or automatically when full): its size before and after, in tokens */
-  | { k: 'compact'; auto: boolean; before: number; after: number }
+  | { k: 'compact'; auto: boolean; before: number; after: number; idle?: true }
   /** /clear: Claude goes on in a new, empty conversation */
   | { k: 'cleared' }
   /** a note of Open Space in the thread ("the last exchanges of the conversation it resumes") */
@@ -71,6 +73,9 @@ export const TEXT_EXTENSIONS: ReadonlySet<string> = new Set(['md', 'markdown', '
 export interface SentFile { title: string; stored: string | null; image: boolean; page?: true; video?: true; size: number }
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }
+
+/** Where `claude update` run from the page is: `text` the reason it failed. */
+export type ClaudeUpdate = { state: 'checking' } | { state: 'upToDate'; version: string } | { state: 'updated'; from: string; version: string } | { state: 'failed'; text: string };
 
 /** One usage window of the subscription: "five_hour", "seven_day", or another one Claude Code reports. */
 export interface QuotaWindow { name: string; utilization: number; resetsAt: number | null }
@@ -110,6 +115,8 @@ export const isPermissionMode = (value: unknown): value is PermissionMode => PER
 
 /** A sub-agent at work: `id` is the id of the Agent/Task call that started it (the `who` of its events). */
 export interface SubagentInfo { id: string; name: string; type: string }
+/** A command Claude Code runs in the background (Bash with run_in_background, Monitor…): it wakes the session up when it ends */
+export interface BackgroundTask { id: string; description: string }
 
 /** Why a session waits for the user. */
 export type AttentionKind = 'permission' | 'question' | 'finished' | 'error';
@@ -143,6 +150,17 @@ export interface SessionInfo {
   model: string;
   /** the model reported by Claude Code at init */
   activeModel: string;
+  /** a duplicate, until it first starts: the Claude Code conversation it goes on from (--resume … --fork-session) */
+  forkOf?: string;
+  /** the version of Claude Code its process runs (none without a process) */
+  claudeVersion?: string;
+  /** its conversation is being compacted: on its own (Claude Code near the limit, or Open Space after a pause) or asked with /compact */
+  compacting?: 'auto' | 'manual';
+  /**
+   * the last event before Open Space compacted the conversation on its own, while nothing else happened since: what
+   * came after is nothing new to read (no "read what X did" for it)
+   */
+  quietFrom?: number;
   /** chosen in the session; none = the model's default */
   effort?: Effort;
   /** Claude Code's ultracode: a workflow of several agents on every task, at any effort */
@@ -172,6 +190,10 @@ export interface SessionInfo {
   permissions: PermissionPrompt[];
   /** sub-agents currently working, oldest first */
   subagents: SubagentInfo[];
+  /** commands it left running in the background, oldest first; absent when none */
+  background?: BackgroundTask[];
+  /** wake-ups it planned on its own (a /loop, cron jobs), still to come; absent when none */
+  scheduled?: number;
   /** the last slash command sent to the session, without the slash (e.g. "kit:design"); '' if none */
   command: string;
   /** last text said by the assistant, shortened */
@@ -302,7 +324,35 @@ export interface Preferences {
   metricsFile: string;
   /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
   language?: Language;
+  /** text selected in the page is copied at once, like in a terminal */
+  copyOnSelect: boolean;
+  /** the effort a new session starts with ('' : the model's default) */
+  effort: Effort | '';
+  /** Claude Code settings for Open Space's sessions only (shared/claude-settings.ts); what is left out is Claude Code's own */
+  claude: ClaudeSettings;
+  /** how the page writes the time of day ('auto' : the language's way) */
+  timeFormat: TimeFormat;
+  /** the time of each message in the threads */
+  timestamps: boolean;
+  /** the line at the end of each turn: how long it took and when it ended */
+  turnDuration: boolean;
+  /** animations and transitions cut short, whatever the system says */
+  reduceMotion: boolean;
+  /** minutes without a message after which a long conversation is compacted on its own (0 : never) */
+  idleCompact: number;
 }
+
+/** The choices of Preferences.idleCompact, in minutes. */
+export const IDLE_COMPACT_MINUTES = [0, 15, 30, 60, 120, 240] as const;
+
+export const TIME_FORMATS = ['auto', '24h', '12h'] as const;
+export type TimeFormat = (typeof TIME_FORMATS)[number];
+
+/**
+ * A place of a session's thread where the search over every session found its words: the event (`seq`), who wrote
+ * it, and the line around the match (`start`, `length`: where the match is in `snippet`).
+ */
+export interface SearchHit { sessionId: string; seq: number; at: number; who: 'user' | 'agent' | 'peer'; snippet: string; start: number; length: number }
 
 /** A note of the whiteboard (a Markdown file of the journal folder, see shared/journal.ts): its file name, its last change (ms). */
 export interface NoteFile { name: string; mtime: number }
@@ -352,6 +402,12 @@ export type ClientMessage =
   /** events of a session after a sequence number (0 = from the start) */
   | { t: 'log'; sessionId: string; after: number }
   | { t: 'directories' }
+  /** a new session that goes on from this one's conversation, which stays as it is */
+  | { t: 'duplicate'; sessionId: string }
+  /** runs `claude update`; the answer comes as claudeUpdate */
+  | { t: 'updateClaude' }
+  /** releases the waiting sessions that run an older Claude Code than the one installed */
+  | { t: 'restartOutdated' }
   /** what a session changed in its files */
   | { t: 'changes'; sessionId: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
@@ -379,17 +435,21 @@ export type ClientMessage =
   | { t: 'writeNote'; name: string; text: string; version: string | null }
   /** reads the numbers file to show it: its numbers then count as seen */
   | { t: 'metrics' }
+  /** the threads of every session searched for `query` (answered with `searchResults` carrying the same `id`) */
+  | { t: 'search'; id: number; query: string }
+  /** what Claude Code spent on this computer, read again if it is older than a minute (`fresh`: read again now) */
+  | { t: 'costs'; fresh?: boolean }
   /** what a music app of the computer plays, after `action` when there is one (the radio asks every few seconds) */
   | { t: 'music'; app: MusicApp; action?: MusicAction }
   /** Music's playlists, and the tracks of its library that match `query` (none for an empty query) */
   | { t: 'musicLibrary'; query: string };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */
-  | { t: 'preferences'; preferences: Preferences; roots: string[]; onboarded: boolean }
+  | { t: 'preferences'; preferences: Preferences; roots: string[]; onboarded: boolean; claudeDefaults: ClaudeDefaults }
   | { t: 'rootSuggestions'; suggestions: RootSuggestion[] }
   | { t: 'crew'; crew: CrewMember[] }
   | { t: 'conversations'; cwd: string; conversations: Conversation[] }
@@ -407,6 +467,9 @@ export type ServerMessage =
   | { t: 'folderCommands'; cwd: string; commands: SlashCommand[] }
   | { t: 'models'; models: ModelChoice[] }
   | { t: 'directories'; directories: string[] }
+  /** the Claude Code installed, read again now and then (its own updater replaces it in the background) */
+  | { t: 'claude'; claude: ClaudeInfo }
+  | { t: 'claudeUpdate'; update: ClaudeUpdate }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }
   | { t: 'inspection'; sessionId: string; inspection: Inspection }
   | { t: 'quota'; quota: Quota }
@@ -422,6 +485,8 @@ export type ServerMessage =
   | { t: 'musicApps'; apps: MusicApp[] }
   | { t: 'music'; nowPlaying: NowPlaying }
   | { t: 'musicLibrary'; query: string; playlists: string[]; tracks: MusicTrack[] }
+  | { t: 'searchResults'; id: number; query: string; hits: SearchHit[] }
+  | { t: 'costs'; report: CostReport }
   | { t: 'toast'; kind: 'info' | 'error'; text: string };
 
 /** A side question (/btw) and its answer. */

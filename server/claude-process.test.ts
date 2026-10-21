@@ -69,6 +69,19 @@ describe('parseCatalog', () => {
     assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), ['--effort', 'high']);
   });
 
+  it('starts a duplicate as a fork of the conversation it comes from, under its own id', () => {
+    const args = buildClaudeArgs({ sessionId: 'copy', resume: false, model: '', permissionMode: 'auto', name: 'Ana', forkOf: 'original' });
+    assert.deepEqual(args.slice(args.indexOf('--resume'), args.indexOf('--resume') + 5), ['--resume', 'original', '--fork-session', '--session-id', 'copy']);
+    assert.ok(!args.includes('--append-system-prompt'), 'the conversation has its prompt already; the new name is told in the next message');
+  });
+
+  it('hands the Claude Code settings chosen in Open Space over as --settings, with ultracode', () => {
+    const base = { sessionId: 'id', resume: false, model: '', permissionMode: 'auto' as const, name: 'Ana' };
+    const args = buildClaudeArgs({ ...base, ultracode: true, settings: { alwaysThinkingEnabled: false, outputStyle: 'Concis' } });
+    assert.deepEqual(JSON.parse(args[args.indexOf('--settings') + 1]), { alwaysThinkingEnabled: false, outputStyle: 'Concis', ultracode: true });
+    assert.ok(!buildClaudeArgs({ ...base, settings: {} }).includes('--settings'), 'nothing chosen: Claude Code’s own files');
+  });
+
   it('passes ultracode as a setting, next to the effort', () => {
     const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', effort: 'high', ultracode: true, permissionMode: 'auto', name: 'Ana' });
     assert.deepEqual(args.slice(args.indexOf('--settings'), args.indexOf('--settings') + 2), ['--settings', '{"ultracode":true}']);

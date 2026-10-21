@@ -7,7 +7,7 @@ import { attentionKind, attentionQueue, isWorking, type AttentionKind, type Seen
 import { assignSeats } from './seats.ts';
 
 /** The icon above someone's head: an attention kind, at work, or nothing. */
-export type Status = AttentionKind | 'working' | null;
+export type Status = AttentionKind | 'working' | 'compacting' | null;
 
 export interface Agent { id: string; name: string; type: string }
 
@@ -48,6 +48,7 @@ export function roleTitle(command: string): string | null {
 export function sessionStatus(session: SessionInfo, seen: SeenSequences): Status {
   const kind = attentionKind(session, seen);
   if (kind) return kind;
+  if (session.compacting) return 'compacting';
   return isWorking(session) ? 'working' : null;
 }
 

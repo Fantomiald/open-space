@@ -13,9 +13,11 @@ import { useSessions } from '../state/sessions.ts';
  * The folders sessions may run in: the suggested ones and those already chosen, checked or not, plus any folder typed in
  * full; and the default one. Shown read-only when OFFICE_ROOTS sets them. At the first start and in the settings.
  */
-export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, suggestions, locked }: {
+export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, suggestions, locked, withDefault = true }: {
   roots: string[]; onRoots: (roots: string[]) => void; defaultFolder: string; onDefaultFolder: (folder: string) => void;
   suggestions: RootSuggestion[] | null; locked: boolean;
+  /** the default folder's field below the list (the settings show it as a row of its own) */
+  withDefault?: boolean;
 }) {
   const [other, setOther] = useState('');
   const toggle = (folder: string) => onRoots(roots.includes(folder) ? roots.filter((root) => root !== folder) : [...roots, folder]);
@@ -53,7 +55,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
           </div>
         </>
       )}
-      {roots.length > 1 && (
+      {withDefault && roots.length > 1 && (
         <label className="cp-onboarding__field">
           <span>{t.settings.folders.defaultFolder}</span>
           <select value={roots.includes(defaultFolder) ? defaultFolder : roots[0]} onChange={(e) => onDefaultFolder(e.target.value)}>
@@ -181,7 +183,7 @@ export function HabitsFields({ habits, onHabits }: { habits: Habits; onHabits: (
 }
 
 /** Each language written in itself, so it can be found whatever the page is shown in. */
-const LANGUAGE_NAMES: Record<Language, string> = { fr: 'Français', en: 'English' };
+export const LANGUAGE_NAMES: Record<Language, string> = { fr: 'Français', en: 'English' };
 
 /** The language of the page, of the server's messages and of new agents' instructions. */
 export function LanguagePicker({ language, onLanguage }: { language: Language; onLanguage: (language: Language) => void }) {

@@ -6,13 +6,22 @@ import path from 'node:path';
 import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
-import { DEFAULT_PERMISSION_MODE, isPermissionMode, type Preferences } from '../shared/protocol.ts';
+import { parseClaudeSettings } from '../shared/claude-settings.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET,
   journalFolder: path.join(os.homedir(), 'Journal'),
   metricsFile: '',
+  copyOnSelect: false,
+  effort: '',
+  claude: {},
+  timeFormat: 'auto',
+  timestamps: false,
+  turnDuration: true,
+  reduceMotion: false,
+  idleCompact: 0,
 };
 
 export const MAX_AGENT_NOTE = 600;
@@ -25,6 +34,11 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
+  for (const key of ['copyOnSelect', 'timestamps', 'turnDuration', 'reduceMotion'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
+  if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
+  if (IDLE_COMPACT_MINUTES.some((minutes) => minutes === raw.idleCompact)) found.idleCompact = raw.idleCompact as number;
+  if (TIME_FORMATS.some((format) => format === raw.timeFormat)) found.timeFormat = raw.timeFormat as Preferences['timeFormat'];
+  if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && path.isAbsolute(root)).map((root) => path.resolve(root)))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;

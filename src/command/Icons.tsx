@@ -1,8 +1,8 @@
 // Open Space's icons, from Lucide (lucide.dev), all at one size and stroke, in the text colour around them.
 // The rest of the page uses these names, so an icon is changed here only.
 import {
-  AppWindow, ArrowLeft, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil,
-  Play, Plus, Power, RotateCw, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Users, Volume2, VolumeX, X, Zap, type LucideIcon,
+  AppWindow, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil,
+  Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn, Clock, Folder, Copy, Languages, PartyPopper, Activity, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -17,6 +17,11 @@ export const InfoIcon = icon(Info);
 export const GridIcon = icon(LayoutGrid);
 export const FreeWindowsIcon = icon(AppWindow);
 export const CrewIcon = icon(Users);
+export const PetIcon = icon(PawPrint);
+export const RemoveIcon = icon(Trash2);
+export const ItsMeIcon = icon(UserCheck);
+export const TurnLeftIcon = icon(RotateCcw);
+export const TurnRightIcon = icon(RotateCw);
 export const CommandIcon = icon(Command);
 export const BellIcon = ({ muted }: { muted: boolean }) => (muted ? <BellOffIcon /> : <BellOnIcon />);
 const BellOnIcon = icon(Bell);
@@ -29,6 +34,7 @@ export const ImageIcon = icon(Image);
 export const SearchIcon = icon(Search);
 export const ChevronUpIcon = icon(ChevronUp);
 export const ChevronDownIcon = icon(ChevronDown);
+export const CheckIcon = icon(Check);
 export const CloseIcon = icon(X);
 export const PencilIcon = icon(Pencil);
 export const PowerIcon = icon(Power);
@@ -68,3 +74,35 @@ export const ShuffleIcon = icon(Shuffle);
 export const ChevronsUpDownIcon = icon(ChevronsUpDown);
 export const BackIcon = icon(ArrowLeft);
 export const RefreshIcon = icon(RotateCw);
+
+/* The search palette and the settings: one icon per kind of result, per section and per row. */
+export const CostIcon = icon(CircleDollarSign);
+export const KeyboardIcon = icon(Keyboard);
+export const NotesIcon = icon(NotebookPen);
+export const MessageIcon = icon(MessageSquareText);
+export const ChartIcon = icon(ChartColumn);
+export const ClockIcon = icon(Clock);
+export const FolderIcon = icon(Folder);
+export const CopyIcon = icon(Copy);
+export const LanguageIcon = icon(Languages);
+export const FestivalIcon = icon(PartyPopper);
+export const ActivityIcon = icon(Activity);
+export const TrendIcon = icon(TrendingUp);
+export const WeekIcon = icon(CalendarDays);
+export const AgentIcon = icon(Bot);
+export const EnterIcon = icon(CornerDownLeft);
+export const ArrowsIcon = icon(ArrowUpDown);
+export const ChangelogIcon = icon(ScrollText);
+export const CoffeeIcon = icon(Coffee);
+export const GaugeIcon = icon(Gauge);
+export const TimerIcon = icon(Timer);
+export const SparklesIcon = icon(Sparkles);
+export const ThinkingIcon = icon(Brain);
+export const DuplicateIcon = icon(CopyPlus);
+export const CompactIcon = icon(Shrink);
+export const PlanIcon = icon(ListChecks);
+export const WorkflowIcon = icon(Workflow);
+export const InboxIcon = icon(Inbox);
+export const PeakIcon = icon(Zap);
+export const ChevronLeftIcon = icon(ChevronLeft);
+export const ChevronRightIcon = icon(ChevronRight);

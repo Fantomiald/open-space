@@ -10,7 +10,8 @@ export interface AttentionItem { session: SessionInfo; kind: AttentionKind }
 /** Last event sequence number the user has seen, by session id. */
 export type SeenSequences = Readonly<Record<string, number>>;
 
-const unseen = (session: SessionInfo, seen: SeenSequences) => session.lastSeq > (seen[session.id] ?? 0);
+/** What came after `quietFrom` was Open Space compacting the conversation on its own: nothing new to read. */
+const unseen = (session: SessionInfo, seen: SeenSequences) => (session.quietFrom ?? session.lastSeq) > (seen[session.id] ?? 0);
 
 /** The reason a session needs the user, or null. A question is an AskUserQuestion call waiting for its answers. */
 export function attentionKind(session: SessionInfo, seen: SeenSequences = {}): AttentionKind | null {
@@ -29,8 +30,9 @@ export function attentionQueue(sessions: readonly SessionInfo[], seen: SeenSeque
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.session.stateSince - b.session.stateSince);
 }
 
-/** At work: its turn running, or between turns while sub-agents it sent off in the background still work. */
-export const isWorking = (session: SessionInfo) => session.state === 'work' || session.state === 'starting' || (session.state === 'wait' && session.subagents.length > 0);
+/** At work: its turn running, or between turns while sub-agents or commands it sent off in the background still work. */
+export const isWorking = (session: SessionInfo) => session.state === 'work' || session.state === 'starting'
+  || (session.state === 'wait' && (session.subagents.length > 0 || !!session.background));
 
 export interface SessionGroups { working: SessionInfo[]; idle: SessionInfo[]; stopped: SessionInfo[] }
 

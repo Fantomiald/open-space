@@ -84,7 +84,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   );
   const tools = (
     <div className="cp-composer__tools">
-      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} title={words.commands} onClick={() => openPalette(true)}><CommandIcon /></button>
+      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} title={words.commands} onClick={() => openPalette(true, '/')}><CommandIcon /></button>
       <TuneMenu tuning={session} cwd={session.cwd} onChange={(change) => send({ t: 'tune', sessionId: session.id, ...change })} compact={stacked} />
       <AttachButton attachments={attachments} />
     </div>

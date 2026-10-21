@@ -1,18 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import type { OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
+import type { BackgroundTask, OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
 import { asJson } from './json.ts';
-import { Normalizer, describeRequest, ruleText, type AgentLaunch, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, ruleText, type AgentLaunch, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 
 function createNormalizer(peerName?: (address: string) => string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
   const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
-  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[] };
+  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
+    onBackground: (tasks) => seen.background.push(tasks), onSchedule: (change) => seen.schedules.push(change),
     names: new Set(), peerName, agentLaunch, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
@@ -34,7 +35,7 @@ describe('Normalizer on a real simple turn', () => {
   const { events, results, quotas, inits, partials } = replay('simple-turn');
 
   it('reads model and slash commands from the init message', () => {
-    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'], socket: '', conversationId: 'b40531d7-8ea6-4c7f-875e-058a07dcfee9' }], 'recorded before Claude Code had sockets');
+    assert.deepEqual(inits, [{ model: 'claude-haiku-5-5', commands: ['kit:new', 'kit:status', 'superpowers:brainstorming', 'compact'], socket: '', conversationId: 'b40531d7-8ea6-4c7f-875e-058a07dcfee9', version: '2.1.301' }], 'recorded before Claude Code had sockets');
     assert.deepEqual(events[0], { k: 'init', model: 'claude-haiku-5-5' });
   });
 
@@ -140,6 +141,39 @@ describe('Normalizer on a real sub-agent sent to the background', () => {
     const leave = events.find((event) => event.k === 'leave');
     assert.ok(leave?.k === 'leave' && leave.who === agentId && leave.ok && leave.tokens > 0);
     assert.equal(results.length, 2, 'its end starts a turn of the main agent of its own');
+  });
+});
+
+describe('Normalizer on a real Bash command sent to the background', () => {
+  const { background, events, results } = replay('bash-background');
+
+  it('tells which commands run in the background, until there are none', () => {
+    assert.deepEqual(background, [[{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished' }], []]);
+    assert.equal(events.filter((event) => event.k === 'hire').length, 0, 'a command is not a sub-agent');
+    assert.equal(results.length, 2, 'its end starts a turn of its own');
+  });
+
+  it('leaves background sub-agents out: they come and go as hire and leave events', () => {
+    assert.deepEqual(replay('subagent-background').background, [[], []]);
+  });
+});
+
+describe('Normalizer on what the agent plans for later', () => {
+  it('tells a /loop wake-up or a cron job once its call went through, not a refused one nor a sub-agent\'s', () => {
+    const { normalizer, schedules } = createNormalizer();
+    const call = (id: string, name: string, input: Record<string, unknown>, isError = false, parent: string | null = null) => {
+      normalizer.handle({ type: 'assistant', parent_tool_use_id: parent, message: { content: [{ type: 'tool_use', id, name, input }] } });
+      normalizer.handle({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok', is_error: isError }] } });
+    };
+    call('w1', 'ScheduleWakeup', { delaySeconds: 1200, prompt: '/loop check', reason: 'r' });
+    call('c1', 'CronCreate', { cron: '30 14 28 2 *', prompt: 'remind', recurring: false });
+    call('c2', 'CronCreate', { cron: '*/5 * * * *', prompt: 'tick' }, true);
+    call('c3', 'CronCreate', { cron: '*/5 * * * *', prompt: 'tick' }, false, 'task1');
+    call('d1', 'CronDelete', { id: 'abc' });
+    call('w2', 'ScheduleWakeup', { stop: true });
+    assert.deepEqual(schedules, [
+      { kind: 'wakeup', seconds: 1200 }, { kind: 'cron', cron: '30 14 28 2 *', recurring: false }, { kind: 'cron_delete' }, { kind: 'wakeup_stop' },
+    ]);
   });
 });
 

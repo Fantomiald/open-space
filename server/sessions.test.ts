@@ -395,6 +395,82 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
+  it('compacts a long conversation left alone, quietly, and sends a resting one back to rest', async () => {
+    let clock = 1_000_000;
+    const { manager, processes, messages, find, attention } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    const first = processes[0];
+    first.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    first.handlers.onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Long answer' }], usage: { input_tokens: 120_000, output_tokens: 500 } } });
+    first.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Long answer', duration_ms: 9, modelUsage: { m: { contextWindow: 200_000 } } });
+    await manager.rest(id);
+    const ends = () => messages.filter((m) => m.t === 'ev' && m.ev.k === 'end').length;
+    const endsBefore = ends();
+    manager.compactIdle(30);
+    assert.equal(processes.length, 1, 'not idle long enough');
+    clock += 31 * 60_000;
+    manager.compactIdle(0);
+    assert.equal(processes.length, 1, 'turned off');
+    manager.compactIdle(30);
+    const second = processes[1];
+    assert.ok(second?.launch.resume, 'the conversation goes on');
+    assert.match(second.sent[0], /^\/compact /);
+    assert.equal(find(id).compacting, 'auto');
+    assert.equal(find(id).resting, true, 'still in the break room');
+    second.handlers.onMessage({ type: 'system', subtype: 'status', status: 'compacting' });
+    second.handlers.onMessage({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'manual', pre_tokens: 120_000, post_tokens: 9_000 } });
+    second.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 900 });
+    const compact = messages.find((m) => m.t === 'ev' && m.ev.k === 'compact');
+    assert.ok(compact?.t === 'ev' && compact.ev.k === 'compact' && compact.ev.idle === true);
+    assert.equal(ends(), endsBefore, 'no turn to read');
+    assert.deepEqual(second.stopCalls, [2000], 'back to rest');
+    const after = find(id);
+    assert.equal(after.resting, true);
+    assert.equal(after.compacting, undefined);
+    assert.ok(after.quietFrom !== undefined && after.quietFrom < after.lastSeq, 'what it wrote is nothing new');
+    assert.equal(attention.filter(([kind]) => kind === 'finished').length, 1, 'only the real turn was told');
+    clock += 31 * 60_000;
+    manager.compactIdle(30);
+    assert.equal(processes.length, 2, 'short now: not again');
+    await manager.shutdown();
+  });
+
+  it('duplicates a session: same folder and settings, its conversation forked at the first message, the original left alone', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi', model: 'haiku', effort: 'high' });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    processes[0].handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Hello', duration_ms: 9 });
+    const copy = await manager.duplicate(id, 'Bob');
+    assert.notEqual(copy.id, id);
+    assert.equal(copy.name, 'Bob');
+    assert.deepEqual([copy.cwd, copy.model, copy.effort, copy.forkOf], [find(id).cwd, 'haiku', 'high', id]);
+    assert.equal(processes.length, 1, 'it waits for a message');
+    manager.send(copy.id, 'try another way');
+    assert.equal(processes[1].launch.forkOf, id);
+    assert.equal(processes[1].launch.sessionId, copy.id);
+    assert.match(processes[1].sent[0], /Bob/, 'told its new name');
+    processes[1].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: copy.id });
+    assert.equal(find(copy.id).forkOf, undefined, 'a fork once: its own conversation from now on');
+    await manager.shutdown();
+  });
+
+  it('releases the waiting sessions on an older Claude Code, so that their next message starts the one installed', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const waiting = await manager.create({ cwd: projectA(), text: 'hi' });
+    const working = await manager.create({ cwd: projectA(), text: 'hi' });
+    for (const [index, id] of [waiting.id, working.id].entries()) processes[index].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id, claude_code_version: '2.1.304' });
+    processes[0].handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Hello', duration_ms: 9 });
+    assert.equal(find(waiting.id).claudeVersion, '2.1.304');
+    assert.equal(manager.releaseOutdated('2.1.304'), 0, 'already on it');
+    assert.equal(manager.releaseOutdated('2.1.305'), 1, 'the one at work keeps going');
+    assert.deepEqual(processes[0].stopCalls, [2000]);
+    assert.deepEqual(processes[1].stopCalls, []);
+    await manager.shutdown();
+  });
+
   it('does not end a turn on an empty result of Claude Code: the real one follows, or the session waits quietly', async () => {
     const { manager, processes, messages, find, attention } = setup();
     await manager.init();
@@ -774,6 +850,36 @@ describe('process life cycle', () => {
     assert.deepEqual(second.processes[0].remoteCalls, [true, false], 'closed: Remote Control ends too');
     assert.equal(second.find(id).remoteSession, undefined);
     await second.manager.shutdown();
+  });
+
+  it('keeps a waiting session at work and its process alive while a command runs in the background, then lets it go', async () => {
+    const { manager, processes, find } = setup({ idleMs: 30 });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'render the videos' });
+    processes[0].feed('bash-background', 0, 11);
+    assert.equal(find(id).state, 'wait');
+    assert.deepEqual(find(id).background, [{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished' }]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, true, 'its end has to wake the session up');
+    processes[0].feed('bash-background', 11);
+    assert.equal(find(id).background, undefined);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, false, 'released once idle');
+    await manager.shutdown();
+  });
+
+  it('keeps the process of a session waiting for its /loop to wake it up', async () => {
+    const { manager, processes, find } = setup({ idleMs: 30 });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/loop check the deploy' });
+    processes[0].handlers.onMessage({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'w1', name: 'ScheduleWakeup', input: { delaySeconds: 1200, prompt: '/loop check the deploy', reason: 'r' } }] } });
+    processes[0].handlers.onMessage({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'w1', content: 'ok' }] } });
+    processes[0].feed('simple-turn');
+    assert.equal(find(id).state, 'wait');
+    assert.equal(find(id).scheduled, 1);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(processes[0].alive, true, 'the wake-up lives in the process');
+    await manager.shutdown();
   });
 
   it('keeps the process of a session under Remote Control, started without a message, and lets it go once turned off', async () => {

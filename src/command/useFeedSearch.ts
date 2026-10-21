@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
-import { findAll, fold, foldQuery } from '../lib/search.ts';
+import { findAll, fold, foldQuery } from '../../shared/search.ts';
 
 const ALL = 'cp-search';
 const CURRENT = 'cp-search-current';

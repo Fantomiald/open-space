@@ -55,3 +55,6 @@ export const PEOPLE_INK = {
   watch: '#cfd3da',
   lens: '#bcd6ea',
 };
+
+/** The see-through dummy the crew editor shows each piece of the wardrobe on: a dotted line, a faint body. */
+export const MANNEQUIN = { line: 'rgb(200 210 255 / 0.75)', body: 'rgb(200 210 255 / 0.13)' };

@@ -380,6 +380,8 @@ const SEPARATED = TAG_GAP * 2 + 1;
 
 /** The status glyphs, on a 5 x 5 grid in the middle of the icon (working is three dots, drawn apart). */
 const STATUS_GLYPHS: Readonly<Record<Exclude<Status, 'working' | null>, Glyph>> = {
+  // two chevrons pressing a bar from above and below: the conversation shrinks
+  compacting: [[1, 0], [2, 1], [3, 0], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [1, 4], [2, 3], [3, 4]],
   permission: [[2, 0], [2, 1], [2, 2], [2, 4]],
   question: [[1, 0], [2, 0], [3, 0], [3, 1], [2, 2], [2, 4]],
   finished: [[0, 2], [1, 3], [2, 2], [3, 1], [4, 0]],

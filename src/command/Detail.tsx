@@ -2,7 +2,7 @@ import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 're
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { buildFeed } from '../state/feed.ts';
-import { isRunning } from '../state/labels.ts';
+import { backgroundWork, isRunning } from '../state/labels.ts';
 import { attentionKind } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import { DropOverlay } from './Attachments.tsx';
@@ -12,7 +12,7 @@ import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx'
 import { Composer, RemoteButton } from './Composer.tsx';
 import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { AgentBack, Feed } from './Feed.tsx';
-import { CloseIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
@@ -23,7 +23,7 @@ import { useDismiss } from './useDismiss.ts';
 const NO_EVENTS: never[] = [];
 
 /** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
-function SessionMenu({ session, searchOpen, onSearch, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onSwitchOff: () => void }) {
+function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onRest: () => void; onSwitchOff: () => void }) {
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -40,7 +40,10 @@ function SessionMenu({ session, searchOpen, onSearch, onSwitchOff }: { session: 
           {!session.remote && (
             <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>
           )}
-          {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(() => send({ t: 'rest', sessionId: session.id }))}><RestIcon />{words.rest}</button>}
+          {session.resumable && (
+            <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
+          )}
+          {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(onRest)}><RestIcon />{words.rest}</button>}
           <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
         </div>
       )}
@@ -84,6 +87,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   }, [sessionId, live, turns, helpers, send]);
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
+  const [restAsked, setRestAsked] = useState(false);
   // the sub-agent whose thread is shown, null for the conversation
   const [agent, setAgent] = useState<string | null>(null);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
@@ -142,7 +146,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onSwitchOff={() => setSwitchingOff(true)} />
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : send({ t: 'rest', sessionId: session.id }))} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -165,9 +169,19 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
         {switchingOff && (
           <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
             <p className="cp-muted">{t.session.detail.switchOffText}</p>
+            {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}
             <div className="cp-form__actions">
               <button type="button" className="cp-button" autoFocus onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
               <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); closeOpen(session.id); }}>{t.session.detail.switchOff}</button>
+            </div>
+          </Modal>
+        )}
+        {restAsked && (
+          <Modal title={t.session.detail.restQuestion(session.name)} onClose={() => setRestAsked(false)}>
+            <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>
+            <div className="cp-form__actions">
+              <button type="button" className="cp-button" autoFocus onClick={() => setRestAsked(false)}>{t.session.detail.cancel}</button>
+              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'rest', sessionId: session.id }); setRestAsked(false); }}>{t.session.detail.rest}</button>
             </div>
           </Modal>
         )}

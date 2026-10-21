@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
@@ -19,6 +20,30 @@ function run(file: string, args: string[]): Promise<string> {
   });
 }
 
+/** The version a `claude` executable says it is ("2.1.305"), or null when it does not answer. */
+export async function readVersion(file: string): Promise<string | null> {
+  try {
+    const output = (await run(file, ['--version'])).trim();
+    return output.split(/\s+/)[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Runs `claude update`, which checks and installs (through the package manager for those installs). The only network
+ * use is Claude Code's own, asked for by the user. Resolves with what it printed, rejects when it failed.
+ */
+export function runUpdate(file: string, environment: NodeJS.ProcessEnv): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(file, ['update'], { env: environment, timeout: 300_000 }, (error, stdout, stderr) => {
+      if (!error) { resolve(stdout); return; }
+      const lines = `${stderr}\n${stdout}`.split('\n').map((line) => line.trim()).filter(Boolean);
+      reject(new Error(lines.at(-1) ?? error.message));
+    });
+  });
+}
+
 /** Finds the `claude` executable without going through terminal aliases. Relative PATH entries are ignored. */
 export async function findClaude(env: NodeJS.ProcessEnv = process.env): Promise<ClaudeBinary | null> {
   const home = os.homedir();
@@ -26,10 +51,8 @@ export async function findClaude(env: NodeJS.ProcessEnv = process.env): Promise<
   const candidates = [env.CLAUDE_BIN, ...fromPath, path.join(home, '.local/bin/claude'), path.join(home, '.claude/local/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
   for (const candidate of new Set(candidates.filter((c): c is string => !!c))) {
     if (!path.isAbsolute(candidate) || !existsSync(candidate)) continue;
-    try {
-      const output = await run(candidate, ['--version']);
-      return { path: candidate, version: output.trim().split(/\s+/)[0] ?? output.trim() };
-    } catch { /* try the next one */ }
+    const version = await readVersion(candidate);
+    if (version) return { path: candidate, version };
   }
   return null;
 }
@@ -49,6 +72,10 @@ export interface LaunchOptions {
   note?: string;
   /** without the folder's own settings (see server/trust.ts) */
   untrusted?: boolean;
+  /** the Claude Code settings the user chose for Open Space's sessions (shared/claude-settings.ts) */
+  settings?: ClaudeSettings;
+  /** a duplicate's first launch: the conversation it goes on from, copied under `sessionId` */
+  forkOf?: string;
   /** folders the session may read besides its own (--add-dir): where the files the user sends are kept */
   addDirs?: readonly string[];
 }
@@ -70,21 +97,23 @@ export interface LaunchOptions {
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
-    options.resume ? '--resume' : '--session-id', options.sessionId,
+    // a duplicate copies the conversation it comes from under its own id (checked with 2.1.305: --resume then knows it)
+    ...(options.forkOf ? ['--resume', options.forkOf, '--fork-session', '--session-id', options.sessionId] : [options.resume ? '--resume' : '--session-id', options.sessionId]),
     '--name', options.name,
   ];
   if (options.model) args.push('--model', options.model);
   if (options.effort) args.push('--effort', options.effort);
-  // a settings key of its own, so that it holds at any effort (`--effort ultracode` would replace the level)
-  if (options.ultracode) args.push('--settings', JSON.stringify({ ultracode: true }));
+  // ultracode is a settings key of its own, so that it holds at any effort (`--effort ultracode` would replace the level)
+  const settings = { ...options.settings, ...(options.ultracode ? { ultracode: true } : {}) };
+  if (Object.keys(settings).length) args.push('--settings', JSON.stringify(settings));
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note));
   return args;
 }
 
@@ -201,7 +230,9 @@ class ClaudeProcess implements ProcessHandle {
     this.handlers = handlers;
     // CLAUDE_CODE_ATTACHMENTS_BY_PATH gives Claude its SendUserFile tool and has it hand the files' paths over instead of
     // uploading them (checked with 2.1.302): Open Space shows them in the thread (see Normalizer and Session.onFiles)
-    const env = { ...environment, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1' };
+    // auto-compact turned off in Claude Code's own /config is kept in ~/.claude.json, which wins over --settings: the
+    // variable turns it off whatever that file says
+    const env = { ...environment, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
     const child = spawn(binary.path, buildClaudeArgs(launch), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     this.child = child;
     readline.createInterface({ input: child.stdout }).on('line', (line) => {

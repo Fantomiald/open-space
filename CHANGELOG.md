@@ -1,5 +1,19 @@
 # Versions
 
+## 1.9.0
+
+- Recherche partout (⌘K) : sessions, messages, commandes et réglages dans une seule fenêtre, centrée, qui ne bouge pas pendant qu'on tape.
+- Réglages refaits en rubriques, avec leur propre recherche. Nouvelle rubrique Claude Code : les réglages du /config (réflexion, style de sortie, langue, compactage auto, workflows…) pour les sessions d'Open Space, avec leur nom dans /config pour s'y retrouver.
+- Usage et coûts : le temps passé, les sessions et ce que ça aurait coûté, par jour, par projet et par modèle.
+- Mise à jour de Claude Code depuis les réglages : une pastille rouge sur la roue quand une nouvelle version est installée, et un bouton pour relancer les sessions dessus.
+- Compactage au repos (réglable, désactivé par défaut) : une longue conversation restée sans message est compactée toute seule. Une icône de compactage s'affiche partout pendant un compactage, manuel ou automatique.
+- Dupliquer une session (menu ⋯) : une copie repart de la conversation sous un autre nom, l'originale continue de son côté.
+- Copie à la sélection, dans les conversations et dans les champs.
+- Une session qui a une commande en fond reste « au travail », son processus est gardé pour les /loop et les crons, et Repos ou Éteindre préviennent de ce qui s'arrête.
+- Fenêtre Équipe refaite : la liste à gauche avec « Ajouter » toujours visible, chaque choix (coiffure, haut, chaussures…) montré sur un mannequin en pointillés, un clic sur le perso ouvre sa partie, le métier dans un menu à cocher.
+- En-tête allégé : Grille / Libre dans sa bulle, un vrai champ Rechercher, son, notifications et équipe rangés dans les réglages.
+- Réglages : format de l'heure, réduire les animations, heure des messages, durée des tours, effort par défaut.
+
 ## 1.8.0
 
 - Open Space devient une vraie app Mac (Electron) : `npm run app` construit un `.dmg` Apple Silicon et Intel. Le serveur tourne dans l'app, plus besoin de terminal ni d'onglet ; fermer la fenêtre laisse tourner les sessions, quitter l'app les arrête.

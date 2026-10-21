@@ -35,6 +35,7 @@ export function Onboarding() {
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
     metricsFile: '',
+    copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0,
   });
 
   useEffect(() => { send({ t: 'suggestRoots' }); }, [send]);

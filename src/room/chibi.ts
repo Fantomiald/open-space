@@ -1,6 +1,6 @@
 // The people of the room in chibi pixel art: a big head on a small body, 16 x 25 art pixels, drawn from a Look
 // (shared/look.ts). Each pose is drawn once on its own little canvas, outlined, and kept.
-import { CLOTH_COLORS, COSTUME_COLORS, HAIR_COLORS, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
+import { CLOTH_COLORS, COSTUME_COLORS, HAIR_COLORS, MANNEQUIN, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { BEARD_STYLES, HAIR_STYLES, type HairStyle, type Look } from '../../shared/look.ts';
 import { costumeSleeve, isCostumeHat, paintAccessory, paintCostumeHat, paintCostumeLegs, paintCostumeTop, paintRaisedSleeve, paintSmoke, underCostume, type Body, type CostumeHat } from './costumes.ts';
@@ -496,6 +496,69 @@ export function chibiIcon(look: Look, scale = 2): HTMLCanvasElement {
   context.drawImage(chibiBust(look), Math.floor((ICON_GRID - BUST.width) / 2) * scale, (ICON_GRID - BUST.height) * scale, BUST.width * scale, BUST.height * scale);
   context.restore();
   return canvas;
+}
+
+/** Where a piece of the wardrobe is worn: the square of the sprite its picture shows, in art pixels. */
+export type BodyPart = 'hat' | 'head' | 'chest' | 'legs' | 'feet';
+const PARTS: Readonly<Record<BodyPart, { x: number; y: number; size: number }>> = {
+  hat: { x: 1, y: 6, size: 24 }, head: { x: 4, y: 12, size: 18 }, chest: { x: 5, y: 27, size: 16 }, legs: { x: 6, y: 29, size: 14 }, feet: { x: 7, y: 33, size: 12 },
+};
+/** The first row under the chin: below the head, the face stays see-through like the rest of the dummy. */
+const NECK = 30;
+/** Nothing on but plain trousers, which stay see-through like the body unless they are the piece shown. */
+const DUMMY: Partial<Look> = {
+  hair: 'none', beard: 'none', hat: 'none', headphones: false, accessory: 'none', glasses: null, sunglasses: false, watch: false, top: 'none', bottom: 'pants', shoes: 'barefoot',
+};
+const STANDING: Pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: true, gesture: 'none' };
+
+const pieces = new Map<string, string>();
+/**
+ * One piece of the wardrobe (`piece`, in the colours of `look`) on a see-through dummy, cut to the part of the body
+ * it is worn on: the crew editor's choices. The body and the trousers are found by drawing the dummy again in other
+ * colours (what changes is theirs), and drawn faint, their outline dotted; the piece keeps its own.
+ */
+export function chibiPiece(look: Look, piece: Partial<Look>, part: BodyPart): string {
+  const key = `${JSON.stringify(look)}|${JSON.stringify(piece)}|${part}`;
+  let url = pieces.get(key);
+  if (url) return url;
+  const dressed: Look = { ...look, ...DUMMY, ...piece };
+  const pixels = (variant: Look) => {
+    const sprite = chibiSprite(variant, STANDING);
+    return sprite.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, sprite.width, sprite.height).data;
+  };
+  const shown = pixels(dressed);
+  const reskinned = pixels({ ...dressed, skin: dressed.skin === SKIN_TONES[0] ? SKIN_TONES[4] : SKIN_TONES[0] });
+  const trousers = 'bottom' in piece ? null : pixels({ ...dressed, bottomColor: dressed.bottomColor === CLOTH_COLORS[0] ? CLOTH_COLORS[3] : CLOTH_COLORS[0] });
+  const width = CANVAS.width;
+  const below = part !== 'hat' && part !== 'head';
+  const differs = (other: Uint8ClampedArray, at: number) => other[at] !== shown[at] || other[at + 1] !== shown[at + 1] || other[at + 2] !== shown[at + 2];
+  const [inkRed, inkGreen, inkBlue] = rgb(INK.outline);
+  type Kind = 'empty' | 'dummy' | 'line' | 'piece';
+  const kindAt = (x: number, y: number): Kind => {
+    if (x < 0 || y < 0 || x >= width || y >= CANVAS.height) return 'empty';
+    const at = (y * width + x) * 4;
+    if (shown[at + 3] < 40) return 'empty';
+    if (differs(reskinned, at) || (trousers && differs(trousers, at)) || (below && y < NECK)) return 'dummy';
+    return shown[at] === inkRed && shown[at + 1] === inkGreen && shown[at + 2] === inkBlue ? 'line' : 'piece';
+  };
+  const { x: left, y: top, size } = PARTS[part];
+  // about 128 screen pixels whatever the part: sharp at twice the size it is shown
+  const scale = Math.round(128 / size);
+  const { canvas, context } = artCanvas(size * scale, size * scale);
+  for (let y = top; y < top + size; y++) for (let x = left; x < left + size; x++) {
+    const kind = kindAt(x, y);
+    const at = (y * width + x) * 4;
+    const around = [kindAt(x - 1, y), kindAt(x + 1, y), kindAt(x, y - 1), kindAt(x, y + 1)];
+    if (kind === 'piece' || (kind === 'line' && around.includes('piece'))) context.fillStyle = `rgb(${shown[at]} ${shown[at + 1]} ${shown[at + 2]})`;
+    // the dummy's outline, every other pixel: a dotted line
+    else if (kind === 'line') { if ((x + y) % 2) continue; context.fillStyle = MANNEQUIN.line; }
+    else if (kind === 'dummy') context.fillStyle = MANNEQUIN.body;
+    else continue;
+    context.fillRect((x - left) * scale, (y - top) * scale, scale, scale);
+  }
+  url = canvas.toDataURL();
+  pieces.set(key, url);
+  return url;
 }
 
 /** A look for someone without one (a sub-agent, a session named like nobody in the crew): stable for the same id. */

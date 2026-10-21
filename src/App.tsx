@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
 import { MetricsDialog } from './command/MetricsDialog.tsx';
-import { CommandPalette } from './command/CommandPalette.tsx';
+import { SearchPalette } from './command/SearchPalette.tsx';
+import { CopyOnSelect } from './command/CopyOnSelect.tsx';
 import { CrewDialog } from './command/CrewDialog.tsx';
 import { Onboarding } from './command/Onboarding.tsx';
 import { SettingsDialog } from './command/SettingsDialog.tsx';
@@ -38,8 +39,10 @@ export function App() {
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
+  const reduceMotion = useSessions((s) => s.preferences.reduceMotion);
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
+  useEffect(() => { document.documentElement.dataset.motion = reduceMotion ? 'reduced' : 'full'; }, [reduceMotion]);
 
   // the user's own bust: the tab's icon, and the macOS app's (kept by the server, see scripts/macos-app.py)
   const selfLook = useSessions((s) => s.crew.find((member) => member.self)?.look);
@@ -94,6 +97,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const state = useSessions.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); state.openPalette(!state.paletteOpen); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); state.openSettings(!state.settingsOpen); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return; }
       // Cmd+F with a session open searches its thread (the browser's own search does not see folded actions)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && state.selectedId && !document.querySelector('dialog[open]')) {
@@ -145,7 +149,7 @@ export function App() {
         e.preventDefault();
         // Shift+N: a session at once, in the default folder with the default model and mode, opened to write to it; N: the launcher's field
         const { preferences } = state;
-        if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, preferences.defaultFolder), model: preferences.model, permissionMode: preferences.permissionMode });
+        if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
         else state.openNewSession({});
       }
     };
@@ -174,7 +178,8 @@ export function App() {
         {openIds.length ? <Stack /> : <Launcher />}
       </main>
       {view !== 'focus' && <StatusPanel />}
-      <CommandPalette />
+      <SearchPalette />
+      <CopyOnSelect />
       <CrewDialog />
       <SettingsDialog />
       <BoardDialog />
