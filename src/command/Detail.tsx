@@ -12,12 +12,14 @@ import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx'
 import { Composer, RemoteButton } from './Composer.tsx';
 import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { AgentBack, Feed } from './Feed.tsx';
-import { CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
+import { SwitchOffDialog } from './SwitchOffDialog.tsx';
+import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
 import { useAttachments } from './useAttachments.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -44,6 +46,7 @@ function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { s
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
           )}
+          <button type="button" role="menuitem" title={words.terminalHereTitle} onClick={pick(() => useSessions.getState().openTerminal(session.id))}><TerminalIcon />{words.terminalHere}</button>
           {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(onRest)}><RestIcon />{words.rest}</button>}
           <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
         </div>
@@ -83,10 +86,13 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const panelView = useSessions((s) => (active ? s.panelView : 'thread'));
   const showPanel = useSessions((s) => s.showPanel);
   // what it changed, asked again at the end of each of its turns and when a sub-agent comes or goes
-  const turns = session?.turns, helpers = session?.subagents.length;
+  const turns = session?.turns, helpers = session?.subagents.length, isolated = !!session?.worktree;
   useEffect(() => {
     if (live && turns !== undefined) send({ t: 'changes', sessionId });
-  }, [sessionId, live, turns, helpers, send]);
+    // a branch may change outside its turns too (a commit from the terminal): looked at again when the window opens
+    if (live && isolated) send({ t: 'branch', sessionId, action: 'refresh' });
+  }, [sessionId, live, turns, helpers, isolated, send]);
+  const openBranches = useSessions((s) => s.openBranches);
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   const [restAsked, setRestAsked] = useState(false);
@@ -156,6 +162,11 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           {editing === 'tag' ? field('tag') : session.tag
             ? <button type="button" className="cp-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
             : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
+          {session.worktree && (
+            <button type="button" className="cp-branch-pill" title={t.branches.pill(session.worktree.branch, session.worktree.base)} onClick={() => openBranches(session.worktree?.home ?? session.cwd)}>
+              <BranchIcon /><span className="cp-branch-pill__name">{session.worktree.branch}</span>
+            </button>
+          )}
           {session.context && <ContextChip context={session.context} onOpen={() => showPanel('context')} />}
           {changes && changes.files.length > 0 && (
             <button
@@ -169,7 +180,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           {pages.length > 0 && <PublishedPages pages={pages} />}
           {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         </div>
-        {switchingOff && (
+        {switchingOff && asksBeforeSwitchingOff(session) && <SwitchOffDialog session={session} onClose={() => setSwitchingOff(false)} />}
+        {switchingOff && !asksBeforeSwitchingOff(session) && (
           <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
             <p className="cp-muted">{t.session.detail.switchOffText}</p>
             {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}

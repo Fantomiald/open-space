@@ -1,6 +1,6 @@
 // How a crew member looks in the room: a few drawn traits and their colours. The room draws them in pixel art
 // (src/room/chibi.ts); the crew editor picks them. Shared so the server can check what it stores.
-import { DEFAULT_HAT_COLOR } from '../src/design/people-palette.ts';
+import { CLOTH_COLORS, DEFAULT_HAT_COLOR, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../src/design/people-palette.ts';
 
 /** Dress-up pieces (src/room/wardrobe.ts and wardrobe-head.ts), after the everyday ones in each list. */
 export const WARDROBE_HAIR = ['topknot', 'dreadlocks', 'mullet', 'punkSpikes', 'wavy', 'coils', 'undercut', 'geisha', 'twinTails', 'vikingBraids', 'emo', 'tonsure'] as const;
@@ -93,5 +93,37 @@ export function parseLook(raw: unknown): Look | null {
     hat: look.hat as HatStyle, hatColor: look.hatColor as string, top: look.top as Top, topColor: look.topColor as string, accentColor: look.accentColor as string,
     bottom: look.bottom as Bottom, bottomColor: look.bottomColor as string, shoes: look.shoes as Shoes, shoesColor: look.shoesColor as string,
     watch: look.watch as boolean, accessory: look.accessory as Accessory,
+  };
+}
+
+/**
+ * A whole look drawn at random, every trait on its own, from what the editor offers. The optional pieces (hat, accessory,
+ * beard, glasses, headphones, watch) often come out as "none" so the results stay varied. `random`: a number in [0, 1).
+ */
+export function randomLook(random: () => number = Math.random): Look {
+  const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)];
+  const maybe = <T>(chance: number, value: () => T, otherwise: T): T => (random() < chance ? value() : otherwise);
+  const glasses = random();
+  return {
+    skin: pick([...SKIN_TONES, ...FANCY_SKINS]),
+    eyes: pick(EYES),
+    hair: pick(HAIR_STYLES),
+    hairColor: pick(HAIR_COLORS),
+    beard: maybe(0.35, () => pick(BEARD_STYLES.filter((style) => style !== 'none')), 'none'),
+    beardColor: pick(HAIR_COLORS),
+    glasses: glasses < 0.25 ? pick(GLASSES_COLORS) : null,
+    sunglasses: glasses >= 0.25 && glasses < 0.4,
+    headphones: random() < 0.2,
+    hat: maybe(0.45, () => pick(HATS.filter((hat) => hat !== 'none')), 'none'),
+    hatColor: pick(CLOTH_COLORS),
+    top: pick(TOPS.filter((top) => top !== 'none')),
+    topColor: pick(CLOTH_COLORS),
+    accentColor: pick(CLOTH_COLORS),
+    bottom: pick(BOTTOMS),
+    bottomColor: pick(CLOTH_COLORS),
+    shoes: pick(SHOES),
+    shoesColor: pick(CLOTH_COLORS),
+    watch: random() < 0.4,
+    accessory: maybe(0.4, () => pick(ACCESSORIES.filter((accessory) => accessory !== 'none')), 'none'),
   };
 }

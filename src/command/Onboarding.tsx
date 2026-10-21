@@ -31,7 +31,7 @@ export function Onboarding() {
   const [birthday, setBirthday] = useState('');
   const [roots, setRoots] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Omit<Preferences, 'roots'>>({
-    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET,
+    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, isolate: 'busy',
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
     metricsFile: '',

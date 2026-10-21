@@ -20,6 +20,8 @@ export const session = {
     interrupt: 'Interrompre',
     interruptTitle: 'Interrompre ce qu’elle fait (la session reste ouverte)',
     duplicate: 'Dupliquer',
+    terminalHere: 'Ouvrir un terminal ici',
+    terminalHereTitle: 'Un terminal s’ouvre dans le dossier de cette session',
     duplicateTitle: 'Une nouvelle session repart de cette conversation telle qu’elle est, pour essayer une autre piste. Celle-ci continue de son côté.',
     rest: 'Repos',
     restTitle: 'En salle de repos : Claude Code s’arrête, un message la rappelle',

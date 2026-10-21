@@ -199,6 +199,8 @@ export const ROOM_PALETTE = {
   tagText: '#f4f1e8',
   /** the word the user put on a session, after its name */
   sessionTag: '#9aa8ff',
+  /** the little branch after the name of a session on a branch of its own (the page's accent, like its branch pill) */
+  branch: '#9aa8ff',
   playerTagText: '#ffd6e2',
   /** the hairline around a name tag, like the edge of the glass panels */
   tagEdge: 'rgba(255, 255, 255, 0.18)',

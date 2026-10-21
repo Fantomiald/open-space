@@ -12,6 +12,10 @@ export type MachineInput =
   | { type: 'send' }
   /** a process started without a message (Remote Control): it waits for one from elsewhere */
   | { type: 'attach' }
+  /** its folder is being made (a worktree of its own) before any process: it looks like it starts */
+  | { type: 'prepare' }
+  /** the folder is ready (or could not be made): it waits, unless a process started meanwhile */
+  | { type: 'prepared' }
   /** Claude Code sent its init message */
   | { type: 'init' }
   /** the assistant produced output while waiting (a queued message or a background task started a new turn) */
@@ -35,6 +39,10 @@ export function reduce(context: MachineContext, input: MachineInput): MachineCon
       return RESTARTABLE.has(state) ? { state: 'starting' } : context;
     case 'attach':
       return RESTARTABLE.has(state) ? { state: 'wait' } : context;
+    case 'prepare':
+      return RESTARTABLE.has(state) ? { state: 'starting' } : context;
+    case 'prepared':
+      return state === 'starting' ? { state: 'wait' } : context;
     case 'send':
     case 'activity':
       return state === 'wait' ? { state: 'work' } : context;

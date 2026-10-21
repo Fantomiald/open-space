@@ -10,7 +10,7 @@ export type SettingRow = keyof typeof t.settings.prefs.rows;
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   language: 'general', timeFormat: 'general', reduceMotion: 'general', sound: 'general', notifications: 'general',
   timestamps: 'general', turnDuration: 'general', copyOnSelect: 'general',
-  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions',
+  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', isolate: 'sessions',
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',

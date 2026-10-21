@@ -24,6 +24,8 @@ export interface Person {
   agents: Agent[];
   /** the tag the user put on the session, or null */
   tag: string | null;
+  /** the session works on a branch of its own: a little branch after its name */
+  branch: boolean;
 }
 
 export interface RoomPlan {
@@ -90,6 +92,7 @@ export function planRoom(
     title: roleTitle(session.command) ?? session.name, status: sessionStatus(session, seen),
     agents: session.subagents.map(({ id, name, type }) => ({ id, name, type: type || t.room.subagent })),
     tag: session.tag ?? null,
+    branch: !!session.worktree,
   }));
   return {
     people,

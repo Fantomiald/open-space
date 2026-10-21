@@ -1,6 +1,6 @@
 // Turns a session's event log into the thread shown in the detail panel. Pure function.
 import { isSubagentHandback } from '../../shared/activity.ts';
-import type { LoggedEvent, PlanItem, SentFile, UploadedFile } from '../../shared/protocol.ts';
+import type { BranchNews, LoggedEvent, PlanItem, SentFile, UploadedFile } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 
 /** `agent`: the sub-agent that said or did it (its id), null for the session's own agent; `author` is its name. */
@@ -17,6 +17,8 @@ export type FeedItem =
   /** `startId`: the first item of the turn, which picks its word (see turnWord) */
   | { id: number; kind: 'turn'; at: number; ok: boolean; stopped: boolean; ms: number; startId: number }
   | { id: number; kind: 'notice'; at: number; text: string }
+  /** what became of the session's own branch: its base moved on, merged, thrown away, kept, cleaned */
+  | { id: number; kind: 'branch'; at: number; what: BranchNews; branch: string; base: string; behind?: number }
   /** files the session (or a sub-agent: `agent`) sent the user, with what it said of them */
   | { id: number; kind: 'files'; at: number; author: string | null; agent: string | null; caption: string; files: SentFile[] }
   | { id: number; kind: 'artifact'; at: number; author: string | null; agent: string | null; title: string; url: string; stored: string | null }
@@ -109,6 +111,7 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
       case 'cleared': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.cleared }); break;
       case 'error': items.push({ id: seq, kind: 'notice', at, text: ev.message }); break;
       case 'note': items.push({ id: seq, kind: 'notice', at, text: ev.text }); break;
+      case 'branch': items.push({ id: seq, kind: 'branch', at, what: ev.what, branch: ev.branch, base: ev.base, ...(ev.behind ? { behind: ev.behind } : {}) }); break;
       case 'state':
         if (ev.reason && (ev.state === 'closed' || ev.state === 'error' || ev.state === 'done')) items.push({ id: seq, kind: 'notice', at, text: ev.reason });
         break;

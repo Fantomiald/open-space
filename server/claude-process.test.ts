@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildClaudeArgs, identityPrompt, parseCatalog, renameNote } from './claude-process.ts';
+import { buildClaudeArgs, identityPrompt, parseCatalog, placeNote, renameNote } from './claude-process.ts';
 import { setServerLanguage } from './i18n/index.ts';
 
 describe('buildClaudeArgs', () => {
@@ -87,6 +87,22 @@ describe('parseCatalog', () => {
     assert.deepEqual(args.slice(args.indexOf('--settings'), args.indexOf('--settings') + 2), ['--settings', '{"ultracode":true}']);
     assert.ok(args.includes('--effort'));
     assert.ok(!buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', permissionMode: 'auto', name: 'Ana' }).includes('--settings'));
+  });
+});
+
+describe('isolated sessions', () => {
+  const worktree = { branch: 'os/lina-pay', base: 'main', root: '/w/lilies/.claude/worktrees/os-lina-pay', mainRoot: '/w/lilies' };
+  it('tells a new conversation its branch, its folder and the main folder it must not write in', () => {
+    const prompt = identityPrompt('Lina', 'Julien', '', worktree);
+    assert.match(prompt, /« os\/lina-pay »/);
+    assert.match(prompt, /\/w\/lilies\/.claude\/worktrees\/os-lina-pay/);
+    assert.match(prompt, /\/w\/lilies, est celui des autres sessions : n’y écris jamais/);
+    assert.match(prompt, /second Metro/);
+    assert.doesNotMatch(identityPrompt('Lina', 'Julien', ''), /worktree/);
+  });
+  it('tells a conversation where it moved: into its worktree, or back to the main folder', () => {
+    assert.match(placeNote(worktree.root, worktree), /changé de dossier[\s\S]*os\/lina-pay/);
+    assert.match(placeNote('/w/lilies', undefined), /dossier principal du projet, \/w\/lilies/);
   });
 });
 

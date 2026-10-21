@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
 import { JOBS, type Job } from '../../shared/jobs.ts';
-import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, type Accessory, type Look } from '../../shared/look.ts';
+import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, randomLook, type Accessory, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { HAT_ROWS, chibiHead, chibiPiece, chibiSprite, type BodyPart } from '../room/chibi.ts';
 import type { Pose } from '../room/sprites.ts';
 import { FIXED_COLOUR } from '../room/wardrobe.ts';
 import { useSessions } from '../state/sessions.ts';
-import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
+import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, ShuffleIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PetPicker } from './PreferenceFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
@@ -244,6 +244,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
         <div className="cp-crew__turn">
           <button type="button" className="cp-icon-button" aria-label={words.turnLeft} title={words.turnLeft} onClick={() => setDirection((value) => (value + 3) % 4)}><TurnLeftIcon /></button>
           <button type="button" className="cp-icon-button" aria-label={words.turnRight} title={words.turnRight} onClick={() => setDirection((value) => (value + 1) % 4)}><TurnRightIcon /></button>
+          <button type="button" className="cp-button" onClick={() => onLook(randomLook())}><ShuffleIcon />{words.random}</button>
         </div>
         <div className="cp-crew__identity">
           <label className="cp-crew__name">

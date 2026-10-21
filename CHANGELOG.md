@@ -1,5 +1,17 @@
 # Versions
 
+## 1.11.0
+
+- Une branche par session (worktrees) : quand une autre session travaille déjà dans le dossier, le lanceur propose « Isoler sur une branche ». La session travaille sur `os/<prénom>-<sujet>`, dans son propre dossier sous `.claude/worktrees/`, avec les `.env`, `node_modules` et `Pods` copiés en clone APFS (ou ce que nomme `.worktreeinclude`).
+- Une pastille de branche dans l'en-tête de la session, une petite branche en pixel art sur son étiquette dans la salle, dans le mode focus et la carte État.
+- La carte « Prête à fusionner dans main » à la fin du fil : Fusionner (la session regroupe son travail en un commit et se remet à jour, Open Space vérifie et avance main), Ouvrir une PR, Plus tard, Jeter la branche. Si main a bougé, une carte le dit ; si la fusion ne passe pas, la carte dit pourquoi, avec Réessayer.
+- Éteindre une session isolée avec du travail demande quoi faire de la branche : fusionner puis éteindre, la garder (le travail est commité, la branche revient si on reprend la conversation), ou tout jeter. Rien n'est jamais perdu sans le dire.
+- Le panneau Branches d'un projet (pastille, ⌘K « Branches », rappel dans le lanceur) range les branches des sessions et les worktrees de Claude Code.
+- Les changements `+X −Y` d'une session isolée comptent depuis le départ de sa branche, commits compris. Le terminal (⌥⌘T) s'ouvre dans son dossier.
+- Réglage « Isoler les sessions » (Réglages > Sessions) : quand le dossier est déjà pris, toujours ou jamais ; « Dossier : Partagé / Isolé » dans le panneau de la session pour forcer.
+- Un bouton Aléatoire dans l'éditeur de perso (Équipe) : peau, cheveux, yeux, barbe, habits, chapeaux, accessoires et tenues, tout est tiré au hasard à chaque clic.
+- ⌥⌘T ouvre un terminal dans le dossier de la session active (sinon le dossier par défaut), aussi depuis ⌘K et le menu ⋯ d'une conversation (« Ouvrir un terminal ici »). Le raccourci est dans Réglages > Raccourcis.
+
 ## 1.10.1
 
 - Les liens des pages publiées sur claude.ai par une conversation : une pastille « N liens » sous son nom, qui ouvre leur liste ; un clic ouvre la page.

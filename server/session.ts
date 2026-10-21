@@ -6,9 +6,9 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange } from '../shared/protocol.ts';
+import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
-import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { placeNote, renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
@@ -54,7 +54,15 @@ export interface SessionDeps {
   runShell?: ShellRunner;
   /** how long an empty turn (see onResult) and an interrupt without answer (see sendNow) are given, in ms; shorter in tests */
   graceMs?: number;
+  /**
+   * the session is done for now: its turn ended and nothing is queued (`done`, or `failed` when Claude Code ended it
+   * on an error), the user stopped it (`interrupted`), or its process went away on its own or was closed (`exited`);
+   * what a merge under way waits for
+   */
+  onTurnEnd?: (session: SessionInfo, how: TurnEnd) => void;
 }
+
+export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
 
 /** Why we asked the process to stop (null = nobody did: it ended or crashed on its own). */
 type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
@@ -111,6 +119,8 @@ export class Session {
   private remote: RemoteControl | undefined;
   /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
   private autoCompaction: { resting: boolean; hadProcess: boolean } | null = null;
+  /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
+  private preparing = false;
 
   constructor(info: StoredInfo, deps: SessionDeps) {
     this.info = info;
@@ -194,8 +204,86 @@ export class Session {
     if (images.length) this.queuedImages.set(id, images);
     if (files.length) this.queuedFiles.set(id, files);
     this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}) }];
-    if (this.busy) { this.publish(); return; }
+    if (this.busy || this.preparing) { this.publish(); return; }
     this.sendQueued();
+  }
+
+  /**
+   * Its folder is being made (a worktree of its own): it shows as starting, with `note` in the thread, and what is
+   * sent meanwhile waits in the queue.
+   */
+  startPreparing(note: string) {
+    this.preparing = true;
+    this.record({ k: 'note', text: note });
+    this.apply({ type: 'prepare' });
+  }
+
+  /**
+   * Its folder is being moved under it (its worktree going away, a merge being landed): like preparing, what is sent
+   * waits in the queue and no process starts, but nothing shows. finishPreparing ends it.
+   */
+  hold() { this.preparing = true; }
+
+  /** The folder is ready: the queue leaves (`send`), or stays for the user to send or take back (it could not be made). */
+  finishPreparing(send: boolean) {
+    this.preparing = false;
+    this.apply({ type: 'prepared' });
+    if (!send || this.context.state !== 'wait') return;
+    try {
+      this.sendQueued();
+    } catch (error) {
+      // refused (too many sessions alive): the queue stays, and the thread says why
+      this.record({ k: 'note', text: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  /** From its next launch, without the folder's own settings (see trust.ts): its new folder runs code the user never accepted. */
+  restrict() {
+    this.info.untrusted = true;
+    this.publish();
+  }
+
+  get isPreparing() { return this.preparing; }
+
+  /** A note of Open Space in the thread, or the news of its branch. */
+  announce(ev: Extract<OfficeEvent, { k: 'note' } | { k: 'branch' }>) { this.record(ev); }
+
+  /**
+   * Something Open Space asks of the session itself (merge its branch, open a pull request): `prompt` goes to Claude,
+   * the thread shows `shown`, a short line in the user's name. Only between turns.
+   */
+  instruct(prompt: string, shown: string) {
+    if (this.busy || this.preparing || this.stopRequest || this.info.queued?.length) throw new Error(st.worktree.waitTurn(this.info.name));
+    this.deliver(prompt, [], [], false, shown);
+    this.publish();
+  }
+
+  /** Its worktree's state changed (what the branch holds, a merge under way), or it has none any more. */
+  setWorktree(worktree: WorktreeInfo | undefined) {
+    this.info.worktree = worktree;
+    this.publish();
+  }
+
+  /**
+   * Moves the session to another folder (into its worktree, or back to the main checkout), its process stopped first
+   * (see stopForMove): its conversation goes on there, and is told where it now is with the next message (placeNote).
+   */
+  relocate(cwd: string, worktree: WorktreeInfo | undefined) {
+    if (this.process?.alive) throw new Error(st.sessions.closing);
+    // a conversation started before worktrees was never told where it works: from now on it is
+    if (this.info.resumable || this.info.forkOf) this.info.toldPlace ??= this.info.cwd;
+    this.info.cwd = cwd;
+    this.info.worktree = worktree;
+    this.publish();
+  }
+
+  /** Stops the process (and Remote Control, the "!" commands) without closing the session: it waits, and its next message starts one again. */
+  async stopForMove() {
+    await Promise.all([this.setRemote(false), this.stopShells()]);
+    this.clearIdleTimer();
+    if (!this.process?.alive) return;
+    this.stopRequest = { reason: 'idle', note: st.sessions.stopped.moved };
+    await this.process.stop(2000);
   }
 
   /** Takes a message back from the queue. */
@@ -209,6 +297,8 @@ export class Session {
 
   /** Sends the queue now: the running turn is interrupted, and the queue leaves when it ends. */
   sendNow() {
+    // its folder is being made or moved: the queue leaves once it is done
+    if (this.preparing) return;
     if (!this.busy) { this.sendQueued(); return; }
     this.interrupt();
     // an interrupt with no turn to stop (the session looked busy, Claude Code was waiting) never ends one: the queue
@@ -232,8 +322,8 @@ export class Session {
     this.publish();
   }
 
-  /** `joining`: sent during a turn, which it joins (see send) instead of starting one. */
-  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false) {
+  /** `joining`: sent during a turn, which it joins (see send) instead of starting one; `shown`: what the thread shows instead of the text. */
+  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false, shown?: string) {
     this.clearIdleTimer();
     if (!joining) {
       this.turnOutput = false;
@@ -247,8 +337,8 @@ export class Session {
     if (command === 'compact') this.info.compacting = 'manual';
     const spawning = !this.process?.alive;
     if (spawning) {
-      // a new conversation gets the name in its system prompt (see buildClaudeArgs)
-      if (!this.info.resumable && !this.info.forkOf) this.info.introducedAs = this.info.name;
+      // a new conversation gets the name in its system prompt (see buildClaudeArgs), and where it works
+      if (!this.info.resumable && !this.info.forkOf) { this.info.introducedAs = this.info.name; this.info.toldPlace = this.info.cwd; }
       this.startProcess();
       this.info.error = undefined;
     }
@@ -257,6 +347,11 @@ export class Session {
     if (this.info.introducedAs !== this.info.name && !command) {
       outgoing = renameNote(this.info.name) + clean;
       this.info.introducedAs = this.info.name;
+    }
+    // moved since it last worked (into its worktree, back to the main checkout): told where it now is
+    if (this.info.toldPlace !== undefined && this.info.toldPlace !== this.info.cwd && !command) {
+      outgoing = placeNote(this.info.cwd, this.info.worktree) + outgoing;
+      this.info.toldPlace = this.info.cwd;
     }
     if (this.shellNotes.length && !command) {
       outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
@@ -269,7 +364,7 @@ export class Session {
       return file ? [{ id, name: path.basename(file), size: statSync(file).size, file }] : [];
     });
     if (uploaded.length) outgoing = [outgoing, st.prompt.attached(uploaded.map((upload) => upload.file))].filter(Boolean).join('\n\n');
-    this.record({ k: 'start', text: clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}) });
+    this.record({ k: 'start', text: shown ?? clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}) });
     if (uploaded.length < files.length) this.record({ k: 'note', text: st.sessions.uploadsGone(files.length - uploaded.length) });
     if (!joining) this.apply({ type: spawning ? 'spawn' : 'send' });
     this.process?.send(outgoing, images);
@@ -314,7 +409,7 @@ export class Session {
       agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -409,6 +504,7 @@ export class Session {
   private liveProcess(): ProcessHandle {
     if (this.process?.alive) return this.process;
     if (this.stopRequest) throw new Error(st.sessions.closing);
+    if (this.preparing) throw new Error(st.worktree.preparingRetry);
     this.info.error = undefined;
     this.startProcess();
     this.apply({ type: 'attach' });
@@ -422,6 +518,7 @@ export class Session {
    * (`<bash-input>`, then `<bash-stdout>` and `<bash-stderr>`, checked in transcripts of 2.1.302).
    */
   async shell(command: string) {
+    if (this.preparing) throw new Error(st.worktree.preparingRetry);
     const cwd = this.deps.allowedDirectory(this.info.cwd);
     if (!cwd) throw new Error(st.sessions.folderGone);
     if (!this.deps.runShell) throw new Error(st.sessions.claudeMissing);
@@ -570,7 +667,7 @@ export class Session {
     const stopped = this.interrupted;
     this.record({ k: 'end', ok: result.ok, text: result.text.slice(0, 20000), ms: result.ms, stopped: stopped || undefined });
     this.interrupted = false;
-    this.endTurn(!stopped);
+    this.endTurn(!stopped, stopped ? 'interrupted' : result.ok ? 'done' : 'failed');
   }
 
   /**
@@ -580,7 +677,7 @@ export class Session {
    */
   autoCompact(command: string): boolean {
     const idle = this.context.state === 'wait' || (this.info.resting === true && (this.context.state === 'closed' || this.context.state === 'done'));
-    if (!idle || this.busy || this.stopRequest || this.autoCompaction || !this.info.resumable || this.info.queued?.length || this.info.subagents.length || this.info.background) return false;
+    if (!idle || this.busy || this.preparing || this.stopRequest || this.autoCompaction || !this.info.resumable || this.info.queued?.length || this.info.subagents.length || this.info.background) return false;
     const hadProcess = !!this.process?.alive;
     if (!hadProcess) this.startProcess();
     this.autoCompaction = { resting: this.info.resting === true, hadProcess };
@@ -616,8 +713,8 @@ export class Session {
     this.publish();
   }
 
-  /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished). */
-  private endTurn(tell: boolean) {
+  /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished; `how`: how it ended). */
+  private endTurn(tell: boolean, how: TurnEnd = 'done') {
     this.turnOutput = false;
     // a /compact that ended without compacting (nothing to compact, refused): it is not under way any more
     this.info.compacting = undefined;
@@ -628,6 +725,7 @@ export class Session {
     this.armIdleTimer();
     // a turn the user stopped themselves needs no telling either
     if (tell) this.deps.onAttention?.('finished', this.snapshot());
+    this.deps.onTurnEnd?.(this.snapshot(), how);
   }
 
   private pending(requestId: string): PendingRequest {
@@ -798,13 +896,20 @@ export class Session {
     this.info.scheduled = undefined;
     const requested = this.stopRequest;
     this.stopRequest = null;
-    if (requested) return this.apply({ type: 'exit', reason: requested.reason }, requested.note);
-    if (code === 0 && signal === null) return this.apply({ type: 'exit', reason: 'clean' }, st.sessions.stopped.ended);
-    const message = stderr.split('\n').map((line) => line.trim()).filter(Boolean).slice(-3).join(' ')
-      || (signal ? st.sessions.killed(signal) : st.sessions.exited(code));
-    this.info.error = message;
-    this.record({ k: 'error', message });
-    this.apply({ type: 'exit', reason: 'failed' }, message);
+    if (requested) {
+      this.apply({ type: 'exit', reason: requested.reason }, requested.note);
+      if (requested.reason === 'closed') this.deps.onTurnEnd?.(this.snapshot(), 'exited');
+      return;
+    }
+    if (code === 0 && signal === null) this.apply({ type: 'exit', reason: 'clean' }, st.sessions.stopped.ended);
+    else {
+      const message = stderr.split('\n').map((line) => line.trim()).filter(Boolean).slice(-3).join(' ')
+        || (signal ? st.sessions.killed(signal) : st.sessions.exited(code));
+      this.info.error = message;
+      this.record({ k: 'error', message });
+      this.apply({ type: 'exit', reason: 'failed' }, message);
+    }
+    this.deps.onTurnEnd?.(this.snapshot(), 'exited');
   }
 }
 

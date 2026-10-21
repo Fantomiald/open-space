@@ -8,7 +8,7 @@ import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
-import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -23,6 +23,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   turnDuration: true,
   reduceMotion: false,
   idleCompact: 0,
+  // a settings file from before worktrees has none: it gets this one
+  isolate: 'busy',
 };
 
 export const MAX_AGENT_NOTE = 600;
@@ -39,6 +41,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
   if (IDLE_COMPACT_MINUTES.some((minutes) => minutes === raw.idleCompact)) found.idleCompact = raw.idleCompact as number;
   if (TIME_FORMATS.some((format) => format === raw.timeFormat)) found.timeFormat = raw.timeFormat as Preferences['timeFormat'];
+  if (ISOLATE_MODES.some((mode) => mode === raw.isolate)) found.isolate = raw.isolate as Preferences['isolate'];
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && path.isAbsolute(root)).map((root) => path.resolve(root)))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);

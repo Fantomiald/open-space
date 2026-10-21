@@ -1,6 +1,6 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { EFFORTS, isPermissionMode, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
@@ -97,8 +97,28 @@ function parseOptions(raw: unknown): SessionOptions | null {
     if (typeof options.resumeId !== 'string' || !CONVERSATION_ID.test(options.resumeId)) return null;
     result.resumeId = options.resumeId;
   }
+  if (options.isolate !== undefined) {
+    const base = isJson(options.isolate) ? options.isolate.base : null;
+    if (base !== undefined && !isBranchName(base)) return null;
+    result.isolate = base ? { base: base as string } : {};
+  }
   return result;
 }
+
+/**
+ * A local branch's name as git takes it (git check-ref-format: accents and other letters are fine): no control
+ * character, space, ~ ^ : ? * [ or backslash, no "..", "@{" or "//", not starting with "-" or "/", not ending with
+ * "/", "." or ".lock". Only ever compared with the server's own lists, and passed to git as one argument.
+ */
+const isBranchName = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 200
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what this refuses
+  && !/[\u0000-\u0020\u007f~^:?*[\\]/.test(value) && !value.startsWith('-') && !value.startsWith('/')
+  && !value.includes('..') && !value.includes('@{') && !value.includes('//') && !value.endsWith('/') && !value.endsWith('.') && !value.endsWith('.lock');
+/** A commit's name as git prints it (sha-1 or sha-256). */
+const COMMIT = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
+const SWITCH_OFF_BRANCH: ReadonlySet<string> = new Set(['merge', 'keep', 'discard']);
+/** How many branches the cleaning panel may remove at once. */
+const MAX_CLEANED = 200;
 
 const DECISIONS: readonly PermissionDecision[] = ['allow', 'deny', 'always'];
 /** AskUserQuestion takes at most 4 questions */
@@ -174,7 +194,34 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return { t: 'onboard', self: { name, look, ...(birthday ? { birthday } : {}) }, preferences: { ...DEFAULT_PREFERENCES, ...parsePreferences(raw.preferences) } };
     }
     case 'close': return sessionId ? { t: 'close', sessionId } : null;
-    case 'forget': return sessionId ? { t: 'forget', sessionId } : null;
+    case 'forget': {
+      if (!sessionId) return null;
+      if (raw.branch === undefined) return { t: 'forget', sessionId };
+      return typeof raw.branch === 'string' && SWITCH_OFF_BRANCH.has(raw.branch) ? { t: 'forget', sessionId, branch: raw.branch as 'merge' | 'keep' | 'discard' } : null;
+    }
+    case 'folderInfo': {
+      const cwd = boundedString(raw.cwd, 4096);
+      return cwd ? { t: 'folderInfo', cwd } : null;
+    }
+    case 'branch': return sessionId && BRANCH_ACTIONS.some((action) => action === raw.action) ? { t: 'branch', sessionId, action: raw.action as BranchAction } : null;
+    case 'branches': {
+      const cwd = boundedString(raw.cwd, 4096);
+      return cwd ? { t: 'branches', cwd } : null;
+    }
+    case 'cleanBranches': {
+      const cwd = boundedString(raw.cwd, 4096);
+      if (!cwd || !Array.isArray(raw.branches) || raw.branches.length > MAX_CLEANED) return null;
+      const branches: CleanedBranch[] = [];
+      for (const item of raw.branches) {
+        if (!isJson(item)) return null;
+        const branch = item.branch === '' ? '' : isBranchName(item.branch) ? item.branch : null;
+        const folder = item.folder === null ? null : boundedString(item.folder, 4096);
+        if (branch === null || (folder === null && item.folder !== null) || (!branch && !folder)) return null;
+        if (typeof item.head !== 'string' || !COMMIT.test(item.head) || !Number.isInteger(item.dirty) || (item.dirty as number) < 0) return null;
+        branches.push({ branch, folder, head: item.head, dirty: item.dirty as number });
+      }
+      return { t: 'cleanBranches', cwd, branches };
+    }
     case 'rename': {
       const name = boundedString(raw.name, MAX_NAME);
       return sessionId && name !== null ? { t: 'rename', sessionId, name } : null;
@@ -206,7 +253,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       };
     }
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
-    case 'openTerminal': return { t: 'openTerminal' };
+    case 'openTerminal': return raw.sessionId === undefined ? { t: 'openTerminal' } : sessionId ? { t: 'openTerminal', sessionId } : null;
     case 'shell': {
       const command = boundedString(raw.command, 10_000)?.trim();
       return sessionId && command ? { t: 'shell', sessionId, command } : null;
