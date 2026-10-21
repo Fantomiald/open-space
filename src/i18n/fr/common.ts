@@ -42,6 +42,8 @@ export const common = {
     session: 'session',
     sessions: 'sessions',
     commands: 'Commandes',
+    crew: 'Équipe',
+    crewTitle: 'Les prénoms et les looks de ton équipe, et le tien',
     search: 'Rechercher',
     searchTitle: 'Sessions, messages, commandes et réglages',
     settings: 'Réglages',

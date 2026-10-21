@@ -1,5 +1,11 @@
 # Versions
 
+## 1.9.2
+
+- Un clic sur une session l'ouvre à côté des autres, sans Maj ; au-delà de six fenêtres, elle prend la place de la fenêtre active.
+- Le bouton Équipe revient dans l'en-tête, à côté de l'usage.
+- L'astuce ⌥ en bas de la salle passe en verre foncé, comme le reste.
+
 ## 1.9.1
 
 - Mise à jour d'Open Space dans les réglages : l'app vérifie toutes les heures, télécharge en fond, puis une pastille rouge sur la roue et un bouton Redémarrer pour l'installer.

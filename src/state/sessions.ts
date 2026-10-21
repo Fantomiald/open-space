@@ -119,7 +119,7 @@ interface CommandPostState {
   quota: Quota | null;
   /** the session the keyboard, the palette and the panel's views go to: one of `openIds`, or null when none is open */
   selectedId: string | null;
-  /** the sessions shown over the room, in columns of three from the right (several with Shift+click, see stack.ts) */
+  /** the sessions shown over the room, in columns of three from the right (a click opens one beside the others, see stack.ts) */
   columns: Columns;
   /** `columns`, flat */
   openIds: string[];
@@ -191,7 +191,7 @@ interface CommandPostState {
    * mode, beside the open ones while there is room)
    */
   show: (sessionId: string) => void;
-  /** Shift+click: adds the session beside the open ones (nothing when there is no room left), or takes it out */
+  /** Adds the session beside the open ones (nothing when there is no room left), or takes it out */
   toggleOpen: (sessionId: string) => void;
   zoom: (sessionId: string | null) => void;
   /** one of the open sessions takes the keyboard (the user clicked in it) */
@@ -493,7 +493,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const s = get();
     set({ stackHidden: false });
     if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
-    const beside = s.view === 'focus' && s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), FOCUS_TILING);
+    const beside = s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
     if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
     if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
     set({ zoomedId: null });

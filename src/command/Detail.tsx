@@ -53,7 +53,7 @@ function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { s
 const NO_DRAFTS: Readonly<Record<string, string>> = {};
 
 /**
- * One open session over the room. Several can be open side by side (Shift+click, see Stack): the one the user is in
+ * One open session over the room. Several can be open side by side (see Stack): the one the user is in
  * (`selectedId`) is `active`, and only it shows the search bar and the views other than the thread; one can be zoomed.
  */
 /** Kept from being drawn again while a window is carried or resized: only its own session changes it. */

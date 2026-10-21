@@ -12,7 +12,6 @@ import type { FestivalDay } from '../../shared/festivals.ts';
 import type { Look } from '../../shared/look.ts';
 import { LOUNGE, OFFICE } from '../../shared/room-layout.ts';
 import { paintBackdrop } from './backdrop.ts';
-import { isFull, maxColumns } from '../state/stack.ts';
 import { BUBBLE_LANE, BUBBLE_ROW_HEIGHT, VISIBLE_ROWS, bubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import { planRoom, roomSessions, type RoomKind } from './cast.ts';
 import { chibiHead, chibiSprites, lookOfStranger } from './chibi.ts';
@@ -69,9 +68,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const openIds = useSessions((s) => s.openIds);
   const select = useSessions((s) => s.select);
   const show = useSessions((s) => s.show);
-  const toggleOpen = useSessions((s) => s.toggleOpen);
   /** a click opens the session alone; Shift+click adds it under the open ones (or takes it out) */
-  const open = (sessionId: string, event: { shiftKey: boolean }) => (event.shiftKey ? toggleOpen(sessionId) : show(sessionId));
   const crew = useSessions((s) => s.crew);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -207,7 +204,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const point = roomPoint(event);
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
-    if (character) { open(character.person.sessionId, event); return; }
+    if (character) { show(character.person.sessionId); return; }
     const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open
@@ -232,11 +229,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
-    // with a session open, how to open another one under it instead
-    const sessionId = person && person !== PLAYER_ID ? scene.characterAt(point)?.person.sessionId : undefined;
-    const open = useSessions.getState().openIds;
     const text = visitor ? words.startWith(visitor.name)
-      : sessionId && open.length > 0 && !open.includes(sessionId) ? (isFull(useSessions.getState().columns, maxColumns(window.innerWidth)) ? words.openFull : words.openUnder)
       : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard
       : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
     setHintText(text);
@@ -279,7 +272,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
               </button>
               {showHidden && (
                 <ul aria-label={t.room.hidden.list}>
-                  {hidden.map((session) => <li key={session.id}><button type="button" onClick={(e) => { open(session.id, e); setShowHidden(false); }}>{session.name}</button></li>)}
+                  {hidden.map((session) => <li key={session.id}><button type="button" onClick={() => { show(session.id); setShowHidden(false); }}>{session.name}</button></li>)}
                 </ul>
               )}
             </div>
