@@ -12,6 +12,8 @@ export const fr = {
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
     /** the files the user sent with a message, as their paths: Claude opens them with its tools */
+    /** sent by Open Space itself to a conversation left alone (Preferences.idleCompact) */
+    idleCompact: '/compact Garde ce qu’il faut pour continuer sans rien réexpliquer : où on en est (branche, fichiers non commités), chaque décision et pourquoi, ce que l’utilisateur a demandé ou refusé avec ses mots, ce qui reste à faire, les fichiers clés et les pièges déjà rencontrés.',
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Fichier joint : ${paths[0]}` : `Fichiers joints :\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
@@ -34,6 +36,8 @@ export const fr = {
       ended: 'Claude Code s’est terminé.',
       idle: 'Processus relâché après un moment sans rien faire.',
       released: 'Processus relâché à l’arrêt du serveur.',
+      updated: 'Processus relâché : le prochain message part avec la nouvelle version de Claude Code.',
+      compacted: 'Processus relâché après le compactage de la conversation.',
     },
     closing: 'Cette session est en train de se fermer, réessaie dans un instant.',
     tooMany: (max: number) => `Trop de sessions actives (${max} au maximum). Ferme-en une.`,
@@ -51,6 +55,8 @@ export const fr = {
     resumedWithHistory: (title: string) => `Reprise de « ${title} » : ses derniers échanges.`,
     nextMessageContinues: 'Ton prochain message continue la conversation.',
     untitledConversation: 'la conversation',
+    duplicateOf: (name: string) => `la conversation de ${name}`,
+    nothingToDuplicate: 'Cette session n’a encore rien dit : rien à dupliquer.',
     logFailed: (name: string, reason: string) => `Le journal de ${name} n’a pas pu être écrit (${reason}). Il sera rouvert au prochain événement.`,
     stoppingNoStart: 'Le serveur s’arrête : aucune session ne peut démarrer.',
     stoppingNoCreate: 'Le serveur s’arrête : aucune session ne peut être créée.',

@@ -4,7 +4,9 @@ import { common } from './common.ts';
 import { composer } from './composer.ts';
 import { metrics } from './metrics.ts';
 import { room } from './room.ts';
+import { search } from './search.ts';
+import { usage } from './usage.ts';
 import { session } from './session.ts';
 import { settings } from './settings.ts';
 
-export const fr = { common, session, composer, settings, room, board, metrics };
+export const fr = { common, session, composer, settings, room, board, metrics, search, usage };

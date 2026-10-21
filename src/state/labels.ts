@@ -1,7 +1,7 @@
 // Words and tones for session states. One place, so the design can restyle the tones without touching logic.
 import type { PermissionMode, SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import type { AttentionKind } from './queue.ts';
+import { type AttentionKind, isWorking } from './queue.ts';
 
 /** Drives the colour of badges and cards (see --tone-* in design/tokens.css). */
 export type Tone = 'permission' | 'reply' | 'work' | 'error' | 'idle';
@@ -10,11 +10,21 @@ export type Tone = 'permission' | 'reply' | 'work' | 'error' | 'idle';
 export function toneOf(session: SessionInfo, kind: AttentionKind | null): Tone {
   switch (session.state) {
     case 'perm': return 'permission';
-    case 'wait': return kind === 'finished' ? 'reply' : 'idle';
+    case 'wait': return kind === 'finished' ? 'reply' : isWorking(session) ? 'work' : 'idle';
     case 'work': case 'starting': return 'work';
     case 'error': return 'error';
     default: return 'idle';
   }
+}
+
+/** What a session left running on its own, which stops with its process ("1 commande en fond"); empty when nothing. */
+export function backgroundWork(session: SessionInfo): string[] {
+  const words = t.session.status;
+  return [
+    session.subagents.length ? words.subagents(session.subagents.length) : '',
+    session.background ? words.background(session.background.length) : '',
+    session.scheduled ? words.scheduled(session.scheduled) : '',
+  ].filter(Boolean);
 }
 
 /** The models offered for a session: the alias Claude Code takes, and its name ('' : Claude Code's default). */
@@ -28,10 +38,11 @@ export const modeLabel = (mode: PermissionMode, length: 'short' | 'long' = 'long
 export function stateLabel(session: SessionInfo, kind: AttentionKind | null): string {
   const words = t.session.states;
   if (kind) return words.attention[kind];
+  if (session.compacting) return words.compacting[session.compacting];
   switch (session.state) {
     case 'starting': return words.starting;
     case 'work': return words.work;
-    case 'wait': return words.wait;
+    case 'wait': return isWorking(session) ? words.work : words.wait;
     case 'closed': return words.closed;
     case 'done': return words.done;
     case 'error': return words.error;

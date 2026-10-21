@@ -12,17 +12,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import type { ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import { createAsideRunner } from './aside.ts';
-import { createCatalogProbe, createProcessFactory, findClaude } from './claude-process.ts';
+import { createCatalogProbe, createProcessFactory, findClaude, readVersion, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
 import { Crew } from './crew.ts';
+import { changedSettings } from '../shared/claude-settings.ts';
+import { readClaudeDefaults } from './claude-settings.ts';
 import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { suggestRoots } from './paths.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
+import { UsageLedger } from './usage.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
 import { attachmentsFolder } from './attachments.ts';
 import { uploadsFolder } from './uploads.ts';
@@ -50,6 +53,8 @@ const MAX_BUFFERED_BYTES = 8_000_000;
 const OPEN_IF_ALONE_AFTER_MS = 3000;
 /** how often the numbers file is looked at, for the badge on the numbers object (scripts or sessions rewrite it now and then) */
 const METRICS_CHECK_MS = 10_000;
+/** how often the installed Claude Code is asked its version */
+const CLAUDE_CHECK_MS = 10 * 60_000;
 
 // An unexpected error is logged, never fatal: one bad request must not kill running sessions.
 const log = (message: string, error?: unknown) => console.error(`  !  ${message}`, error instanceof Error ? error.message : (error ?? ''));
@@ -95,6 +100,7 @@ const sessions = new SessionManager({
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
+  claudeSettings: () => settings.preferences.claude,
   broadcast,
   log,
   onAttention: (kind, session) => {
@@ -102,6 +108,7 @@ const sessions = new SessionManager({
   },
 });
 await sessions.init();
+const usage = new UsageLedger({ home: os.homedir(), cacheFile: path.join(config.dataDir, 'usage-cache.json'), log });
 
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
@@ -115,7 +122,25 @@ async function checkMetrics() {
   broadcast({ t: 'metricsStatus', unread });
 }
 setInterval(() => { checkMetrics().catch((error: unknown) => log('numbers file', error)); }, METRICS_CHECK_MS).unref();
-const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded });
+/** The Claude Code installed now: its updater replaces it in the background, the next launches start the new one */
+let installedClaude = claude?.version ?? '';
+/** a `claude update` is running: a second click waits for it */
+let updating = false;
+const claudeInfo = (): ClaudeInfo => (claude ? { found: true, version: installedClaude, path: claude.path } : { found: false });
+/** Reads the installed version again (no network: the executable answers); tells the pages when it changed. */
+async function checkClaudeVersion() {
+  const version = claude && await readVersion(claude.path);
+  if (!version || version === installedClaude) return;
+  installedClaude = version;
+  broadcast({ t: 'claude', claude: claudeInfo() });
+}
+// the conversations left alone long enough are compacted, one at a time (Preferences.idleCompact)
+setInterval(() => sessions.compactIdle(settings.preferences.idleCompact), 60_000).unref();
+setInterval(() => { checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error)); }, CLAUDE_CHECK_MS).unref();
+
+/** Claude Code's own settings, read again whenever a page connects (the user may have changed them in its /config) */
+let claudeDefaults = await readClaudeDefaults(os.homedir());
+const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded, claudeDefaults });
 prepareSounds(config.dataDir, log);
 const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection });
 
@@ -133,10 +158,16 @@ function onConnection(socket: WebSocket) {
   socket.on('error', (error) => log('websocket error', error));
 
   send({
-    t: 'hello', claude: claude ? { found: true, version: claude.version, path: claude.path } : { found: false }, roots: config.roots,
+    t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
-    preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked,
+    preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults,
   });
+  checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
+  readClaudeDefaults(os.homedir()).then((found) => {
+    if (JSON.stringify(found) === JSON.stringify(claudeDefaults)) return;
+    claudeDefaults = found;
+    broadcast(preferencesMessage());
+  }).catch((error: unknown) => log('cannot read the Claude Code settings', error));
   send({ t: 'metricsStatus', unread: metricsUnread });
   send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
@@ -179,10 +210,12 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'asideClose': sessions.closeAside(message.sessionId); break;
     case 'preferences': {
       const { roots, ...rest } = message.preferences;
+      const before = settings.preferences.claude;
       await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
       setServerLanguage(settings.preferences.language ?? 'fr');
       applyRoots();
       broadcast(preferencesMessage());
+      await sessions.applySettings(changedSettings(before, settings.preferences.claude));
       await checkMetrics();
       break;
     }
@@ -207,6 +240,28 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'forget': await sessions.forget(message.sessionId); break;
     case 'log': send({ t: 'log', sessionId: message.sessionId, ...sessions.logSince(message.sessionId, message.after) }); break;
     case 'directories': send({ t: 'directories', directories: sessions.directories() }); break;
+    case 'duplicate': {
+      const taken = new Set(sessions.list().map((session) => session.name));
+      await sessions.duplicate(message.sessionId, crew.freeNameFor('', taken));
+      break;
+    }
+    case 'updateClaude': {
+      if (!claude || updating) break;
+      updating = true;
+      broadcast({ t: 'claudeUpdate', update: { state: 'checking' } });
+      const from = installedClaude;
+      try {
+        await runUpdate(claude.path, buildClaudeEnvironment(process.env, config.passthrough));
+        await checkClaudeVersion();
+        broadcast({ t: 'claudeUpdate', update: installedClaude === from ? { state: 'upToDate', version: from } : { state: 'updated', from, version: installedClaude } });
+      } catch (error) {
+        broadcast({ t: 'claudeUpdate', update: { state: 'failed', text: error instanceof Error ? error.message : String(error) } });
+      } finally {
+        updating = false;
+      }
+      break;
+    }
+    case 'restartOutdated': if (installedClaude) sessions.releaseOutdated(installedClaude); break;
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
     case 'saveMember':
@@ -249,6 +304,16 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await checkMetrics();
       break;
     }
+    case 'search': send({ t: 'searchResults', id: message.id, query: message.query, hits: sessions.search(message.query) }); break;
+    case 'costs': {
+      // the first reading of the transcripts is long: what is known goes out at once, the finished report follows
+      if (usage.needsScan(message.fresh === true)) {
+        const known = usage.current();
+        if (known) send({ t: 'costs', report: { ...known, scanning: true } });
+      }
+      send({ t: 'costs', report: await usage.report(message.fresh === true) });
+      break;
+    }
     case 'music': send({ t: 'music', nowPlaying: message.action ? await controlMusic(message.app, message.action) : await nowPlaying(message.app) }); break;
     case 'musicLibrary': send({ t: 'musicLibrary', query: message.query, ...await musicLibrary(message.query) }); break;
     case 'openTerminal': await openTerminal(defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir()); break;
@@ -270,10 +335,12 @@ server.listen(config.port, HOST, () => {
   console.log(st.console.pair(pairLink));
   console.log(st.console.folders(config.roots.join(path.delimiter)));
   console.log(st.console.data(config.dataDir));
-  console.log(claude ? `  Claude Code ${claude.version} (${claude.path})` : st.console.claudeMissing);
+  console.log(claude ? `  Claude Code ${installedClaude} (${claude.path})` : st.console.claudeMissing);
   console.log(st.console.stopHint);
   console.log('');
   appPort?.postMessage({ t: 'ready', link: pairLink });
+  // read the transcripts now, so that the first opening of the usage view is quick
+  usage.report().catch((error: unknown) => log('usage', error));
   if (process.argv.includes('--open') && !DEV) {
     // open tabs reconnect on their own: a new one only when none came back
     setTimeout(() => {

@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type SearchHit, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
 import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
@@ -24,10 +24,13 @@ import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
 import { Session, newSessionInfo, type SessionDeps, type StoredInfo } from './session.ts';
 import { SessionLog } from './session-log.ts';
+import { searchSessions } from './search.ts';
 
 const STATES: ReadonlySet<string> = new Set(['starting', 'work', 'perm', 'wait', 'done', 'closed', 'error']);
 const SAVE_DELAY_MS = 500;
 const MAX_COMMAND_DESCRIPTION = 200;
+/** a shorter conversation is not worth compacting while idle (Preferences.idleCompact): Claude Code alone starts near 45k */
+const IDLE_COMPACT_MIN_TOKENS = 100_000;
 
 export interface SessionManagerDeps {
   config: Config;
@@ -44,6 +47,7 @@ export interface SessionManagerDeps {
   onAttention?: SessionDeps['onAttention'];
   /** the user's first name and their note for every agent */
   identity?: SessionDeps['identity'];
+  claudeSettings?: SessionDeps['claudeSettings'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
   /** runs a command typed with "!" (see shell.ts) */
@@ -188,6 +192,7 @@ export class SessionManager {
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       identity: this.deps.identity,
+      claudeSettings: this.deps.claudeSettings,
       peerName: (address) => this.peerName(address),
       liveCount: () => [...this.sessions.values()].filter((session) => session.alive).length,
       maxLive: this.deps.config.maxLive,
@@ -208,6 +213,45 @@ export class SessionManager {
   }
 
   // ── read side ──
+  /**
+   * Compacts, one at a time, the long conversations left alone for Preferences.idleCompact minutes (asked by
+   * `idleCompact`, 0 : never), at their desk or resting. Run every minute.
+   */
+  compactIdle(minutes: number) {
+    const sessions = [...this.sessions.values()];
+    if (!minutes || this.stopping || sessions.some((session) => session.autoCompacting)) return;
+    const now = this.now();
+    const due = sessions
+      .filter((session) => {
+        const info = session.snapshot();
+        return (info.context?.used ?? 0) >= IDLE_COMPACT_MIN_TOKENS && now - info.stateSince >= minutes * 60_000 && !info.compacting;
+      })
+      .sort((a, b) => a.snapshot().stateSince - b.snapshot().stateSince);
+    for (const session of due) {
+      try {
+        if (session.autoCompact(st.prompt.idleCompact)) return;
+      } catch (error) {
+        // too many live sessions: the next minute tries again
+        this.deps.log(`cannot compact ${session.snapshot().name}`, error);
+        return;
+      }
+    }
+  }
+
+  /** Releases the waiting sessions whose process runs another Claude Code than `version`; how many were. */
+  releaseOutdated(version: string): number {
+    return [...this.sessions.values()].filter((session) => {
+      const running = session.snapshot().claudeVersion;
+      return running !== undefined && running !== version && session.release();
+    }).length;
+  }
+
+  /** Tells the running sessions about Claude Code settings changed in Open Space; one that refuses keeps its own. */
+  async applySettings(changes: Record<string, unknown>) {
+    if (!Object.keys(changes).length) return;
+    await Promise.all([...this.sessions.values()].map((session) => session.applySettings(changes).catch((error: unknown) => this.deps.log(`cannot apply the Claude Code settings to ${session.snapshot().name}`, error))));
+  }
+
   list(): SessionInfo[] { return [...this.sessions.values()].map((session) => session.snapshot()); }
   getCommands(): SlashCommand[] { return this.commands; }
   getFolderCommands(): Record<string, SlashCommand[]> { return Object.fromEntries(this.folderCommands); }
@@ -285,6 +329,11 @@ export class SessionManager {
   /** What a client missed: the events after `after`. */
   logSince(id: string, after: number): { events: LoggedEvent[]; truncated: boolean } {
     return this.logs.get(id)?.since(after) ?? { events: [], truncated: false };
+  }
+
+  /** The threads of every session (what is in memory) searched for `query`. */
+  search(query: string): SearchHit[] {
+    return searchSessions([...this.logs].map(([id, log]): [string, LoggedEvent[]] => [id, log.since(0).events]), query);
   }
 
   // ── commands ──
@@ -385,6 +434,31 @@ export class SessionManager {
     return session.snapshot();
   }
 
+  /**
+   * A new session that goes on from `id`'s conversation as it is now, in the same folder and with the same settings,
+   * under another name (`name`, or someone free): the original carries on its own. It waits for a message.
+   */
+  async duplicate(id: string, name?: string): Promise<SessionInfo> {
+    if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
+    const source = this.session(id).snapshot();
+    if (!source.resumable) throw new Error(st.sessions.nothingToDuplicate);
+    const conversation = source.conversationId ?? source.id;
+    const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
+    const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
+    Object.assign(info, {
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context,
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tag ? { tag: source.tag } : {}),
+    });
+    const log = await this.openLog(info.id);
+    const session = this.createSession(info, log);
+    this.logs.set(info.id, log);
+    this.sessions.set(info.id, session);
+    this.deps.broadcast({ t: 'session', session: session.snapshot() });
+    this.save();
+    session.showHistory(st.sessions.duplicateOf(source.name), await lastExchanges(source.cwd, conversation, 8, this.deps.home));
+    return session.snapshot();
+  }
+
   send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[]) { this.session(id).send(text, images, files); }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
@@ -479,6 +553,8 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,
+    forkOf: /^[\w-]{1,100}$/.test(asString(raw.forkOf)) ? asString(raw.forkOf) : undefined,
+    quietFrom: typeof raw.quietFrom === 'number' && Number.isInteger(raw.quietFrom) && raw.quietFrom >= 0 ? raw.quietFrom : undefined,
     conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,
     tag: asString(raw.tag).slice(0, MAX_TAG) || undefined,

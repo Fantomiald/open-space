@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
-import { contextLevel } from './labels.ts';
+import { contextLevel, stateLabel, toneOf } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
 import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
@@ -57,6 +57,9 @@ describe('attention queue', () => {
     assert.equal(attentionKind(session('a', 'error')), 'error');
     assert.equal(attentionKind(session('a', 'wait', { turns: 0 })), null);
     for (const state of ['work', 'starting', 'closed', 'done'] as const) assert.equal(attentionKind(session('a', state)), null);
+    // what Open Space's own compaction wrote after a turn the user read is nothing new; one they had not read still is
+    assert.equal(attentionKind(session('a', 'wait', { lastSeq: 9, quietFrom: 5 }), { a: 5 }), null);
+    assert.equal(attentionKind(session('a', 'wait', { lastSeq: 9, quietFrom: 5 }), { a: 3 }), 'finished');
   });
 
   it('a finished turn or an error leaves the queue once seen, until something new happens', () => {
@@ -92,6 +95,15 @@ describe('attention queue', () => {
     assert.deepEqual(groups.working.map((s) => s.id), ['bg']);
     assert.deepEqual(groups.idle.map((s) => s.id), ['ready']);
     assert.equal(sessionStatus(session('bg', 'wait', { turns: 0, subagents: [helper] }), {}), 'working');
+  });
+
+  it('counts a session between turns as working while a command it sent to the background runs, and says so', () => {
+    const rendering = session('bg', 'wait', { turns: 2, lastSeq: 5, background: [{ id: 'b1', description: 'Render the videos' }] });
+    assert.deepEqual(otherSessions([rendering], { bg: 5 }).working.map((s) => s.id), ['bg']);
+    assert.equal(sessionStatus(rendering, { bg: 5 }), 'working');
+    assert.equal(toneOf(rendering, null), 'work');
+    assert.equal(stateLabel(rendering, null), stateLabel(session('w', 'work'), null));
+    assert.equal(attentionKind(rendering, {}), 'finished', 'what it said before going on still waits to be read');
   });
 
   it('detects sessions that just started waiting, not those already waiting, nor errors', () => {
@@ -393,7 +405,7 @@ describe('usage of the subscription', () => {
 });
 
 describe('search in a thread', async () => {
-  const { findAll, fold, foldQuery } = await import('../lib/search.ts');
+  const { findAll, fold, foldQuery } = await import('../../shared/search.ts');
   it('ignores capitals and accents, and maps each match back to the original text', () => {
     const { folded, origin } = fold('Élève CAFÉ');
     assert.equal(folded, 'eleve cafe');

@@ -29,6 +29,8 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'interrupt', sessionId: 's1' }), { t: 'interrupt', sessionId: 's1' });
     assert.deepEqual(parseClientMessage({ t: 'log', sessionId: 's1', after: 12.9 }), { t: 'log', sessionId: 's1', after: 12 });
     assert.deepEqual(parseClientMessage({ t: 'directories' }), { t: 'directories' });
+    assert.deepEqual(parseClientMessage({ t: 'updateClaude', extra: 1 }), { t: 'updateClaude' });
+    assert.deepEqual(parseClientMessage({ t: 'restartOutdated' }), { t: 'restartOutdated' });
   });
 
   it('accepts pictures with a message or a new session, and drops the message when one is not right', () => {
@@ -87,5 +89,16 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'music', app: 'music', action: { kind: 'quit' } }), null);
     assert.deepEqual(parseClientMessage({ t: 'musicLibrary', query: '  joey ' }), { t: 'musicLibrary', query: 'joey' });
     assert.equal(parseClientMessage({ t: 'musicLibrary', query: 'x'.repeat(101) }), null);
+  });
+
+  it('accepts a search with a bounded query and a costs request, and drops the malformed ones', () => {
+    assert.deepEqual(parseClientMessage({ t: 'search', id: 3, query: 'pack zen' }), { t: 'search', id: 3, query: 'pack zen' });
+    assert.equal(parseClientMessage({ t: 'search', id: -1, query: 'x' }), null);
+    assert.equal(parseClientMessage({ t: 'search', id: 1.5, query: 'x' }), null);
+    assert.equal(parseClientMessage({ t: 'search', id: 1 }), null);
+    assert.equal(parseClientMessage({ t: 'search', id: 1, query: 'x'.repeat(201) }), null);
+    assert.deepEqual(parseClientMessage({ t: 'costs' }), { t: 'costs' });
+    assert.deepEqual(parseClientMessage({ t: 'costs', fresh: true }), { t: 'costs', fresh: true });
+    assert.deepEqual(parseClientMessage({ t: 'costs', fresh: 'yes' }), { t: 'costs' });
   });
 });

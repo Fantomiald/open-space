@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
-import type { AttentionKind, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange } from '../shared/protocol.ts';
+import type { ClaudeSettings } from '../shared/claude-settings.ts';
+import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
@@ -13,7 +14,8 @@ import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
-import { Normalizer, describeRequest, type InitInfo, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
 
@@ -42,6 +44,8 @@ export interface SessionDeps {
   idleMs: number;
   /** the user's first name and the note for every new agent (Preferences.agentNote), read when a conversation starts */
   identity?: () => { user: string; note: string };
+  /** the Claude Code settings chosen for Open Space's sessions (Preferences.claude), read at each launch */
+  claudeSettings?: () => ClaudeSettings;
   /** the name of the session a SendMessage call goes to (see Normalizer) */
   peerName?: (address: string) => string;
   /** time source, replaceable in tests */
@@ -79,6 +83,8 @@ export class Session {
   /** first names of sub-agents already used in this session, kept across resumes */
   private subagentNames = new Set<string>();
   private idleTimer: NodeJS.Timeout | null = null;
+  /** wake-ups and cron jobs the process holds (they die with it) */
+  private schedules: Schedules = noSchedules();
   private stopRequest: StopRequest = null;
   private interrupted = false;
   /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
@@ -103,6 +109,8 @@ export class Session {
   private emptyResult: NodeJS.Timeout | null = null;
   /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
   private remote: RemoteControl | undefined;
+  /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
+  private autoCompaction: { resting: boolean; hadProcess: boolean } | null = null;
 
   constructor(info: StoredInfo, deps: SessionDeps) {
     this.info = info;
@@ -177,7 +185,7 @@ export class Session {
     const clean = text.trim();
     if (!clean && !images.length && !files.length) return;
     if (this.stopRequest) throw new Error(st.sessions.closing);
-    if (this.busy && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length) {
+    if (this.busy && !this.autoCompaction && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length) {
       this.deliver(clean, images, files, true);
       this.publish();
       return;
@@ -231,14 +239,16 @@ export class Session {
       this.turnOutput = false;
       this.interrupted = false;
     }
-    // a message calls a resting session back from the break room
+    // a message calls a resting session back from the break room, and is news to read again
     this.info.resting = undefined;
+    this.info.quietFrom = undefined;
     const command = /^\/(\S+)/.exec(clean)?.[1];
     if (command) this.info.command = command;
+    if (command === 'compact') this.info.compacting = 'manual';
     const spawning = !this.process?.alive;
     if (spawning) {
       // a new conversation gets the name in its system prompt (see buildClaudeArgs)
-      if (!this.info.resumable) this.info.introducedAs = this.info.name;
+      if (!this.info.resumable && !this.info.forkOf) this.info.introducedAs = this.info.name;
       this.startProcess();
       this.info.error = undefined;
     }
@@ -274,11 +284,14 @@ export class Session {
       onInit: (init) => this.onInit(init),
       onCommands: (commands) => this.deps.onCommandDetails(commands),
       onQuota: (quota) => this.deps.onQuota(quota),
+      onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
       onRequest: (request) => this.onRequest(request),
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
+      onBackground: (tasks) => this.onBackground(tasks),
+      onSchedule: (change) => this.onSchedule(change),
       onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
       onFiles: (who, caption, files, display) => this.onEvent({
         k: 'files', who, ...(caption.trim() ? { caption: caption.slice(0, 2000) } : {}),
@@ -301,7 +314,7 @@ export class Session {
       agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -337,6 +350,8 @@ export class Session {
     }
     this.socket = init.socket;
     this.info.activeModel = init.model;
+    this.info.claudeVersion = init.version || undefined;
+    this.info.forkOf = undefined;
     this.info.resumable = true;
     this.deps.onInitCommands(init.commands);
     this.apply({ type: 'init' });
@@ -464,6 +479,24 @@ export class Session {
     this.publish();
   }
 
+  private onBackground(tasks: BackgroundTask[]) {
+    this.info.background = tasks.length ? tasks : undefined;
+    // the last one is done: the idle process may now be released
+    if (!tasks.length && this.context.state === 'wait') this.armIdleTimer();
+    this.publish();
+  }
+
+  private onSchedule(change: ScheduleChange) {
+    this.schedules = applySchedule(this.schedules, change, this.now());
+    this.info.scheduled = pendingSchedules(this.schedules, this.now()) || undefined;
+    this.publish();
+  }
+
+  /** Sub-agents and commands still at work in the background would die with the process, and Remote Control with it. */
+  private keepsProcess() {
+    return this.info.subagents.length > 0 || !!this.info.background || !!this.remote;
+  }
+
   private onPartial(who: string, text: string) {
     this.partials.set(who, text);
     this.partialTimer ??= setTimeout(() => {
@@ -473,7 +506,9 @@ export class Session {
     }, PARTIAL_EVERY_MS);
   }
 
-  private onEvent(ev: OfficeEvent) {
+  private onEvent(event: OfficeEvent) {
+    const ev: OfficeEvent = event.k === 'compact' && this.autoCompaction ? { ...event, idle: true } : event;
+    if (ev.k === 'compact') { this.info.compacting = undefined; this.publish(); }
     // the whole message is here: what was left of it to send is not needed any more
     if (ev.k === 'say') this.partials.delete(ev.who);
     // Claude Code's init (it opens every turn) is not something happening in it
@@ -519,6 +554,7 @@ export class Session {
   }
 
   private onResult(result: TurnResult) {
+    if (this.autoCompaction) { this.endAutoCompaction(); return; }
     // Claude Code sometimes closes an empty turn of a few ms before the real one (waking a session up, after a
     // background sub-agent's hand-back): nothing happened, so nothing is told. If nothing follows, the session waits.
     if (this.cleared && !result.text.trim()) { this.cleared = false; this.endTurn(false); return; }
@@ -537,9 +573,54 @@ export class Session {
     this.endTurn(!stopped);
   }
 
+  /**
+   * Compacts the conversation of a session left alone (Preferences.idleCompact), at its desk or in the break room,
+   * without telling the user anything new: no message of theirs in the thread, no "read what X did", no sound. A
+   * resting one goes back to rest after. false: it is not idle; throws when no process can start (too many alive).
+   */
+  autoCompact(command: string): boolean {
+    const idle = this.context.state === 'wait' || (this.info.resting === true && (this.context.state === 'closed' || this.context.state === 'done'));
+    if (!idle || this.busy || this.stopRequest || this.autoCompaction || !this.info.resumable || this.info.queued?.length || this.info.subagents.length || this.info.background) return false;
+    const hadProcess = !!this.process?.alive;
+    if (!hadProcess) this.startProcess();
+    this.autoCompaction = { resting: this.info.resting === true, hadProcess };
+    this.info.quietFrom ??= this.deps.log.lastSeq;
+    this.info.compacting = 'auto';
+    this.clearIdleTimer();
+    this.apply({ type: hadProcess ? 'send' : 'spawn' });
+    this.process?.send(command, []);
+    return true;
+  }
+
+  get autoCompacting() { return this.autoCompaction !== null; }
+
+  /** The compaction Open Space asked for is over: the session goes back to how it was, or takes what was sent meanwhile. */
+  private endAutoCompaction() {
+    const before = this.autoCompaction;
+    this.autoCompaction = null;
+    this.info.compacting = undefined;
+    this.turnOutput = false;
+    this.apply({ type: 'turn_result' });
+    if (this.context.state !== 'wait' || !before) return;
+    if (this.info.queued?.length) { this.sendQueued(); return; }
+    if (before.resting && this.process?.alive) {
+      this.info.resting = true;
+      this.stopRequest = { reason: 'closed', note: st.sessions.stopped.compacted };
+      void this.process.stop(2000);
+    } else if (!before.hadProcess && this.process?.alive) {
+      this.stopRequest = { reason: 'idle', note: st.sessions.stopped.compacted };
+      void this.process.stop(2000);
+    } else {
+      this.armIdleTimer();
+    }
+    this.publish();
+  }
+
   /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished). */
   private endTurn(tell: boolean) {
     this.turnOutput = false;
+    // a /compact that ended without compacting (nothing to compact, refused): it is not under way any more
+    this.info.compacting = undefined;
     this.apply({ type: 'turn_result' });
     if (this.context.state !== 'wait') return;
     // queued messages leave at once: the session works again, nothing to tell the user
@@ -618,6 +699,11 @@ export class Session {
     }
   }
 
+  /** Claude Code settings changed in Open Space (null : back to Claude Code's own): a running process takes them at once. */
+  async applySettings(changes: Record<string, unknown>) {
+    if (this.process?.alive) await this.process.control({ subtype: 'apply_flag_settings', settings: changes });
+  }
+
   rename(name: string) {
     this.info.name = name;
     this.publish();
@@ -628,6 +714,18 @@ export class Session {
     this.info.resting = true;
     if (this.process?.alive) await this.close();
     this.publish();
+  }
+
+  /**
+   * Lets the process go while the session waits, so that its next message starts the Claude Code installed since.
+   * false: it is at work, or keeps its process for its background work or Remote Control.
+   */
+  release(): boolean {
+    if (!this.process?.alive || this.context.state !== 'wait' || this.keepsProcess() || scheduledUntil(this.schedules, this.now())) return false;
+    this.clearIdleTimer();
+    this.stopRequest = { reason: 'idle', note: st.sessions.stopped.updated };
+    void this.process.stop(2000);
+    return true;
   }
 
   /** Puts a label on the session, or removes it (empty). */
@@ -660,13 +758,14 @@ export class Session {
 
   private armIdleTimer() {
     this.clearIdleTimer();
-    // sub-agents still at work in the background would die with the process, and Remote Control with it: it stays
-    if (!this.process?.alive || this.info.subagents.length || this.remote) return;
+    if (!this.process?.alive || this.keepsProcess()) return;
+    // a planned wake-up only comes while the process lives: it is kept until a while after the last one
+    const planned = scheduledUntil(this.schedules, this.now());
     this.idleTimer = setTimeout(() => {
-      if (this.context.state !== 'wait' || !this.process?.alive) return;
+      if (this.context.state !== 'wait' || !this.process?.alive || this.keepsProcess()) return;
       this.stopRequest = { reason: 'idle', note: st.sessions.stopped.idle };
       void this.process.stop(2000);
-    }, this.deps.idleMs);
+    }, Math.max(this.deps.idleMs, planned - this.now() + this.deps.idleMs));
     this.idleTimer.unref();
   }
 
@@ -687,10 +786,16 @@ export class Session {
     this.process = null;
     this.normalizer = null;
     this.remote = undefined;
+    this.info.claudeVersion = undefined;
+    this.info.compacting = undefined;
+    this.autoCompaction = null;
     this.cancelRequests();
     // sub-agents that will not report
     for (const id of normalizer?.present ?? []) this.onEvent({ k: 'leave', who: id, ok: false, tokens: 0, tools: 0, ms: 0 });
     this.info.subagents = [];
+    this.info.background = undefined;
+    this.schedules = noSchedules();
+    this.info.scheduled = undefined;
     const requested = this.stopRequest;
     this.stopRequest = null;
     if (requested) return this.apply({ type: 'exit', reason: requested.reason }, requested.note);

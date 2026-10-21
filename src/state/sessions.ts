@@ -1,13 +1,16 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
 import { create } from 'zustand';
+import type { ClaudeDefaults } from '../../shared/claude-settings.ts';
+import { setClockFormat } from '../lib/format.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { Aside, ClaudeInfo, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { Aside, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
@@ -38,6 +41,13 @@ const writeWindows = (state: CommandPostState) =>
   writePreference('windows', { mode: state.windowMode, free: state.free, sizes: state.gridSizes, stackWidth: state.stackWidth } satisfies WindowsPreference);
 export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
+/** The parts of the settings dialog, in the order of its menu. */
+export const SETTINGS_SECTIONS = ['general', 'sessions', 'claude', 'folders', 'office', 'notes', 'usage', 'shortcuts', 'about'] as const;
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
+/** The latest search sent over every session's thread: only its answer is kept. */
+let searchId = 0;
+
 export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
 /** What the palette or the "new session" dialog starts with. */
@@ -57,6 +67,14 @@ interface CommandPostState {
   crew: CrewMember[];
   crewOpen: boolean;
   settingsOpen: boolean;
+  /** the part of the settings shown */
+  settingsSection: SettingsSection;
+  /** the row of the settings to bring into view and light up (picked in the search palette) */
+  settingsRow: string | null;
+  /** what Claude Code spent on this computer, as last read (null: not asked for yet) */
+  costs: CostReport | null;
+  /** the search over every session's thread: its latest answer, for `query` */
+  searchResults: { id: number; query: string; hits: SearchHit[] } | null;
   /** the whiteboard's notes are open (a click on the whiteboard of the room) */
   boardOpen: boolean;
   /** the journal folder and its notes, as last listed */
@@ -130,6 +148,10 @@ interface CommandPostState {
   onboarded: boolean;
   /** the folders are set by OFFICE_ROOTS: the page cannot change them */
   rootsLocked: boolean;
+  /** what Claude Code runs with where Open Space sets nothing, and its output styles */
+  claudeDefaults: ClaudeDefaults;
+  /** where the last `claude update` asked from the page is (null: none since the page opened) */
+  claudeUpdate: ClaudeUpdate | null;
   /** folders offered at the onboarding, once asked for */
   rootSuggestions: RootSuggestion[] | null;
   /** changes some of the settings (the server keeps them and tells every tab) */
@@ -137,10 +159,14 @@ interface CommandPostState {
   /** a ding when a session finishes or needs the user */
   sound: boolean;
   paletteOpen: boolean;
+  /** what the search palette's field starts with ("/" for the commands) */
+  paletteQuery: string;
   /** a session asked for in a folder that runs code of its own and was never trusted, waiting for the user's answer */
   trustRequest: { cwd: string; code: FolderCode; options: SessionOptions } | null;
   /** the search bar of the open session's thread */
   searchOpen: boolean;
+  /** what the thread's search bar starts with (a match picked in the search palette), '' for nothing */
+  searchSeed: string;
   /** what the room shows instead of today's festival (null: none) and the hour now, to try them; undefined: the real ones */
   preview: { festival?: Festival | null; hour?: number };
   setPreview: (preview: { festival?: Festival | null; hour?: number }) => void;
@@ -195,10 +221,18 @@ interface CommandPostState {
   setView: (view: View) => void;
   toggleNotifications: () => void;
   toggleSound: () => void;
-  openPalette: (open: boolean) => void;
-  openSearch: (open: boolean) => void;
+  openPalette: (open: boolean, query?: string) => void;
+  openSearch: (open: boolean, seed?: string) => void;
+  /** asks the server for the events of every session that hold `query` */
+  searchThreads: (query: string) => void;
+  /** asks for what Claude Code spent (`fresh`: read its transcripts again now) */
+  loadCosts: (fresh?: boolean) => void;
   openCrew: (open: boolean) => void;
-  openSettings: (open: boolean) => void;
+  openSettings: (open: boolean, section?: SettingsSection, row?: string) => void;
+  /** runs `claude update` on the server */
+  updateClaude: () => void;
+  /** lets the waiting sessions on an older Claude Code go, so that their next message starts the new one */
+  restartOutdated: () => void;
   openBoard: (open: boolean) => void;
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
@@ -213,6 +247,8 @@ interface CommandPostState {
   toast: (kind: Toast['kind'], text: string) => void;
 
   createSession: (options: SessionOptions) => void;
+  /** a new session going on from this one's conversation; it opens like a new one */
+  duplicateSession: (sessionId: string) => void;
   /** the user's answer to `trustRequest`: trust the folder, run without its settings, or give up (null) */
   answerTrust: (choice: 'folder' | 'restricted' | null) => void;
   /** a message to a session, with the pictures attached to it */
@@ -241,6 +277,7 @@ const isVisible = () => typeof document !== 'undefined' && document.visibilitySt
 function languageState(preferences: Preferences): { language: Language } {
   const language = preferences.language ?? languageOf(navigator.languages);
   setLanguage(language);
+  setClockFormat(preferences.timeFormat ?? 'auto');
   return { language };
 }
 
@@ -251,6 +288,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   crew: [],
   crewOpen: false,
   settingsOpen: false,
+  settingsSection: 'general',
+  settingsRow: null,
+  costs: null,
+  searchResults: null,
   boardOpen: false,
   notes: null,
   lastNote: null,
@@ -289,15 +330,19 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, journalFolder: '', metricsFile: '' },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, journalFolder: '', metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0 },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
+  claudeDefaults: { current: {}, outputStyles: [] },
+  claudeUpdate: null,
   rootSuggestions: null,
   sound: readPreference('sound', true),
   paletteOpen: false,
+  paletteQuery: '',
   trustRequest: null,
   searchOpen: false,
+  searchSeed: '',
   preview: {},
   newSession: null,
   launcherOpen: false,
@@ -324,7 +369,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           ...languageState(message.preferences),
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
-          preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked,
+          preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults,
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
@@ -357,7 +402,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         if (s.sound && previous[message.session.id] && previous[message.session.id].state !== 'error' && message.session.state === 'error') errorChime();
         break;
       }
-      case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded }); break;
+      case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded, claudeDefaults: message.claudeDefaults }); break;
       case 'rootSuggestions': set({ rootSuggestions: message.suggestions }); break;
       case 'trustNeeded': if (lastCreate) set({ trustRequest: { cwd: message.cwd, code: message.code, options: lastCreate } }); break;
       case 'forgotten': {
@@ -405,6 +450,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'folderCommands': set({ folderCommands: { ...s.folderCommands, [message.cwd]: message.commands } }); break;
       case 'models': set({ models: message.models }); break;
       case 'directories': set({ directories: message.directories }); break;
+      case 'claude': set({ claude: message.claude }); break;
+      case 'claudeUpdate': set({ claudeUpdate: message.update }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
       case 'inspection': {
         const { inspection } = message;
@@ -422,6 +469,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'musicApps': set({ musicApps: message.apps }); break;
       case 'music': set({ nowPlaying: message.nowPlaying }); break;
       case 'musicLibrary': set({ musicLibrary: { query: message.query, playlists: message.playlists, tracks: message.tracks } }); break;
+      // an answer to an older query, overtaken by the one typed since, is dropped
+      case 'searchResults': if (message.id === searchId) set({ searchResults: { id: message.id, query: message.query, hits: message.hits } }); break;
+      case 'costs': set({ costs: message.report }); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
@@ -598,11 +648,15 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   toggleNotifications: () => { get().send({ t: 'preferences', preferences: { notifications: !get().preferences.notifications } }); },
   setPreferences: (changes) => get().send({ t: 'preferences', preferences: changes }),
 
-  openPalette: (open) => set({ paletteOpen: open }),
-  openSearch: (open) => set({ searchOpen: open }),
+  openPalette: (open, query = '') => set({ paletteOpen: open, paletteQuery: query }),
+  openSearch: (open, seed = '') => set({ searchOpen: open, searchSeed: seed }),
+  searchThreads: (query) => { get().send({ t: 'search', id: ++searchId, query }); },
+  loadCosts: (fresh) => { get().send({ t: 'costs', ...(fresh ? { fresh } : {}) }); },
   setPreview: (preview) => set({ preview }),
   openCrew: (open) => set({ crewOpen: open }),
-  openSettings: (open) => set({ settingsOpen: open }),
+  updateClaude: () => { get().send({ t: 'updateClaude' }); },
+  restartOutdated: () => { get().send({ t: 'restartOutdated' }); },
+  openSettings: (open, section, row) => set({ settingsOpen: open, settingsRow: row ?? null, ...(section ? { settingsSection: section } : {}) }),
   openBoard: (open) => set({ boardOpen: open, ...(open ? {} : { lastNote: null }) }),
   openMetrics: (open) => {
     set({ metricsOpen: open, metrics: undefined });
@@ -623,6 +677,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   },
   closeLauncher: () => set({ launcherOpen: false }),
 
+  duplicateSession: (sessionId) => { set({ awaitingNew: true }); get().send({ t: 'duplicate', sessionId }); },
   createSession: (options) => { set({ awaitingNew: true }); lastCreate = options; get().send({ t: 'create', options }); },
   answerTrust: (choice) => {
     const request = get().trustRequest;
@@ -648,3 +703,8 @@ export const selectAttentionCount = (state: CommandPostState) => attentionQueue(
 
 /** The commands offered in a session folder (the ones of no folder until it was probed), or with no folder. */
 export const commandsIn = (state: Pick<CommandPostState, 'commands' | 'folderCommands'>, cwd?: string): SlashCommand[] => (cwd && state.folderCommands[cwd]) || state.commands;
+
+/** The sessions whose process runs another Claude Code than the one installed (`version`): the next launch takes it. */
+export const outdatedSessions = (sessions: readonly SessionInfo[], version: string | undefined) =>
+  version ? sessions.filter((session) => session.claudeVersion !== undefined && session.claudeVersion !== version) : [];
+export const selectOutdatedCount = (state: CommandPostState) => outdatedSessions(Object.values(state.sessions), state.claude?.version).length;

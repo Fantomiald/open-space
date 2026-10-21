@@ -22,6 +22,11 @@ describe('settings', () => {
     assert.equal(parsePreferences({ pet: { kind: 'dragon' } }).pet, undefined);
     assert.deepEqual(parsePreferences({ pet: { kind: 'cat', variant: 'grey' } }).pet, { kind: 'cat', variant: 'plain', colors: { fur: '#8b919c' } }, 'a coat named after its colour becomes a plain cat of that colour');
     assert.deepEqual(parsePreferences({ pet: { kind: 'duck' } }).pet, { kind: 'duck' });
+    assert.deepEqual(parsePreferences({ effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false, reduceMotion: 'yes' }), { effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false });
+    assert.deepEqual(parsePreferences({ effort: 'ultra', timeFormat: 'swatch' }), {});
+    assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {
+      enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis',
+    }, 'only the keys Open Space offers, with known values');
   });
 
   it('needs the first start until it is done, and keeps the notifications of an older file', async () => {

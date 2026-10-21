@@ -2,7 +2,7 @@
 // `who` is "chef" (the main agent of the session) or the tool_use id of the Task/Agent call that
 // started a sub-agent (every message of that sub-agent carries it as parent_tool_use_id).
 import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
-import type { OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import type { BackgroundTask, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
@@ -10,12 +10,17 @@ export interface TurnResult { ok: boolean; text: string; ms: number }
 
 /** `socket`: where other Claude Code sessions reach this one ("/tmp/cc-socks/<pid>.sock"; their SendMessage calls write "uds:" before it). */
 /** `conversationId`: the conversation Claude Code goes on with (a new one after /clear) */
-export interface InitInfo { model: string; commands: string[]; socket: string; conversationId: string }
+export interface InitInfo { model: string; commands: string[]; socket: string; conversationId: string; version: string }
 
 /** A can_use_tool control request: a tool call (or an AskUserQuestion call) waiting for the user. */
 export interface ToolRequest { requestId: string; who: string; tool: string; input: Record<string, unknown>; suggestions: Json[] }
 
 export type AskEvent = Extract<OfficeEvent, { k: 'ask' }>;
+
+/** Something the session's agent planned to do later on its own, once the tool call that plans it went through. */
+export type ScheduleChange =
+  | { kind: 'wakeup'; seconds: number } | { kind: 'wakeup_stop' }
+  | { kind: 'cron'; cron: string; recurring: boolean } | { kind: 'cron_delete' };
 
 /** The Agent call that first started a sub-agent, and the sub-agent's type. */
 export interface AgentLaunch { call: string; type: string }
@@ -25,6 +30,8 @@ export interface NormalizerOptions {
   onInit: (info: InitInfo) => void;
   onCommands: (commands: SlashCommand[]) => void;
   onQuota: (quota: Quota) => void;
+  /** Claude Code started compacting the conversation (it ends with a compact event) */
+  onCompacting?: () => void;
   onResult: (result: TurnResult) => void;
   onRequest: (request: ToolRequest) => void;
   /** Claude Code withdrew a request (it will not wait for the answer any more) */
@@ -39,6 +46,10 @@ export interface NormalizerOptions {
   onContext?: (context: { used?: number; max?: number }) => void;
   /** where Remote Control is at, once turned on (system/bridge_state: "ready", "connected", "failed"…) */
   onRemoteState?: (state: string) => void;
+  /** the commands running in the background now, sub-agents left out (they come as hire and leave events) */
+  onBackground?: (tasks: BackgroundTask[]) => void;
+  /** a /loop wake-up or a cron job planned or cancelled (ScheduleWakeup, CronCreate, CronDelete) */
+  onSchedule?: (change: ScheduleChange) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
@@ -58,6 +69,8 @@ export class Normalizer {
   private sending = new Map<string, string>();
   /** Artifact calls publishing a page, waiting for their result (its address comes with it) */
   private publishing = new Set<string>();
+  /** ScheduleWakeup, CronCreate and CronDelete calls waiting for their result, by tool call id */
+  private scheduling = new Map<string, ScheduleChange>();
   /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
   private agentTasks = new Map<string, string>();
   /** what each SendMessage call said: a sub-agent it wakes up again works on it */
@@ -158,8 +171,12 @@ export class Normalizer {
           commands: asArray(message.slash_commands).filter((name): name is string => typeof name === 'string'),
           socket: asString(message.messaging_socket_path),
           conversationId: asString(message.session_id),
+          version: asString(message.claude_code_version),
         });
         this.options.emit({ k: 'init', model: asString(message.model) });
+        break;
+      case 'status':
+        if (message.status === 'compacting') this.options.onCompacting?.();
         break;
       case 'compact_boundary': {
         const metadata = asJson(message.compact_metadata);
@@ -170,6 +187,11 @@ export class Normalizer {
       }
       case 'bridge_state':
         this.options.onRemoteState?.(asString(message.state));
+        break;
+      case 'background_tasks_changed':
+        // the whole list each time (fixtures/bash-background.jsonl, 2.1.304)
+        this.options.onBackground?.(asArray(message.tasks).map(asJson).filter((task) => asString(task.task_id) && !asString(task.task_type).includes('agent'))
+          .map((task) => ({ id: asString(task.task_id), description: cut(task.description, 90) })));
         break;
       case 'commands_changed':
         this.options.onCommands(asArray(message.commands).map(asJson).filter((c) => asString(c.name)).map((c) => ({
@@ -248,6 +270,8 @@ export class Normalizer {
     // the files are shown with the call's result, no action line
     if (name === 'SendUserFile') { this.sending.set(id, asString(input.display)); return; }
     // a page, not an asset upload nor a read, list or delete
+    const schedule = who === 'chef' ? scheduleOf(name, input) : null;
+    if (schedule) this.scheduling.set(id, schedule);
     if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && input.asset !== true && input.file_path) this.publishing.add(id);
     if (name === 'Agent' || name === 'Task') {
       this.hire(id, asString(input.subagent_type), asString(input.description), asString(input.prompt));
@@ -282,6 +306,11 @@ export class Normalizer {
         if (files.length) this.options.onFiles?.(who, asString(result.caption), files, display);
         continue;
       }
+      const schedule = this.scheduling.get(id);
+      if (schedule) {
+        this.scheduling.delete(id);
+        if (!block.is_error) this.options.onSchedule?.(schedule);
+      }
       if (this.publishing.delete(id)) {
         // checked with the transcripts of 2.1.302: tool_use_result is { url, path, title, artifact_id, updated, … }
         const result = asJson(message.tool_use_result);
@@ -308,6 +337,15 @@ export class Normalizer {
       if (this.hired.has(id)) continue;
       this.options.emit({ k: 'act_done', who, id, ok: !block.is_error });
     }
+  }
+}
+
+function scheduleOf(tool: string, input: Record<string, unknown>): ScheduleChange | null {
+  switch (tool) {
+    case 'ScheduleWakeup': return input.stop === true ? { kind: 'wakeup_stop' } : { kind: 'wakeup', seconds: asNumber(input.delaySeconds) };
+    case 'CronCreate': return { kind: 'cron', cron: asString(input.cron), recurring: input.recurring !== false };
+    case 'CronDelete': return { kind: 'cron_delete' };
+    default: return null;
   }
 }
 

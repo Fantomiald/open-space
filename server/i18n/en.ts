@@ -12,6 +12,7 @@ export const en: ServerDictionary = {
         ` Open Space shows in the thread the pictures you send with SendUserFile and the pages you publish with Artifact: when you change something visible (a page, a screen) and can take a screenshot of it, send it.` +
         (note ? `\n\nWhat ${who} asks of all their agents: ${note}` : '');
     },
+    idleCompact: '/compact Keep what is needed to go on without explaining anything again: where things stand (branch, uncommitted files), each decision and why, what the user asked for or refused in their own words, what is left to do, the key files and the pitfalls already met.',
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
@@ -33,6 +34,8 @@ export const en: ServerDictionary = {
       ended: 'Claude Code ended.',
       idle: 'Process released after a while doing nothing.',
       released: 'Process released when the server stopped.',
+      updated: 'Process released: the next message starts the new version of Claude Code.',
+      compacted: 'Process released once the conversation was compacted.',
     },
     closing: 'This session is closing, try again in a moment.',
     tooMany: (max: number) => `Too many active sessions (${max} at most). Close one.`,
@@ -50,6 +53,8 @@ export const en: ServerDictionary = {
     resumedWithHistory: (title: string) => `Resumed “${title}”: its last exchanges.`,
     nextMessageContinues: 'Your next message continues the conversation.',
     untitledConversation: 'the conversation',
+    duplicateOf: (name: string) => `${name}’s conversation`,
+    nothingToDuplicate: 'This session has not said anything yet: nothing to duplicate.',
     logFailed: (name: string, reason: string) => `${name}’s log couldn’t be written (${reason}). It will be reopened on the next event.`,
     stoppingNoStart: 'The server is stopping: no session can start.',
     stoppingNoCreate: 'The server is stopping: no session can be created.',

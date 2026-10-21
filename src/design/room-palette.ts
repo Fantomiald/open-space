@@ -168,6 +168,7 @@ export const ROOM_PALETTE = {
     working: '#8cc2ff',
     finished: '#6fdc9b',
     error: '#ff8f8a',
+    compacting: '#c9a6ff',
   },
   /** the glyph in that icon */
   statusInk: '#141826',

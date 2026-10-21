@@ -2,9 +2,10 @@ import { useEffect, useRef, type ReactNode } from 'react';
 
 /**
  * A modal dialog on the native <dialog> element: focus trap, Escape and screen-reader semantics come with it. `look`
- * dresses it as something of the room (the whiteboard: its title is then only read out, the board shows its own).
+ * dresses it as something of the room (the whiteboard), the search palette (high on the screen) or a panel of its own
+ * (the settings): its title is then only read out, the content shows its own.
  */
-export function Modal({ title, onClose, children, wide, look }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; look?: 'board' }) {
+export function Modal({ title, onClose, children, wide, look }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; look?: 'board' | 'palette' | 'panel' }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;

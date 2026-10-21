@@ -33,12 +33,17 @@ function useArea(view: string) {
   const [area, setArea] = useState<(Size & { column: number }) | null>(null);
   useLayoutEffect(() => {
     const node = element.current!;
-    const measure = () => setArea((previous) => {
-      if (!canArrange()) return null;
+    const measure = () => {
+      if (!canArrange()) { setArea(null); return; }
+      // measured as placed (over the room, the whole page) even before React marks it so: measured at its grid size, the
+      // first window would open on the left and glide to its place
+      const shown = node.dataset.placed;
+      node.dataset.placed = 'true';
       const width = node.clientWidth, height = node.clientHeight;
+      if (shown !== undefined) node.dataset.placed = shown;
       const column = Number.parseFloat(getComputedStyle(node).getPropertyValue('--detail-width')) * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-      return previous?.width === width && previous.height === height && previous.column === column ? previous : { width, height, column };
-    });
+      setArea((previous) => (previous?.width === width && previous.height === height && previous.column === column ? previous : { width, height, column }));
+    };
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     measure();

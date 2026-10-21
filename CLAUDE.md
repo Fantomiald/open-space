@@ -19,3 +19,11 @@ Open Space pilote plusieurs sessions Claude Code depuis un bureau en pixel art, 
 - La logique pure (états, file « à toi », fil d'événements) est testée sans DOM : `server/session-state.ts`, `src/state/*.ts`, `src/room/*.ts`.
 - Le serveur ne fait aucun appel réseau sortant (la salle est dessinée en code, sans image externe) ; garder ça.
 - Les fixtures `server/fixtures/*.jsonl` sont de vraies sorties de `claude -p` (nettoyées) : les régénérer si le format du CLI change.
+
+## L'app Mac (Electron)
+
+- `desktop/main.ts` ouvre une fenêtre sur le serveur, lancé dans l'app (`utilityProcess`). Si un serveur répond déjà sur le port (`npm start`), l'app s'y branche et ne l'arrête pas en quittant. Le code de l'app est construit dans `out/` (`vite.desktop.config.ts`), jamais dans `dist/`.
+- L'app installée tourne sur le code de sa version. Pour voir une modif sans publier : quitter l'app, `npm start`, rouvrir l'app (elle se branche dessus). `npm run app:dev` lance l'app depuis le repo.
+- Tester l'app sans toucher à l'Open Space en cours : `PORT=4949`, `OFFICE_DIR` et `--user-data-dir` dans un dossier temporaire.
+- Sortir une version : passer `version` dans `package.json`, une section dans `CHANGELOG.md`, commit « Open Space x.y.z » et push. Puis `GH_TOKEN=$(gh auth token)` et `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` (clé API App Store Connect) avec `npm run app:publish` : signe, notarise et crée la release GitHub en brouillon. Enfin `gh release edit vx.y.z --draft=false --latest`. Les apps installées se mettent à jour seules à partir de la release publiée (`latest-mac.yml` + zip).
+- Sans certificat Developer ID : `npm run app` fait un dmg signé ad hoc (clic droit, Ouvrir la première fois, pas de mise à jour auto).

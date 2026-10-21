@@ -3,26 +3,20 @@
 // tag, its last words and how long it has been so. A click opens it beside the open ones (or goes to it when open); a
 // group folds away, and the whole list down to the faces (remembered in this browser).
 import { useMemo, useState } from 'react';
-import type { SessionInfo } from '../../shared/protocol.ts';
-import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { t } from '../i18n/index.ts';
 import { formatDuration } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
-import { roomSessions, sessionStatus, type Status } from '../room/cast.ts';
-import { chibiHead, lookOfStranger } from '../room/chibi.ts';
+import { roomSessions, sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
-
-/** The sign on a face, the same as over a head in the room; none for a session that is ready or resting. */
-const SIGNS: Readonly<Record<Exclude<Status, null>, string>> = { permission: '!', question: '?', finished: '✓', error: '×', working: '…' };
+import { SessionFace } from './SessionFace.tsx';
 
 export function SessionList() {
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
-  const crew = useSessions((s) => s.crew);
   const openIds = useSessions((s) => s.openIds);
   const selectedId = useSessions((s) => s.selectedId);
   const show = useSessions((s) => s.show);
@@ -47,11 +41,6 @@ export function SessionList() {
   }, [sessions, seen]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(groups.some(([group]) => group === 'working') ? 1000 : 30_000);
-  // a session named like a crew member wears that member's look, as in the room
-  const faceOf = (session: SessionInfo) => {
-    const member = crew.find((candidate) => !candidate.self && candidate.name === session.name);
-    return chibiHead(member ? member.look ?? DEFAULT_LOOK : lookOfStranger(session.id));
-  };
   const words = t.session.list;
 
   return (
@@ -84,10 +73,7 @@ export function SessionList() {
                       title={narrow ? session.name : words.open} aria-label={narrow ? session.name : undefined}
                       onClick={() => show(session.id)}
                     >
-                      <span className="cp-list__face">
-                        <img src={faceOf(session)} alt="" width={36} height={36} />
-                        {status && <span className="cp-list__sign" aria-hidden="true">{SIGNS[status]}</span>}
-                      </span>
+                      <SessionFace session={session} resting={group === 'resting'} />
                       <span className="cp-list__text">
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>

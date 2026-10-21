@@ -105,7 +105,7 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
         if (item) Object.assign(item, { output: ev.output, code: ev.code, done: true, ms: ev.ms, byUser: ev.byUser === true });
         break;
       }
-      case 'compact': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.compacted(ev.auto, ev.before, ev.after) }); break;
+      case 'compact': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.compacted(ev.auto, ev.before, ev.after, ev.idle === true) }); break;
       case 'cleared': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.cleared }); break;
       case 'error': items.push({ id: seq, kind: 'notice', at, text: ev.message }); break;
       case 'note': items.push({ id: seq, kind: 'notice', at, text: ev.text }); break;

@@ -10,7 +10,8 @@ import { useFeedSearch } from './useFeedSearch.ts';
  */
 export function FeedSearch({ thread, version }: { thread: RefObject<HTMLElement | null>; version: unknown }) {
   const openSearch = useSessions((s) => s.openSearch);
-  const [query, setQuery] = useState('');
+  // a match picked in the search palette opens the bar on its words
+  const [query, setQuery] = useState(() => useSessions.getState().searchSeed);
   const field = useRef<HTMLInputElement>(null);
   const { count, index, next, previous } = useFeedSearch(thread, query, version);
 

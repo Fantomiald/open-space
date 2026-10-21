@@ -53,6 +53,11 @@
   /* the one gap between floating things, and between them and the window's edge */
   --gutter: 0.75rem;
   --detail-width: 31rem;
+  /* the settings dialog and the search palette */
+  --prefs-width: 64rem;
+  --prefs-height: 46rem;
+  --prefs-side: 15rem;
+  --palette-width: 42rem;
   /* focus mode's session list, beside the windows */
   --list-width: 18rem;
   --content-max: 70rem;
@@ -76,10 +81,13 @@
   --glass: rgb(16 20 36 / 0.70);
   --glass-surface: linear-gradient(var(--glass), var(--glass)), var(--frost, none) 0 0 / 100vw 100vh no-repeat fixed;
   --glass-strong: rgb(16 19 34 / 0.94);
+  /* a menu over fields: nothing under it shows through */
+  --menu-solid: rgb(20 24 40);
   --glass-tint: rgb(255 255 255 / 0.05);
   --glass-edge: rgb(255 255 255 / 0.10);
   /* the floor a person or a pet stands on in the crew dialog: a soft spotlight */
   --stage-light: radial-gradient(50% 20% at 50% 44%, rgb(154 168 255 / 0.2), transparent);
+  --piece-light: radial-gradient(circle at 50% 55%, rgb(154 168 255 / 0.3), transparent 72%);
   /* a slider's track, on glass */
   --track: rgb(255 255 255 / 0.22);
   --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 50px rgb(4 5 14 / 0.45);
@@ -118,6 +126,9 @@
   /* A message from another session: neither the user's nor this agent's own words */
   --tone-peer: #f29bd2;
   --tone-peer-soft: #2c1626;
+  /* a conversation being compacted */
+  --tone-compact: #c9a6ff;
+  --tone-compact-soft: #251a3d;
   --diff-add: #6fdc9b;
   --diff-add-soft: #0f2a1a;
   --diff-remove: #ff8f8a;
@@ -132,6 +143,29 @@
   --chart-6: #9aa8ff;
   --chart-7: #ff8f8a;
   --chart-8: #c9a6ff;
+
+  /*
+   * The usage charts: one colour per model, in the order of what they cost (four slots, then the others in grey).
+   * Checked for colour blindness against the dialogs' glass (dataviz validator: lightness band, CVD separation, contrast).
+   */
+  --series-0: #4f8ff7;
+  --series-1: #cf7428;
+  --series-2: #a06cf0;
+  --series-3: #22a06b;
+  --series-others: #7d8597;
+  --series-neutral: #8e9ab8;
+  /* the hour by hour activity: one hue, light to strong */
+  --heat-0: rgb(255 255 255 / 0.04);
+  --heat-1: rgb(79 143 247 / 0.28);
+  --heat-2: rgb(79 143 247 / 0.5);
+  --heat-3: rgb(79 143 247 / 0.75);
+  --heat-4: #6fa6ff;
+  --chart-grid: rgb(255 255 255 / 0.07);
+  /* the words a search found, in its results */
+  --mark: rgb(255 184 102 / 0.26);
+  --mark-text: #ffd7a8;
+  /* a setting row lit for a moment (picked in the search palette) */
+  --flash: rgb(154 168 255 / 0.16);
 
   /*
    * The whiteboard's notes (BoardDialog): drawn like the room's whiteboard, in pixel art. Its writing surface stays light

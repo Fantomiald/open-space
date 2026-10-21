@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { locale, t } from '../i18n/index.ts';
-import { formatDuration } from '../lib/format.ts';
+import { formatClock, formatDuration } from '../lib/format.ts';
 import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
-import { BackIcon, ChevronDownIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
+import { BackIcon, ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { Prose } from './Prose.tsx';
@@ -198,14 +198,21 @@ function SentVideo({ src, title, size, caption, onView }: { src: string; title: 
 
 const bytes = (size: number) => new Intl.NumberFormat(locale(), { style: 'unit', unit: size >= 1_000_000 ? 'megabyte' : 'kilobyte', maximumFractionDigits: 1 }).format(size >= 1_000_000 ? size / 1_000_000 : Math.max(0.1, size / 1000));
 
+/** The time a message was written, when the settings show it (Preferences.timestamps). */
+function Stamp({ at }: { at: number }) {
+  const shown = useSessions((s) => s.preferences.timestamps);
+  return shown ? <time className="cp-feed__time" dateTime={new Date(at).toISOString()}>{formatClock(at)}</time> : null;
+}
+
 function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEntry; sessionId: string; speaker: string; openAgent: (agentId: string) => void; onView: (image: Viewed) => void }) {
+  const turnDuration = useSessions((s) => s.preferences.turnDuration);
   switch (item.kind) {
     case 'tools':
       return <Tools run={item} />;
     case 'user':
       return (
         <li className="cp-feed__item" data-kind="user">
-          <span className="cp-feed__who">{t.session.feed.you}</span>
+          <span className="cp-feed__who">{t.session.feed.you}<Stamp at={item.at} /></span>
           {item.images.length > 0 && (
             <div className="cp-feed__images">
               {item.images.map((name) => (
@@ -226,7 +233,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
     case 'assistant':
       return (
         <li className="cp-feed__item" data-kind="assistant">
-          <span className="cp-feed__who">{item.author ?? speaker}</span>
+          <span className="cp-feed__who">{item.author ?? speaker}<Stamp at={item.at} /></span>
           <Prose className="cp-feed__text" text={item.text} />
         </li>
       );
@@ -258,7 +265,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
     case 'peer':
       return <PeerMessage item={item} speaker={speaker} />;
     case 'turn':
-      return <li className="cp-feed__item" data-kind="turn">{turnLine(item)}</li>;
+      return turnDuration ? <li className="cp-feed__item" data-kind="turn">{turnLine(item)}</li> : null;
     case 'notice':
       return <li className="cp-feed__item" data-kind="notice">{item.text}</li>;
     case 'files':
@@ -322,15 +329,24 @@ const UNREAD_KINDS: ReadonlySet<ThreadEntry['kind']> = new Set(['assistant', 'pe
 function turnLine(item: FeedItem & { kind: 'turn' }) {
   const words = t.session.feed;
   const duration = formatDuration(item.ms);
-  const time = new Date(item.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  const time = formatClock(item.at);
   if (item.stopped) return words.turnStopped(duration, time);
   return item.ok ? words.turnDone(turnWord(item.startId, words.turnWords).done, duration, time) : words.turnFailed(duration, time);
 }
 
 /** The end of a working session's thread: its word of the turn, how long it has been at it, and what it is doing. */
-function Working({ items, speaker }: { items: readonly FeedItem[]; speaker: string }) {
+function Working({ items, speaker, sessionId }: { items: readonly FeedItem[]; speaker: string; sessionId: string }) {
   const now = useNow(1000);
   const words = t.session.feed;
+  const compacting = useSessions((s) => s.sessions[sessionId]?.compacting);
+  if (compacting) {
+    return (
+      <li className="cp-feed__item" data-kind="typing">
+        <span className="cp-feed__who">{speaker}</span>
+        <span className="cp-feed__compacting"><CompactIcon />{words.compacting[compacting]}</span>
+      </li>
+    );
+  }
   const turn = currentTurn(items);
   const phase = turnPhase(items);
   const doing = phase === 'thinking' ? words.phases.thinking : phase.tool;
@@ -371,6 +387,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   /** the user's last message, once the thread went down for it */
   const sentSeen = useRef<number | null>(null);
   const searching = useSessions((s) => s.searchOpen && s.selectedId === sessionId);
+  const searchSeed = useSessions((s) => s.searchSeed);
   const draft = drafts[shownAgent ? shownAgent.agentId : 'chef'];
   // a message of the user's own brings the thread back down, like Claude Code
   const lastEntry = entries.at(-1);
@@ -418,7 +435,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   };
   return (
     <div className="cp-thread">
-      {searching && <FeedSearch thread={scroller} version={entries} />}
+      {searching && <FeedSearch key={searchSeed} thread={scroller} version={entries} />}
       {agents.length > 0 && (
         <div className="cp-thread__bar">
           <div className="cp-thread__tabs" role="tablist" aria-label={t.session.feed.tabs}>
@@ -445,7 +462,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
                 <span className="cp-feed__who">{shownAgent ? shownAgent.name : speaker}</span>
                 <Prose className="cp-feed__text" text={draft} />
               </li>
-            ) : working && !shownAgent && <Working items={feed.items} speaker={speaker} />}
+            ) : working && !shownAgent && <Working items={feed.items} speaker={speaker} sessionId={sessionId} />}
             {shownAgent?.report && (
               <li className="cp-feed__item" data-kind="assistant">
                 <span className="cp-feed__who">{t.session.feed.report}</span>
