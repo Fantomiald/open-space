@@ -21,6 +21,7 @@ export function Header() {
   const openPalette = useSessions((s) => s.openPalette);
   const openSettings = useSessions((s) => s.openSettings);
   const outdated = useSessions(selectOutdatedCount);
+  const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
   const windowMode = useSessions((s) => s.windowModeRequest ?? s.windowMode[arrangementOf(s.view)]);
@@ -68,8 +69,9 @@ export function Header() {
           <SearchIcon /><span className="cp-header__label">{words.search}</span><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
         </button>
         <button
-          type="button" className="cp-icon-button cp-header__settings" data-alert={outdated > 0} onClick={() => openSettings(true)}
-          aria-label={outdated ? words.settingsUpdate : words.settings} title={outdated ? words.settingsUpdate : words.settingsTitle(SETTINGS_KEYS)}
+          type="button" className="cp-icon-button cp-header__settings" data-alert={appReady || outdated > 0} onClick={() => openSettings(true)}
+          aria-label={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settings}
+          title={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settingsTitle(SETTINGS_KEYS)}
         >
           <SettingsIcon />
         </button>

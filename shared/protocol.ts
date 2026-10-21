@@ -74,6 +74,9 @@ export interface SentFile { title: string; stored: string | null; image: boolean
 
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }
 
+/** A new Open Space found by the Mac app: being downloaded, then ready to install by restarting the app. */
+export interface AppUpdate { state: 'downloading' | 'ready'; version: string }
+
 /** Where `claude update` run from the page is: `text` the reason it failed. */
 export type ClaudeUpdate = { state: 'checking' } | { state: 'upToDate'; version: string } | { state: 'updated'; from: string; version: string } | { state: 'failed'; text: string };
 
@@ -408,6 +411,8 @@ export type ClientMessage =
   | { t: 'updateClaude' }
   /** releases the waiting sessions that run an older Claude Code than the one installed */
   | { t: 'restartOutdated' }
+  /** restarts the Mac app on the Open Space it downloaded (appUpdate ready) */
+  | { t: 'restartApp' }
   /** what a session changed in its files */
   | { t: 'changes'; sessionId: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
@@ -445,7 +450,7 @@ export type ClientMessage =
   | { t: 'musicLibrary'; query: string };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */
@@ -470,6 +475,8 @@ export type ServerMessage =
   /** the Claude Code installed, read again now and then (its own updater replaces it in the background) */
   | { t: 'claude'; claude: ClaudeInfo }
   | { t: 'claudeUpdate'; update: ClaudeUpdate }
+  /** where the Mac app is with a new Open Space (only when the bridge runs inside it) */
+  | { t: 'appUpdate'; update: AppUpdate }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }
   | { t: 'inspection'; sessionId: string; inspection: Inspection }
   | { t: 'quota'; quota: Quota }

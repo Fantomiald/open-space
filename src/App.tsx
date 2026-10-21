@@ -11,7 +11,7 @@ import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
 import { RoomView } from './room/RoomView.tsx';
 import { SessionList } from './command/SessionList.tsx';
-import { Sky } from './room/Sky.tsx';
+import { Sky, refreshFrost } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useFestival } from './room/useFestival.ts';
 import { Stack } from './command/Stack.tsx';
@@ -43,6 +43,8 @@ export function App() {
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
   useEffect(() => { document.documentElement.dataset.motion = reduceMotion ? 'reduced' : 'full'; }, [reduceMotion]);
+  // the frost of the panes showed the room for up to a second after it went away (focus mode): drawn again at once
+  useEffect(() => { const frame = requestAnimationFrame(refreshFrost); return () => cancelAnimationFrame(frame); }, [view]);
 
   // the user's own bust: the tab's icon, and the macOS app's (kept by the server, see scripts/macos-app.py)
   const selfLook = useSessions((s) => s.crew.find((member) => member.self)?.look);

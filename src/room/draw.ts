@@ -10,6 +10,7 @@ import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
 import { metricsBadgeAt } from './metrics.ts';
+import { STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
@@ -378,15 +379,6 @@ const TAG_LIFT = 5;
 /** the room a hairline takes between two parts of a tag, with the gaps on both sides */
 const SEPARATED = TAG_GAP * 2 + 1;
 
-/** The status glyphs, on a 5 x 5 grid in the middle of the icon (working is three dots, drawn apart). */
-const STATUS_GLYPHS: Readonly<Record<Exclude<Status, 'working' | null>, Glyph>> = {
-  // two chevrons pressing a bar from above and below: the conversation shrinks
-  compacting: [[1, 0], [2, 1], [3, 0], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [1, 4], [2, 3], [3, 4]],
-  permission: [[2, 0], [2, 1], [2, 2], [2, 4]],
-  question: [[1, 0], [2, 0], [3, 0], [3, 1], [2, 2], [2, 4]],
-  finished: [[0, 2], [1, 3], [2, 2], [3, 1], [4, 0]],
-  error: [[0, 0], [4, 0], [1, 1], [3, 1], [2, 2], [1, 3], [3, 3], [0, 4], [4, 4]],
-};
 
 const asks = (status: Status) => status === 'permission' || status === 'question';
 const textWidthOf = (context: Context, text: string) => Math.ceil(context.measureText(text).width);
@@ -417,8 +409,8 @@ function paintTagIcon(context: Context, status: Exclude<Status, null>, left: num
   context.fill();
   const glyphLeft = left + 2, glyphTop = top + 2;
   if (status === 'working') {
-    const lifted = reducedMotion ? -1 : Math.floor(time / 300) % 3;
-    for (const dot of [0, 1, 2]) rect(context, glyphLeft + dot * 2, glyphTop + 2 - (dot === lifted ? 1 : 0), 1, 1, P.statusInk);
+    const lifted = reducedMotion ? -1 : Math.floor(time / WORKING_STEP_MS) % 3;
+    WORKING_DOTS.forEach((dx, dot) => { rect(context, glyphLeft + dx, glyphTop + 2 - (dot === lifted ? 1 : 0), 1, 1, P.statusInk); });
     return;
   }
   for (const [dx, dy] of STATUS_GLYPHS[status]) rect(context, glyphLeft + dx, glyphTop + dy, 1, 1, P.statusInk);
@@ -506,7 +498,6 @@ function paintSpeech(context: Context, text: string, x: number, y: number) {
   context.fillText(text, Math.round(x), top + 10);
 }
 
-type Glyph = readonly (readonly [number, number])[];
 const EXCLAMATION: Glyph = [[0, 0], [0, 1], [0, 2], [0, 4]];
 
 /** A rounded bubble centred on (x, y), its tail down, a white glyph in it (dots from its middle); `scale`: drawn bigger. */

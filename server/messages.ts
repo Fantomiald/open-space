@@ -189,6 +189,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'updateClaude': return { t: 'updateClaude' };
     case 'duplicate': return sessionId ? { t: 'duplicate', sessionId } : null;
     case 'restartOutdated': return { t: 'restartOutdated' };
+    case 'restartApp': return { t: 'restartApp' };
     case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
     case 'tune': {
       if (!sessionId) return null;

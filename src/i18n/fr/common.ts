@@ -7,6 +7,8 @@ export const common = {
   },
   copied: 'Copié',
   since: (duration: string) => `depuis ${duration}`,
+  justNow: 'à l’instant',
+  ago: (duration: string) => `il y a ${duration}`,
   percent: (value: number) => `${value} %`,
   reset: {
     today: 'aujourd’hui',
@@ -45,6 +47,7 @@ export const common = {
     settings: 'Réglages',
     settingsTitle: (keys: string) => `Réglages (${keys})`,
     settingsUpdate: 'Réglages : une nouvelle version de Claude Code est installée',
+    settingsAppUpdate: 'Réglages : une nouvelle version d’Open Space est prête',
   },
   notices: {
     connecting: 'Connexion au serveur…',

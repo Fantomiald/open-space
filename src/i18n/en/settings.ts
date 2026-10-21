@@ -76,6 +76,12 @@ export const settings: Dictionary['settings'] = {
     on: 'on', off: 'off',
     claudeSays: (value: string) => `Claude Code: ${value}`,
     update: {
+      appReady: (version: string) => `Open Space ${version} is ready`,
+      appReadyHint: 'Restart the app to install it: your sessions pick up where they were.',
+      appDownloading: (version: string) => `Open Space ${version} is downloading`,
+      appDownloadingHint: 'You can restart on it in a moment.',
+      appRestart: 'Restart',
+      appRestarting: 'Restarting…',
       installed: (version: string) => `Claude Code ${version} is installed`,
       outdated: (count: number, old: string) => `${plural(count, 'session still runs', 'sessions still run')} ${old}. Working ones switch at their next pause.`,
       restart: 'Restart the waiting ones',

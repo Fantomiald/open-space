@@ -54,7 +54,6 @@ export const composer = {
     searching: (folder: string) => `Recherche des conversations de ${folder}…`,
     noConversation: (folder: string) => `Aucune conversation Claude Code dans ${folder} (ou elles sont déjà ouvertes ici).`,
     conversationsOf: (folder: string) => `Conversations de ${folder}`,
-    ago: (duration: string) => `il y a ${duration}`,
     fieldLabel: 'Première demande',
     placeholderResume: 'Un message pour reprendre (facultatif)…',
     placeholderPickFirst: 'Choisis d’abord une conversation au-dessus',

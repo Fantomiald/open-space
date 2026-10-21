@@ -222,7 +222,6 @@ export const session = {
     collapse: (group: string) => `Replier ou déplier : ${group}`,
     fold: 'Replier la liste',
     unfold: 'Déplier la liste',
-    ago: (duration: string) => `il y a ${duration}`,
     empty: 'Aucune session pour l’instant : lance la première à droite.',
   },
   /** where the sessions are at, in the corner of the screen */

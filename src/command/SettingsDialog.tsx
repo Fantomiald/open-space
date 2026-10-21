@@ -10,7 +10,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, BellIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, BellIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -45,6 +45,29 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   notes: [['files', ['journalFolder', 'metricsFile']]],
   about: [['appearance', ['version', 'claude', 'links', 'dockApp']]],
 };
+
+/** At the top of the settings while the Mac app downloads a new Open Space, then to restart on it. */
+function AppUpdateBanner() {
+  const update = useSessions((s) => s.appUpdate);
+  const [restarting, setRestarting] = useState(false);
+  const words = t.settings.prefs.update;
+  if (!update) return null;
+  const ready = update.state === 'ready';
+  return (
+    <div className="cp-prefs__banner" role="status">
+      <span className="cp-prefs__banner-icon"><DownloadIcon /></span>
+      <div className="cp-prefs__row-text">
+        <strong>{ready ? words.appReady(update.version) : words.appDownloading(update.version)}</strong>
+        <span className="cp-prefs__row-hint">{ready ? words.appReadyHint : words.appDownloadingHint}</span>
+      </div>
+      {ready && (
+        <button type="button" className="cp-button" data-variant="primary" disabled={restarting} onClick={() => { setRestarting(true); useSessions.getState().restartApp(); }}>
+          {restarting ? words.appRestarting : words.appRestart}
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** At the top of the settings while sessions still run an older Claude Code than the one installed. */
 function UpdateBanner() {
@@ -433,7 +456,7 @@ function SettingsEditor() {
             <button type="button" className="cp-icon-button" aria-label={t.settings.close} title={t.settings.close} onClick={close}><CloseIcon /></button>
           </header>
           <div className="cp-prefs__content" ref={content} data-section={matches ? 'search' : section}>
-            {!matches && <UpdateBanner />}
+            {!matches && <><AppUpdateBanner /><UpdateBanner /></>}
             {matches ? (
               matches.length ? SETTINGS_SECTIONS.filter((id) => matches.some((entry) => entry.section === id)).map((id) => {
                 const found = matches.filter((entry) => entry.section === id);

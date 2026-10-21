@@ -1,5 +1,14 @@
 # Versions
 
+## 1.9.1
+
+- Mise à jour d'Open Space dans les réglages : l'app vérifie toutes les heures, télécharge en fond, puis une pastille rouge sur la roue et un bouton Redémarrer pour l'installer.
+- « À l'instant » au lieu des secondes pendant la première minute, et les durées bougent moins souvent.
+- Mode focus replié : survoler une tête montre son nom, son tag, son état et son dernier message.
+- Les têtes de la liste ont les mêmes pictos d'état que la salle, avec les points qui bougent.
+- Bureau / Salon / Focus gardent la même largeur d'une vue à l'autre, et l'ombre de la salle ne traîne plus en passant en focus.
+- Les réglages s'ouvrent toujours sur Général.
+
 ## 1.9.0
 
 - Recherche partout (⌘K) : sessions, messages, commandes et réglages dans une seule fenêtre, centrée, qui ne bouge pas pendant qu'on tape.

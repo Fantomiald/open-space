@@ -21,6 +21,11 @@ export function formatDuration(ms: number): string {
   return hours < 24 ? duration.hours(hours, String(minutes % 60).padStart(2, '0')) : duration.days(Math.floor(hours / 24));
 }
 
+/** How long a session has been in its state: "now" under a minute, so the lists don't tick every second. */
+export const formatAge = (ms: number) => (ms < 60_000 ? t.common.justNow : formatDuration(ms));
+/** "3 min ago", or "now" under a minute. */
+export const formatAgo = (ms: number) => (ms < 60_000 ? t.common.justNow : t.common.ago(formatDuration(ms)));
+
 /** "for 3 min" style label. */
 export const since = (from: number, now: number) => t.common.since(formatDuration(now - from));
 

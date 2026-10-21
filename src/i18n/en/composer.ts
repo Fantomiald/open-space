@@ -52,7 +52,6 @@ export const composer: Dictionary['composer'] = {
     searching: (folder: string) => `Looking for conversations in ${folder}…`,
     noConversation: (folder: string) => `No Claude Code conversations in ${folder} (or they’re already open here).`,
     conversationsOf: (folder: string) => `Conversations in ${folder}`,
-    ago: (duration: string) => `${duration} ago`,
     fieldLabel: 'First request',
     placeholderResume: 'A message to resume with (optional)…',
     placeholderPickFirst: 'Pick a conversation above first',

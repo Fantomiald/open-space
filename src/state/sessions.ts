@@ -9,7 +9,7 @@ import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { Aside, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { AppUpdate, Aside, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -152,6 +152,8 @@ interface CommandPostState {
   claudeDefaults: ClaudeDefaults;
   /** where the last `claude update` asked from the page is (null: none since the page opened) */
   claudeUpdate: ClaudeUpdate | null;
+  /** a new Open Space the Mac app found (null outside the app, or when there is none) */
+  appUpdate: AppUpdate | null;
   /** folders offered at the onboarding, once asked for */
   rootSuggestions: RootSuggestion[] | null;
   /** changes some of the settings (the server keeps them and tells every tab) */
@@ -233,6 +235,8 @@ interface CommandPostState {
   updateClaude: () => void;
   /** lets the waiting sessions on an older Claude Code go, so that their next message starts the new one */
   restartOutdated: () => void;
+  /** restarts the Mac app on the new Open Space it downloaded */
+  restartApp: () => void;
   openBoard: (open: boolean) => void;
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
@@ -336,6 +340,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   rootsLocked: false,
   claudeDefaults: { current: {}, outputStyles: [] },
   claudeUpdate: null,
+  appUpdate: null,
   rootSuggestions: null,
   sound: readPreference('sound', true),
   paletteOpen: false,
@@ -369,7 +374,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           ...languageState(message.preferences),
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
-          preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults,
+          preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults, appUpdate: message.appUpdate,
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
@@ -452,6 +457,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'directories': set({ directories: message.directories }); break;
       case 'claude': set({ claude: message.claude }); break;
       case 'claudeUpdate': set({ claudeUpdate: message.update }); break;
+      case 'appUpdate': set({ appUpdate: message.update }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
       case 'inspection': {
         const { inspection } = message;
@@ -656,7 +662,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openCrew: (open) => set({ crewOpen: open }),
   updateClaude: () => { get().send({ t: 'updateClaude' }); },
   restartOutdated: () => { get().send({ t: 'restartOutdated' }); },
-  openSettings: (open, section, row) => set({ settingsOpen: open, settingsRow: row ?? null, ...(section ? { settingsSection: section } : {}) }),
+  restartApp: () => { get().send({ t: 'restartApp' }); },
+  // opened without a section: from the top (General), not where they were last left
+  openSettings: (open, section, row) => set((state) => ({ settingsOpen: open, settingsRow: row ?? null, settingsSection: section ?? (open && !state.settingsOpen ? 'general' : state.settingsSection) })),
   openBoard: (open) => set({ boardOpen: open, ...(open ? {} : { lastNote: null }) }),
   openMetrics: (open) => {
     set({ metricsOpen: open, metrics: undefined });

@@ -211,7 +211,6 @@ export const session: Dictionary['session'] = {
     collapse: (group: string) => `Fold or unfold: ${group}`,
     fold: 'Fold the list',
     unfold: 'Unfold the list',
-    ago: (duration: string) => `${duration} ago`,
     empty: 'No session yet: start the first one on the right.',
   },
   status: {

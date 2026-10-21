@@ -31,6 +31,7 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'directories' }), { t: 'directories' });
     assert.deepEqual(parseClientMessage({ t: 'updateClaude', extra: 1 }), { t: 'updateClaude' });
     assert.deepEqual(parseClientMessage({ t: 'restartOutdated' }), { t: 'restartOutdated' });
+    assert.deepEqual(parseClientMessage({ t: 'restartApp' }), { t: 'restartApp' });
   });
 
   it('accepts pictures with a message or a new session, and drops the message when one is not right', () => {
