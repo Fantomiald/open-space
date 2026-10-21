@@ -12,9 +12,10 @@ import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection 
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
   ActivityIcon, AgentIcon, BellIcon, BranchIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
-  CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
+  CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
+import { AccountAction } from './AccountAction.tsx';
 import { AppUpdateAction, CheckButton } from './AppUpdateAction.tsx';
 import { Modal } from './Modal.tsx';
 import { FoldersPicker, LANGUAGE_NAMES } from './PreferenceFields.tsx';
@@ -45,7 +46,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   folders: [['places', ['roots', 'defaultFolder']]],
   office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   notes: [['files', ['journalFolder', 'metricsFile']]],
-  about: [['appearance', ['version', 'claude', 'links', 'dockApp']]],
+  about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
 
 /** At the top of the settings while the Mac app downloads a new Open Space, then to restart on it. */
@@ -131,6 +132,7 @@ function SettingsEditor() {
   const suggestions = useSessions((s) => s.rootSuggestions);
   const claude = useSessions((s) => s.claude);
   const claudeUpdate = useSessions((s) => s.claudeUpdate);
+  const account = useSessions((s) => s.claudeAccount);
   const claudeDefaults = useSessions((s) => s.claudeDefaults.current);
   const outputStyles = useSessions((s) => s.claudeDefaults.outputStyles);
   const sound = useSessions((s) => s.sound);
@@ -385,6 +387,15 @@ function SettingsEditor() {
               failure={claudeUpdate?.state === 'failed' ? claudeUpdate.text : undefined} onClick={() => store().updateClaude()}
             />
           )}
+        </Row>
+      );
+      case 'account': return (
+        <Row
+          key={id} id={id} flash={flash} icon={<ItsMeIcon />} title={rows.account.title}
+          hint={account?.failed ? rows.account.failed(account.failed) : account?.loggedIn ? [account.org, account.plan].filter(Boolean).join(' · ') : rows.account.hint}
+        >
+          <span className="cp-prefs__value">{account ? (account.loggedIn ? account.email : rows.account.signedOut) : '-'}</span>
+          {claude?.found && <AccountAction />}
         </Row>
       );
       case 'links': return (

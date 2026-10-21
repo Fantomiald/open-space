@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildClaudeArgs, identityPrompt, parseCatalog, placeNote, renameNote } from './claude-process.ts';
+import { buildClaudeArgs, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote } from './claude-process.ts';
 import { setServerLanguage } from './i18n/index.ts';
 
 describe('buildClaudeArgs', () => {
@@ -38,6 +38,19 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs({ ...base, model: 'haiku' });
     assert.equal(args[args.indexOf('--model') + 1], 'haiku');
     for (const forbidden of ['--tools', '--restricted', '--dangerously-skip-permissions', '--allowedTools', '--permission-prompts']) assert.ok(!args.includes(forbidden));
+  });
+});
+
+describe('parseAccount', () => {
+  it('reads who `claude auth status --json` says is signed in, and nothing else', () => {
+    const status = { loggedIn: true, authMethod: 'claude.ai', email: 'ada@example.com', orgId: 'org-1', orgName: 'Example', subscriptionType: 'team', configDirectory: '/x' };
+    assert.deepEqual(parseAccount(status), { loggedIn: true, email: 'ada@example.com', org: 'Example', plan: 'team' });
+  });
+
+  it('says signed out, and null for an answer it does not know', () => {
+    assert.deepEqual(parseAccount({ loggedIn: false, authMethod: 'none' }), { loggedIn: false });
+    assert.equal(parseAccount({ authMethod: 'none' }), null);
+    assert.equal(parseAccount('Not logged in'), null);
   });
 });
 
