@@ -254,8 +254,8 @@ function PaletteContent() {
         ) : typed ? (
           <div className="cp-find__bar" role="tablist" aria-label={words.filtersLabel}>
             {FILTERS.filter((id) => id === 'all' || counts[id] > 0 || id === filter).map((id) => (
-              <button key={id} type="button" role="tab" className="cp-chip" aria-selected={filter === id} onClick={() => { setFilter(id); field.current?.focus(); }}>
-                {words.filters[id]} <span className="cp-chip__count">{counts[id]}</span>
+              <button key={id} type="button" role="tab" className="cp-find__filter" aria-selected={filter === id} onClick={() => { setFilter(id); field.current?.focus(); }}>
+                {words.filters[id]} <span className="cp-find__count">{counts[id]}</span>
               </button>
             ))}
             {searching && <span className="cp-find__busy" role="status">{words.searching}</span>}

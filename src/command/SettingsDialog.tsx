@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
-import { EFFORTS, IDLE_COMPACT_MINUTES, PERMISSION_MODES, TIME_FORMATS, type ClaudeUpdate, type Preferences } from '../../shared/protocol.ts';
+import { EFFORTS, IDLE_COMPACT_MINUTES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
@@ -15,6 +15,7 @@ import {
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
+import { AppUpdateAction, CheckButton } from './AppUpdateAction.tsx';
 import { Modal } from './Modal.tsx';
 import { FoldersPicker, LANGUAGE_NAMES } from './PreferenceFields.tsx';
 import { PreviewFestival, PreviewHour } from './PreviewFields.tsx';
@@ -50,9 +51,8 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
 /** At the top of the settings while the Mac app downloads a new Open Space, then to restart on it. */
 function AppUpdateBanner() {
   const update = useSessions((s) => s.appUpdate);
-  const [restarting, setRestarting] = useState(false);
   const words = t.settings.prefs.update;
-  if (!update) return null;
+  if (update?.state !== 'downloading' && update?.state !== 'ready') return null;
   const ready = update.state === 'ready';
   return (
     <div className="cp-prefs__banner" role="status">
@@ -61,11 +61,7 @@ function AppUpdateBanner() {
         <strong>{ready ? words.appReady(update.version) : words.appDownloading(update.version)}</strong>
         <span className="cp-prefs__row-hint">{ready ? words.appReadyHint : words.appDownloadingHint}</span>
       </div>
-      {ready && (
-        <button type="button" className="cp-button" data-variant="primary" disabled={restarting} onClick={() => { setRestarting(true); useSessions.getState().restartApp(); }}>
-          {restarting ? words.appRestarting : words.appRestart}
-        </button>
-      )}
+      <AppUpdateAction />
     </div>
   );
 }
@@ -88,18 +84,6 @@ function UpdateBanner() {
       {waiting && <button type="button" className="cp-button" data-variant="primary" onClick={() => useSessions.getState().restartOutdated()}>{words.restart}</button>}
     </div>
   );
-}
-
-/** What `claude update` answered, next to its button. */
-function updateText(update: ClaudeUpdate | null): string | null {
-  const words = t.settings.prefs.update;
-  switch (update?.state) {
-    case 'checking': return words.checking;
-    case 'upToDate': return words.upToDate(update.version);
-    case 'updated': return words.updated(update.from, update.version);
-    case 'failed': return words.failed(update.text);
-    default: return null;
-  }
 }
 
 export function SettingsDialog() {
@@ -381,24 +365,21 @@ function SettingsEditor() {
       case 'version': return (
         <Row key={id} id={id} flash={flash} icon={<SparklesIcon />} title={rows.version.title} hint={rows.version.hint}>
           <span className="cp-prefs__value">{__APP_VERSION__}</span>
+          {IN_APP && <AppUpdateAction />}
         </Row>
       );
-      case 'claude': {
-        const said = updateText(claudeUpdate);
-        return (
-          <Row
-            key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.claude.title} hint={claude?.found ? claude.path && homeRelative(claude.path) : rows.claude.missing}
-            extra={said && <span className="cp-prefs__said" data-state={claudeUpdate?.state}>{said}</span>}
-          >
-            <span className="cp-prefs__value">{claude?.found ? rows.claude.found(claude.version ?? '') : '-'}</span>
-            {claude?.found && (
-              <button type="button" className="cp-button" disabled={claudeUpdate?.state === 'checking'} onClick={() => store().updateClaude()}>
-                <RefreshIcon />{words.update.check}
-              </button>
-            )}
-          </Row>
-        );
-      }
+      case 'claude': return (
+        <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.claude.title} hint={claude?.found ? claude.path && homeRelative(claude.path) : rows.claude.missing}>
+          <span className="cp-prefs__value">{claude?.found ? rows.claude.found(claude.version ?? '') : '-'}</span>
+          {claude?.found && (
+            <CheckButton
+              busy={claudeUpdate?.state === 'checking'}
+              done={claudeUpdate?.state === 'upToDate' ? words.update.upToDate : claudeUpdate?.state === 'updated' ? words.update.updated : undefined}
+              failure={claudeUpdate?.state === 'failed' ? claudeUpdate.text : undefined} onClick={() => store().updateClaude()}
+            />
+          )}
+        </Row>
+      );
       case 'links': return (
         <Row key={id} id={id} flash={flash} icon={<ChangelogIcon />} title={rows.links.title}>
           <span className="cp-prefs__links">
@@ -464,7 +445,7 @@ function SettingsEditor() {
             <button type="button" className="cp-icon-button" aria-label={t.settings.close} title={t.settings.close} onClick={close}><CloseIcon /></button>
           </header>
           <div className="cp-prefs__content" ref={content} data-section={matches ? 'search' : section}>
-            {!matches && <><AppUpdateBanner /><UpdateBanner /></>}
+            {!matches && <>{section !== 'about' && <AppUpdateBanner />}<UpdateBanner /></>}
             {matches ? (
               matches.length ? SETTINGS_SECTIONS.filter((id) => matches.some((entry) => entry.section === id)).map((id) => {
                 const found = matches.filter((entry) => entry.section === id);

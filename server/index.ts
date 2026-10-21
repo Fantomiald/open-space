@@ -39,6 +39,7 @@ import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
+import { busySessions } from '../shared/app-update.ts';
 import { appPort } from './app-port.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,6 +56,8 @@ const OPEN_IF_ALONE_AFTER_MS = 3000;
 const METRICS_CHECK_MS = 10_000;
 /** how often the installed Claude Code is asked its version */
 const CLAUDE_CHECK_MS = 10 * 60_000;
+/** how often a downloaded Open Space looks for a moment without work to install itself */
+const RESTART_CHECK_MS = 30_000;
 
 // An unexpected error is logged, never fatal: one bad request must not kill running sessions.
 const log = (message: string, error?: unknown) => console.error(`  !  ${message}`, error instanceof Error ? error.message : (error ?? ''));
@@ -87,6 +90,19 @@ appPort?.on('message', ({ data }) => {
   appUpdate = data.update;
   broadcast({ t: 'appUpdate', update: appUpdate });
 });
+/**
+ * The downloaded Open Space installs itself once no session has work under way, two checks in a row (a turn may
+ * start between them): the app restarts and the sessions pick up where they were.
+ */
+let idleChecks = 0;
+const restartWhenIdle = setInterval(() => {
+  if (appUpdate?.state !== 'ready') return;
+  idleChecks = busySessions(sessions.list()).length ? 0 : idleChecks + 1;
+  if (idleChecks < 2) return;
+  clearInterval(restartWhenIdle);
+  appPort?.postMessage({ t: 'restart' });
+}, RESTART_CHECK_MS);
+restartWhenIdle.unref();
 
 function broadcast(message: ServerMessage) {
   const payload = JSON.stringify(message);
@@ -271,6 +287,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     }
     case 'restartOutdated': if (installedClaude) sessions.releaseOutdated(installedClaude); break;
     case 'restartApp': if (appUpdate?.state === 'ready') appPort?.postMessage({ t: 'restart' }); break;
+    case 'checkApp': if (appUpdate?.state !== 'downloading' && appUpdate?.state !== 'ready') appPort?.postMessage({ t: 'check' }); break;
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
     case 'saveMember':

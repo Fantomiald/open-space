@@ -1,5 +1,12 @@
 # Versions
 
+## 1.10.1
+
+- Les liens des pages publiées sur claude.ai par une conversation : une pastille « N liens » sous son nom, qui ouvre leur liste ; un clic ouvre la page.
+- Mise à jour d'Open Space : bouton « Chercher une mise à jour » dans À propos, barre de téléchargement, puis Redémarrer, avec un avertissement si des sessions travaillent. L'app redémarre aussi toute seule sur la nouvelle version dès qu'aucune session ne travaille.
+- Les boutons de mise à jour (Open Space et Claude Code) tournent pendant qu'ils cherchent et disent eux-mêmes « À jour », plus de texte sous la ligne.
+- Le champ du dossier d'une nouvelle conversation n'a plus de double contour.
+
 ## 1.10.0
 
 - Thèmes du bureau (Réglages > Bureau) : Navette spatiale, Tokyo néon, Donjon, Plage, Bateau pirate et Cabane en forêt. Murs, sol, porte, fenêtres, ciel, lumières et tous les meubles changent, au bureau comme au salon ; les fêtes s'y posent toujours.

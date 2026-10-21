@@ -237,6 +237,8 @@ interface CommandPostState {
   restartOutdated: () => void;
   /** restarts the Mac app on the new Open Space it downloaded */
   restartApp: () => void;
+  /** asks the Mac app to look for a new Open Space now */
+  checkApp: () => void;
   openBoard: (open: boolean) => void;
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
@@ -663,6 +665,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   updateClaude: () => { get().send({ t: 'updateClaude' }); },
   restartOutdated: () => { get().send({ t: 'restartOutdated' }); },
   restartApp: () => { get().send({ t: 'restartApp' }); },
+  checkApp: () => { get().send({ t: 'checkApp' }); },
   // opened without a section: from the top (General), not where they were last left
   openSettings: (open, section, row) => set((state) => ({ settingsOpen: open, settingsRow: row ?? null, settingsSection: section ?? (open && !state.settingsOpen ? 'general' : state.settingsSection) })),
   openBoard: (open) => set({ boardOpen: open, ...(open ? {} : { lastNote: null }) }),

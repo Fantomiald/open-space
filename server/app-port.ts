@@ -8,7 +8,8 @@ import type { AppUpdate } from '../shared/protocol.ts';
 export type AppMessage =
   | { t: 'ready'; link: string }
   | { t: 'notify'; title: string; body: string; sessionId: string }
-  | { t: 'restart' };
+  | { t: 'restart' }
+  | { t: 'check' };
 
 /** From the app to the bridge. */
 export type AppNews = { t: 'update'; update: AppUpdate };
@@ -19,3 +20,4 @@ interface ParentPort {
 }
 
 export const appPort: ParentPort | undefined = (process as { parentPort?: ParentPort }).parentPort;
+
