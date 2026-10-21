@@ -1,5 +1,9 @@
 # Versions
 
+## 1.12.0
+
+- Compte Claude dans Réglages > À propos : qui est connecté (e-mail, organisation, offre), avec Se connecter / Changer de compte (ouvre le navigateur) et Se déconnecter, sans passer par un terminal.
+
 ## 1.11.0
 
 - Une branche par session (worktrees) : quand une autre session travaille déjà dans le dossier, le lanceur propose « Isoler sur une branche ». La session travaille sur `os/<prénom>-<sujet>`, dans son propre dossier sous `.claude/worktrees/`, avec les `.env`, `node_modules` et `Pods` copiés en clone APFS (ou ce que nomme `.worktreeinclude`).
