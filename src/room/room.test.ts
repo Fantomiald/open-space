@@ -310,6 +310,7 @@ describe('scene', () => {
     assert.match(petWords(pet, 'dog'), /Ouaf|Wouf/);
     assert.match(petWords(pet, 'rocky'), /♫/, 'Rocky speaks in chords');
     assert.match(petWords(pet, 'duck'), /Coin|bug/);
+    assert.match(petWords(pet, 'owl'), /Hou/);
     const scene = officeScene();
     const paws = toScreen(scene.pet!.position);
     assert.equal(scene.pokePet({ x: paws.x, y: paws.y - 10 }), true);
@@ -452,12 +453,14 @@ describe('looks', () => {
 
   it('accepts only a complete look with known traits and #rrggbb colours', () => {
     assert.deepEqual(parseLook(look), look);
-    assert.equal(parseLook({ ...look, hair: 'dreadlocks' }), null);
+    assert.equal(parseLook({ ...look, hair: 'beehive' }), null);
     const { sunglasses: _sun, headphones: _phones, hat: _hat, hatColor: _hatColor, eyes: _eyes, accessory: _accessory, ...older } = look;
     assert.deepEqual(parseLook(older), { ...look, eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_LOOK.hatColor, accessory: 'none' }, 'a look saved before them keeps everything else');
     const anime = { ...look, top: 'narutoJacket', bottom: 'luffyShorts', shoes: 'zoroBoots', hat: 'strawHat', accessory: 'mask' } as const;
     assert.deepEqual(parseLook(anime), anime, 'anime pieces mix like any other');
     assert.equal(parseLook({ ...look, accessory: 'cape' }), null);
+    const dressedUp = { ...look, hair: 'dreadlocks', eyes: 'starry', top: 'kimono', bottom: 'hakama', shoes: 'geta', hat: 'hachimaki', accessory: 'katana' } as const;
+    assert.deepEqual(parseLook(dressedUp), dressedUp, 'the dress-up wardrobe mixes like any other');
     assert.equal(parseLook({ ...look, eyes: 'narrow' })?.eyes, 'round', 'eyes no longer offered: round ones, the rest kept');
     assert.equal(parseLook({ ...look, hat: 'sombrero' }), null);
     assert.equal(parseLook({ ...look, topColor: 'red' }), null);

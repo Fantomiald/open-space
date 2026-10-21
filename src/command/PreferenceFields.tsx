@@ -91,6 +91,13 @@ function PetPreview({ pet }: { pet: Exclude<PetChoice, { kind: 'none' }> }) {
   return <canvas ref={canvas} className="cp-pet__preview" width={22 * 5} height={17 * 5} role="img" aria-label={t.settings.pet.preview} />;
 }
 
+/** What the one colour of a pet is called, when it is not its fur. */
+const COLOUR_PART: Partial<Record<PetChoice['kind'], 'shell' | 'colour' | 'skin' | 'feathers' | 'scales' | 'spines' | 'light'>> = {
+  rocky: 'shell', turtle: 'shell', crab: 'shell', duck: 'colour', clawd: 'colour', robotDog: 'colour', slime: 'colour', golem: 'colour',
+  axolotl: 'skin', octopus: 'skin', alien: 'skin', parrot: 'feathers', owl: 'feathers', penguin: 'feathers', dragon: 'scales', hedgehog: 'spines',
+  firefly: 'light',
+};
+
 /** The office pet: its kind, a cat's pattern or a dog's breed, then one colour (shown as it is now) and a cat's eyes. */
 export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoice) => void }) {
   const pickKind = (kind: PetChoice['kind']) =>
@@ -126,7 +133,7 @@ export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoi
       {pet.kind !== 'none' && <PetPreview pet={pet} />}
       {pet.kind !== 'none' && (
         <div className="cp-pet__colours">
-          <ColourRow label={pet.kind === 'rocky' ? t.settings.pet.shell : pet.kind === 'duck' || pet.kind === 'clawd' ? t.settings.pet.colour : pet.kind === 'axolotl' ? t.settings.pet.skin : t.settings.pet.fur} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
+          <ColourRow label={t.settings.pet[COLOUR_PART[pet.kind] ?? 'fur']} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
           {pet.kind === 'cat' && <ColourRow label={t.settings.pet.eyes} colours={PET_EYE_COLORS} value={pet.colors?.eyes ?? PET_EYE_COLORS[0]} onPick={(colour) => paint('eyes', colour)} />}
         </div>
       )}

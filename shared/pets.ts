@@ -2,23 +2,29 @@
 // Shared so the server can check what it stores; src/room/pet.ts draws them.
 import { OLDER_PET_FURS } from '../src/design/people-palette.ts';
 
-export const PET_KINDS = ['cat', 'dog', 'duck', 'capybara', 'axolotl', 'rocky', 'clawd', 'none'] as const;
+/** The pets that have neither a pattern nor a breed, only a colour. */
+export const PLAIN_PET_KINDS = [
+  'duck', 'capybara', 'axolotl', 'rocky', 'clawd', 'fox', 'redPanda', 'rabbit', 'hedgehog', 'owl', 'parrot', 'penguin', 'turtle', 'crab',
+  'octopus', 'firefly', 'ghostCat', 'manekiNeko', 'robotDog', 'alien', 'dragon', 'slime', 'golem',
+] as const;
+export const PET_KINDS = ['cat', 'dog', ...PLAIN_PET_KINDS, 'none'] as const;
 /** A cat's coat pattern; its colour is chosen apart. */
 export const CAT_PATTERNS = ['plain', 'tabby', 'calico', 'tuxedo'] as const;
 /** A dog's breed: its shape, ears, tail and markings; its colour starts as the breed's and can be changed. */
 export const DOG_BREEDS = ['labrador', 'dalmatian', 'husky', 'shiba', 'corgi', 'dachshund', 'pug'] as const;
 
 export type PetKind = (typeof PET_KINDS)[number];
+export type PlainPetKind = (typeof PLAIN_PET_KINDS)[number];
 export type CatPattern = (typeof CAT_PATTERNS)[number];
 export type DogBreed = (typeof DOG_BREEDS)[number];
 
-/** Colours chosen over the defaults: the fur (a shell, a duck's rubber, an axolotl's skin), a cat's eyes. "#rrggbb". */
+/** Colours chosen over the defaults: the fur (a shell, a duck's rubber, an axolotl's skin, a firefly's light), a cat's eyes. "#rrggbb". */
 export interface PetColors { fur?: string; eyes?: string }
 
 export type PetChoice =
   | { kind: 'cat'; variant: CatPattern; colors?: PetColors }
   | { kind: 'dog'; variant: DogBreed; colors?: PetColors }
-  | { kind: 'duck' | 'capybara' | 'axolotl' | 'rocky' | 'clawd'; colors?: PetColors }
+  | { kind: PlainPetKind; colors?: PetColors }
   | { kind: 'none' };
 
 export const DEFAULT_PET: PetChoice = { kind: 'cat', variant: 'plain' };
@@ -53,7 +59,7 @@ export function parsePet(raw: unknown): PetChoice | undefined {
   const painted = Object.keys(colors).length ? { colors } : {};
   if (kind === 'cat' && oneOf(CAT_PATTERNS, variant)) return { kind, variant, ...painted };
   if (kind === 'dog' && oneOf(DOG_BREEDS, variant)) return { kind, variant, ...painted };
-  if (kind === 'duck' || kind === 'capybara' || kind === 'axolotl' || kind === 'rocky' || kind === 'clawd') return { kind, ...painted };
+  if (oneOf(PLAIN_PET_KINDS, kind)) return { kind, ...painted };
   if (kind === 'none') return { kind };
   return undefined;
 }

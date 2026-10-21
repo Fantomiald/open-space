@@ -5,6 +5,7 @@ import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
+import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 import type { CostReport } from './usage.ts';
@@ -321,6 +322,8 @@ export interface Preferences {
   officeLife: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
+  /** the place both rooms are dressed as (shared/room-themes.ts) */
+  theme: RoomTheme;
   /** the folder of the whiteboard's notes, one Markdown file per project (absolute; ~/Journal by default) */
   journalFolder: string;
   /** the Markdown file the office's numbers object shows, kept up to date by the user's scripts or sessions (absolute; '' by default: no object) */

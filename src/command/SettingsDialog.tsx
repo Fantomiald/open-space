@@ -3,6 +3,7 @@ import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, PERMISSION_MODES, TIME_FORMATS, type ClaudeUpdate, type Preferences } from '../../shared/protocol.ts';
+import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
 import { homeRelative } from '../lib/format.ts';
@@ -12,7 +13,7 @@ import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/setting
 import {
   ActivityIcon, AgentIcon, BellIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
-  SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
+  PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { FoldersPicker, LANGUAGE_NAMES } from './PreferenceFields.tsx';
@@ -41,7 +42,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
-  office: [['life', ['festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
+  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   notes: [['files', ['journalFolder', 'metricsFile']]],
   about: [['appearance', ['version', 'claude', 'links', 'dockApp']]],
 };
@@ -332,6 +333,13 @@ function SettingsEditor() {
         <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.defaultFolder.title} hint={rows.defaultFolder.hint}>
           <select aria-labelledby={`setting-${id}-title`} value={draft.roots.includes(draft.defaultFolder) ? draft.defaultFolder : draft.roots[0]} onChange={(e) => change({ defaultFolder: e.target.value })} disabled={draft.roots.length < 2}>
             {draft.roots.map((root) => <option key={root} value={root}>{homeRelative(root)}</option>)}
+          </select>
+        </Row>
+      );
+      case 'theme': return (
+        <Row key={id} id={id} flash={flash} icon={<PaletteIcon />} title={rows.theme.title} hint={rows.theme.hint}>
+          <select aria-labelledby={`setting-${id}-title`} value={draft.theme} onChange={(e) => change({ theme: e.target.value as RoomTheme })}>
+            {ROOM_THEMES.map((theme) => <option key={theme} value={theme}>{rows.theme.options[theme]}</option>)}
           </select>
         </Row>
       );

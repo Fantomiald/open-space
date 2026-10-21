@@ -4,6 +4,7 @@ import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { TOPS, type FurniturePiece, type PieceKind } from '../../shared/room-layout.ts';
 import { toScreen, type Point } from './geometry.ts';
 import { ART_SCALE, artCanvas, fillPolygon, outline, ring, shadedBall, tones } from './pixel-art.ts';
+import { themeKit } from './themes/index.ts';
 import { glyphRows } from './wall-art.ts';
 import { BOARD, DOODLES, DOODLE_GAP, LINE_HEIGHT, doodlesWidth, textWidth, type BoardContent } from './whiteboard.ts';
 
@@ -14,7 +15,7 @@ const F = ROOM_PALETTE.festive;
 const TILE = { x: 8, y: 4 };
 const MARGIN = 3;
 
-interface Painter {
+export interface Painter {
   /** a box from (x, y) to (x + width, y + depth) in tiles, from `z` to `z + height` in art pixels */
   box(x: number, y: number, width: number, depth: number, z: number, height: number, colour: string, top?: string): void;
   /** a flat shape on the +y face (the one turned to the bottom left) of the plane y = `y` */
@@ -73,7 +74,7 @@ const CASH_COLOURS: Readonly<Record<string, string>> = { l: tones(C.cash).light,
 const CASH_SPOTS = { banknotes: { x: 0.3, y: 0.3 }, notepad: { x: 0.35, y: 0.82 } };
 
 /** One letter a pixel, facing the viewer, its bottom row on the desk's top above `middle`. */
-function standing(p: Painter, rows: readonly string[], colours: Readonly<Record<string, string>>, middle: { x: number; y: number }, z: number) {
+export function standing(p: Painter, rows: readonly string[], colours: Readonly<Record<string, string>>, middle: { x: number; y: number }, z: number) {
   const half = Math.floor(rows[0].length / 2);
   for (const [line, row] of rows.entries()) [...row].forEach((letter, column) => {
     const colour = colours[letter];
@@ -188,7 +189,7 @@ function scribbleNotes(p: Painter) {
 }
 
 /** What the board shows (see boardContent): notes, the birthday wishes, or the festival's doodles, centred on it. */
-function writeOnBoard(p: Painter, board: BoardContent) {
+export function writeOnBoard(p: Painter, board: BoardContent) {
   if (board.kind === 'notes') { scribbleNotes(p); return; }
   if (board.kind === 'birthday') {
     const height = board.lines.length * LINE_HEIGHT - 2;
@@ -220,11 +221,29 @@ const CLICKABLE: Partial<Record<PieceKind, (paint: Painter) => void>> = {
   bossDesk: paintLaptop, whiteboard: paintWhiteboard, cash: paintCash, metricsTv: paintMetricsTv, ticker: paintTicker, piggyBank: paintPiggy,
 };
 
-/** `fine`: thin details painted after the outline, so they stay one pixel wide (strings). `board`: what the whiteboard shows. */
-interface Design {
+/**
+ * `fine`: thin details painted after the outline, so they stay one pixel wide (strings). `board`: what the whiteboard
+ * shows. `float`: the piece hovers and bobs up and down by that many art pixels, all but `ground` (its glow or shadow
+ * on the floor, painted on a canvas of its own that stays still). `clickable`: the part outlined under the pointer, when
+ * a theme moves it (see CLICKABLE).
+ */
+export interface Design {
   height: number;
   paint: (paint: Painter, piece: FurniturePiece, board: BoardContent) => void;
   fine?: (paint: Painter, piece: FurniturePiece, board: BoardContent) => void;
+  float?: number;
+  ground?: (paint: Painter, piece: FurniturePiece) => void;
+  clickable?: (paint: Painter) => void;
+}
+
+/** A piece's design in the theme the room is dressed in. */
+const designOf = (kind: PieceKind): Design => themeKit()?.furniture?.[kind] ?? DESIGNS[kind];
+/** How long a floating piece takes to bob up and back down, in ms. */
+const BOB_MS = 3200;
+/** How high a floating piece is lifted at `time`, in room pixels: each on its own beat, a whole art pixel at a time. */
+export function bobOf(piece: FurniturePiece, float: number, time: number) {
+  const phase = ((piece.x * 7 + piece.y * 13) % 10) / 10;
+  return Math.round(Math.sin((time / BOB_MS + phase) * Math.PI * 2) * float) * ART_SCALE;
 }
 
 /** Where a prop stands on its desk or table, by footprint: the user's desk is three tiles wide, the others two. */
@@ -625,17 +644,37 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
 };
 
 /** The canvas of a piece, and where its far corner (its x, y) sits on it. */
-interface Drawn { canvas: HTMLCanvasElement; corner: Point }
+interface Drawn { canvas: HTMLCanvasElement; corner: Point; ground?: HTMLCanvasElement; float?: number }
 
 /** A piece drawn on its own canvas; `part`: only that part of it, as a white line around it (see CLICKABLE). */
 function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Painter) => void): Drawn {
-  const design = DESIGNS[piece.kind];
+  const design = designOf(piece.kind);
   const width = (piece.width + piece.depth) * TILE.x + MARGIN * 2;
   const height = (piece.width + piece.depth) * TILE.y + design.height + MARGIN * 2;
   const corner = { x: piece.depth * TILE.x + MARGIN, y: design.height + MARGIN };
-  const { canvas, context } = artCanvas(width, height);
+  const ground = !part && design.ground ? paintOn(artCanvas(width, height), piece, corner, (p) => design.ground!(p, piece)) : undefined;
+  const drawing = artCanvas(width, height);
+  const { canvas } = drawing;
+  const painter = painterOn(drawing, piece, corner);
+  if (part) {
+    part(painter);
+    ring(canvas, C.highlight);
+    return { canvas, corner, float: design.float };
+  }
+  design.paint(painter, piece, board);
+  outline(canvas, C.outline);
+  design.fine?.(painter, piece, board);
+  return { canvas, corner, ground, float: design.float };
+}
+
+function paintOn(drawing: { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }, piece: FurniturePiece, corner: Point, paint: (p: Painter) => void) {
+  paint(painterOn(drawing, piece, corner));
+  return drawing.canvas;
+}
+
+function painterOn({ context }: { context: CanvasRenderingContext2D }, piece: FurniturePiece, corner: Point): Painter {
   const at = (x: number, y: number, z: number): Point => ({ x: corner.x + (x - y) * TILE.x, y: corner.y + (x + y) * TILE.y - z });
-  const painter: Painter = {
+  return {
     box(x, y, w, d, z, h, colour, top) {
       const colours = tones(colour);
       const t = z + h;
@@ -672,15 +711,6 @@ function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Paint
       context.fillRect(Math.round(point.x + across), Math.round(point.y), 1, 1);
     },
   };
-  if (part) {
-    part(painter);
-    ring(canvas, C.highlight);
-    return { canvas, corner };
-  }
-  design.paint(painter, piece, board);
-  outline(canvas, C.outline);
-  design.fine?.(painter, piece, board);
-  return { canvas, corner };
 }
 
 export interface FurnitureSprites {
@@ -693,9 +723,14 @@ export interface FurnitureSprites {
 export function pixelFurniture(board: BoardContent = { kind: 'notes' }): FurnitureSprites {
   const drawn = new Map<FurniturePiece, Drawn>();
   const highlights = new Map<FurniturePiece, Drawn>();
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const place = (context: CanvasRenderingContext2D, piece: FurniturePiece, image: Drawn) => {
     const far = toScreen({ x: piece.x, y: piece.y });
-    context.drawImage(image.canvas, Math.round(far.x - image.corner.x * ART_SCALE), Math.round(far.y - image.corner.y * ART_SCALE), image.canvas.width * ART_SCALE, image.canvas.height * ART_SCALE);
+    const left = Math.round(far.x - image.corner.x * ART_SCALE), top = Math.round(far.y - image.corner.y * ART_SCALE);
+    const size = [image.canvas.width * ART_SCALE, image.canvas.height * ART_SCALE] as const;
+    if (image.ground) context.drawImage(image.ground, left, top, ...size);
+    const bob = image.float && !still ? bobOf(piece, image.float, performance.now()) : 0;
+    context.drawImage(image.canvas, left, top - bob, ...size);
   };
   return {
     draw(context, piece) {
@@ -704,7 +739,7 @@ export function pixelFurniture(board: BoardContent = { kind: 'notes' }): Furnitu
       place(context, piece, image);
     },
     drawHighlight(context, piece) {
-      const part = CLICKABLE[piece.kind];
+      const part = designOf(piece.kind).clickable ?? CLICKABLE[piece.kind];
       if (!part) return;
       let image = highlights.get(piece);
       if (!image) { image = render(piece, board, part); highlights.set(piece, image); }

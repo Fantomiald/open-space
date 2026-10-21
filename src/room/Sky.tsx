@@ -3,6 +3,7 @@ import type { Festival } from '../../shared/festivals.ts';
 import { useSessions } from '../state/sessions.ts';
 import { currentHour, lightingAt } from './lighting.ts';
 import { SKY_PIXEL, paintClouds, paintSky, paintSkyFestival, skyIsBusy } from './sky.ts';
+import { themeKit, themedLighting } from './themes/index.ts';
 
 /** How often what moves in the sky moves on: the clouds go a sky pixel a second at most, snow and fireworks need more. */
 const CLOUD_MS = 1000;
@@ -28,11 +29,14 @@ export function Sky({ festival }: { festival: Festival | null }) {
     const back = sky.current!, front = moving.current!;
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let painted = '';
-    let lighting = lightingAt(previewHour ?? currentHour());
+    let lighting = themedLighting(lightingAt(previewHour ?? currentHour()));
     const move = () => {
       const context = front.getContext('2d')!;
       const seconds = still ? 0 : Date.now() / 1000;
-      paintClouds(context, front.width, front.height, lighting, seconds);
+      const kit = themeKit();
+      if (kit?.paintSkyMotion) kit.paintSkyMotion(context, front.width, front.height, seconds, lighting);
+      else if (!kit?.paintSky) paintClouds(context, front.width, front.height, lighting, seconds);
+      else context.clearRect(0, 0, front.width, front.height);
       if (!still) paintSkyFestival(context, front.width, front.height, festival, lighting, seconds);
     };
     const paint = () => {
@@ -41,14 +45,14 @@ export function Sky({ festival }: { festival: Festival | null }) {
       const key = `${width}x${height}@${Math.round(hour * 4)}`;
       if (key === painted) return;
       painted = key;
-      lighting = lightingAt(hour);
+      lighting = themedLighting(lightingAt(hour));
       for (const canvas of [back, front]) { canvas.width = width; canvas.height = height; }
-      paintSky(back.getContext('2d')!, width, height, lighting);
+      (themeKit()?.paintSky ?? paintSky)(back.getContext('2d')!, width, height, lighting);
       move();
     };
     paint();
     const hourly = window.setInterval(paint, 60_000);
-    const frames = still ? undefined : window.setInterval(() => { if (!document.hidden) move(); }, skyIsBusy(festival) ? FESTIVAL_MS : CLOUD_MS);
+    const frames = still ? undefined : window.setInterval(() => { if (!document.hidden) move(); }, skyIsBusy(festival) ? FESTIVAL_MS : themeKit()?.skyFrameMs ?? CLOUD_MS);
     window.addEventListener('resize', paint);
     return () => { window.clearInterval(hourly); window.clearInterval(frames); window.removeEventListener('resize', paint); };
   }, [previewHour, festival]);

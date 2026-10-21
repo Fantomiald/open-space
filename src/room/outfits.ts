@@ -38,7 +38,10 @@ export function outfitFor(festival: Festival | null, name: string, isUser: boole
 }
 
 /** How many art pixels a hat rises above the hair: the name tag goes that much higher. */
-export const HAT_HEIGHT: Readonly<Record<Hat, number>> = { party: 9, gold: 9, santa: 6, crown: 4, bunny: 7, beret: 3, cap: 3, beanie: 5, tophat: 5, leafBand: 0, leafBandTilted: 0, bandana: 1, strawHat: 3 };
+export const HAT_HEIGHT: Readonly<Record<Hat, number>> = {
+  party: 9, gold: 9, santa: 6, crown: 4, bunny: 7, beret: 3, cap: 3, beanie: 5, tophat: 5, leafBand: 0, leafBandTilted: 0, bandana: 1, strawHat: 3,
+  spaceHelmet: 4, tricorne: 5, wizardHat: 10, greatHelm: 1, hachimaki: 0, sunHat: 3, catEars: 4, flowerCrown: 1, cowboyHat: 4,
+};
 
 /** What someone wears: the festival's outfit over their look's own hat, glasses and headphones. */
 export function wornOutfit(look: Look, outfit: Outfit): Outfit {

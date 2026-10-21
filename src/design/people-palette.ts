@@ -58,3 +58,17 @@ export const PEOPLE_INK = {
 
 /** The see-through dummy the crew editor shows each piece of the wardrobe on: a dotted line, a faint body. */
 export const MANNEQUIN = { line: 'rgb(200 210 255 / 0.75)', body: 'rgb(200 210 255 / 0.13)' };
+
+/** The colours of the dress-up wardrobe (src/room/wardrobe.ts) that do not follow the look's: metal, wood, neon, flowers. */
+export const WARDROBE_COLORS = {
+  steel: '#b4bccb', steelLight: '#e4e9f0', steelDark: '#6b7383', rivet: '#454b57',
+  gold: '#e8c048', goldDark: '#a47c24', white: '#f1f2f5', whiteShade: '#c9ccd6',
+  glass: 'rgb(190 225 255 / 0.14)', lens: '#a9d8f2', lensShine: '#ffffff',
+  wood: '#c99a5e', woodDark: '#86603a', leather: '#6a4428', leatherDark: '#45291a', strap: '#26262d',
+  neonCyan: '#3ff0ff', neonPink: '#ff4fd8', neonLime: '#b6ff3a', led: '#ff3640', ledGlow: '#ffb0b0',
+  iris: '#3f7fe8', irisLight: '#8fd0ff', star: '#ffd84a', starLight: '#fff6c2', tear: '#7cc8ff', eyeBag: '#9a7a8e',
+  red: '#d0402e', green: '#3f9a4a', blue: '#3d6fc6', yellow: '#f2c440', orange: '#f08a24',
+  petalPink: '#ff8ab4', petalWhite: '#f6f4ee', petalYellow: '#ffd84a', petalRed: '#e8524a', petalPurple: '#b48cff', leaf: '#4f9a3a',
+  straw: '#e9c45c', flame: '#ff9a3a', flameCore: '#fff1a8', rubber: '#2b2f38', snorkel: '#f2a33a',
+  sheath: '#7a1f26', bag: '#d0603a', guitar: '#c8442e', guitarDark: '#7a2418', fret: '#5a3a22', sporran: '#5a3a22', sock: '#eef0f4',
+} as const;

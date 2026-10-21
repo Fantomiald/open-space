@@ -5,13 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
+import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET,
+  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
   journalFolder: path.join(os.homedir(), 'Journal'),
   metricsFile: '',
   copyOnSelect: false,
@@ -44,6 +45,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
   if (isPermissionMode(raw.permissionMode)) found.permissionMode = raw.permissionMode;
   if (typeof raw.agentNote === 'string') found.agentNote = raw.agentNote.trim().slice(0, MAX_AGENT_NOTE);
+  if (isRoomTheme(raw.theme)) found.theme = raw.theme;
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;
   if (isLanguage(raw.language)) found.language = raw.language;

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
 import { JOBS, type Job } from '../../shared/jobs.ts';
-import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, type Look } from '../../shared/look.ts';
+import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, type Accessory, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { HAT_ROWS, chibiHead, chibiPiece, chibiSprite, type BodyPart } from '../room/chibi.ts';
 import type { Pose } from '../room/sprites.ts';
+import { FIXED_COLOUR } from '../room/wardrobe.ts';
 import { useSessions } from '../state/sessions.ts';
 import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
@@ -16,7 +17,13 @@ import { useAutosave } from './useAutosave.ts';
 import { useDismiss } from './useDismiss.ts';
 
 /** The hats that take a colour of one's choice. */
-const COLOURED_HATS: ReadonlySet<Look['hat']> = new Set(['cap', 'beanie', 'beret', 'tophat', 'party']);
+const COLOURED_HATS: ReadonlySet<Look['hat']> = new Set(['cap', 'beanie', 'beret', 'tophat', 'party', 'tricorne', 'wizardHat', 'sunHat', 'cowboyHat']);
+/** The pieces whose colour is their own (anime, armour...): no colour to pick. */
+const ownColour = (piece: string) => isCostumePiece(piece) || FIXED_COLOUR.has(piece);
+/** Where the accessories not worn on the head are shown. */
+const ACCESSORY_PARTS: Partial<Record<Accessory, BodyPart>> = {
+  swords: 'chest', katana: 'chest', lei: 'chest', guitar: 'chest', staff: 'body', parrot: 'body', jetpack: 'back', backpack: 'back', backSword: 'back',
+};
 
 const TABS = ['face', 'hair', 'beard', 'head', 'top', 'bottom', 'shoes'] as const;
 type Tab = (typeof TABS)[number];
@@ -219,6 +226,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
   const words = t.settings.look;
   const labels = words.options;
   const change = (part: Partial<Look>) => onLook({ ...look, ...part });
+  const accentLabel = (words.accents as Partial<Record<Look['top'], string>>)[look.top];
   const [month = '', day = ''] = birthday.split('-');
   const setBirthday = (nextMonth: string, nextDay: string) => onBirthday(nextMonth && nextDay ? `${nextMonth}-${nextDay}` : '');
   const pieces = <T extends string>(label: string, options: readonly T[], names: Record<T, string>, value: T, onPick: (value: T) => void, worn: (option: T) => Partial<Look>, part: BodyPart | ((option: T) => BodyPart)) => (
@@ -293,25 +301,24 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
             <>
               {COLOURED_HATS.has(look.hat) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
               {pieces(words.hat, HATS, labels.hat, look.hat, (hat) => change({ hat }), (hat) => ({ hat }), 'hat')}
-              {pieces(words.accessory, ACCESSORIES, labels.accessory, look.accessory, (accessory) => change({ accessory }), (accessory) => ({ accessory }), (accessory) => (accessory === 'swords' ? 'chest' : 'head'))}
+              {pieces(words.accessory, ACCESSORIES, labels.accessory, look.accessory, (accessory) => change({ accessory }), (accessory) => ({ accessory }), (accessory) => ACCESSORY_PARTS[accessory] ?? 'head')}
               <Toggle label={words.headphones} checked={look.headphones} onChange={(headphones) => change({ headphones })} />
               <p className="cp-muted cp-crew__note">{words.festivalHats}</p>
             </>
           )}
           {tab === 'top' && (
             <>
-              {look.top !== 'none' && !isCostumePiece(look.top) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
-              {(look.top === 'threePiece' || look.top === 'tracksuit' || look.top === 'jacket') && (
-                <Swatches label={words.accents[look.top]} colours={CLOTH_COLORS} value={look.accentColor} onPick={(accentColor) => change({ accentColor })} />
-              )}
+              {look.top !== 'none' && !ownColour(look.top) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.topColor} onPick={(topColor) => change({ topColor })} />}
+              {accentLabel && <Swatches label={accentLabel} colours={CLOTH_COLORS} value={look.accentColor} onPick={(accentColor) => change({ accentColor })} />}
               {pieces(words.top, TOPS, labels.top, look.top, (top) => change({ top }), (top) => ({ top }), 'chest')}
             </>
           )}
           {tab === 'bottom' && (
             look.top === 'blanket' ? <p className="cp-muted cp-crew__note">{words.blanketHides}</p>
-              : look.top === 'dress' ? <p className="cp-muted cp-crew__note">{words.dressIsBottom}</p> : (
+              : look.top === 'dress' ? <p className="cp-muted cp-crew__note">{words.dressIsBottom}</p>
+              : look.top === 'overalls' ? <p className="cp-muted cp-crew__note">{words.overallsAreBottom}</p> : (
               <>
-                {!isCostumePiece(look.bottom) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />}
+                {!ownColour(look.bottom) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.bottomColor} onPick={(bottomColor) => change({ bottomColor })} />}
                 {pieces(words.bottom, BOTTOMS, labels.bottom, look.bottom, (bottom) => change({ bottom }), (bottom) => ({ bottom }), 'legs')}
               </>
             )
@@ -319,7 +326,7 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
           {tab === 'shoes' && (
             look.top === 'blanket' ? <p className="cp-muted cp-crew__note">{words.blanketHides}</p> : (
               <>
-                {!isCostumePiece(look.shoes) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />}
+                {!ownColour(look.shoes) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.shoesColor} onPick={(shoesColor) => change({ shoesColor })} />}
                 {pieces(words.shoes, SHOES, labels.shoes, look.shoes, (shoes) => change({ shoes }), (shoes) => ({ shoes }), 'feet')}
               </>
             )

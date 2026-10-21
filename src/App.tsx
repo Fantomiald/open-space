@@ -14,6 +14,7 @@ import { SessionList } from './command/SessionList.tsx';
 import { Sky, refreshFrost } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useFestival } from './room/useFestival.ts';
+import { setRoomTheme } from './room/themes/index.ts';
 import { Stack } from './command/Stack.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
@@ -33,6 +34,9 @@ export function App() {
   const view = useSessions((s) => s.view);
   const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
   const day = useFestival();
+  // the room and the sky read the theme as they paint: set before they mount again for it (their keys)
+  const theme = useSessions((s) => s.preferences.theme);
+  setRoomTheme(theme);
   const attention = useSessions(selectAttentionCount);
   const selectedId = useSessions((s) => s.selectedId);
   const openIds = useSessions((s) => s.openIds);
@@ -170,12 +174,12 @@ export function App() {
 
   return (
     <div className="cp-app" data-view={view}>
-      <Sky festival={day.festival} />
+      <Sky key={theme} festival={day.festival} />
       <Header />
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>
