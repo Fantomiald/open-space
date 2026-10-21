@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
+import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { MetricsDialog } from './command/MetricsDialog.tsx';
 import { SearchPalette } from './command/SearchPalette.tsx';
 import { CopyOnSelect } from './command/CopyOnSelect.tsx';
@@ -102,6 +103,8 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const state = useSessions.getState();
+      // by position of the key: Option changes what `e.key` says on a Mac
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyT') { e.preventDefault(); state.openTerminal(state.selectedId); return; }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); state.openPalette(!state.paletteOpen); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); state.openSettings(!state.settingsOpen); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return; }
@@ -189,6 +192,7 @@ export function App() {
       <CrewDialog />
       <SettingsDialog />
       <BoardDialog />
+      <BranchesDialog />
       <MetricsDialog />
       <TrustDialog />
       <Toasts />

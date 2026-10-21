@@ -3,7 +3,7 @@ import { EFFORTS, PERMISSION_MODES, type Effort, type PermissionMode, type TuneC
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
-import { TuneIcon, UltracodeIcon } from './Icons.tsx';
+import { BranchIcon, TuneIcon, UltracodeIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
 
 /** What the menu shows: a session's own settings, or those a new session will start with. */
@@ -15,7 +15,10 @@ export interface Tuning { model: string; effort?: Effort; ultracode?: boolean; p
  * list, with the efforts each takes; until it was asked for, Open Space's short list and every effort.
  * In a small window, the button is an icon that says them in its tooltip.
  */
-export function TuneMenu({ tuning, cwd, onChange, compact = false }: { tuning: Tuning; cwd: string; onChange: (change: TuneChange) => void; compact?: boolean }) {
+/** The launcher's choice of a branch of its own for the new session (a folder in a git repository only). */
+export interface Isolation { isolated: boolean; onChange: (isolated: boolean) => void }
+
+export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: { tuning: Tuning; cwd: string; onChange: (change: TuneChange) => void; compact?: boolean; isolation?: Isolation }) {
   const catalog = useSessions((s) => s.models);
   // Claude Code names ultracode in /effort's hint only when it is offered (dynamic workflows on, in its /config)
   const effortHint = useSessions((s) => (s.folderCommands[cwd] ?? s.commands).find((command) => command.name === 'effort')?.argumentHint);
@@ -73,6 +76,15 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false }: { tuning: T
               {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
             </select>
           </label>
+          {isolation && (
+            <div className="cp-popover-field">
+              <span id={`${panelId}-folder`}>{t.branches.tune.folder}</span>
+              <div className="cp-segmented cp-tune__folder" role="group" aria-labelledby={`${panelId}-folder`}>
+                <button type="button" aria-pressed={!isolation.isolated} title={t.branches.tune.sharedTitle} onClick={() => isolation.onChange(false)}>{t.branches.tune.shared}</button>
+                <button type="button" aria-pressed={isolation.isolated} title={t.branches.tune.isolatedTitle} onClick={() => isolation.onChange(true)}><BranchIcon />{t.branches.tune.isolated}</button>
+              </div>
+            </div>
+          )}
           {ultracodeOffered && (
             <label className="cp-ultracode">
               <span><UltracodeIcon /><strong>{words.ultracode}</strong></span>

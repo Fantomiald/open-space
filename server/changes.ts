@@ -81,9 +81,9 @@ async function untracked(file: string): Promise<Omit<FileChange, 'path'>> {
   return { status: 'added', added: lines.length, removed: 0, ...cutPatch(`@@ -0,0 +1,${lines.length} @@\n${lines.map((line) => `+${line}`).join('\n')}\n`) };
 }
 
-/** What git says of some files of one repository against its last commit; files without changes are left out. */
-async function inRepository(top: string, files: readonly string[]): Promise<FileChange[]> {
-  const base = await git(top, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(() => 'HEAD', () => EMPTY_TREE);
+/** What git says of some files of one repository against its last commit (or `since`); files without changes are left out. */
+async function inRepository(top: string, files: readonly string[], since?: string): Promise<FileChange[]> {
+  const base = since ?? await git(top, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(() => 'HEAD', () => EMPTY_TREE);
   const relative = files.map((file) => path.relative(top, file));
   const options = ['diff', base, '--no-color', '--no-ext-diff', '--no-renames'];
   const [numstat, statuses, patch, others] = await Promise.all([
@@ -110,12 +110,30 @@ async function inRepository(top: string, files: readonly string[]): Promise<File
 }
 
 /**
- * The changes of a session's files. `allowed`: whether a folder may be read (inside the roots); a file outside them, or
- * outside any git repository, is listed without its diff.
+ * Where a session's branch left its base (`base`, the branch it merges into) and the files it changed since, committed
+ * or not: an isolated session's work is all of its branch (see server/worktrees.ts).
  */
-export async function sessionChanges(cwd: string, sessionId: string, allowed: (directory: string) => boolean, home?: string): Promise<SessionChanges> {
+async function branchWork(cwd: string, base: string): Promise<{ top: string; start: string; files: string[] } | null> {
+  try {
+    const top = (await git(cwd, ['rev-parse', '--show-toplevel'])).trim();
+    const start = (await git(top, ['merge-base', base, 'HEAD'])).trim();
+    const [committed, others] = await Promise.all([git(top, ['diff', '--name-only', '--no-renames', start]), git(top, ['ls-files', '--others', '--exclude-standard'])]);
+    return { top, start, files: [...committed.split('\n'), ...others.split('\n')].filter(Boolean).map((file) => path.join(top, file)) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The changes of a session's files. `allowed`: whether a folder may be read (inside the roots); a file outside them, or
+ * outside any git repository, is listed without its diff. `base`: the session works on a branch of its own, which is
+ * compared from where it left `base`, commits included.
+ */
+export async function sessionChanges(cwd: string, sessionId: string, allowed: (directory: string) => boolean, home?: string, base?: string): Promise<SessionChanges> {
   const texts = await Promise.all((await transcripts(cwd, sessionId, home)).map((file) => readFile(file, 'utf8').catch(() => '')));
-  const files = [...new Set(texts.flatMap(editedFiles))].slice(-FILE_LIMIT);
+  const edited = [...new Set(texts.flatMap(editedFiles))];
+  const branch = base ? await branchWork(cwd, base) : null;
+  const files = [...new Set([...(branch?.files ?? []), ...edited])].slice(-FILE_LIMIT);
   const repositories = new Map<string, string[]>();
   const outside: FileChange[] = [];
   const tops = new Map<string, string | null>();
@@ -127,7 +145,7 @@ export async function sessionChanges(cwd: string, sessionId: string, allowed: (d
     if (top) repositories.set(top, [...(repositories.get(top) ?? []), file]);
     else outside.push({ path: file, status: 'outside', added: 0, removed: 0, patch: '' });
   }
-  const found = (await Promise.all([...repositories].map(([top, list]) => inRepository(top, list).catch(() => [])))).flat();
+  const found = (await Promise.all([...repositories].map(([top, list]) => inRepository(top, list, branch && top === branch.top ? branch.start : undefined).catch(() => [])))).flat();
   // the order the files were last written in, and no more patch text than a message should carry
   const order = new Map(files.map((file, index) => [file, index]));
   const changes = [...found, ...outside].sort((a, b) => (order.get(b.path) ?? 0) - (order.get(a.path) ?? 0));
@@ -137,5 +155,5 @@ export async function sessionChanges(cwd: string, sessionId: string, allowed: (d
     change.patch = '';
     change.truncated = true;
   }
-  return { files: changes, added: changes.reduce((sum, change) => sum + change.added, 0), removed: changes.reduce((sum, change) => sum + change.removed, 0), touched: files.length };
+  return { files: changes, added: changes.reduce((sum, change) => sum + change.added, 0), removed: changes.reduce((sum, change) => sum + change.removed, 0), touched: edited.length };
 }

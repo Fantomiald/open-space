@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import { EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand } from '../shared/protocol.ts';
+import { EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 
@@ -78,6 +78,8 @@ export interface LaunchOptions {
   forkOf?: string;
   /** folders the session may read besides its own (--add-dir): where the files the user sends are kept */
   addDirs?: readonly string[];
+  /** it works on a branch of its own, in a worktree: its conversation is told so when it starts */
+  worktree?: Pick<WorktreeInfo, 'branch' | 'base' | 'root' | 'mainRoot'>;
 }
 
 /**
@@ -97,7 +99,7 @@ export interface LaunchOptions {
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -113,7 +115,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree));
   return args;
 }
 
@@ -122,9 +124,16 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = ''): string {
-  return st.prompt.identity(name, user.trim(), note.trim());
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree']): string {
+  const identity = st.prompt.identity(name, user.trim(), note.trim());
+  return worktree ? `${identity}\n\n${st.prompt.worktree(worktree)}` : identity;
 }
+
+/**
+ * Told in the next message when a session moved since its conversation started: into its worktree (a kept branch
+ * resumed), or back to the main checkout `cwd` (its branch merged, thrown away or cleaned).
+ */
+export const placeNote = (cwd: string, worktree: LaunchOptions['worktree'] | undefined) => (worktree ? st.prompt.intoWorktree(worktree) : st.prompt.backHome(cwd));
 
 /** Told in the next message when a session was renamed, or started before sessions had names. */
 export const renameNote = (name: string) => st.prompt.rename(name);

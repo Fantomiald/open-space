@@ -13,6 +13,7 @@ import { Prose } from './Prose.tsx';
 import { currentTurn, threadOf, toolSummary, turnPhase, turnWord, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
 import { FeedSearch } from './FeedSearch.tsx';
+import { BranchCardView, BranchNewsItem } from './BranchCard.tsx';
 
 type Subagent = FeedItem & { kind: 'subagent' };
 
@@ -268,6 +269,8 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
       return turnDuration ? <li className="cp-feed__item" data-kind="turn">{turnLine(item)}</li> : null;
     case 'notice':
       return <li className="cp-feed__item" data-kind="notice">{item.text}</li>;
+    case 'branch':
+      return <BranchNewsItem item={item} sessionId={sessionId} speaker={speaker} />;
     case 'files':
       return (
         <li className="cp-feed__item" data-kind="files">
@@ -323,7 +326,7 @@ function PeerMessage({ item, speaker }: { item: FeedItem & { kind: 'peer' }; spe
 }
 
 /** What the pill counts as new while the user reads higher up: what was said or asked, not the tool calls. */
-const UNREAD_KINDS: ReadonlySet<ThreadEntry['kind']> = new Set(['assistant', 'peer', 'permission', 'subagent', 'notice', 'files', 'artifact']);
+const UNREAD_KINDS: ReadonlySet<ThreadEntry['kind']> = new Set(['assistant', 'peer', 'permission', 'subagent', 'notice', 'files', 'artifact', 'branch']);
 
 /** "Brewed for 10 s · done 22:53": how long the turn took and when it ended, like Claude Code's own line. */
 function turnLine(item: FeedItem & { kind: 'turn' }) {
@@ -463,6 +466,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
                 <Prose className="cp-feed__text" text={draft} />
               </li>
             ) : working && !shownAgent && <Working items={feed.items} speaker={speaker} sessionId={sessionId} />}
+            {!shownAgent && !draft && <BranchCardView sessionId={sessionId} />}
             {shownAgent?.report && (
               <li className="cp-feed__item" data-kind="assistant">
                 <span className="cp-feed__who">{t.session.feed.report}</span>

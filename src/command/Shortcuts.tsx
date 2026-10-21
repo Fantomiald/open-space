@@ -8,7 +8,7 @@ const OPTION = MAC ? '⌥' : 'Alt';
 export function Shortcuts() {
   const words = t.settings.prefs.shortcuts;
   const groups: readonly (readonly [string, readonly (readonly [string, readonly string[]])[]])[] = [
-    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']]]],
+    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.terminal, MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
     [words.groups.sessions, [
       [words.newSession, ['N']], [words.quickSession, ['⇧', 'N']], [words.command, ['/']], [words.threadSearch, [MODIFIER, 'F']],
       [words.interrupt, ['esc']], [words.hide, ['tab']],

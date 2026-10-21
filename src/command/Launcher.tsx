@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BRANCH_PREFIX, workSlug } from '../../shared/worktrees.ts';
 import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
-import { defaultFolder, formatAgo, homeRelative } from '../lib/format.ts';
+import { defaultFolder, folderName, formatAgo, homeRelative } from '../lib/format.ts';
 import { availability, stillFree } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
+import { branchPreview, isolationOffer, occupants } from '../state/worktrees.ts';
+import { BranchName } from './BranchCard.tsx';
+import { Switch } from './Switch.tsx';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
-import { CloseIcon, SendIcon } from './Icons.tsx';
+import { BranchIcon, CleanIcon, CloseIcon, SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 import { TuneMenu } from './TuneMenu.tsx';
@@ -52,6 +56,25 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const cwd = folder.trim() || defaultFolder(roots, preferences.defaultFolder);
   const conversations = found && found.cwd === cwd ? found.list : null;
 
+  // the folder's repository, asked for once the user stops typing it: whether to offer a branch of its own
+  const repo = useSessions((s) => s.folderRepos[cwd]);
+  const openBranches = useSessions((s) => s.openBranches);
+  useEffect(() => {
+    if (!cwd || !live) return;
+    const timer = window.setTimeout(() => send({ t: 'folderInfo', cwd }), 250);
+    return () => window.clearTimeout(timer);
+  }, [cwd, live, send]);
+  const taken = useMemo(() => (repo ? occupants(Object.values(sessions), repo) : []), [repo, sessions]);
+  const offer = isolationOffer(preferences.isolate, repo, taken.length);
+  // the user's own choice for this folder (the line's switch or the panel's Shared / Isolated), else the setting's
+  const [isolateChoice, setIsolateChoice] = useState<{ cwd: string; isolated: boolean } | null>(null);
+  const [base, setBase] = useState<{ cwd: string; branch: string } | null>(null);
+  const [choosingBase, setChoosingBase] = useState(false);
+  const canIsolate = !resuming && !!repo?.branch;
+  const isolated = canIsolate && (isolateChoice?.cwd === cwd ? isolateChoice.isolated : offer.checked);
+  const startBase = base?.cwd === cwd && repo?.branches.includes(base.branch) ? base.branch : repo?.branch ?? '';
+  const chooseIsolated = (next: boolean) => setIsolateChoice({ cwd, isolated: next });
+
   useEffect(() => { if (live) send({ t: 'directories' }); }, [live, send]);
 
   // a request for a new session (N, the palette, the room) lands here: the field takes the focus and the command asked for
@@ -85,7 +108,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     const message = text.trim();
     const images = attachments.uploads;
     const files = attachments.files;
-    createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}) });
+    const isolate = isolated ? { isolate: startBase && startBase !== repo?.branch ? { base: startBase } : {} } : {};
+    createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}), ...isolate });
     setText('');
     attachments.clear();
     setResumeId(null);
@@ -93,6 +117,11 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   };
 
   const words = t.composer.launcher;
+  const branchWords = t.branches.launcher;
+  // the branch it will get: with someone asked for, the name the server will give; else the work's part only
+  const slug = workSlug(text);
+  const preview = person ? branchPreview(person, text) : `${BRANCH_PREFIX}…${slug ? `-${slug}` : ''}`;
+  const tidy = !resuming && repo && repo.merged >= 3;
   return (
     <aside className="cp-launcher" aria-label={words.label} {...attachments.dropTarget}>
       <DropOverlay attachments={attachments} />
@@ -133,6 +162,36 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
       </div>
 
       <form className="cp-launcher__composer" onSubmit={(e) => { e.preventDefault(); start(); }}>
+        {repo && canIsolate && (offer.shown || isolated) && (
+          <section className="cp-isolate" data-on={isolated} aria-label={branchWords.title}>
+            <span className="cp-isolate__icon" aria-hidden="true"><BranchIcon /></span>
+            <div className="cp-isolate__text">
+              <strong className="cp-isolate__title">{branchWords.title}</strong>
+              <p>
+                {taken.length ? branchWords.busy(taken[0].name, taken.length - 1, folderName(repo.root)) : branchWords.alone}
+                {isolated && (
+                  <> {branchWords.startsOn(person)} <BranchName name={preview} />{branchWords.from}{' '}
+                    {choosingBase ? (
+                      <span className="cp-chip" data-select>
+                        <select aria-label={branchWords.base} value={startBase} autoFocus onChange={(e) => { setBase({ cwd, branch: e.target.value }); setChoosingBase(false); }} onBlur={() => setChoosingBase(false)}>
+                          {repo.branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                        </select>
+                      </span>
+                    ) : <BranchName name={startBase} />}
+                    .{repo.branches.length > 1 && !choosingBase && <> <button type="button" className="cp-link" title={branchWords.changeTitle} onClick={() => setChoosingBase(true)}>{branchWords.change}</button></>}
+                  </>
+                )}
+              </p>
+              {isolated && repo.dirty > 0 && <p className="cp-isolate__dirty">{branchWords.dirty(repo.dirty, folderName(repo.root))}</p>}
+            </div>
+            <Switch checked={isolated} onChange={chooseIsolated} label={branchWords.title} />
+          </section>
+        )}
+        {tidy && (
+          <p className="cp-launcher__tidy">
+            <CleanIcon />{branchWords.tidy(repo.merged, folderName(repo.root))} <button type="button" className="cp-link" onClick={() => openBranches(cwd)}>{branchWords.tidyAction}</button>
+          </p>
+        )}
         <div className="cp-launcher__box">
         <AttachmentStrip attachments={attachments} />
         <CommandField
@@ -143,7 +202,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
           <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
-          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} />
+          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} />
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
           <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>
         </div>

@@ -20,6 +20,8 @@ export const session: Dictionary['session'] = {
     interrupt: 'Interrupt',
     interruptTitle: 'Interrupt what they’re doing (the session stays open)',
     duplicate: 'Duplicate',
+    terminalHere: 'Open a terminal here',
+    terminalHereTitle: 'A terminal opens in this session’s folder',
     duplicateTitle: 'A new session goes on from this conversation as it is, to try another way. This one carries on its own.',
     rest: 'Rest',
     restTitle: 'To the break room: Claude Code stops, a message calls them back',

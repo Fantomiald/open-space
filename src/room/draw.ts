@@ -10,7 +10,7 @@ import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
 import { metricsBadgeAt } from './metrics.ts';
-import { STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
+import { BRANCH_GLYPH, BRANCH_GLYPH_HEIGHT, BRANCH_GLYPH_WIDTH, STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { roomTheme, themeKit } from './themes/index.ts';
@@ -386,6 +386,8 @@ interface NameTag {
   colour: string;
   status: Exclude<Status, null> | null;
   tag: string | null;
+  /** on a branch of its own: a little branch after the name */
+  branch?: boolean;
   /** whose sub-agents they are, for their faces */
   sessionId: string;
   agents: readonly Agent[];
@@ -414,6 +416,7 @@ const extraAgents = (tag: NameTag) => Math.max(0, tag.agents.length - SHOWN_AGEN
 
 function tagWidth(context: Context, tag: NameTag): number {
   let width = (tag.status ? 2 + ICON_SIZE + TAG_GAP : TAG_PADDING) + textWidthOf(context, tag.name) + TAG_PADDING;
+  if (tag.branch) width += TAG_GAP + BRANCH_GLYPH_WIDTH;
   if (tag.tag) width += SEPARATED + textWidthOf(context, tag.tag);
   if (tag.agents.length) {
     const shown = Math.min(tag.agents.length, SHOWN_AGENTS);
@@ -500,6 +503,12 @@ function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, lef
   context.fillStyle = tag.colour;
   context.fillText(tag.name, x, top + 10);
   x += textWidthOf(context, tag.name);
+  if (tag.branch) {
+    x += TAG_GAP;
+    const glyphTop = top + Math.floor((TAG_HEIGHT - BRANCH_GLYPH_HEIGHT) / 2);
+    for (const [dx, dy] of BRANCH_GLYPH) rect(context, x + dx, glyphTop + dy, 1, 1, P.branch);
+    x += BRANCH_GLYPH_WIDTH;
+  }
   if (tag.tag) {
     x = separator(context, x, top);
     context.fillStyle = P.sessionTag;
@@ -666,7 +675,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag,
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag, branch: character.person.branch,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },
     });

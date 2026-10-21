@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
-import { EFFORTS, IDLE_COMPACT_MINUTES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
+import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
@@ -11,7 +11,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, BellIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, BellIcon, BranchIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -37,7 +37,7 @@ type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
   general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']], ['branches', ['isolate']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -303,6 +303,13 @@ function SettingsEditor() {
       case 'agentNote': return (
         <Row key={id} id={id} flash={flash} wide icon={<AgentIcon />} title={rows.agentNote.title} hint={rows.agentNote.hint}>
           <textarea aria-labelledby={`setting-${id}-title`} rows={3} maxLength={600} value={draft.agentNote} onChange={(e) => change({ agentNote: e.target.value })} placeholder={t.settings.habits.agentNotePlaceholder} />
+        </Row>
+      );
+      case 'isolate': return (
+        <Row key={id} id={id} flash={flash} icon={<BranchIcon />} title={rows.isolate.title} hint={rows.isolate.hint}>
+          <select aria-labelledby={`setting-${id}-title`} value={draft.isolate} onChange={(e) => change({ isolate: e.target.value as Preferences['isolate'] })}>
+            {ISOLATE_MODES.map((mode) => <option key={mode} value={mode}>{rows.isolate.options[mode]}</option>)}
+          </select>
         </Row>
       );
       case 'roots': return (

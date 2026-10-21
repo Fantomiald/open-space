@@ -3,6 +3,7 @@
 //
 // On disk (OFFICE_DIR):  sessions.json  (the list, rewritten atomically)   logs/<session id>.jsonl  (one event per line)
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } f
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import type { ShellRunner } from './shell.ts';
-import type { Aside, FolderCode, InspectView, McpAction, SessionChanges } from '../shared/protocol.ts';
+import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { CatalogProbe, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
@@ -22,9 +23,13 @@ import { MAX_NAME, MAX_TAG } from './messages.ts';
 import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
-import { Session, newSessionInfo, type SessionDeps, type StoredInfo } from './session.ts';
+import { Session, newSessionInfo, type SessionDeps, type StoredInfo, type TurnEnd } from './session.ts';
 import { SessionLog } from './session-log.ts';
 import { searchSessions } from './search.ts';
+import {
+  branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
+  listBranches, moveConversation, recreateWorktree, removeWorktree, setBranchNote,
+} from './worktrees.ts';
 
 const STATES: ReadonlySet<string> = new Set(['starting', 'work', 'perm', 'wait', 'done', 'closed', 'error']);
 const SAVE_DELAY_MS = 500;
@@ -107,6 +112,7 @@ export class SessionManager {
     }
     this.save();
     this.sweep();
+    await this.checkWorktrees();
     void this.fillContexts();
     void this.probeAll();
     // Remote Control was on when the server stopped: back on, on the same session of claude.ai
@@ -129,6 +135,27 @@ export class SessionManager {
       if (last && max) session.recallContext({ used: last.used, max });
     }
   }
+
+  /**
+   * A session whose worktree was removed while Open Space was not running (by hand, by another tool) goes back to the
+   * main checkout, with its conversation, and says so.
+   */
+  private async checkWorktrees() {
+    for (const session of this.sessions.values()) await this.rehome(session);
+  }
+
+  /** An isolated session whose worktree's folder is gone goes back to the main checkout (true when it did). */
+  private async rehome(session: Session): Promise<boolean> {
+    const info = session.snapshot();
+    if (!info.worktree || existsSync(info.worktree.root) || session.alive || session.isPreparing) return false;
+    await moveConversation(info.cwd, info.worktree.home, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
+    session.relocate(info.worktree.home, undefined);
+    session.announce({ k: 'note', text: st.worktree.folderGone(info.worktree.branch, path.basename(info.worktree.home)) });
+    return true;
+  }
+
+  /** The Claude Code conversations a session has written: its own id, and the one it goes on with after a /clear. */
+  private conversationIds(info: SessionInfo) { return [info.id, info.conversationId ?? info.id]; }
 
   /** Removes in the background the stored pictures and files of forgotten sessions (see sweepAttachments). */
   private sweep() {
@@ -200,6 +227,7 @@ export class SessionManager {
       now: this.deps.now,
       graceMs: this.deps.graceMs,
       runShell: this.deps.runShell,
+      onTurnEnd: (session, how) => this.onTurnEnd(session.id, how),
     });
   }
 
@@ -271,12 +299,14 @@ export class SessionManager {
       ? [{ name: entry.name, utilization: entry.utilization, resetsAt: typeof entry.resetsAt === 'number' ? entry.resetsAt : null }] : []));
     return { fiveHour: raw.fiveHour, resetsAt, windows };
   }
+  /** The folder a session works in, or null when there is no such session. */
+  folderOf(id: string): string | null { return this.sessions.get(id)?.snapshot().cwd ?? null; }
   directories(): string[] { return listProjectDirectories(this.deps.config.roots); }
 
   /** What a session changed in its files (see changes.ts). */
   changes(id: string): Promise<SessionChanges> {
-    const { cwd, conversationId } = this.session(id).snapshot();
-    return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home);
+    const { cwd, conversationId, worktree } = this.session(id).snapshot();
+    return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home, worktree?.base);
   }
 
   /** The Claude Code conversations of an allowed folder that are not open here yet. */
@@ -423,6 +453,11 @@ export class SessionManager {
       const found = (await listConversations(cwd, new Set(), this.deps.home)).find((conversation) => conversation.id === options.resumeId);
       session.showHistory(found?.title ?? st.sessions.untitledConversation, await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
     }
+    // on a branch of its own: the worktree is made while the first message waits in the queue; a conversation that
+    // was switched off with its branch kept gets that branch's worktree back
+    const repo = options.isolate || options.resumeId ? await folderRepo(cwd).catch(() => null) : null;
+    const kept = options.resumeId && repo ? await keptBranchOf(repo.root, options.resumeId).catch(() => null) : null;
+    if (options.isolate || kept) session.startPreparing(st.worktree.preparing);
     if (options.text?.trim() || options.images?.length || options.files?.length) {
       try {
         session.send(options.text ?? '', options.images, options.files);
@@ -431,7 +466,298 @@ export class SessionManager {
         throw error;
       }
     }
+    if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base);
+    else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '');
     return session.snapshot();
+  }
+
+  // ── worktrees: a branch and a folder of its own per session (server/worktrees.ts) ──
+  /** Makes the worktree of a new isolated session, then lets its first message go; on failure it stays in the main checkout, its message queued. */
+  private async prepareWorktree(id: string, cwd: string, repo: Omit<FolderRepo, 'merged'> | null, asked: string | undefined, about: string) {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    const info = session.snapshot();
+    try {
+      if (!repo) throw new Error(st.worktree.notRepo);
+      this.checkRepoAllowed(repo);
+      const base = asked || repo.branch;
+      if (!base) throw new Error(repo.branches.length ? st.worktree.noBase : st.worktree.noCommit);
+      if (!repo.branches.includes(base)) throw new Error(st.worktree.unknownBase(base));
+      const made = await createWorktree({ mainRoot: repo.root, name: info.name, about: info.tag || about, base, note: { name: info.name, sub: repo.sub, conversation: info.id } });
+      await this.settleWorktree(session, repo, made.root, made.branch, base, cwd);
+    } catch (error) {
+      session.announce({ k: 'note', text: st.worktree.prepareFailed(error instanceof Error ? error.message : String(error), info.name, path.basename(cwd)) });
+      session.finishPreparing(false);
+    }
+  }
+
+  /** A kept branch resumed: its worktree again, and the conversation moved there. */
+  private async reviveWorktree(id: string, repo: Omit<FolderRepo, 'merged'>, branch: string, base: string | undefined) {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    const info = session.snapshot();
+    try {
+      this.checkRepoAllowed(repo);
+      const root = await recreateWorktree(repo.root, branch);
+      session.announce({ k: 'note', text: st.worktree.revived(branch) });
+      await this.settleWorktree(session, repo, root, branch, base || repo.branch, info.cwd);
+    } catch (error) {
+      session.announce({ k: 'note', text: st.worktree.prepareFailed(error instanceof Error ? error.message : String(error), info.name, path.basename(info.cwd)) });
+      session.finishPreparing(false);
+    }
+  }
+
+  /** A worktree goes where the repository is: outside the allowed folders, no process could start there. */
+  private checkRepoAllowed(repo: Pick<FolderRepo, 'root'>) {
+    if (!resolveAllowedDirectory(repo.root, this.deps.config.roots)) throw new Error(st.worktree.outsideRoots(repo.root));
+  }
+
+  /** The worktree is there: what git does not carry is copied, the session moves in, and its queue leaves. */
+  private async settleWorktree(session: Session, repo: Omit<FolderRepo, 'merged'>, root: string, branch: string, base: string, home: string) {
+    const copied = await copyIncluded(repo.root, root).catch(() => ({ copied: 0, failed: 1, skipped: false }));
+    // switched off while its folder was made: the folder goes, and the branch too when it holds nothing of its own
+    if (this.sessions.get(session.id) !== session) {
+      await removeWorktree(repo.root, root, false).catch((error) => this.deps.log(`cannot remove the worktree ${root}`, error));
+      await deleteBranch(repo.root, branch, base).catch((error) => this.deps.log(`cannot delete the branch ${branch}`, error));
+      return;
+    }
+    if (copied.failed || copied.skipped) session.announce({ k: 'note', text: st.worktree.notCopied(session.snapshot().name) });
+    const worktree: WorktreeInfo = { branch, base, root, mainRoot: repo.root, home, canPr: await canOpenPullRequest(repo.root).catch(() => false) };
+    const inside = path.join(root, repo.sub);
+    const cwd = existsSync(inside) ? inside : root;
+    // the user agreed to what the main folder runs (trust.ts), not to hooks or MCP servers only the branch has
+    const info = session.snapshot();
+    const code = (folder: string) => { const { hooks, mcpServers } = folderCode(folder); return JSON.stringify({ hooks, mcpServers }); };
+    if (!info.untrusted && runsCode(folderCode(cwd)) && code(cwd) !== code(home) && !this.trusted.has(cwd) && !trustedInClaudeCode(cwd, this.deps.home)) {
+      session.restrict();
+      session.announce({ k: 'note', text: st.worktree.restricted(info.name) });
+    }
+    // a conversation that goes on (resumed) is looked for by its folder: its transcripts follow it
+    if (info.resumable) await moveConversation(info.cwd, cwd, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
+    session.relocate(cwd, worktree);
+    session.finishPreparing(true);
+    if (!this.folderCommands.has(session.snapshot().cwd)) void this.probeFolder(session.snapshot().cwd, !!session.snapshot().untrusted);
+    await this.refreshBranch(session.id);
+  }
+
+  /** Looks at what an isolated session's branch holds again (after each turn, after a change), for its card. */
+  async refreshBranch(id: string) {
+    const session = this.sessions.get(id);
+    const worktree = session?.snapshot().worktree;
+    if (!session || !worktree) return;
+    // its folder removed by hand while Open Space runs: back to the main checkout, as at startup
+    if (await this.rehome(session)) return;
+    const status = await branchStatus(worktree.root, worktree.base).catch(() => null);
+    // a remote may have been added since
+    const canPr = await canOpenPullRequest(worktree.mainRoot).catch(() => false);
+    // read again: a merge may have started or ended meanwhile
+    const now = session.snapshot().worktree;
+    if (status && now && now.root === worktree.root) session.setWorktree({ ...now, status, ...(canPr ? { canPr } : { canPr: undefined }) });
+  }
+
+  /** A turn of an isolated session is over: the merge it was asked for is checked and done, or its branch looked at again. */
+  private onTurnEnd(id: string, how: TurnEnd) {
+    const session = this.sessions.get(id);
+    const worktree = session?.snapshot().worktree;
+    if (!session || !worktree) return;
+    if (worktree.merge?.step === 'asked') {
+      if (how === 'done') { void this.completeMerge(id); return; }
+      // stopped by the user: no merge, the card comes back; ended on an error or gone: the card says so, with Try again
+      session.setWorktree({ ...worktree, merge: how === 'interrupted' ? undefined : { step: 'failed', problem: { kind: 'stopped' }, ...(worktree.merge.thenOff ? { thenOff: true } : {}) } });
+    }
+    void this.refreshBranch(id);
+  }
+
+  private isBusy(info: SessionInfo) { return info.state === 'starting' || info.state === 'work' || info.state === 'perm' || !!info.background; }
+
+  private isolated(id: string): { session: Session; info: SessionInfo; worktree: WorktreeInfo } {
+    const session = this.session(id);
+    const info = session.snapshot();
+    if (!info.worktree) throw new Error(st.worktree.notIsolated);
+    return { session, info, worktree: info.worktree };
+  }
+
+  /** At work, its folder being made or moved, or a merge under way: what touches its branch waits. */
+  private checkFree(session: Session) {
+    const info = session.snapshot();
+    if (this.isBusy(info) || session.isPreparing || info.worktree?.merge?.step === 'asked') throw new Error(st.worktree.waitTurn(info.name));
+  }
+
+  /**
+   * Merges an isolated session's branch into its base: the session is asked to squash its work into one commit, catch
+   * up with the base and settle the conflicts; at the end of that turn Open Space checks and fast-forwards the base
+   * (completeMerge). `thenOff`: switched off once merged.
+   */
+  async mergeBranch(id: string, thenOff = false): Promise<void> {
+    const { session, worktree } = this.isolated(id);
+    this.checkFree(session);
+    const status = await branchStatus(worktree.root, worktree.base);
+    // read again: another click (another tab) may have asked meanwhile
+    this.checkFree(session);
+    const now = session.snapshot().worktree;
+    if (!now || now.root !== worktree.root) throw new Error(st.worktree.notIsolated);
+    if (!status.ahead && !status.dirty) {
+      if (thenOff) return this.forget(id);
+      // nothing left to merge (a merge cut by a restart after the base moved): a failed card goes
+      session.setWorktree({ ...now, status, merge: undefined });
+      throw new Error(st.worktree.nothingToMerge);
+    }
+    session.setWorktree({ ...now, status, merge: { step: 'asked', retried: false, ...(thenOff ? { thenOff: true } : {}) } });
+    try {
+      session.instruct(st.prompt.merge(worktree), st.worktree.mergeBubble(worktree.base));
+    } catch (error) {
+      session.setWorktree({ ...now, status });
+      throw error;
+    }
+    // after the user's line: the thread reads "merge into main", then why the session catches up first
+    if (status.behind) session.announce({ k: 'branch', what: 'moved', branch: worktree.branch, base: worktree.base, behind: status.behind });
+  }
+
+  /** The session did its part of a merge: the checks, then the base moves; a base that moved meanwhile is caught up once more. */
+  private async completeMerge(id: string) {
+    const session = this.sessions.get(id);
+    const worktree = session?.snapshot().worktree;
+    if (!session || worktree?.merge?.step !== 'asked' || session.isPreparing) return;
+    const { merge } = worktree;
+    // nothing starts in the worktree, nothing else touches the branch, until it is landed and left
+    session.hold();
+    const outcome = await landBranch({ mainRoot: worktree.mainRoot, worktreeRoot: worktree.root, branch: worktree.branch, base: worktree.base });
+    const thenOff = merge.thenOff ? { thenOff: true as const } : {};
+    const fail = (problem: MergeProblem) => { session.setWorktree({ ...worktree, merge: { step: 'failed', problem, ...thenOff } }); void this.refreshBranch(id); };
+    if (!outcome.ok) {
+      session.finishPreparing(true);
+      if (outcome.problem.kind === 'behind' && !merge.retried) {
+        const status = await branchStatus(worktree.root, worktree.base).catch(() => null);
+        session.announce({ k: 'branch', what: 'moved', branch: worktree.branch, base: worktree.base, ...(status?.behind ? { behind: status.behind } : {}) });
+        session.setWorktree({ ...worktree, merge: { step: 'asked', retried: true, ...thenOff } });
+        try {
+          session.instruct(st.prompt.catchUp(worktree.base), st.worktree.catchUpBubble(worktree.base));
+        } catch {
+          fail(outcome.problem);
+        }
+        return;
+      }
+      fail(outcome.problem);
+      return;
+    }
+    try {
+      await this.moveOut(session, 'merged');
+    } catch (error) {
+      fail({ kind: 'git', text: error instanceof Error ? error.message : String(error) });
+      return;
+    } finally {
+      session.finishPreparing(!merge.thenOff);
+    }
+    if (merge.thenOff) await this.forget(id);
+  }
+
+  /** Puts a failed merge aside: the card goes back to what the branch holds. */
+  dismissMerge(id: string) {
+    const { session, worktree } = this.isolated(id);
+    if (worktree.merge?.step === 'failed') session.setWorktree({ ...worktree, merge: undefined });
+  }
+
+  /** Asks an isolated session to push its branch and open a pull request into its base. */
+  pullRequest(id: string) {
+    const { session, worktree } = this.isolated(id);
+    this.checkFree(session);
+    session.instruct(st.prompt.pullRequest(worktree), st.worktree.prBubble(worktree.base));
+  }
+
+  /** Throws an isolated session's branch away, with its folder: the session goes on in the main checkout. */
+  async discardBranch(id: string) {
+    const { session } = this.isolated(id);
+    this.checkFree(session);
+    await this.leaveWorktree(session, 'discarded');
+  }
+
+  /** moveOut, with nothing starting in the worktree meanwhile, and nothing else touching the branch. */
+  private async leaveWorktree(session: Session, what: 'discarded' | 'cleaned') {
+    if (session.isPreparing) throw new Error(st.worktree.waitTurn(session.snapshot().name));
+    session.hold();
+    try {
+      await this.moveOut(session, what);
+    } finally {
+      session.finishPreparing(true);
+    }
+  }
+
+  /**
+   * An isolated session leaves its worktree for the main checkout, its process stopped first: merged (the folder
+   * removed, the branch deleted only when all of it is in the base), thrown away or cleaned (removed whatever they
+   * hold). Once the folder is gone, the session moves home whatever else fails; its conversation's transcripts move
+   * with it.
+   */
+  private async moveOut(session: Session, what: 'merged' | 'discarded' | 'cleaned') {
+    const info = session.snapshot();
+    const worktree = info.worktree;
+    if (!worktree) return;
+    await session.stopForMove();
+    await removeWorktree(worktree.mainRoot, worktree.root, what !== 'merged');
+    await deleteBranch(worktree.mainRoot, worktree.branch, what === 'merged' ? worktree.base : undefined)
+      .then((deleted) => { if (!deleted) this.deps.log(`kept the branch ${worktree.branch}: it has commits that are not in ${worktree.base}`); })
+      .catch((error) => this.deps.log(`cannot delete the branch ${worktree.branch}`, error));
+    await moveConversation(info.cwd, worktree.home, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
+    session.relocate(worktree.home, undefined);
+    session.announce({ k: 'branch', what, branch: worktree.branch, base: worktree.base });
+  }
+
+  /** Whether a folder is in a git repository, its branches, its uncommitted files, and how many branches are left to tidy. */
+  async folderInfo(directory: string): Promise<FolderRepo | null> {
+    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    if (!cwd) return null;
+    const repo = await folderRepo(cwd).catch(() => null);
+    // a repository that starts above the allowed folders cannot have its worktrees there: no branch is offered
+    if (!repo || !resolveAllowedDirectory(repo.root, this.deps.config.roots)) return null;
+    const rows = await listBranches(repo.root).catch(() => [] as BranchRow[]);
+    return { ...repo, merged: rows.filter((row) => row.merged && !row.inUse && !this.sessionOn(repo.root, row)).length };
+  }
+
+  /** The session working on a branch of the cleaning panel, if one does. */
+  private sessionOn(mainRoot: string, row: { branch: string; folder: string | null }): Session | undefined {
+    return [...this.sessions.values()].find((session) => {
+      const worktree = session.snapshot().worktree;
+      return !!worktree && worktree.mainRoot === mainRoot && ((row.folder !== null && worktree.root === row.folder) || (!!row.branch && worktree.branch === row.branch));
+    });
+  }
+
+  /** The branches of a folder's repository, for the cleaning panel. */
+  async branches(directory: string): Promise<{ root: string; branches: BranchRow[] }> {
+    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    if (!cwd) throw new Error(st.sessions.outsideRoots);
+    const repo = await folderRepo(cwd);
+    if (!repo) return { root: '', branches: [] };
+    return { root: repo.root, branches: await listBranches(repo.root) };
+  }
+
+  /**
+   * Removes branches of a folder's repository and their worktrees, as the user checked them. One a session is working
+   * on, one still in use (a terminal's Claude Code), and one that got work since the page showed it are left alone; one
+   * a session waits or rests on takes it back to the main checkout. Returns the branches that could not go.
+   */
+  async cleanBranches(directory: string, chosen: readonly CleanedBranch[]): Promise<string[]> {
+    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    if (!cwd) throw new Error(st.sessions.outsideRoots);
+    const repo = await folderRepo(cwd);
+    if (!repo) return [];
+    const rows = await listBranches(repo.root);
+    const failed: string[] = [];
+    for (const wanted of chosen) {
+      const row = rows.find((candidate) => candidate.branch === wanted.branch && candidate.folder === wanted.folder);
+      if (!row) continue;
+      const session = this.sessionOn(repo.root, row);
+      // what the user agreed to lose is what they saw: new commits or more changes since are not part of it
+      const changed = !row.merged && (row.head !== wanted.head || row.dirty > wanted.dirty);
+      try {
+        if (row.inUse || changed || (session && (this.isBusy(session.snapshot()) || session.isPreparing))) { failed.push(row.branch || row.folder || ''); continue; }
+        if (session) await this.leaveWorktree(session, 'cleaned');
+        else await dropBranch(repo.root, row);
+      } catch (error) {
+        this.deps.log(`cannot clean ${row.branch || row.folder}`, error);
+        failed.push(row.branch || row.folder || '');
+      }
+    }
+    return failed;
   }
 
   /**
@@ -459,7 +785,13 @@ export class SessionManager {
     return session.snapshot();
   }
 
-  send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[]) { this.session(id).send(text, images, files); }
+  send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[]) {
+    const session = this.session(id);
+    // writing to the session again moves on from a failed merge: its card would stay over the new work
+    const worktree = session.snapshot().worktree;
+    if (worktree?.merge?.step === 'failed') session.setWorktree({ ...worktree, merge: undefined });
+    session.send(text, images, files);
+  }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
   interrupt(id: string) { this.session(id).interrupt(); }
@@ -482,11 +814,29 @@ export class SessionManager {
   stopShell(id: string, shellId: string) { this.session(id).stopShell(shellId); }
   mcpAction(id: string, server: string, action: McpAction) { return this.session(id).mcpAction(server, action); }
 
-  /** Removes a session (closed first if it runs) and its log. Claude Code's own transcript is not touched. */
-  async forget(id: string) {
+  /**
+   * Removes a session (closed first if it runs) and its log. Claude Code's own transcript is not touched. One on a
+   * branch of its own never loses its work silently: `branch` says what becomes of it (merged first, kept without its
+   * folder, thrown away); without a word, a branch with work is kept, one without is removed. When its branch cannot be
+   * put away safely, nothing is removed and the session stays (the error says why).
+   */
+  async forget(id: string, branch?: 'merge' | 'keep' | 'discard'): Promise<void> {
     const session = this.session(id);
-    if (session.alive) await session.close();
-    else await session.stopShells();
+    const worktree = session.snapshot().worktree;
+    if (worktree && branch === 'merge') return this.mergeBranch(id, true);
+    if (worktree) {
+      if (session.isPreparing) throw new Error(st.worktree.waitTurn(session.snapshot().name));
+      // nothing may start in the worktree while it is put away
+      session.hold();
+    }
+    try {
+      if (session.alive) await session.close();
+      else await session.stopShells();
+      if (worktree) await this.switchOffBranch(session, worktree, branch === 'discard');
+    } catch (error) {
+      if (worktree) session.finishPreparing(false);
+      throw error;
+    }
     this.closeAside(id);
     this.sessions.delete(id);
     const log = this.logs.get(id);
@@ -496,6 +846,40 @@ export class SessionManager {
     this.deps.broadcast({ t: 'forgotten', sessionId: id });
     this.save();
     this.sweep();
+  }
+
+  /**
+   * What becomes of a switched off session's branch: thrown away when asked; kept when it holds work (what is left
+   * committed as "wip", the folder removed); else removed. Throws, removing nothing, when that cannot be done safely.
+   */
+  private async switchOffBranch(session: Session, worktree: WorktreeInfo, discard: boolean) {
+    const info = session.snapshot();
+    const { mainRoot, root, branch, base } = worktree;
+    try {
+      if (discard) {
+        await dropBranch(mainRoot, { branch, folder: root });
+      } else if (!existsSync(root)) {
+        // its folder went (by hand): what was committed stays on the branch, and git forgets the folder
+        await setBranchNote(mainRoot, branch, { name: info.name, conversation: info.conversationId ?? info.id, base });
+        await removeWorktree(mainRoot, root, true);
+      } else {
+        // what is not on the branch (a detached HEAD, a rebase under way) would go with the folder
+        await checkOnBranch(root, branch);
+        const status = await branchStatus(root, base).catch(() => null);
+        // what cannot be read is kept, rather than lost
+        if (!status || status.ahead > 0 || status.dirty > 0) {
+          await commitWork(root, info.name);
+          await setBranchNote(mainRoot, branch, { name: info.name, conversation: info.conversationId ?? info.id, base });
+          await removeWorktree(mainRoot, root, true);
+        } else {
+          await dropBranch(mainRoot, { branch, folder: root }, base);
+        }
+      }
+    } catch (error) {
+      this.deps.log(`cannot put away the branch of ${info.name}`, error);
+      throw new Error(st.worktree.putAwayFailed(info.name, error instanceof Error ? error.message : String(error)));
+    }
+    await moveConversation(info.cwd, worktree.home, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
   }
 
   // ── persistence ──
@@ -562,9 +946,30 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
     queued: parseQueue(raw.queued),
+    worktree: parseWorktree(raw.worktree),
+    toldPlace: asString(raw.toldPlace) || undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,
+  };
+}
+
+const MERGE_PROBLEMS: ReadonlySet<string> = new Set(['dirty', 'behind', 'overlap', 'elsewhere', 'git', 'stopped']);
+
+/** A saved session's worktree; a merge that was asked when the server stopped is told as stopped (its turn was cut). */
+function parseWorktree(raw: unknown): WorktreeInfo | undefined {
+  if (!isJson(raw)) return undefined;
+  const [branch, base, root, mainRoot, home] = [raw.branch, raw.base, raw.root, raw.mainRoot, raw.home].map((value) => asString(value));
+  if (!branch || !base || !path.isAbsolute(root) || !path.isAbsolute(mainRoot) || !path.isAbsolute(home)) return undefined;
+  const status = isJson(raw.status) ? {
+    ahead: asNumber(raw.status.ahead), behind: asNumber(raw.status.behind), files: asNumber(raw.status.files), dirty: asNumber(raw.status.dirty), head: asString(raw.status.head),
+  } : undefined;
+  const merge = isJson(raw.merge) ? raw.merge : null;
+  const thenOff = merge?.thenOff === true ? { thenOff: true as const } : {};
+  const problem = merge && isJson(merge.problem) && MERGE_PROBLEMS.has(asString(merge.problem.kind)) ? merge.problem as MergeProblem : { kind: 'stopped' as const };
+  return {
+    branch, base, root, mainRoot, home, ...(status ? { status } : {}), ...(raw.canPr === true ? { canPr: true } : {}),
+    ...(merge ? { merge: { step: 'failed' as const, problem: merge.step === 'failed' ? problem : { kind: 'stopped' as const }, ...thenOff } } : {}),
   };
 }
 

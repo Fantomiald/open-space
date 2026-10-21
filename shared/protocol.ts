@@ -60,6 +60,12 @@ export type OfficeEvent =
   | { k: 'cleared' }
   /** a note of Open Space in the thread ("the last exchanges of the conversation it resumes") */
   | { k: 'note'; text: string }
+  /**
+   * what became of an isolated session's branch (see WorktreeInfo): its base moved on since it started (`behind`
+   * commits, the session catches up before merging), merged into its base, thrown away, kept without its folder, or
+   * cleaned from the branches panel; the session then goes on in the main checkout
+   */
+  | { k: 'branch'; what: BranchNews; branch: string; base: string; behind?: number }
   /** the session changed state (see SessionState) */
   | { k: 'state'; state: SessionState; reason?: string };
 
@@ -149,6 +155,97 @@ export interface FileChange { path: string; status: 'modified' | 'added' | 'dele
 /** What a session changed: the files with changes not committed yet, the latest first; `touched`: all the files it wrote. */
 export interface SessionChanges { files: FileChange[]; added: number; removed: number; touched: number }
 
+/** What the page asks of an isolated session's branch (the `branch` message). */
+export const BRANCH_ACTIONS = ['merge', 'pr', 'discard', 'refresh', 'dismiss'] as const;
+export type BranchAction = (typeof BRANCH_ACTIONS)[number];
+
+/** What a thread says of an isolated session's branch (the `branch` event). */
+export type BranchNews = 'moved' | 'merged' | 'discarded' | 'kept' | 'cleaned';
+
+/**
+ * What an isolated session's branch holds against its base: commits ahead, commits the base got since (`behind`),
+ * files changed (committed or not), files with changes not committed (`dirty`), and its last commit (`head`).
+ */
+export interface BranchStatus { ahead: number; behind: number; files: number; dirty: number; head: string }
+
+/**
+ * Why a merge did not go through: the session left changes not committed, the base moved on again, the main checkout
+ * has uncommitted changes in files the branch changes too (`count`), the base is checked out in another worktree, git
+ * refused (`text`), or the session stopped before it was done.
+ */
+export type MergeProblem =
+  | { kind: 'dirty'; count: number } | { kind: 'behind' } | { kind: 'overlap'; count: number } | { kind: 'elsewhere'; folder: string }
+  | { kind: 'git'; text: string } | { kind: 'stopped' };
+
+/**
+ * A session working on a branch of its own, in a git worktree (server/worktrees.ts), so it never steps on the files of
+ * the sessions working in the main checkout. Its `cwd` is then inside the worktree.
+ */
+export interface WorktreeInfo {
+  /** its branch (os/lina-apple-pay) and the branch it merges into (main) */
+  branch: string;
+  base: string;
+  /** the worktree's root, the main checkout's root, and the folder asked for in it, where the session goes back */
+  root: string;
+  mainRoot: string;
+  home: string;
+  /** what the branch holds, as looked at after each turn */
+  status?: BranchStatus;
+  /** a pull request can be opened (a remote, and `gh` installed) */
+  canPr?: boolean;
+  /**
+   * a merge under way: asked of the session (it squashes, catches up, settles the conflicts), then checked and done by
+   * Open Space at the end of its turn (`retried`: asked again once because the base moved meanwhile), or failed;
+   * `thenOff`: the session switches off once merged
+   */
+  merge?: { step: 'asked'; retried: boolean; thenOff?: true } | { step: 'failed'; problem: MergeProblem; thenOff?: true };
+}
+
+/** A branch of a repository in the branches panel: a worktree in .claude/worktrees (Open Space's or Claude Code's), or an os/* branch without one. */
+export interface BranchRow {
+  /** '' for a worktree on no branch */
+  branch: string;
+  /** its worktree, null when it has none */
+  folder: string | null;
+  base: string;
+  /** who it is for and the conversation that works on it, as Open Space noted them */
+  name?: string;
+  conversation?: string;
+  /** its last commit, ms */
+  at: number;
+  /** its last commit (what the page saw: cleaning is refused if it changed since) */
+  head: string;
+  /** commits not in its base, and files with changes not committed */
+  ahead: number;
+  dirty: number;
+  /** nothing on it that its base lacks: it can go without losing anything */
+  merged: boolean;
+  /** made by Claude Code (claude --worktree), not by Open Space */
+  claude: boolean;
+  /** its worktree is locked by a program still running (Claude Code in a terminal) or by hand: it is never cleaned */
+  inUse?: true;
+}
+
+/** A branch the cleaning panel was told to remove, as the page saw it (see BranchRow). */
+export interface CleanedBranch { branch: string; folder: string | null; head: string; dirty: number }
+
+/** What the launcher knows of a folder in a git repository (see server/worktrees.ts folderRepo). */
+export interface FolderRepo {
+  /** the main checkout's root, the folder's path in it, its branch and its local branches */
+  root: string;
+  sub: string;
+  branch: string;
+  branches: string[];
+  /** files with changes not committed in the main checkout */
+  dirty: number;
+  /** branches with nothing left to merge, still lying around: the launcher reminds to tidy them from 3 on */
+  merged: number;
+}
+
+/** When the launcher offers to isolate a session: when another session works in the folder already, always, or never. */
+export const ISOLATE_MODES = ['busy', 'always', 'never'] as const;
+export type IsolateMode = (typeof ISOLATE_MODES)[number];
+
 export interface SessionInfo {
   /** also the Claude Code session id (the same UUID is used for --session-id and --resume) */
   id: string;
@@ -221,6 +318,10 @@ export interface SessionInfo {
   context?: { used: number; max: number };
   /** Remote Control is on: the session is also reachable from claude.ai/code and the Claude app, at `url` ('' until known) */
   remote?: RemoteControl;
+  /** it works on a branch of its own, in a worktree */
+  worktree?: WorktreeInfo;
+  /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
+  toldPlace?: string;
 }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
@@ -298,6 +399,8 @@ export interface SessionOptions {
   trust?: 'folder' | 'restricted';
   /** a Claude Code conversation already on disk to go on with (see Conversation), instead of a new one */
   resumeId?: string;
+  /** on a branch of its own, from `base` (the main checkout's branch when left out), in a worktree of the folder's repository */
+  isolate?: { base?: string };
 }
 
 /** A Claude Code conversation found on disk for a folder, that a new session can go on with. updatedAt: ms. */
@@ -350,6 +453,8 @@ export interface Preferences {
   reduceMotion: boolean;
   /** minutes without a message after which a long conversation is compacted on its own (0 : never) */
   idleCompact: number;
+  /** when the launcher offers to put a new session on a branch of its own (see IsolateMode) */
+  isolate: IsolateMode;
 }
 
 /** The choices of Preferences.idleCompact, in minutes. */
@@ -408,7 +513,22 @@ export type ClientMessage =
   | { t: 'tag'; sessionId: string; tag: string }
   /** sends the session to the break room (its process is released; a message calls it back) */
   | { t: 'rest'; sessionId: string }
-  | { t: 'forget'; sessionId: string }
+  /**
+   * switches a session off; one on a branch of its own with work on it says what becomes of the branch (merge it
+   * first, keep it without its folder, throw it away), and keeps it when it says nothing
+   */
+  | { t: 'forget'; sessionId: string; branch?: 'merge' | 'keep' | 'discard' }
+  /** what a folder is in git, for the launcher (answered with `folderInfo`) */
+  | { t: 'folderInfo'; cwd: string }
+  /**
+   * an isolated session's branch: merge it into its base (asked of the session, then checked), open a pull request
+   * (asked of the session), throw it away, look at it again, or put a failed merge aside
+   */
+  | { t: 'branch'; sessionId: string; action: BranchAction }
+  /** the branches of a folder's repository (answered with `branches`) */
+  | { t: 'branches'; cwd: string }
+  /** removes these branches of a folder's repository and their worktrees; a session left on one goes back to the main checkout */
+  | { t: 'cleanBranches'; cwd: string; branches: CleanedBranch[] }
   /** events of a session after a sequence number (0 = from the start) */
   | { t: 'log'; sessionId: string; after: number }
   | { t: 'directories' }
@@ -428,8 +548,8 @@ export type ClientMessage =
   /** changes the model, the effort, ultracode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
   | ({ t: 'tune'; sessionId: string } & TuneChange)
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
-  /** opens a terminal window on the user's computer, in the default folder */
-  | { t: 'openTerminal' }
+  /** opens a terminal window on the user's computer, in the folder of the session given (the server finds it), else the default folder */
+  | { t: 'openTerminal'; sessionId?: string }
   /** runs a command typed with "!" in the session's folder, without Claude; Claude learns of it with the next message */
   | { t: 'shell'; sessionId: string; command: string }
   | { t: 'stopShell'; sessionId: string; shellId: string }
@@ -467,6 +587,10 @@ export type ServerMessage =
   | { t: 'rootSuggestions'; suggestions: RootSuggestion[] }
   | { t: 'crew'; crew: CrewMember[] }
   | { t: 'conversations'; cwd: string; conversations: Conversation[] }
+  /** `repo` null: not in a git repository */
+  | { t: 'folderInfo'; cwd: string; repo: FolderRepo | null }
+  /** the branches of a repository (`root`, its main checkout), for the folder asked; `failed`: what went wrong while cleaning */
+  | { t: 'branches'; cwd: string; root: string; branches: BranchRow[]; failed?: string[] }
   | { t: 'session'; session: SessionInfo }
   | { t: 'forgotten'; sessionId: string }
   | { t: 'ev'; sessionId: string; seq: number; at: number; ev: OfficeEvent }

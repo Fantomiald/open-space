@@ -3,6 +3,14 @@ import { describe, it } from 'node:test';
 import { MAX_NAME, MAX_TEXT, parseClientMessage } from './messages.ts';
 
 describe('parseClientMessage', () => {
+  it('reads openTerminal with or without a session, and nothing else', () => {
+    assert.deepEqual(parseClientMessage({ t: 'openTerminal' }), { t: 'openTerminal' });
+    assert.deepEqual(parseClientMessage({ t: 'openTerminal', sessionId: 's1' }), { t: 'openTerminal', sessionId: 's1' });
+    assert.deepEqual(parseClientMessage({ t: 'openTerminal', sessionId: 's1', folder: '/etc' }), { t: 'openTerminal', sessionId: 's1' }, 'no path from the client');
+    assert.equal(parseClientMessage({ t: 'openTerminal', sessionId: '../x' }), null);
+    assert.equal(parseClientMessage({ t: 'openTerminal', sessionId: 5 }), null);
+  });
+
   it('reads a change of model or effort, and refuses an unknown effort', () => {
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: 'sonnet' }), { t: 'tune', sessionId: 's1', model: 'sonnet' });
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: '', effort: '' }), { t: 'tune', sessionId: 's1', model: '', effort: '' });
@@ -101,5 +109,29 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'costs' }), { t: 'costs' });
     assert.deepEqual(parseClientMessage({ t: 'costs', fresh: true }), { t: 'costs', fresh: true });
     assert.deepEqual(parseClientMessage({ t: 'costs', fresh: 'yes' }), { t: 'costs' });
+  });
+  it('takes the worktree messages with a sane branch name, and drops the others', () => {
+    const id = 'abc-1';
+    assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: {} } }), { t: 'create', options: { cwd: '/p', isolate: {} } });
+    assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: 'release/2.0' } } }), { t: 'create', options: { cwd: '/p', isolate: { base: 'release/2.0' } } });
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: '--force' } } }), null);
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: 'a..b' } } }), null);
+    // a branch with accents is a branch; a space or a control character is not
+    assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: 'fonctionnalité' } } }), { t: 'create', options: { cwd: '/p', isolate: { base: 'fonctionnalité' } } });
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: 'a b' } } }), null);
+    assert.equal(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: { base: 'a\nb' } } }), null);
+    assert.deepEqual(parseClientMessage({ t: 'forget', sessionId: id, branch: 'keep' }), { t: 'forget', sessionId: id, branch: 'keep' });
+    assert.equal(parseClientMessage({ t: 'forget', sessionId: id, branch: 'burn' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'branch', sessionId: id, action: 'merge' }), { t: 'branch', sessionId: id, action: 'merge' });
+    assert.equal(parseClientMessage({ t: 'branch', sessionId: id, action: 'push' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'folderInfo', cwd: '/p' }), { t: 'folderInfo', cwd: '/p' });
+    const head = 'a'.repeat(40);
+    assert.deepEqual(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: 'os/lina', folder: null, head, dirty: 0 }, { branch: '', folder: '/p/.claude/worktrees/x', head, dirty: 2 }] }),
+      { t: 'cleanBranches', cwd: '/p', branches: [{ branch: 'os/lina', folder: null, head, dirty: 0 }, { branch: '', folder: '/p/.claude/worktrees/x', head, dirty: 2 }] });
+    assert.equal(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: '', folder: null, head, dirty: 0 }] }), null);
+    assert.equal(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: '-D', folder: null, head, dirty: 0 }] }), null);
+    // what the page saw of it must come with it
+    assert.equal(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: 'os/lina', folder: null }] }), null);
+    assert.equal(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: 'os/lina', folder: null, head: 'HEAD', dirty: 0 }] }), null);
   });
 });

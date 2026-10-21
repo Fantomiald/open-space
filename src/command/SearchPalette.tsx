@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { foldQuery } from '../../shared/search.ts';
 import { locale, t } from '../i18n/index.ts';
-import { folderName, formatClock } from '../lib/format.ts';
+import { defaultFolder, folderName, formatClock } from '../lib/format.ts';
+import { shownFolder } from '../state/worktrees.ts';
 import { nativeView, typedName } from '../state/commands.ts';
 import { attentionKind } from '../state/queue.ts';
 import { FILTERS, filterCounts, isCommandQuery, searchResults, type Action, type Filter, type Group, type Result } from '../state/search.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
 import { settingEntries } from '../state/settings-index.ts';
 import {
-  BellIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, WeekIcon,
+  BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { SessionFace } from './SessionFace.tsx';
@@ -18,12 +19,12 @@ import { StateBadge } from './StateBadge.tsx';
 const TYPING_PAUSE_MS = 140;
 
 /** Everything the palette can do on its own, in the order shown when nothing is typed. */
-const ACTION_IDS = ['newSession', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'shortcuts', 'sound', 'notifications'] as const;
+const ACTION_IDS = ['newSession', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
 type ActionId = (typeof ACTION_IDS)[number];
 
 const ACTION_ICONS: Record<ActionId, () => ReactNode> = {
   newSession: PlusIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon,
-  office: DeskIcon, lounge: SofaIcon, shortcuts: KeyboardIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
+  office: DeskIcon, lounge: SofaIcon, shortcuts: KeyboardIcon, terminal: TerminalIcon, branches: BranchIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
 };
 
 /** The search over everything (⌘K): sessions, what was said in their threads, commands, actions and settings. */
@@ -127,6 +128,13 @@ function PaletteContent() {
       case 'office': s.setView('salle'); break;
       case 'lounge': s.setView('repos'); break;
       case 'shortcuts': s.openSettings(true, 'shortcuts'); break;
+      case 'terminal': s.openTerminal(s.selectedId); break;
+      // the project of the open session, else of the default folder
+      case 'branches': {
+        const open = s.selectedId ? s.sessions[s.selectedId] : undefined;
+        s.openBranches(open ? shownFolder(open) : defaultFolder(s.roots, s.preferences.defaultFolder));
+        break;
+      }
       case 'sound': s.toggleSound(); break;
       case 'notifications': s.toggleNotifications(); break;
     }
@@ -184,7 +192,7 @@ function PaletteContent() {
               <StateBadge session={result.session} kind={attentionKind(result.session, seen)} />
               <span className="cp-find__when">{when(result.session.stateSince, now)}</span>
             </span>
-            <span className="cp-find__detail"><span className="cp-find__folder">{folderName(result.session.cwd)}</span>{result.session.lastMessage && <> · {result.session.lastMessage}</>}</span>
+            <span className="cp-find__detail"><span className="cp-find__folder">{folderName(shownFolder(result.session))}</span>{result.session.lastMessage && <> · {result.session.lastMessage}</>}</span>
           </span>
         </div>
       );

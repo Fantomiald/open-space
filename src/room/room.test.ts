@@ -14,7 +14,7 @@ import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
-import { parseLook } from '../../shared/look.ts';
+import { parseLook, randomLook } from '../../shared/look.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
@@ -467,6 +467,24 @@ describe('looks', () => {
     assert.equal(parseLook({ ...look, glasses: '#121419' })?.glasses, '#121419');
     const { watch: _watch, ...missing } = look;
     assert.equal(parseLook(missing), null);
+  });
+});
+
+describe('random looks', () => {
+  it('draws only valid looks, with variety in every trait', () => {
+    const seen = new Map<string, Set<unknown>>();
+    for (let draw = 0; draw < 200; draw++) {
+      const look = randomLook();
+      assert.deepEqual(parseLook(look), look, 'a look the server would accept');
+      for (const [trait, value] of Object.entries(look)) seen.set(trait, (seen.get(trait) ?? new Set()).add(value));
+    }
+    for (const [trait, values] of seen) assert.ok(values.size >= 2, `${trait} varies`);
+    assert.ok(seen.get('hat')?.has('none') && seen.get('accessory')?.has('none') && seen.get('beard')?.has('none'), 'optional pieces sometimes stay empty');
+  });
+
+  it('is decided by the random source alone', () => {
+    assert.deepEqual(randomLook(() => 0), randomLook(() => 0));
+    assert.deepEqual(parseLook(randomLook(() => 0.999999)), randomLook(() => 0.999999));
   });
 });
 

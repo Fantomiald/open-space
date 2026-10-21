@@ -12,6 +12,7 @@ import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { BranchMark } from './BranchCard.tsx';
 import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
 import { SessionFace } from './SessionFace.tsx';
 
@@ -88,6 +89,7 @@ export function SessionList() {
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>
                           {session.tag && <span className="cp-tag cp-list__tag">{session.tag}</span>}
+                          {session.worktree && <BranchMark branch={session.worktree.branch} />}
                           {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
                         </span>
                         <span className="cp-list__line">
@@ -124,6 +126,7 @@ function Peek({ session, seen, now, x, y }: { session: SessionInfo; seen: SeenSe
       <span className="cp-list__line">
         <span className="cp-list__name">{session.name}</span>
         {session.tag && <span className="cp-tag cp-list__tag">{session.tag}</span>}
+                          {session.worktree && <BranchMark branch={session.worktree.branch} />}
         {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
       </span>
       <span className="cp-list__peek-state" data-status={sessionStatus(session, seen) ?? 'idle'}>

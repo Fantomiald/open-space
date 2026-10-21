@@ -27,9 +27,20 @@ describe('settings', () => {
     assert.equal(parsePreferences({ theme: 'moon' }).theme, undefined, 'an unknown theme is left out');
     assert.deepEqual(parsePreferences({ effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false, reduceMotion: 'yes' }), { effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false });
     assert.deepEqual(parsePreferences({ effort: 'ultra', timeFormat: 'swatch' }), {});
+    assert.deepEqual(parsePreferences({ isolate: 'always' }), { isolate: 'always' });
+    assert.deepEqual(parsePreferences({ isolate: 'sometimes' }), {}, 'an unknown way to isolate is left out');
     assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {
       enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis',
     }, 'only the keys Open Space offers, with known values');
+  });
+
+  it('a settings file from before worktrees offers to isolate when the folder is taken', async () => {
+    const file = path.join(folder, 'older.json');
+    writeFileSync(file, JSON.stringify({ onboarded: true, model: 'opus', idleCompact: 30 }));
+    const settings = new Settings(file);
+    await settings.load();
+    assert.equal(settings.preferences.isolate, 'busy');
+    assert.equal(DEFAULT_PREFERENCES.isolate, 'busy');
   });
 
   it('needs the first start until it is done, and keeps the notifications of an older file', async () => {

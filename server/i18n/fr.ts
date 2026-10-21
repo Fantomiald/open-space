@@ -1,3 +1,13 @@
+/** where an isolated session works (see WorktreeInfo) */
+type Place = { branch: string; base: string; root: string; mainRoot: string };
+
+/** an isolated session: where it works, what it must not touch, and the dev servers of the others */
+const worktreeNote = ({ branch, base, root, mainRoot }: Place) =>
+  `Tu travailles sur ta propre branche, « ${branch} », partie de « ${base} », dans ton propre dossier : ${root} (un worktree git). ` +
+  `Le dossier principal du projet, ${mainRoot}, est celui des autres sessions : n’y écris jamais, et n’y lance aucune commande git. ` +
+  `Commite sur ta branche quand c’est utile ; c’est Open Space qui fusionne dans « ${base} », quand l’utilisateur le demande. ` +
+  `Un serveur de dev lancé depuis le dossier principal tient peut-être déjà son port : vérifie avant d’en lancer un (lsof -i :<port>), prends un autre port si besoin, et ne lance jamais un second Metro.`;
+
 export const fr = {
   /** what new agents are told (system prompt, rename note, side question) */
   prompt: {
@@ -18,6 +28,21 @@ export const fr = {
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
       'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.',
+    worktree: (worktree: Place) => worktreeNote(worktree),
+    intoWorktree: (worktree: Place) => `(Note d'Open Space : tu as changé de dossier. ${worktreeNote(worktree)})\n\n`,
+    backHome: (folder: string) => `(Note d'Open Space : ta branche et son dossier n’existent plus. Tu travailles maintenant dans le dossier principal du projet, ${folder}, avec les autres sessions.)\n\n`,
+    /** what an isolated session is asked to do when the user merges its branch */
+    merge: ({ branch, base, root, mainRoot }: { branch: string; base: string; root: string; mainRoot: string }) =>
+      `Open Space te demande de fusionner ta branche « ${branch} » dans « ${base} ». Travaille seulement dans ton dossier (${root}) :\n` +
+      `1. Regroupe tout ton travail en un seul commit sur ta branche, avec un message clair qui dit ce qu’il apporte (git add -A, git reset --soft $(git merge-base ${base} HEAD), puis un seul git commit).\n` +
+      `2. Remets ta branche à jour : git rebase ${base}. S’il y a des conflits, règle-les en gardant le travail des deux côtés, puis git rebase --continue.\n` +
+      `3. Lance les vérifications rapides du projet s’il en a (types, lint, tests courts) et corrige ce qui casse.\n` +
+      `4. Ne fais ni merge ni push, et ne touche pas au dossier principal (${mainRoot}) : Open Space avance « ${base} » lui-même à la fin de ton tour.\n` +
+      `Finis avec ton dossier propre (tout commité), et dis en une phrase ce que contient le commit.`,
+    catchUp: (base: string) => `« ${base} » a encore bougé pendant ta fusion. Refais les étapes 2 et 3 (git rebase ${base}, les conflits, les vérifications), garde un seul commit et finis avec ton dossier propre.`,
+    pullRequest: ({ branch, base, mainRoot }: { branch: string; base: string; mainRoot: string }) =>
+      `Open Space te demande d’ouvrir une pull request pour ta branche « ${branch} » vers « ${base} » : commite ce qui reste, pousse ta branche (git push -u origin ${branch}), ` +
+      `puis ouvre la PR avec gh pr create --base ${base}, un titre et une description clairs. Ne touche pas au dossier principal (${mainRoot}). Termine en donnant le lien de la PR.`,
   },
   process: {
     stopped: 'Claude Code s’est arrêté.',
@@ -38,6 +63,7 @@ export const fr = {
       released: 'Processus relâché à l’arrêt du serveur.',
       updated: 'Processus relâché : le prochain message part avec la nouvelle version de Claude Code.',
       compacted: 'Processus relâché après le compactage de la conversation.',
+      moved: 'Processus relâché pour changer de dossier.',
     },
     closing: 'Cette session est en train de se fermer, réessaie dans un instant.',
     tooMany: (max: number) => `Trop de sessions actives (${max} au maximum). Ferme-en une.`,
@@ -65,6 +91,32 @@ export const fr = {
     alreadyOpen: 'Cette conversation est déjà ouverte ici.',
     emptyName: 'Le nom ne peut pas être vide.',
     trustNeeded: 'Ce dossier fait tourner du code à lui : confirme d’abord.',
+  },
+  /** a session on a branch of its own (server/worktrees.ts) */
+  worktree: {
+    preparing: 'Préparation de la branche…',
+    preparingRetry: 'La branche se prépare encore, réessaie dans un instant.',
+    prepareFailed: (reason: string, name: string, folder: string) => `La branche n’a pas pu être préparée (${reason}). ${name} reste dans ${folder} ; ton message attend au-dessus du champ.`,
+    notRepo: 'ce dossier n’est pas dans un repo git',
+    noBase: 'le dossier principal n’est sur aucune branche',
+    noCommit: 'le repo n’a encore aucun commit',
+    unknownBase: (base: string) => `la branche « ${base} » n’existe pas`,
+    notCopied: (name: string) => `Les dépendances et les .env du dossier principal n’ont pas pu être copiés : ${name} installera ce qu’il faut.`,
+    revived: (branch: string) => `Branche « ${branch} » retrouvée : son dossier est recréé.`,
+    folderGone: (branch: string, folder: string) => `Le dossier de la branche « ${branch} » a disparu : la session continue dans ${folder}.`,
+    waitTurn: (name: string) => `${name} travaille encore : attends la fin de son tour.`,
+    nothingToMerge: 'La branche n’a rien de nouveau à fusionner.',
+    notIsolated: 'Cette session ne travaille pas sur une branche à elle.',
+    /** what makes Open Space leave a branch's folder as it is rather than lose something */
+    notOnBranch: (branch: string) => `le dossier n’est plus sur la branche « ${branch} » (une autre branche, ou aucune)`,
+    midOperation: 'un rebase, un merge ou un cherry-pick est en cours dans le dossier de la branche',
+    putAwayFailed: (name: string, reason: string) => `La branche de ${name} n’a pas pu être rangée (${reason}). Rien n’a été supprimé : la session et son dossier restent.`,
+    outsideRoots: (folder: string) => `le repo commence au-dessus de tes dossiers autorisés (${folder})`,
+    restricted: (name: string) => `La branche fait tourner du code (hooks, serveurs MCP) que le dossier principal n’a pas : ${name} y travaille sans les réglages du projet.`,
+    /** the short lines the thread shows for what Open Space asks of the session */
+    mergeBubble: (base: string) => `Fusionne dans ${base}`,
+    catchUpBubble: (base: string) => `Remets-toi à jour sur ${base}`,
+    prBubble: (base: string) => `Ouvre une PR vers ${base}`,
   },
   /** what the thread shows of tool calls, permissions and messages from other sessions */
   normalizer: {

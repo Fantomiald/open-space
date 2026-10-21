@@ -261,7 +261,27 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tag': sessions.tag(message.sessionId, message.tag); break;
     case 'rest': await sessions.rest(message.sessionId); break;
-    case 'forget': await sessions.forget(message.sessionId); break;
+    case 'forget': await sessions.forget(message.sessionId, message.branch); break;
+    case 'folderInfo': send({ t: 'folderInfo', cwd: message.cwd, repo: await sessions.folderInfo(message.cwd) }); break;
+    case 'branch':
+      switch (message.action) {
+        case 'merge': await sessions.mergeBranch(message.sessionId); break;
+        case 'pr': sessions.pullRequest(message.sessionId); break;
+        case 'discard': await sessions.discardBranch(message.sessionId); break;
+        case 'refresh': await sessions.refreshBranch(message.sessionId); break;
+        case 'dismiss': sessions.dismissMerge(message.sessionId); break;
+      }
+      break;
+    case 'branches': send({ t: 'branches', cwd: message.cwd, ...await sessions.branches(message.cwd) }); break;
+    case 'cleanBranches': {
+      // the panel waits for this answer: it comes even when the cleaning failed as a whole (the error then shows as a toast)
+      const failed = await sessions.cleanBranches(message.cwd, message.branches).catch((error: unknown) => {
+        send({ t: 'toast', kind: 'error', text: error instanceof Error ? error.message : String(error) });
+        return message.branches.map((row) => row.branch || row.folder || '');
+      });
+      send({ t: 'branches', cwd: message.cwd, ...await sessions.branches(message.cwd), ...(failed.length ? { failed } : {}) });
+      break;
+    }
     case 'log': send({ t: 'log', sessionId: message.sessionId, ...sessions.logSince(message.sessionId, message.after) }); break;
     case 'directories': send({ t: 'directories', directories: sessions.directories() }); break;
     case 'duplicate': {
@@ -342,7 +362,11 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     }
     case 'music': send({ t: 'music', nowPlaying: message.action ? await controlMusic(message.app, message.action) : await nowPlaying(message.app) }); break;
     case 'musicLibrary': send({ t: 'musicLibrary', query: message.query, ...await musicLibrary(message.query) }); break;
-    case 'openTerminal': await openTerminal(defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir()); break;
+    case 'openTerminal': {
+      const folder = (message.sessionId && sessions.folderOf(message.sessionId)) || defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir();
+      await openTerminal(folder);
+      break;
+    }
   }
 }
 

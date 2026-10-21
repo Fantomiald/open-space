@@ -9,7 +9,7 @@ import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { AppUpdate, Aside, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -102,6 +102,15 @@ interface CommandPostState {
   panelView: PanelView;
   /** the Claude Code conversations found for a folder, to resume one (the last folder asked for) */
   conversations: { cwd: string; list: Conversation[] } | null;
+  /** what each folder asked for by the launcher is in git (null: not in a repository) */
+  folderRepos: Record<string, FolderRepo | null>;
+  /** the branches panel: the folder whose repository it shows (null: closed), and the branches of each folder asked for */
+  branchesFor: string | null;
+  branchLists: Record<string, { root: string; rows: BranchRow[]; failed?: string[] }>;
+  /** the "ready to merge" cards put off with "Later", by session: the state of the branch then (kept in this browser) */
+  branchSnoozes: Record<string, string>;
+  openBranches: (cwd: string | null) => void;
+  snoozeBranch: (sessionId: string, signature: string) => void;
   sessions: Record<string, SessionInfo>;
   /** events of the sessions being followed (selected ones), by session id */
   logs: Record<string, LoggedEvent[]>;
@@ -255,6 +264,8 @@ interface CommandPostState {
   createSession: (options: SessionOptions) => void;
   /** a new session going on from this one's conversation; it opens like a new one */
   duplicateSession: (sessionId: string) => void;
+  /** opens a terminal on the computer, in the folder of the session (the server finds it); without one, in the default folder */
+  openTerminal: (sessionId?: string | null) => void;
   /** the user's answer to `trustRequest`: trust the folder, run without its settings, or give up (null) */
   answerTrust: (choice: 'folder' | 'restricted' | null) => void;
   /** a message to a session, with the pictures attached to it */
@@ -312,6 +323,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   inspections: {},
   panelView: 'thread',
   conversations: null,
+  folderRepos: {},
+  branchesFor: null,
+  branchLists: {},
+  branchSnoozes: readPreference<Record<string, string>>('branchSnoozes', {}),
   sessions: {},
   logs: {},
   logLoaded: {},
@@ -336,7 +351,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0 },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0, isolate: 'busy' },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -417,6 +432,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const { [message.sessionId]: _log, ...logs } = s.logs;
         const { [message.sessionId]: _seen, ...seen } = s.seen;
         writePreference('seen', seen);
+        if (s.branchSnoozes[message.sessionId]) {
+          const { [message.sessionId]: _snooze, ...branchSnoozes } = s.branchSnoozes;
+          writePreference('branchSnoozes', branchSnoozes);
+          set({ branchSnoozes });
+        }
         writeDraft(message.sessionId, '');
         set({ sessions, logs, seen, free: withoutWindow(s.free, message.sessionId) });
         writeWindows(get());
@@ -468,6 +488,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         break;
       }
       case 'conversations': set({ conversations: { cwd: message.cwd, list: message.conversations } }); break;
+      case 'folderInfo': set({ folderRepos: { ...s.folderRepos, [message.cwd]: message.repo } }); break;
+      case 'branches': set({ branchLists: { ...s.branchLists, [message.cwd]: { root: message.root, rows: message.branches, ...(message.failed ? { failed: message.failed } : {}) } } }); break;
       case 'crew': set({ crew: message.crew }); break;
       case 'quota': set({ quota: message.quota }); break;
       case 'notes': set({ notes: { folder: message.folder, files: message.files } }); break;
@@ -687,7 +709,17 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ newSession: draft });
   },
   closeLauncher: () => set({ launcherOpen: false }),
+  openBranches: (cwd) => {
+    set({ branchesFor: cwd });
+    if (cwd) get().send({ t: 'branches', cwd });
+  },
+  snoozeBranch: (sessionId, signature) => {
+    const branchSnoozes = { ...get().branchSnoozes, [sessionId]: signature };
+    writePreference('branchSnoozes', branchSnoozes);
+    set({ branchSnoozes });
+  },
 
+  openTerminal: (sessionId) => get().send(sessionId ? { t: 'openTerminal', sessionId } : { t: 'openTerminal' }),
   duplicateSession: (sessionId) => { set({ awaitingNew: true }); get().send({ t: 'duplicate', sessionId }); },
   createSession: (options) => { set({ awaitingNew: true }); lastCreate = options; get().send({ t: 'create', options }); },
   answerTrust: (choice) => {
