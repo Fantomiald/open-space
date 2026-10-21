@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { roomSessions } from '../room/cast.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
-import { DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
@@ -20,6 +20,7 @@ export function Header() {
   const connection = useSessions((s) => s.connection);
   const openPalette = useSessions((s) => s.openPalette);
   const openSettings = useSessions((s) => s.openSettings);
+  const openCrew = useSessions((s) => s.openCrew);
   const outdated = useSessions(selectOutdatedCount);
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
@@ -65,6 +66,9 @@ export function Header() {
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
+        <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} title={words.crewTitle}>
+          <CrewIcon /><span className="cp-header__label">{words.crew}</span>
+        </button>
         <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} title={words.searchTitle}>
           <SearchIcon /><span className="cp-header__label">{words.search}</span><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
         </button>

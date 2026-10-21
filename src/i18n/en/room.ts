@@ -14,7 +14,7 @@ export const room: Dictionary['room'] = {
   },
   /** the line in the corner of the room until the room or a window was moved by hand */
   arrange: { title: 'Tip', move: 'drag: move the room or a window', zoom: 'scroll: zoom', close: 'Got it' },
-  hint: { openUnder: 'Shift+click: open it beside · Tab: see the room', openFull: 'Six windows at most: close one to open it beside', toLounge: 'Break room', toOffice: 'Open space', openTerminal: 'Open a terminal', openBoard: 'Whiteboard: your notes', openMetrics: 'Numbers', newMetrics: 'Numbers: something new', startWith: (name: string) => `Start a session with ${name}` },
+  hint: { toLounge: 'Break room', toOffice: 'Open space', openTerminal: 'Open a terminal', openBoard: 'Whiteboard: your notes', openMetrics: 'Numbers', newMetrics: 'Numbers: something new', startWith: (name: string) => `Start a session with ${name}` },
   description: {
     lounge: (count) => `Break room: ${plural(count, 'session resting', 'sessions resting')}.`,
     office: (count) => `Office: ${plural(count, 'session', 'sessions')} at their desks.`,

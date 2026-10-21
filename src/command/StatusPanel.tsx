@@ -38,7 +38,6 @@ export function StatusPanel() {
   const seen = useSessions((s) => s.seen);
   const show = useSessions((s) => s.show);
   const openIds = useSessions((s) => s.openIds);
-  const toggleOpen = useSessions((s) => s.toggleOpen);
   const [folded, setFolded] = useState(readFolded);
   const [foldedGroups, setFoldedGroups] = useState(() => readPreference<Group[]>('statusFolded', []));
   const foldGroup = (group: Group) => {
@@ -71,7 +70,7 @@ export function StatusPanel() {
             <StatusGroup {...groupProps('waiting', waiting.length)}>
                 {waiting.map(({ session, kind }) => (
                   <li key={session.id}>
-                    <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
+                    <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">{todoLabel(session, kind)}</span>
                       <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
@@ -84,7 +83,7 @@ export function StatusPanel() {
             <StatusGroup {...groupProps('working', working.length)}>
                 {working.map((session) => (
                   <li key={session.id}>
-                    <button type="button" className="cp-status__item" data-kind={session.compacting ? 'compacting' : 'working'} aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
+                    <button type="button" className="cp-status__item" data-kind={session.compacting ? 'compacting' : 'working'} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       {session.compacting ? <span className="cp-status__compact" aria-hidden="true"><CompactIcon /></span> : <span className="cp-status__dot" aria-hidden="true" />}
                       <span className="cp-status__label">
                         {session.name}
@@ -103,7 +102,7 @@ export function StatusPanel() {
             <StatusGroup {...groupProps('ready', ready.length)}>
                 {ready.map((session) => (
                   <li key={session.id}>
-                    <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={(e) => (e.shiftKey ? toggleOpen(session.id) : show(session.id))}>
+                    <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       <span className="cp-status__dot" aria-hidden="true" />
                       <span className="cp-status__label">{session.name}</span>
                       <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>

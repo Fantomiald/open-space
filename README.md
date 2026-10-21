@@ -16,7 +16,7 @@ Open Space runs the `claude` installed on your machine. Your skills, plugins, `C
 
 - **Start sessions** in your project folders, each with a first name from your crew and a tag if you like. The label above each agent shows both, with their status. Their answers stream into the thread.
 - **See where everyone is at** in the Status panel, bottom left: what waits for you and for how long, who is at work and for how long, who is ready for a new message.
-- **Open several at once**: Shift+click an agent to open its conversation next to the others, up to six. Tab slides them aside to see the room, Tab brings them back.
+- **Open several at once**: click an agent to open its conversation next to the others, up to six. Tab slides them aside to see the room, Tab brings them back.
 - **Switch to focus mode** (the icon in the top bar, or Cmd+.): the room gives way to the list of all your sessions, grouped by what they need, and the ones you open line up side by side. Handy when someone is looking at your screen.
 - **Change the model, the effort and the permissions** of a session from one panel under its field, at once and even mid-task. Ultracode is there too, per session, when dynamic workflows are on in Claude Code.
 - **Get notified** by a sound and a macOS notification when a session is done or waiting for you, even with the tab closed.

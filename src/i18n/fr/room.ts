@@ -19,7 +19,7 @@ export const room = {
   },
   /** the line in the corner of the room until the room or a window was moved by hand */
   arrange: { title: 'Astuce', move: 'glisser : bouger la salle ou une fenêtre', zoom: 'molette : zoomer', close: 'Compris' },
-  hint: { openUnder: 'Maj+clic : l’ouvrir à côté · Tab : voir la salle', openFull: '6 fenêtres au plus : ferme-en une pour l’ouvrir à côté', toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
+  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
     office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,

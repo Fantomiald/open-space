@@ -44,6 +44,8 @@ export const common: Dictionary['common'] = {
     session: 'session',
     sessions: 'sessions',
     commands: 'Commands',
+    crew: 'Crew',
+    crewTitle: 'Your crew’s names and looks, and yours',
     search: 'Search',
     searchTitle: 'Sessions, messages, commands and settings',
     settings: 'Settings',
