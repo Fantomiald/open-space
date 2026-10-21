@@ -82,6 +82,12 @@ export interface SentFile { title: string; stored: string | null; image: boolean
 export interface ClaudeInfo { found: boolean; version?: string; path?: string }
 
 /**
+ * Who Claude Code is signed in as (`claude auth status`): the account every session uses. `busy` while a login or a
+ * logout asked from the settings runs, `failed` why the last one did not work.
+ */
+export interface ClaudeAccount { loggedIn: boolean; email?: string; org?: string; plan?: string; busy?: 'login' | 'logout'; failed?: string }
+
+/**
  * Where the Mac app is with a new Open Space: looking for one when asked (`checking`, then `upToDate` or `failed`),
  * downloading the one found (`percent` 0 to 100), then ready to install by restarting the app.
  */
@@ -536,6 +542,9 @@ export type ClientMessage =
   | { t: 'duplicate'; sessionId: string }
   /** runs `claude update`; the answer comes as claudeUpdate */
   | { t: 'updateClaude' }
+  /** runs `claude auth login` (it opens the browser) or `claude auth logout`; the answer comes as claudeAccount */
+  | { t: 'claudeLogin' }
+  | { t: 'claudeLogout' }
   /** releases the waiting sessions that run an older Claude Code than the one installed */
   | { t: 'restartOutdated' }
   /** restarts the Mac app on the Open Space it downloaded (appUpdate ready) */
@@ -608,6 +617,7 @@ export type ServerMessage =
   /** the Claude Code installed, read again now and then (its own updater replaces it in the background) */
   | { t: 'claude'; claude: ClaudeInfo }
   | { t: 'claudeUpdate'; update: ClaudeUpdate }
+  | { t: 'claudeAccount'; account: ClaudeAccount }
   /** where the Mac app is with a new Open Space (only when the bridge runs inside it) */
   | { t: 'appUpdate'; update: AppUpdate }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }

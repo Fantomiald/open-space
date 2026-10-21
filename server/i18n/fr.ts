@@ -47,6 +47,7 @@ export const fr = {
   process: {
     stopped: 'Claude Code s’est arrêté.',
     refused: 'Claude Code a refusé.',
+    timedOut: 'Claude Code a mis trop de temps à répondre.',
   },
   aside: {
     tooLong: 'La question à côté a pris trop de temps.',
