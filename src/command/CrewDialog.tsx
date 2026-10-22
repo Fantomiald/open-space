@@ -12,7 +12,6 @@ import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, ItsMeIcon, PetIcon, Pl
 import { Modal } from './Modal.tsx';
 import { PetPicker } from './PreferenceFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
-import { Switch } from './Switch.tsx';
 import { useAutosave } from './useAutosave.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -269,8 +268,10 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
       </div>
 
       <div className="cp-crew__wardrobe">
-        <div className="cp-segmented cp-crew__tabs" role="tablist" aria-label={words.parts}>
-          {TABS.map((part) => <button key={part} type="button" role="tab" aria-selected={tab === part} onClick={() => setTab(part)}>{words.tabs[part]}</button>)}
+        <div className="cp-crew__bar">
+          <div className="cp-segmented cp-crew__tabs" role="tablist" aria-label={words.parts}>
+            {TABS.map((part) => <button key={part} type="button" role="tab" aria-selected={tab === part} onClick={() => setTab(part)}>{words.tabs[part]}</button>)}
+          </div>
         </div>
         <div className="cp-crew__panel" role="tabpanel" aria-label={words.tabs[tab]}>
           {tab === 'face' && (
@@ -283,7 +284,6 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
                 (value) => ({ sunglasses: value === 'sun', glasses: value === 'on' ? look.glasses ?? GLASSES_COLORS[0] : null }), 'head',
               )}
               {look.glasses && !look.sunglasses && <Swatches label={words.frame} colours={GLASSES_COLORS} value={look.glasses} onPick={(glasses) => change({ glasses })} />}
-              <Toggle label={words.watch} checked={look.watch} onChange={(watch) => change({ watch })} />
             </>
           )}
           {tab === 'hair' && (
@@ -302,8 +302,14 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
             <>
               {COLOURED_HATS.has(look.hat) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
               {pieces(words.hat, HATS, labels.hat, look.hat, (hat) => change({ hat }), (hat) => ({ hat }), 'hat')}
-              {pieces(words.accessory, ACCESSORIES, labels.accessory, look.accessory, (accessory) => change({ accessory }), (accessory) => ({ accessory }), (accessory) => ACCESSORY_PARTS[accessory] ?? 'head')}
-              <Toggle label={words.headphones} checked={look.headphones} onChange={(headphones) => change({ headphones })} />
+              <Pieces
+                label={words.accessory} options={ACCESSORIES} labels={labels.accessory} value={look.accessory} onPick={(accessory) => change({ accessory })}
+                picture={(accessory) => chibiPiece(look, { accessory }, ACCESSORY_PARTS[accessory] ?? 'head')}
+              >
+                {/* worn with any other accessory (the radio puts headphones on too), so each stays a trait of its own */}
+                <PieceButton label={words.headphones} picture={chibiPiece(look, { headphones: true }, 'head')} pressed={look.headphones} onPick={() => change({ headphones: !look.headphones })} />
+                <PieceButton label={words.watch} picture={chibiPiece(look, { watch: true }, 'wrist')} pressed={look.watch} onPick={() => change({ watch: !look.watch })} />
+              </Pieces>
               <p className="cp-muted cp-crew__note">{words.festivalHats}</p>
             </>
           )}
@@ -369,29 +375,27 @@ function JobPicker({ chosen, onChange }: { chosen: readonly Job[]; onChange: (jo
   );
 }
 
-/** The choices of a piece, each worn by the see-through dummy (`picture`), its name under it. */
-function Pieces<T extends string>({ label, options, labels, value, onPick, picture }: { label: string; options: readonly T[]; labels: Record<T, string>; value: T; onPick: (value: T) => void; picture: (option: T) => string }) {
+/** The choices of a piece, each worn by the see-through dummy (`picture`), its name under it; `children`: more choices after them. */
+function Pieces<T extends string>({ label, options, labels, value, onPick, picture, children }: {
+  label: string; options: readonly T[]; labels: Record<T, string>; value: T; onPick: (value: T) => void; picture: (option: T) => string; children?: ReactNode;
+}) {
   return (
     <div className="cp-crew__field" role="group" aria-label={label}>
       <span className="cp-crew__label">{label}</span>
       <div className="cp-crew__pieces">
-        {options.map((option) => (
-          <button key={option} type="button" aria-pressed={option === value} title={labels[option]} onClick={() => onPick(option)}>
-            <img src={picture(option)} alt="" />
-            <span>{labels[option]}</span>
-          </button>
-        ))}
+        {options.map((option) => <PieceButton key={option} label={labels[option]} picture={picture(option)} pressed={option === value} onPick={() => onPick(option)} />)}
+        {children}
       </div>
     </div>
   );
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+function PieceButton({ label, picture, pressed, onPick }: { label: string; picture: string; pressed: boolean; onPick: () => void }) {
   return (
-    <div className="cp-crew__toggle">
+    <button type="button" aria-pressed={pressed} title={label} onClick={onPick}>
+      <img src={picture} alt="" />
       <span>{label}</span>
-      <Switch label={label} checked={checked} onChange={onChange} />
-    </div>
+    </button>
   );
 }
 

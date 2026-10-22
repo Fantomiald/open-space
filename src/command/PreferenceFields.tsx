@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
-import { CAT_PATTERNS, DOG_BREEDS, type CatPattern, type DogBreed, type PetChoice, type PetColors } from '../../shared/pets.ts';
+import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
 import { furOf, petSprite } from '../room/pet.ts';
 import { homeRelative } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
@@ -70,25 +70,44 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
 type Habits = Pick<Preferences, 'model' | 'permissionMode' | 'notifications' | 'festivals' | 'officeLife' | 'agentNote'>;
 
 
-/** The pet walking on the spot, like in the room (five screen pixels per art pixel). */
-function PetPreview({ pet }: { pet: Exclude<PetChoice, { kind: 'none' }> }) {
+/** A pet drawn at three screen pixels per art pixel: walking when it is the one picked, sitting otherwise. */
+function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>; moving: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const context = canvas.current!.getContext('2d')!;
     context.imageSmoothingEnabled = false;
     let frame: 0 | 1 = 0;
     const paint = () => {
-      const sprite = petSprite(pet, 'walk', frame);
+      const sprite = petSprite(pet, moving ? 'walk' : 'sit', frame);
       context.clearRect(0, 0, canvas.current!.width, canvas.current!.height);
-      context.drawImage(sprite, 0, 0, sprite.width * 5, sprite.height * 5);
+      context.drawImage(sprite, 0, 0, sprite.width * 3, sprite.height * 3);
       frame = frame ? 0 : 1;
     };
     paint();
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!moving || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = window.setInterval(paint, 220);
     return () => window.clearInterval(timer);
-  }, [pet]);
-  return <canvas ref={canvas} className="cp-pet__preview" width={22 * 5} height={17 * 5} role="img" aria-label={t.settings.pet.preview} />;
+  }, [pet, moving]);
+  return <canvas ref={canvas} width={22 * 3} height={17 * 3} />;
+}
+
+/** One choice of pet, shown as it would walk in the room, with its name under it. */
+function PetTile({ pet, label, picked, onPick }: { pet: PetChoice; label: string; picked: boolean; onPick: () => void }) {
+  return (
+    <button type="button" className="cp-pet__tile" aria-pressed={picked} title={label} onClick={onPick}>
+      {pet.kind === 'none' ? <span className="cp-pet__empty" aria-hidden="true" /> : <PetSprite pet={pet} moving={picked} />}
+      <span className="cp-pet__name">{label}</span>
+    </button>
+  );
+}
+
+function PetTiles({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="cp-crew__field" role="group" aria-label={label}>
+      <span className="cp-crew__label">{label}</span>
+      <div className="cp-pet__tiles">{children}</div>
+    </div>
+  );
 }
 
 /** What the one colour of a pet is called, when it is not its fur. */
@@ -98,44 +117,43 @@ const COLOUR_PART: Partial<Record<PetChoice['kind'], 'shell' | 'colour' | 'skin'
   firefly: 'light',
 };
 
-/** The office pet: its kind, a cat's pattern or a dog's breed, then one colour (shown as it is now) and a cat's eyes. */
+/** A kind of pet as it comes, before any colour is picked. */
+const defaultOf = (kind: PetChoice['kind']): PetChoice =>
+  kind === 'cat' ? { kind, variant: 'plain' } : kind === 'dog' ? { kind, variant: 'labrador' } : { kind } as PetChoice;
+
+/** The office pet: one colour (shown as it is now) and a cat's eyes, then its kind and a cat's pattern or a dog's breed. */
 export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoice) => void }) {
-  const pickKind = (kind: PetChoice['kind']) =>
-    onPet(kind === 'cat' ? { kind, variant: 'plain' } : kind === 'dog' ? { kind, variant: 'labrador' } : { kind } as PetChoice);
   const paint = (part: keyof PetColors, colour: string) => { if (pet.kind !== 'none') onPet({ ...pet, colors: { ...pet.colors, [part]: colour } }); };
   return (
     <div className="cp-pet">
-      <div className="cp-pet__fields">
-        <label className="cp-onboarding__field">
-          <span>{t.settings.pet.kind}</span>
-          <select value={pet.kind} onChange={(e) => pickKind(e.target.value as PetChoice['kind'])}>
-            {(Object.keys(t.settings.pet.kinds) as PetChoice['kind'][]).map((kind) => <option key={kind} value={kind}>{t.settings.pet.kinds[kind]}</option>)}
-          </select>
-        </label>
-        {/* a new pattern or breed starts from its own colour */}
-        {pet.kind === 'cat' && (
-          <label className="cp-onboarding__field">
-            <span>{t.settings.pet.pattern}</span>
-            <select value={pet.variant} onChange={(e) => onPet({ kind: 'cat', variant: e.target.value as CatPattern, ...(pet.colors?.eyes ? { colors: { eyes: pet.colors.eyes } } : {}) })}>
-              {CAT_PATTERNS.map((pattern) => <option key={pattern} value={pattern}>{t.settings.pet.patterns[pattern]}</option>)}
-            </select>
-          </label>
-        )}
-        {pet.kind === 'dog' && (
-          <label className="cp-onboarding__field">
-            <span>{t.settings.pet.breed}</span>
-            <select value={pet.variant} onChange={(e) => onPet({ kind: 'dog', variant: e.target.value as DogBreed })}>
-              {DOG_BREEDS.map((breed) => <option key={breed} value={breed}>{t.settings.pet.breeds[breed]}</option>)}
-            </select>
-          </label>
-        )}
-      </div>
-      {pet.kind !== 'none' && <PetPreview pet={pet} />}
+      {/* the colours first, as in a person's wardrobe: in sight whatever the pet */}
       {pet.kind !== 'none' && (
         <div className="cp-pet__colours">
           <ColourRow label={t.settings.pet[COLOUR_PART[pet.kind] ?? 'fur']} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
           {pet.kind === 'cat' && <ColourRow label={t.settings.pet.eyes} colours={PET_EYE_COLORS} value={pet.colors?.eyes ?? PET_EYE_COLORS[0]} onPick={(colour) => paint('eyes', colour)} />}
         </div>
+      )}
+      {/* the pet picked is drawn with its own colours, the others as they come */}
+      <PetTiles label={t.settings.pet.kind}>
+        {PET_KINDS.map((kind) => (
+          <PetTile key={kind} pet={pet.kind === kind ? pet : defaultOf(kind)} label={t.settings.pet.kinds[kind]} picked={pet.kind === kind} onPick={() => pet.kind !== kind && onPet(defaultOf(kind))} />
+        ))}
+      </PetTiles>
+      {/* a new pattern or breed starts from its own colour */}
+      {pet.kind === 'cat' && (
+        <PetTiles label={t.settings.pet.pattern}>
+          {CAT_PATTERNS.map((pattern) => {
+            const choice: PetChoice = { kind: 'cat', variant: pattern, ...(pet.colors?.eyes ? { colors: { eyes: pet.colors.eyes } } : {}) };
+            return <PetTile key={pattern} pet={pet.variant === pattern ? pet : choice} label={t.settings.pet.patterns[pattern]} picked={pet.variant === pattern} onPick={() => pet.variant !== pattern && onPet(choice)} />;
+          })}
+        </PetTiles>
+      )}
+      {pet.kind === 'dog' && (
+        <PetTiles label={t.settings.pet.breed}>
+          {DOG_BREEDS.map((breed) => (
+            <PetTile key={breed} pet={pet.variant === breed ? pet : { kind: 'dog', variant: breed }} label={t.settings.pet.breeds[breed]} picked={pet.variant === breed} onPick={() => pet.variant !== breed && onPet({ kind: 'dog', variant: breed })} />
+          ))}
+        </PetTiles>
       )}
     </div>
   );

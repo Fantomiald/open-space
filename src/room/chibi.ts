@@ -515,9 +515,9 @@ export function chibiIcon(look: Look, scale = 2): HTMLCanvasElement {
 
 /** Where a piece of the wardrobe is worn: the square of the sprite its picture shows, in art pixels. `body` is the
  * whole person, `back` the whole person from behind (what is worn on the back). */
-export type BodyPart = 'hat' | 'head' | 'chest' | 'legs' | 'feet' | 'body' | 'back';
+export type BodyPart = 'hat' | 'head' | 'chest' | 'legs' | 'feet' | 'wrist' | 'body' | 'back';
 const PARTS: Readonly<Record<BodyPart, { x: number; y: number; size: number }>> = {
-  hat: { x: 1, y: 6, size: 24 }, head: { x: 4, y: 12, size: 18 }, chest: { x: 5, y: 27, size: 16 }, legs: { x: 6, y: 29, size: 14 }, feet: { x: 7, y: 33, size: 12 },
+  hat: { x: 1, y: 6, size: 24 }, head: { x: 4, y: 12, size: 18 }, chest: { x: 5, y: 27, size: 16 }, legs: { x: 6, y: 29, size: 14 }, feet: { x: 7, y: 33, size: 12 }, wrist: { x: -1, y: 26, size: 11 },
   body: { x: -2, y: 13, size: 30 }, back: { x: -2, y: 13, size: 30 },
 };
 /** The first row under the chin: below the head, the face stays see-through like the rest of the dummy. */

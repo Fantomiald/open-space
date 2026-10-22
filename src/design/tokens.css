@@ -81,6 +81,8 @@
   --glass: rgb(16 20 36 / 0.70);
   --glass-surface: linear-gradient(var(--glass), var(--glass)), var(--frost, none) 0 0 / 100vw 100vh no-repeat fixed;
   --glass-strong: rgb(16 19 34 / 0.94);
+  /* the same, for what must hide what scrolls under it (a sticky bar) */
+  --glass-solid: rgb(16 19 34);
   /* a menu over fields: nothing under it shows through */
   --menu-solid: rgb(20 24 40);
   --glass-tint: rgb(255 255 255 / 0.05);
