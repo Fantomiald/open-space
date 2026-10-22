@@ -1,5 +1,9 @@
 # Versions
 
+## 1.13.2
+
+- Dans la liste du mode focus, « Au repos » est trié comme « Prêtes » : la plus récente en haut.
+
 ## 1.13.1
 
 - Le menu « @ » montre le visage de chaque session (grisé si elle est au repos).
