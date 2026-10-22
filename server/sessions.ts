@@ -8,7 +8,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type SearchHit, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
-import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
+import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import type { ShellRunner } from './shell.ts';
@@ -231,6 +231,7 @@ export class SessionManager {
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
       uploadPath: (id) => uploadPath(uploadsFolder(this.deps.config.dataDir), id),
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
+      bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,

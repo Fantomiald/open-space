@@ -21,7 +21,7 @@ export type FeedItem =
   | { id: number; kind: 'branch'; at: number; what: BranchNews; branch: string; base: string; behind?: number }
   /** files the session (or a sub-agent: `agent`) sent the user, with what it said of them */
   | { id: number; kind: 'files'; at: number; author: string | null; agent: string | null; caption: string; files: SentFile[] }
-  | { id: number; kind: 'artifact'; at: number; author: string | null; agent: string | null; title: string; url: string; stored: string | null }
+  | { id: number; kind: 'artifact'; at: number; author: string | null; agent: string | null; title: string; url: string; stored: string | null; bundle: string | null }
   /** a command the user ran with "!": `code` null while it runs (or when stopped after too long), `done` once it ended */
   | { id: number; kind: 'shell'; at: number; shellId: string; command: string; output: string; code: number | null; done: boolean; ms: number; byUser: boolean };
 
@@ -95,7 +95,7 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
       }
       case 'end': items.push({ id: seq, kind: 'turn', at, ok: ev.ok, stopped: ev.stopped === true, ms: ev.ms, startId: turnFirst || seq }); turnStart = items.length; turnFirst = 0; break;
       case 'files': items.push({ id: seq, kind: 'files', at, author: author(ev.who), agent: agent(ev.who), caption: ev.caption ?? '', files: ev.files }); break;
-      case 'artifact': items.push({ id: seq, kind: 'artifact', at, author: author(ev.who), agent: agent(ev.who), title: ev.title, url: ev.url, stored: ev.stored }); break;
+      case 'artifact': items.push({ id: seq, kind: 'artifact', at, author: author(ev.who), agent: agent(ev.who), title: ev.title, url: ev.url, stored: ev.stored, bundle: ev.bundle ?? null }); break;
       case 'shell': {
         const item = { id: seq, kind: 'shell' as const, at, shellId: ev.id, command: ev.command, output: '', code: null, done: false, ms: 0, byUser: false };
         shells.set(ev.id, item);

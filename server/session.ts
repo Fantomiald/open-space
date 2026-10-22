@@ -38,6 +38,8 @@ export interface SessionDeps {
   uploadPath?: (id: string) => string | null;
   /** keeps a copy of a file Claude sent; its stored name, or null (see attachments.ts) */
   copyFile?: (path: string) => string | null;
+  /** keeps a copy of the files a published page loads, by the path it names them with; the stored bundle's name, or null (see attachments.ts) */
+  bundlePage?: (page: string, files: Readonly<Record<string, string>>) => string | null;
   /** how many claude processes are alive across all sessions */
   liveCount: () => number;
   maxLive: number;
@@ -405,12 +407,15 @@ export class Session {
           };
         }),
       }),
-      onArtifact: (who, artifact) => this.onEvent({
-        k: 'artifact', who, title: artifact.title || path.basename(artifact.path), url: artifact.url, stored: this.deps.copyFile?.(artifact.path) ?? null,
-      }),
+      onArtifact: (who, artifact) => {
+        const stored = this.deps.copyFile?.(artifact.path) ?? null;
+        const bundle = stored && Object.keys(artifact.files).length ? this.deps.bundlePage?.(stored, artifact.files) : null;
+        this.onEvent({ k: 'artifact', who, title: artifact.title || path.basename(artifact.path), url: artifact.url, stored, ...(bundle ? { bundle } : {}) });
+      },
       names: this.subagentNames,
       peerName: this.deps.peerName,
       agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
+      cwd,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
       { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}) },
