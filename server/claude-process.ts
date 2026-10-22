@@ -73,7 +73,10 @@ export function readAccount(file: string, environment: NodeJS.ProcessEnv): Promi
 export function parseAccount(status: unknown): ClaudeAccount | null {
   if (!isJson(status) || typeof status.loggedIn !== 'boolean') return null;
   if (!status.loggedIn) return { loggedIn: false };
-  return { loggedIn: true, email: asString(status.email), org: asString(status.orgName), plan: asString(status.subscriptionType) };
+  // how it reaches Claude: the sign-in (claude.ai, an API key…), or the cloud it goes through when not Anthropic's own
+  const provider = asString(status.apiProvider);
+  const via = provider && provider !== 'firstParty' ? provider : asString(status.authMethod);
+  return { loggedIn: true, email: asString(status.email), org: asString(status.orgName), plan: asString(status.subscriptionType), ...(via ? { via } : {}) };
 }
 
 /** Finds the `claude` executable without going through terminal aliases. Relative PATH entries are ignored. */

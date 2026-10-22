@@ -41,9 +41,13 @@ export function relToFolder(text: string, folder: string): string {
   return text.replace(new RegExp(`${esc}(?=$|[/"'\\s])`, 'g'), '.').replace(/(^|[\s"'])\.\//g, '$1');
 }
 
-/** The command made easier to read: the session folder becomes "." and a leading `cd <folder> &&` is dropped. */
+/**
+ * The command made easier to read: the session folder becomes "." and a leading `cd <folder> &&` is dropped. Runs of
+ * blank lines and of spaces are squeezed, so that nothing hides below them in a permission prompt.
+ */
 export function readableCommand(cmd: unknown, folder: string): string {
-  return relToFolder(String(cmd ?? ''), folder).trim().replace(/^cd\s+(?:"\."|'\.'|\.)\s*&&\s*/, '');
+  return relToFolder(String(cmd ?? ''), folder).trim().replace(/^cd\s+(?:"\."|'\.'|\.)\s*&&\s*/, '')
+    .replace(/\n[ \t]*(?:\n[ \t]*)+\n/g, '\n\n').replace(/[ \t]{20,}/g, ' ');
 }
 
 const DETAIL_MAX = 1500;

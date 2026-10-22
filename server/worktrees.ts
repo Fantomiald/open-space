@@ -24,7 +24,8 @@ interface GitResult { code: number; stdout: string; stderr: string }
 /** Runs git in `cwd`; never throws (the code says how it went). */
 function run(cwd: string, args: readonly string[], input?: string): Promise<GitResult> {
   return new Promise((resolve) => {
-    const child = execFile('git', ['-c', 'core.quotepath=off', ...args], {
+    // core.fsmonitor names a program git runs on status: a folder's own .git/config must not start one here
+    const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', ...args], {
       cwd, timeout: GIT_TIMEOUT_MS, maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' },
     }, (error, stdout, stderr) => {

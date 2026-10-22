@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { asideQuestion, nativeView, tuning } from '../state/commands.ts';
+import { folderName } from '../lib/format.ts';
+import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
 import { contextLevel } from '../state/labels.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
@@ -9,6 +10,7 @@ import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { CommandField } from './CommandField.tsx';
 import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
+import { runOwnCommand } from './ownCommands.ts';
 import { TuneMenu } from './TuneMenu.tsx';
 import type { Attachments } from './useAttachments.ts';
 
@@ -31,11 +33,19 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const showPanel = useSessions((s) => s.showPanel);
   // a small window (several open, this one not zoomed): icons beside a one-line field
   const stacked = useSessions((s) => s.openIds.length > 1 && s.zoomedId !== session.id);
+  // the other sessions, to name with "@" (the server introduces them to Claude, see Sessions.introduceMentioned)
+  const sessions = useSessions((s) => s.sessions);
+  const people = useMemo(() => Object.values(sessions).filter((other) => other.id !== session.id)
+    .map((other) => ({ name: other.name, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, session.id]);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const queued = session.queued ?? [];
+  const own = attachments.items.length ? null : ownCommand(text);
   // during a turn a plain message joins it at once; a slash command, or anything behind one, waits for its end (Session.send)
-  const waits = busy && (session.state === 'starting' || text.trim().startsWith('/') || queued.length > 0);
+  const waits = busy && (session.state === 'starting' || (text.trim().startsWith('/') && !own) || queued.length > 0);
+  /** a word from a command (/copy) shown in the emptied field for a moment */
+  const [note, setNote] = useState<string | null>(null);
+  const say = (word: string) => { setNote(word); window.setTimeout(() => setNote(null), 2000); };
 
   // "!command": run in the session's folder at once, without Claude, like Claude Code's bash mode
   const shellCommand = text.startsWith('!') ? text.slice(1).trim() : null;
@@ -55,6 +65,8 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
     // "/mcp", "/context", "/usage": Open Space's own view of it, in the panel, instead of Claude Code's line of text
     const view = attachments.items.length ? null : nativeView(text);
     if (view) { showPanel(view); setText(''); return; }
+    // "/tag front", "/focus", "/copy"…: done by Open Space at once (ownCommands.ts)
+    if (own) { if (runOwnCommand(own.name, own.argument, session, say)) setText(''); return; }
     // "/model sonnet", "/effort high": the same as the buttons below the field, so the session keeps it
     const tune = attachments.items.length ? null : tuning(text);
     if (tune) { if (send({ t: 'tune', sessionId: session.id, ...tune })) setText(''); return; }
@@ -70,16 +82,16 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   };
 
   const words = t.composer.composer;
-  const placeholder = shellCommand !== null ? words.placeholderShell : stopped ? words.placeholderStopped
+  const placeholder = note ?? (shellCommand !== null ? words.placeholderShell : stopped ? words.placeholderStopped
     : session.state === 'perm' ? words.placeholderPermission
       : busy ? words.placeholderBusy(session.name)
-        : stacked ? words.placeholderShort : words.placeholder;
+        : stacked ? words.placeholderShort : words.placeholder);
 
   const sendLabel = shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send;
   const field = (
     <CommandField
       id={`composer-field-${session.id}`} label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
-      onPaste={attachments.onPaste} shell cwd={session.cwd}
+      onPaste={attachments.onPaste} shell cwd={session.cwd} own people={people}
     />
   );
   const tools = (

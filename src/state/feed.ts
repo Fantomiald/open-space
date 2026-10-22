@@ -190,3 +190,19 @@ export function toolSummary(tools: readonly { tool: string }[]): string {
   for (const { tool } of tools) counts.set(tool, (counts.get(tool) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1]).map(([tool, count]) => (count > 1 ? `${tool} ×${count}` : tool)).join(', ');
 }
+
+/** The session's own answer `n` from the end (1: the last), for /copy; null when there is none that far back. */
+export function answerFromEnd(items: readonly FeedItem[], n: number): string | null {
+  const answers = items.filter((item): item is FeedItem & { kind: 'assistant' } => item.kind === 'assistant' && item.agent === null);
+  return answers.at(-Math.max(1, n))?.text ?? null;
+}
+
+/** The conversation as Markdown, for /export: the user's messages and the session's answers, each with its time. */
+export function conversationMarkdown(items: readonly FeedItem[], heading: { name: string; folder: string; you: string; clock: (at: number) => string }): string {
+  const parts = [`# ${heading.name}`, heading.folder];
+  for (const item of items) {
+    if (item.kind === 'user') parts.push(`**${heading.you}** · ${heading.clock(item.at)}\n\n${item.text}`);
+    else if (item.kind === 'assistant' && item.agent === null) parts.push(`**${heading.name}** · ${heading.clock(item.at)}\n\n${item.text}`);
+  }
+  return `${parts.join('\n\n')}\n`;
+}

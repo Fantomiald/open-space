@@ -5,13 +5,13 @@ import { t } from '../i18n/index.ts';
 /**
  * Built-in commands that make no sense when Claude Code is driven from this page (checked against the
  * commands reference, code.claude.com/docs/en/commands, and each one sent to claude -p 2.1.302):
- * - color, focus: change the terminal prompt bar and view, which do not exist here;
+ * - color: changes the terminal prompt bar, which does not exist here;
  * - heapdump: memory diagnostics, already hidden from Claude Code's own menu;
  * - fast: "not available in the Agent SDK";
- * - rename: renames Claude Code's conversation, not the session in Open Space (its own rename does both);
  * - agents, extra-usage: removed and renamed (to /usage-credits); workflow-launch-exec: internal.
+ * focus and rename are Open Space's own (OWN_COMMANDS), which replace Claude Code's.
  */
-const UNUSABLE_HERE: ReadonlySet<string> = new Set(['color', 'focus', 'heapdump', 'fast', 'rename', 'agents', 'extra-usage', 'workflow-launch-exec']);
+const UNUSABLE_HERE: ReadonlySet<string> = new Set(['color', 'heapdump', 'fast', 'agents', 'extra-usage', 'workflow-launch-exec']);
 
 /** Commands Open Space answers with a view of its own in the session panel, instead of the text Claude Code gives -p. */
 const NATIVE_VIEWS: Readonly<Record<string, InspectView>> = { mcp: 'mcp', context: 'context', usage: 'usage' };
@@ -84,15 +84,60 @@ export function findCommands(commands: readonly SlashCommand[], query: string): 
     .sort((a, b) => a.closeness - b.closeness || a.index - b.index).map(({ command }) => command);
 }
 
-/** Open Space's own commands, offered with Claude Code's in a session's field. */
-const ownCommands = (): readonly SlashCommand[] => [{ name: 'btw', ...t.common.ownCommands.btw }];
+/**
+ * Open Space's own commands, done by the page (src/command/ownCommands.ts) instead of Claude Code: those it only takes
+ * in a terminal, and those Open Space has a button for. `argument`: what follows the name ('none': the command alone);
+ * `session`: it acts on a session, so the search palette offers it only for one.
+ */
+const OWN_COMMANDS = {
+  btw: { argument: 'required', session: true },
+  tag: { argument: 'optional', session: true },
+  rename: { argument: 'optional', session: true },
+  plan: { argument: 'optional', session: true },
+  review: { argument: 'optional', session: true },
+  copy: { argument: 'optional', session: true },
+  export: { argument: 'none', session: true },
+  diff: { argument: 'none', session: true },
+  cost: { argument: 'none', session: true },
+  fork: { argument: 'none', session: true, aliases: ['branch'] },
+  'remote-control': { argument: 'none', session: true, aliases: ['rc'] },
+  stop: { argument: 'none', session: true },
+  resume: { argument: 'none', session: false },
+  focus: { argument: 'none', session: false },
+  stats: { argument: 'none', session: false },
+  status: { argument: 'none', session: false },
+  theme: { argument: 'none', session: false },
+  help: { argument: 'none', session: false },
+  'release-notes': { argument: 'none', session: false },
+  login: { argument: 'none', session: false },
+  logout: { argument: 'none', session: false },
+} satisfies Record<string, { argument: 'none' | 'optional' | 'required'; session: boolean; aliases?: string[] }>;
+export type OwnName = keyof typeof OWN_COMMANDS;
+
+const isOwnName = (name: string): name is OwnName => Object.hasOwn(OWN_COMMANDS, name);
+
+/** Open Space's commands (only those that need none when there is no session) before Claude Code's, which they replace. */
+export function withOwnCommands(commands: readonly SlashCommand[], inSession: boolean): SlashCommand[] {
+  const words = t.common.ownCommands;
+  const own = Object.entries(OWN_COMMANDS).filter(([, command]) => inSession || !command.session)
+    .map(([name, command]): SlashCommand => ({ name, ...words[name as OwnName], ...('aliases' in command ? { aliases: command.aliases } : {}) }));
+  return [...own, ...commands.filter((command) => !isOwnName(command.name))];
+}
+
+/** An Open Space command typed alone or with what it takes ("/tag front", "/focus"), else null: the text goes to Claude Code. */
+export function ownCommand(text: string): { name: OwnName; argument: string } | null {
+  const [, typed, argument = ''] = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim()) ?? [];
+  const name = typed && Object.entries(OWN_COMMANDS).find(([own, command]) => own === typed || ('aliases' in command && command.aliases.includes(typed)))?.[0];
+  if (!name || !isOwnName(name)) return null;
+  const takes = OWN_COMMANDS[name].argument;
+  if ((takes === 'none' && argument) || (takes === 'required' && !argument.trim())) return null;
+  return { name, argument: argument.trim() };
+}
 
 /** While `text` is a command name being typed ("/ki", before any space): the commands to suggest, else none. */
 export function commandSuggestions(commands: readonly SlashCommand[], text: string): SlashCommand[] {
   const typing = /^\/(\S*)$/.exec(text);
-  const own = ownCommands();
-  const all = [...own, ...commands.filter((command) => !own.some((ownCommand) => ownCommand.name === command.name))];
-  return typing ? findCommands(all, typing[1]) : optionSuggestions(all, text);
+  return typing ? findCommands(commands, typing[1]) : optionSuggestions(commands, text);
 }
 
 /**

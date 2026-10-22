@@ -145,6 +145,7 @@ export const settings: Dictionary['settings'] = {
         title: 'Claude account',
         hint: 'The account every session uses, as /login and /logout set it in a terminal. Logging in opens your browser.',
         signedOut: 'Not signed in',
+        via: (how: string) => `via ${how}`,
         login: 'Log in',
         switch: 'Switch account',
         logout: 'Log out',

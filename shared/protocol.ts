@@ -85,7 +85,7 @@ export interface ClaudeInfo { found: boolean; version?: string; path?: string }
  * Who Claude Code is signed in as (`claude auth status`): the account every session uses. `busy` while a login or a
  * logout asked from the settings runs, `failed` why the last one did not work.
  */
-export interface ClaudeAccount { loggedIn: boolean; email?: string; org?: string; plan?: string; busy?: 'login' | 'logout'; failed?: string }
+export interface ClaudeAccount { loggedIn: boolean; email?: string; org?: string; plan?: string; via?: string; busy?: 'login' | 'logout'; failed?: string }
 
 /**
  * Where the Mac app is with a new Open Space: looking for one when asked (`checking`, then `upToDate` or `failed`),
@@ -142,7 +142,7 @@ export interface BackgroundTask { id: string; description: string }
 export type AttentionKind = 'permission' | 'question' | 'finished' | 'error';
 
 /** What a folder would run of its own with a session: its hooks and MCP servers ("event : command", "name : command"), and whether it has a CLAUDE.md. */
-export interface FolderCode { hooks: string[]; mcpServers: string[]; instructions: boolean }
+export interface FolderCode { hooks: string[]; mcpServers: string[]; settings: string[]; instructions: boolean }
 
 export interface QueuedMessage { id: string; text: string; /** how many pictures go with it */ images?: number; /** how many other files */ files?: number }
 

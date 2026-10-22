@@ -3,10 +3,10 @@ import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
 import { contextLevel, stateLabel, toneOf } from './labels.ts';
-import { asideQuestion, commandSuggestions, findCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
+import { asideQuestion, commandSuggestions, findCommands, ownCommand, withOwnCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
 import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
-import { buildFeed, publishedPages, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells } from './feed.ts';
+import { answerFromEnd, buildFeed, conversationMarkdown, publishedPages, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells, type FeedItem } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
 import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } from './queue.ts';
@@ -319,7 +319,7 @@ describe('slash commands', () => {
   });
 
   it('suggests commands only while a command name is being typed', () => {
-    assert.deepEqual(commandSuggestions(commands, '/').map((c) => c.name), ['kit:new', 'kit:status', 'btw', 'web-test', 'compact', 'clear']);
+    assert.deepEqual(commandSuggestions(commands, '/').map((c) => c.name), ['kit:new', 'kit:status', 'web-test', 'compact', 'clear']);
     assert.deepEqual(commandSuggestions(commands, '/kit').map((c) => c.name), ['kit:new', 'kit:status']);
     assert.deepEqual(commandSuggestions(commands, '/cle').map((c) => c.name), ['clear'], '/clear works: Open Space follows the new conversation');
     assert.deepEqual(commandSuggestions(commands, '/kit:new mon idée'), []);
@@ -332,8 +332,8 @@ describe('slash commands', () => {
     assert.deepEqual(findCommands(named, 'mcp').map((c) => c.name), ['mcp', 'kit:mcp-setup', 'seo:dataforseo']);
   });
 
-  it('hides what does nothing here: /fast, /rename, removed and renamed ones', () => {
-    assert.deepEqual(findCommands([{ name: 'fast' }, { name: 'rename' }, { name: 'agents' }, { name: 'extra-usage' }, { name: 'usage' }], '').map((c) => c.name), ['usage']);
+  it('hides what does nothing here: /fast, /color, removed and renamed ones', () => {
+    assert.deepEqual(findCommands([{ name: 'fast' }, { name: 'color' }, { name: 'agents' }, { name: 'extra-usage' }, { name: 'usage' }], '').map((c) => c.name), ['usage']);
   });
 
   it('offers the values of a command once its name is typed, with what each does', () => {
@@ -370,6 +370,25 @@ describe('slash commands', () => {
     assert.equal(tuning('/effort extreme'), null);
     assert.equal(tuning('/model'), null);
     assert.equal(tuning('/compact'), null);
+  });
+
+  it('does its own commands itself, with what they take, under their name or alias', () => {
+    assert.deepEqual(ownCommand(' /login '), { name: 'login', argument: '' });
+    assert.deepEqual(ownCommand('/tag front end'), { name: 'tag', argument: 'front end' });
+    assert.deepEqual(ownCommand('/tag'), { name: 'tag', argument: '' }, 'removes the tag');
+    assert.deepEqual(ownCommand('/rc'), { name: 'remote-control', argument: '' });
+    assert.deepEqual(ownCommand('/plan corrige le login'), { name: 'plan', argument: 'corrige le login' });
+    assert.equal(ownCommand('/login now'), null, 'a command taking nothing, with something after: Claude Code’s');
+    assert.equal(ownCommand('/btw'), null, 'a question is needed');
+    assert.equal(ownCommand('/loginx'), null);
+    assert.equal(ownCommand('/compact'), null);
+  });
+
+  it('offers its own commands before Claude Code’s, which they replace, and only those needing no session without one', () => {
+    const named = withOwnCommands([{ name: 'rename' }, { name: 'focus' }, { name: 'compact' }], false).map((c) => c.name);
+    assert.ok(named.includes('focus') && named.includes('compact') && !named.includes('rename') && !named.includes('tag'));
+    assert.equal(named.filter((name) => name === 'focus').length, 1);
+    assert.ok(withOwnCommands([], true).some((c) => c.name === 'tag'));
   });
 
   it('opens a view of its own for /mcp, /context and /usage typed alone', () => {
@@ -458,8 +477,8 @@ describe('side questions', () => {
     assert.equal(asideQuestion('/btw'), '');
     assert.equal(asideQuestion('/btwx'), null);
     assert.equal(asideQuestion('dis /btw'), null);
-    assert.deepEqual(commandSuggestions([], '/bt').map((command) => command.name), ['btw']);
-    assert.deepEqual(commandSuggestions([{ name: 'btw' }], '/btw').length, 1, 'not twice when Claude Code lists it too');
+    assert.deepEqual(commandSuggestions(withOwnCommands([], true), '/bt').map((command) => command.name), ['btw']);
+    assert.deepEqual(commandSuggestions(withOwnCommands([{ name: 'btw' }], true), '/btw').length, 1, 'not twice when Claude Code lists it too');
   });
 });
 
@@ -544,5 +563,25 @@ describe('sessions open side by side', () => {
     assert.equal(maxColumns(1280), 2);
     assert.equal(maxColumns(3840), 2);
     assert.deepEqual(fitColumns([['a'], ['b']], 1), [['a']]);
+  });
+});
+
+describe('copying and exporting a conversation', () => {
+  const items = [
+    { id: 1, kind: 'user', at: 0, text: 'salut', images: [], files: [] },
+    { id: 2, kind: 'assistant', at: 0, text: 'premier', author: null, agent: null },
+    { id: 3, kind: 'assistant', at: 0, text: 'du sous-agent', author: 'Bob', agent: 'a1' },
+    { id: 4, kind: 'assistant', at: 0, text: 'second', author: null, agent: null },
+  ] as const satisfies readonly FeedItem[];
+
+  it('copies the session’s own answers from the end, not a sub-agent’s', () => {
+    assert.equal(answerFromEnd(items, 1), 'second');
+    assert.equal(answerFromEnd(items, 2), 'premier');
+    assert.equal(answerFromEnd(items, 3), null);
+  });
+
+  it('exports the messages and the answers, each with its time', () => {
+    assert.equal(conversationMarkdown(items, { name: 'Iris', folder: '~/app', you: 'Toi', clock: () => '14:02' }),
+      '# Iris\n\n~/app\n\n**Toi** · 14:02\n\nsalut\n\n**Iris** · 14:02\n\npremier\n\n**Iris** · 14:02\n\nsecond\n');
   });
 });

@@ -42,6 +42,8 @@ export interface SessionDeps {
   liveCount: () => number;
   maxLive: number;
   idleMs: number;
+  /** who the other sessions named in a message by "@" are, for Claude, woken up to be reached ('' : none named) */
+  mentioned?: (text: string) => string;
   /** the user's first name and the note for every new agent (Preferences.agentNote), read when a conversation starts */
   identity?: () => { user: string; note: string };
   /** the Claude Code settings chosen for Open Space's sessions (Preferences.claude), read at each launch */
@@ -357,6 +359,8 @@ export class Session {
       outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
       this.shellNotes = [];
     }
+    const mentioned = command ? '' : this.deps.mentioned?.(clean);
+    if (mentioned) outgoing = `${outgoing}\n\n${mentioned}`;
     const names = images.map((image) => this.deps.saveImage(image));
     // like a file dropped in the terminal: its path in the message, Claude opens it with its tools
     const uploaded = files.flatMap((id) => {
@@ -495,6 +499,11 @@ export class Session {
     } finally {
       this.publish();
     }
+  }
+
+  /** Named by another session's message: its process starts, if it can, so that a message from that one reaches it. */
+  wake() {
+    try { this.liveProcess(); } catch { /* closing, or too many sessions alive: it is told of the message when it wakes */ }
   }
 
   /**

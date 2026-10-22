@@ -26,6 +26,12 @@ export const composer: Dictionary['composer'] = {
     queue: 'Queue',
     placeholderShell: 'Shell command, run in the session’s folder',
     run: 'Run',
+    /** what /copy and /export say, in the field, for a moment */
+    copied: 'Answer copied',
+    nothingToCopy: 'No answer to copy yet',
+    you: 'You',
+    /** a session offered after "@", in the break room (a message wakes it up) */
+    resting: 'resting, will be woken up',
   },
   tune: {
     title: 'Model, effort, permissions and ultracode',
@@ -122,6 +128,7 @@ export const composer: Dictionary['composer'] = {
     neverTrusted: 'has never been trusted, here or in Claude Code. With a session, it would start on its own:',
     hooks: 'Hooks',
     mcpServers: 'MCP servers',
+    settings: 'Settings that run or allow code',
     withoutSettings: 'Without its settings, the session keeps yours (your MCP servers, your permissions) but nothing from this folder starts.',
     instructionsRead: ' Its CLAUDE.md is read either way.',
     cancel: 'Cancel',
