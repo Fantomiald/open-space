@@ -10,7 +10,7 @@ A pixel-art office to run several Claude Code sessions at once.
 
 **[Download for Mac](https://github.com/Fantomiald/open-space/releases/latest)** · [Run from source](#run-from-source) · [What's new](CHANGELOG.md) (in French)
 
-![The office: sessions at their desks with their name and tag above them, the Status panel bottom left, and Lina's conversation open on the right with a Bash permission waiting](docs/images/office.png)
+![Lina raises her hand for a Bash permission, a click on her opens the thread, Yes, and she goes back to work while the others keep typing](docs/images/office.gif)
 
 Each session is a character at a desk. They type while they work, raise a hand when they need you, and smile when they're done. Click one to open its thread and answer without switching windows. No more juggling six terminals to find out who is waiting on what.
 
@@ -18,7 +18,7 @@ Open Space runs the `claude` installed on your machine, so your skills, plugins,
 
 ## Your desk
 
-![Focus mode: the list of sessions on the left, four conversations side by side](docs/images/focus.png)
+![Cmd+. swaps the room for focus mode: the sessions on the left, conversations side by side; Tab slides them aside to see the room](docs/images/focus.gif)
 
 - **See who needs you.** The Status panel lists what waits for you and for how long, who is working, and who is ready for a new message.
 - **Open up to six conversations** side by side. Tab slides them aside to see the room, Tab brings them back.
@@ -70,11 +70,11 @@ Pick a pet among 25: a cat, a dog (7 breeds), a fox, an owl, a dragon, a slime, 
 
 ## Your room
 
-![The six themes: space shuttle, neon Tokyo, dungeon, beach bar, pirate ship and treehouse](docs/images/themes.png)
+![The six themes in turn: space shuttle, neon Tokyo, dungeon, beach bar, pirate ship and treehouse](docs/images/themes.gif)
 
 Six themes under **Settings > Office**: a space shuttle, a neon Tokyo street, a dungeon, a beach bar, a pirate ship and a treehouse. Walls, floor, furniture, sky and lights all change, in the office and in the break room.
 
-![The same office by day, at night, and the break room at Christmas](docs/images/sky.png)
+![The sky over the office from dawn to night: clouds by day, then stars, the moon and the lamps on](docs/images/sky.gif)
 
 The sky follows your clock: clouds by day, stars and a lit-up office at night. The rooms dress up for 14 occasions, from Christmas and Halloween to Songkran and each crew member's birthday. The calendar icon in the top bar lets you try them all.
 

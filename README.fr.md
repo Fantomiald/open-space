@@ -10,7 +10,7 @@ Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temp
 
 **[Télécharger pour Mac](https://github.com/Fantomiald/open-space/releases/latest)** · [Lancer depuis le code](#lancer-depuis-le-code) · [Nouveautés](CHANGELOG.md)
 
-![Le bureau : des sessions à leur poste avec leur prénom et leur tag au-dessus, le panneau État en bas à gauche, et la conversation de Lina ouverte à droite avec une autorisation Bash qui attend](docs/images/office.png)
+![Lina lève la main pour une autorisation Bash, un clic sur elle ouvre la conversation, Oui, et elle se remet au travail pendant que les autres tapent](docs/images/office.gif)
 
 Chaque session est un perso assis à son poste. Il tape quand il travaille, lève la main quand il a besoin de toi, sourit quand il a fini. Un clic sur lui ouvre son fil, et tu réponds sans changer de fenêtre. Plus besoin de jongler entre six terminaux pour savoir qui attend quoi.
 
@@ -18,7 +18,7 @@ Open Space lance le `claude` installé sur ta machine : tes skills, tes plugins,
 
 ## Ton poste
 
-![Le mode focus : la liste des sessions à gauche, quatre conversations côte à côte](docs/images/focus.png)
+![Cmd+. remplace la salle par le mode focus : les sessions à gauche, les conversations côte à côte ; Tab les écarte pour voir la salle](docs/images/focus.gif)
 
 - **Voir qui a besoin de toi.** Le panneau État liste ce qui t'attend et depuis quand, qui travaille, et qui est prêt pour un nouveau message.
 - **Ouvrir jusqu'à six conversations** côte à côte. Tab les fait glisser hors de vue pour voir la salle, Tab les ramène.
@@ -70,11 +70,11 @@ Choisis un animal parmi 25 : un chat, un chien (7 races), un renard, un hibou, u
 
 ## Ta salle
 
-![Les six thèmes : navette spatiale, Tokyo néon, donjon, plage, bateau pirate et cabane en forêt](docs/images/themes.png)
+![Les six thèmes l'un après l'autre : navette spatiale, Tokyo néon, donjon, plage, bateau pirate et cabane en forêt](docs/images/themes.gif)
 
 Six thèmes dans **Réglages > Bureau** : une navette spatiale, une rue de Tokyo au néon, un donjon, un bar de plage, un bateau pirate et une cabane en forêt. Murs, sol, meubles, ciel et lumières changent, au bureau comme en salle de repos.
 
-![Le même bureau de jour, de nuit, et la salle de repos à Noël](docs/images/sky.png)
+![Le ciel au-dessus du bureau de l'aube à la nuit : des nuages le jour, puis les étoiles, la lune et les lampes allumées](docs/images/sky.gif)
 
 Le ciel suit ton heure : nuages le jour, étoiles et bureau éclairé la nuit. Les salles se déguisent pour 14 occasions, de Noël et Halloween à Songkran et à l'anniversaire de chaque membre de l'équipe. L'icône calendrier du bandeau permet de toutes les essayer.
 
