@@ -157,7 +157,8 @@ function PagePreview({ src, title, onOpen }: { src: string; title: string; onOpe
 /** A page a session published on claude.ai: its preview (claude.ai cannot be framed elsewhere), and its address there. */
 function ArtifactCard({ item, speaker, onView }: { item: FeedItem & { kind: 'artifact' }; speaker: string; onView: (viewed: Viewed) => void }) {
   const words = t.session.feed.artifact;
-  const src = item.stored ? `/attachments/${item.stored}` : null;
+  // with its pictures and files, when Open Space has them (see servePage in server/http.ts)
+  const src = item.bundle ? `/pages/${item.bundle.split('.')[0]}/` : item.stored ? `/attachments/${item.stored}` : null;
   return (
     <li className="cp-feed__item" data-kind="artifact">
       <span className="cp-feed__who">{item.author ?? speaker}</span>

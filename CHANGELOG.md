@@ -1,5 +1,10 @@
 # Versions
 
+## 1.14.0
+
+- Les pages publiées par une session montrent enfin leurs images dans le fil : Open Space garde une copie des images et fichiers de la page avec elle.
+- « Ouvrir l’original » sur une image ou un fichier ouvre une fenêtre de l’app au lieu d’une page vide dans le navigateur.
+
 ## 1.13.2
 
 - Dans la liste du mode focus, « Au repos » est trié comme « Prêtes » : la plus récente en haut.

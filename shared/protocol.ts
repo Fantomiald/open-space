@@ -53,7 +53,7 @@ export type OfficeEvent =
   /** files a session's Claude (or one of its sub-agents) sent the user with its SendUserFile tool, and what it said of them */
   | { k: 'files'; who: string; caption?: string; files: SentFile[] }
   /** a page Claude published on claude.ai with its Artifact tool: its address there, and `stored` the copy of its HTML under /attachments/ (null when it could not be kept) */
-  | { k: 'artifact'; who: string; title: string; url: string; stored: string | null }
+  | { k: 'artifact'; who: string; title: string; url: string; stored: string | null; /** the page with the files it loads, served under /pages/ */ bundle?: string }
   /** the conversation was summarized to free its context (/compact, or automatically when full): its size before and after, in tokens */
   | { k: 'compact'; auto: boolean; before: number; after: number; idle?: true }
   /** /clear: Claude goes on in a new, empty conversation */

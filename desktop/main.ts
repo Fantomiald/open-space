@@ -117,8 +117,17 @@ function showWindow() {
   current.on('closed', () => { window = null; });
   // "(2) Open Space": two sessions wait for the user, on the Dock icon too
   current.on('page-title-updated', (_event, title) => app.dock?.setBadge(/^\((\d+)\)/.exec(title)?.[1] ?? ''));
-  // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space
-  current.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
+  // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space. A file a session sent
+  // ("Open the original") opens in a window of the app: the browser has no session cookie to load it with.
+  current.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`${address}/attachments/`)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, backgroundColor: BACKGROUND } };
+    openOutside(url);
+    return { action: 'deny' };
+  });
+  current.webContents.on('did-create-window', (opened) => {
+    opened.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
+    opened.webContents.on('will-navigate', (event, url) => { event.preventDefault(); openOutside(url); });
+  });
   current.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith(`${address}/`) || url === address) return;
     event.preventDefault();

@@ -285,7 +285,7 @@ describe('Normalizer on files Claude sends the user (SendUserFile, as seen with 
 
 describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts of 2.1.302)', () => {
   it('passes a published page on with its claude.ai address and its file, and keeps its action line', () => {
-    const published: { who: string; artifact: { url: string; path: string; title: string } }[] = [];
+    const published: { who: string; artifact: { url: string; path: string; title: string; files: Record<string, string> } }[] = [];
     const events: OfficeEvent[] = [];
     const normalizer = new Normalizer({
       emit: (event) => events.push(event), onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
@@ -300,8 +300,31 @@ describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts 
     call('a2', { action: 'list' }, { url, path: '/tmp/headers.html' });
     call('a3', { file_path: '/tmp/x.html' }, { url: 'https://evil.example/artifact/1', path: '/tmp/x.html' });
     call('a4', { file_path: '/tmp/y.html' }, { url, path: '/tmp/y.html' }, true);
-    assert.deepEqual(published, [{ who: 'chef', artifact: { url, path: '/tmp/headers.html', title: 'Headers' } }]);
+    assert.deepEqual(published, [{ who: 'chef', artifact: { url, path: '/tmp/headers.html', title: 'Headers', files: {} } }]);
     assert.deepEqual(events.filter((event) => event.k === 'act').length, 4, 'each call keeps its action line');
+  });
+
+  it('gathers the files a page loads: assets uploaded to it, and its own files, kept from one publish to the next', () => {
+    const published: Record<string, string>[] = [];
+    const normalizer = new Normalizer({
+      emit: () => {}, onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
+      names: new Set(), onArtifact: (_who, artifact) => published.push(artifact.files), cwd: '/work',
+    });
+    const url = 'https://claude.ai/artifact/8xenifh1amiKJMWP2Up7H8';
+    const call = (id: string, input: object, result: object) => {
+      normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: 'Artifact', input }] } });
+      normalizer.handle({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] }, tool_use_result: result });
+    };
+    call('u1', { url, asset: true, file_paths: ['/s/a.jpg', '/s/b.jpg'] }, {
+      written: { url }, asset_uploads: { url, results: [{ file_path: '/s/a.jpg', url: '/_blob/aa' }, { file_path: '/s/b.jpg', url: '/_blob/bb' }] },
+    });
+    call('u2', { url, asset: true, file_path: '/s/c.jpg' }, { written: { url }, asset_upload: { id: 'cc', url: '/_blob/cc' } });
+    call('p1', { file_path: '/s/dl/index.html', root: '/s/dl', files: ['images/tilt.png', { path: 'previews/tilt.jpg' }] }, { url, path: '/s/dl/index.html' });
+    call('p2', { file_path: 'site/index.html', files: { 'img/x.png': 'shots/x.png', 'data.json': { from: 'out/data.json' }, 'images/tilt.png': null, 'theirs.css': { artifact: url, path: 'a.css' } } }, { url, path: '/work/site/index.html' });
+    assert.deepEqual(published, [
+      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'images/tilt.png': '/s/dl/images/tilt.png', 'previews/tilt.jpg': '/s/dl/previews/tilt.jpg' },
+      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'previews/tilt.jpg': '/s/dl/previews/tilt.jpg', 'img/x.png': '/work/shots/x.png', 'data.json': '/work/out/data.json' },
+    ]);
   });
 });
 

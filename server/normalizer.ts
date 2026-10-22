@@ -1,6 +1,7 @@
 // Translates what a `claude -p --output-format stream-json` process says into OfficeEvents.
 // `who` is "chef" (the main agent of the session) or the tool_use id of the Task/Agent call that
 // started a sub-agent (every message of that sub-agent carries it as parent_tool_use_id).
+import path from 'node:path';
 import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
 import type { BackgroundTask, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
@@ -40,8 +41,11 @@ export interface NormalizerOptions {
   onPartial: (who: string, text: string) => void;
   /** files Claude sent the user (SendUserFile, see claude-process.ts): their paths as Claude Code checked them */
   onFiles?: (who: string, caption: string, files: readonly { path: string; size: number; image: boolean }[], display: string) => void;
-  /** a page Claude published with its Artifact tool: its claude.ai address and the local HTML file it came from */
-  onArtifact?: (who: string, artifact: { url: string; path: string; title: string }) => void;
+  /**
+   * a page Claude published with its Artifact tool: its claude.ai address, the local HTML file it came from, and the local
+   * files it loads by the path it names them with (its own files, and the assets uploaded to it as "_blob/<id>")
+   */
+  onArtifact?: (who: string, artifact: { url: string; path: string; title: string; files: Record<string, string> }) => void;
   /** how full the context is: `used` as of the session's own agent's last answer, `max` the model's window (from a turn's end) */
   onContext?: (context: { used?: number; max?: number }) => void;
   /** where Remote Control is at, once turned on (system/bridge_state: "ready", "connected", "failed"…) */
@@ -56,6 +60,8 @@ export interface NormalizerOptions {
   peerName?: (address: string) => string;
   /** how a sub-agent was launched, by its agentId: one woken up again may come from an earlier process of the conversation */
   agentLaunch?: (agentId: string) => AgentLaunch | null;
+  /** the session's folder, where the Artifact tool's relative paths start */
+  cwd?: string;
 }
 
 export class Normalizer {
@@ -67,8 +73,10 @@ export class Normalizer {
   private writing = new Map<string, string>();
   /** SendUserFile calls waiting for their result (what they sent comes with it), with how Claude asked them shown: 'render', 'attach' or '' */
   private sending = new Map<string, string>();
-  /** Artifact calls publishing a page, waiting for their result (its address comes with it) */
-  private publishing = new Set<string>();
+  /** Artifact calls publishing a page or uploading assets, waiting for their result (the address comes with it): their input */
+  private publishing = new Map<string, Record<string, unknown>>();
+  /** the local files of each artifact so far, by its address: what a later publish of its page leaves out is kept there */
+  private artifactFiles = new Map<string, Map<string, string>>();
   /** ScheduleWakeup, CronCreate and CronDelete calls waiting for their result, by tool call id */
   private scheduling = new Map<string, ScheduleChange>();
   /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
@@ -269,10 +277,10 @@ export class Normalizer {
     this.whoOfTool.set(id, who);
     // the files are shown with the call's result, no action line
     if (name === 'SendUserFile') { this.sending.set(id, asString(input.display)); return; }
-    // a page, not an asset upload nor a read, list or delete
     const schedule = who === 'chef' ? scheduleOf(name, input) : null;
     if (schedule) this.scheduling.set(id, schedule);
-    if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && input.asset !== true && input.file_path) this.publishing.add(id);
+    // a page or an asset upload, not a read, list or delete
+    if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && (input.file_path || input.file_paths)) this.publishing.set(id, input);
     if (name === 'Agent' || name === 'Task') {
       this.hire(id, asString(input.subagent_type), asString(input.description), asString(input.prompt));
     } else if (name === 'TodoWrite' && who === 'chef') {
@@ -311,12 +319,10 @@ export class Normalizer {
         this.scheduling.delete(id);
         if (!block.is_error) this.options.onSchedule?.(schedule);
       }
-      if (this.publishing.delete(id)) {
-        // checked with the transcripts of 2.1.302: tool_use_result is { url, path, title, artifact_id, updated, … }
-        const result = asJson(message.tool_use_result);
-        const url = asString(result.url);
-        const file = asString(result.path);
-        if (!block.is_error && ARTIFACT_URL.test(url) && /\.html?$/i.test(file)) this.options.onArtifact?.(who, { url, path: file, title: asString(result.title).slice(0, 200) });
+      const publish = this.publishing.get(id);
+      if (publish) {
+        this.publishing.delete(id);
+        if (!block.is_error) this.published(who, publish, asJson(message.tool_use_result));
       }
       if (this.present.has(id)) {
         // a sub-agent's report comes back to the main agent as the tool result of the Task call
@@ -337,6 +343,43 @@ export class Normalizer {
       if (this.hired.has(id)) continue;
       this.options.emit({ k: 'act_done', who, id, ok: !block.is_error });
     }
+  }
+
+  /**
+   * Checked with the transcripts of 2.1.302: a page's result is { url, path, title, artifact_id, updated, … }; an upload's
+   * is { written: { url }, asset_upload: { url: "/_blob/<id>", … } } for one file, { …, asset_uploads: { results: [{ file_path, url }] } } for several.
+   */
+  private published(who: string, input: Record<string, unknown>, result: Json) {
+    if (input.asset === true) {
+      const files = this.filesOf(asString(asJson(result.written).url) || asString(input.url));
+      const one = asJson(result.asset_upload);
+      if (asString(one.url) && asString(input.file_path)) files.set(asString(one.url).replace(/^\//, ''), asString(input.file_path));
+      for (const upload of asArray(asJson(result.asset_uploads).results).map(asJson)) {
+        if (asString(upload.url) && asString(upload.file_path)) files.set(asString(upload.url).replace(/^\//, ''), asString(upload.file_path));
+      }
+      return;
+    }
+    const url = asString(result.url);
+    const file = asString(result.path);
+    if (!ARTIFACT_URL.test(url) || !/\.html?$/i.test(file)) return;
+    const files = this.filesOf(url);
+    const root = path.resolve(this.options.cwd ?? '', asString(input.root));
+    // `files`: a list of paths published as they are, or a map from the published path to a source (another artifact's file is left out)
+    const listed: [string, unknown][] = Array.isArray(input.files)
+      ? input.files.map((entry) => [asString(asJson(entry).path) || asString(entry), asString(asJson(entry).path) || asString(entry)])
+      : Object.entries(asJson(input.files));
+    for (const [published, source] of listed) {
+      const from = typeof source === 'string' ? source : asString(asJson(source).from);
+      if (source === null) files.delete(published);
+      else if (published && from) files.set(published.replace(/^\.?\//, ''), path.resolve(root, from));
+    }
+    this.options.onArtifact?.(who, { url, path: file, title: asString(result.title).slice(0, 200), files: Object.fromEntries(files) });
+  }
+
+  private filesOf(url: string): Map<string, string> {
+    let files = this.artifactFiles.get(url);
+    if (!files) { files = new Map(); this.artifactFiles.set(url, files); }
+    return files;
   }
 }
 

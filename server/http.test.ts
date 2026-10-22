@@ -61,6 +61,8 @@ before(async () => {
   mkdirSync(path.join(base, 'attachments'));
   writeFileSync(path.join(base, 'attachments', `${'a'.repeat(64)}.png`), 'PNG');
   writeFileSync(path.join(base, 'attachments', `${'b'.repeat(64)}.html`), '<script>alert(1)</script>');
+  writeFileSync(path.join(base, 'attachments', `${'f'.repeat(64)}.html`), '<img src="/_blob/0a1b"><img src="img/cover.png">');
+  writeFileSync(path.join(base, 'attachments', `${'9'.repeat(64)}.bundle`), JSON.stringify({ page: `${'f'.repeat(64)}.html`, files: { '_blob/0a1b': `${'a'.repeat(64)}.png`, 'img/cover.png': `${'a'.repeat(64)}.png`, 'away.txt': '../secret.txt' } }));
   writeFileSync(path.join(base, 'attachments', `${'d'.repeat(64)}.mp4`), '0123456789');
   writeFileSync(path.join(base, 'attachments', `${'e'.repeat(64)}.md`), '# Énigmes\n<script>alert(1)</script>');
   writeFileSync(path.join(base, 'attachments', `${'c'.repeat(64)}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
@@ -137,6 +139,20 @@ describe('HTTP requests', () => {
     assert.doesNotMatch(csp, /allow-same-origin/);
     assert.match(csp, /frame-ancestors 'self'/);
     assert.match(await res.text(), /^<!doctype html>.*<script>alert\(1\)<\/script>$/s, 'wrapped like claude.ai does');
+  });
+
+  it('serves a published page with its files under its bundle, without the cookie its sandbox cannot send', async () => {
+    const site = `http://127.0.0.1:${port}/pages/${'9'.repeat(64)}/`;
+    const res = await fetch(site);
+    assert.equal(res.status, 200);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    assert.match(csp, /^sandbox allow-scripts /);
+    assert.match(csp, new RegExp(`default-src ${site} https:`), 'it may load its own files, nothing else of Open Space');
+    assert.match(await res.text(), new RegExp(`<img src="/pages/${'9'.repeat(64)}/_blob/0a1b"><img src="img/cover.png">$`), 'an asset is found under the bundle');
+    for (const file of ['_blob/0a1b', 'img/cover.png']) assert.equal(await (await fetch(`${site}${file}`)).text(), 'PNG');
+    assert.equal((await fetch(`${site}away.txt`)).status, 404, 'only a stored file');
+    assert.equal((await fetch(`${site}missing.png`)).status, 404);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/pages/${'8'.repeat(64)}/`)).status, 404, 'no such bundle');
   });
 
   it('plays a video by ranges, as a browser asks for it', async () => {

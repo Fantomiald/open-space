@@ -5,19 +5,19 @@ import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { ATTACHMENT_NAME, SHOWN_EXTENSIONS, VIDEO_EXTENSIONS } from './attachments.ts';
+import { ATTACHMENT_NAME, readBundle, SHOWN_EXTENSIONS, VIDEO_EXTENSIONS } from './attachments.ts';
 import { TEXT_EXTENSIONS } from '../shared/protocol.ts';
 import { SPOTIFY_ARTWORK } from '../shared/music.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 
-/** The file types the compiled UI contains. */
+/** The file types served: the compiled UI's, and what sessions send or publish. */
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
-  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.json': 'application/json', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
 };
 
 export interface WebServerOptions {
@@ -48,6 +48,8 @@ const PAGE_CSP = [
   'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms',
   "default-src https: data: blob: 'unsafe-inline' 'unsafe-eval'", 'connect-src https:', "frame-ancestors 'self'", "base-uri 'none'",
 ].join('; ');
+/** The same, for a page served with its files (see servePage): it may load them too, and nothing else of Open Space. */
+const bundledPageCsp = (files: string) => PAGE_CSP.replace('default-src https:', `default-src ${files} https:`).replace('connect-src https:', `connect-src ${files} https:`);
 /** An SVG a session sent is shown as a picture; opened on its own, it may not run anything either. */
 const SVG_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
 /** What claude.ai wraps a published page in (the page starts with its own <title> and <style>, without <html> nor <head>). */
@@ -119,6 +121,42 @@ export function createWebServer(options: WebServerOptions) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ id, size }));
   }
 
+  function sendPage(res: http.ServerResponse, page: string, csp: string) {
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=31536000, immutable',
+      'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer',
+    });
+    res.end(/^\s*<!doctype/i.test(page) ? page : `${PAGE_SKELETON}${page}`);
+  }
+
+  /**
+   * A published page with the files it loads (see bundlePage), at /pages/<bundle>/ and /pages/<bundle>/<published path>.
+   * Its sandbox gives it an origin of its own, so the browser sends no cookie with what it loads: the bundle's name, the
+   * hash of what it holds, is what lets a request in. Its links open in the browser, which has no cookie either.
+   */
+  async function servePage(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const [hash = '', ...rest] = url.pathname.slice('/pages/'.length).split('/');
+    const bundle = /^[0-9a-f]{64}$/.test(hash) ? await readBundle(attachmentsDir, hash) : null;
+    if (!bundle) { res.writeHead(404).end(); return; }
+    let published: string;
+    try { published = decodeURIComponent(rest.join('/')); } catch { res.writeHead(400).end(); return; }
+    const isPage = published === '' || published === 'index.html';
+    const name = isPage ? bundle.page : bundle.files[published];
+    const stored = name && ATTACHMENT_NAME.test(name) ? resolveInside(attachmentsDir, name) : null;
+    if (!name || !stored || !statSync(stored).isFile()) { res.writeHead(404).end(); return; }
+    const own = `http://${req.headers.host}/pages/${hash}/`;
+    if (name.endsWith('.html')) {
+      // an uploaded asset is named from the root of the page's site ("/_blob/<id>"), here under the bundle
+      const page = await readFile(stored, 'utf8');
+      sendPage(res, isPage ? page.replaceAll('/_blob/', `/pages/${hash}/_blob/`) : page, bundledPageCsp(own));
+      return;
+    }
+    await serveFile(stored, res, {
+      'Cache-Control': 'private, max-age=31536000, immutable',
+      ...(name.endsWith('.svg') ? { 'Content-Security-Policy': SVG_CSP } : {}),
+    });
+  }
+
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
     if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     const url = parseRequestUrl(req.url);
@@ -133,15 +171,7 @@ export function createWebServer(options: WebServerOptions) {
       if (!stored || !statSync(stored).isFile()) { res.writeHead(404).end(); return; }
       const title = (url.searchParams.get('name') ?? name).replace(/[^\w.\- ]/g, '_').slice(0, 120) || name;
       // a page (an artifact, or an HTML file sent) is shown when asked without a name to download it under, sandboxed (see PAGE_CSP)
-      if (name.endsWith('.html') && !url.searchParams.has('name')) {
-        const page = await readFile(stored, 'utf8');
-        res.writeHead(200, {
-          'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=31536000, immutable',
-          'Content-Security-Policy': PAGE_CSP, 'Referrer-Policy': 'no-referrer',
-        });
-        res.end(/^\s*<!doctype/i.test(page) ? page : `${PAGE_SKELETON}${page}`);
-        return;
-      }
+      if (name.endsWith('.html') && !url.searchParams.has('name')) { sendPage(res, await readFile(stored, 'utf8'), PAGE_CSP); return; }
       const extension = path.extname(name).slice(1);
       // a video is played, by ranges: the browser asks for the parts it needs to start, then to jump ahead
       if (VIDEO_EXTENSIONS.has(extension) && !url.searchParams.has('name')) { serveRanges(stored, req, res); return; }
@@ -158,6 +188,7 @@ export function createWebServer(options: WebServerOptions) {
       });
       return;
     }
+    if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }
     if (url.pathname.startsWith('/sounds/')) {
       const sound = resolveInside(soundsDir, `.${url.pathname.slice('/sounds'.length)}`);
       if (!sound || !statSync(sound).isFile()) { res.writeHead(404).end(); return; }
