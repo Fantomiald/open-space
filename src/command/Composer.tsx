@@ -36,7 +36,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   // the other sessions, to name with "@" (the server introduces them to Claude, see Sessions.introduceMentioned)
   const sessions = useSessions((s) => s.sessions);
   const people = useMemo(() => Object.values(sessions).filter((other) => other.id !== session.id)
-    .map((other) => ({ name: other.name, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, session.id]);
+    .map((other) => ({ name: other.name, session: other, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, session.id]);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const queued = session.queued ?? [];

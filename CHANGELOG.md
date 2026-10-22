@@ -1,5 +1,10 @@
 # Versions
 
+## 1.13.1
+
+- Le menu « @ » montre le visage de chaque session (grisé si elle est au repos).
+- Les sessions nommées avec « @ » restent en couleur dans le message envoyé.
+
 ## 1.13.0
 
 - Mentionner une autre session avec « @ » : le champ propose les sessions, le nom s'affiche en couleur, et la session nommée est réveillée si elle était au repos. Claude sait à qui écrire (« va demander à @PL comment elle a fait »).
