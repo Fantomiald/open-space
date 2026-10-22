@@ -1,24 +1,26 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import { findMentions, mentionAt } from '../../shared/mentions.ts';
+import type { SessionInfo } from '../../shared/protocol.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
 import { commandAt, commandSuggestions, typedName, withOwnCommands } from '../state/commands.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
+import { SessionFace } from './SessionFace.tsx';
 
 const MAX_SUGGESTIONS = 8;
 
 /** A session the field can name with "@", and a word on it (its folder, at rest). */
-export interface Mentionable { name: string; detail: string }
+export interface Mentionable { name: string; detail: string; session: SessionInfo }
 
 /** A line of the suggestions: a command or a session. `insert` replaces what is typed; typed as `whole`, Enter sends. */
-interface Suggestion { label: string; hint?: string; description?: string; insert: string; whole: string }
+interface Suggestion { label: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }
 
 /** The sessions whose name starts with what follows the "@", then those whose name holds it, accents and case aside. */
 function mentionSuggestions(people: readonly Mentionable[], typed: string): Suggestion[] {
   const word = foldQuery(typed);
   const named = (person: Mentionable) => foldQuery(person.name);
   const found = [...people.filter((person) => named(person).startsWith(word)), ...people.filter((person) => !named(person).startsWith(word) && named(person).includes(word))];
-  return found.map((person) => ({ label: `@${person.name}`, description: person.detail, insert: `@${person.name} `, whole: `@${person.name}` }));
+  return found.map((person) => ({ label: `@${person.name}`, description: person.detail, insert: `@${person.name} `, whole: `@${person.name}`, face: person.session }));
 }
 
 interface Props {
@@ -122,10 +124,11 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
         <ul id={listId} ref={list} role="listbox" className="cp-composer__commands" aria-label={t.common.commandField.commands}>
           {suggestions.map((suggestion, index) => (
             <li
-              key={suggestion.label} id={`${listId}-${index}`} role="option" aria-selected={suggestion === current} data-active={suggestion === current}
+              key={suggestion.label} id={`${listId}-${index}`} role="option" aria-selected={suggestion === current} data-active={suggestion === current} data-face={!!suggestion.face}
               onMouseDown={(e) => e.preventDefault()} onClick={() => complete(suggestion)}
             >
-              <strong>{suggestion.label.startsWith('@') ? <><span className="cp-command-field__at">@</span>{suggestion.label.slice(1)}</> : suggestion.label}</strong>
+              {suggestion.face && <SessionFace session={suggestion.face} resting={suggestion.face.resting} />}
+              <strong>{suggestion.label.startsWith('@') ? <><span className="cp-at">@</span>{suggestion.label.slice(1)}</> : suggestion.label}</strong>
               {suggestion.hint && <span className="cp-muted"> {suggestion.hint}</span>}
               {suggestion.description && <span className="cp-palette__description">{suggestion.description}</span>}
             </li>
@@ -143,7 +146,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
         />
         {marks.length > 0 && (
           <div ref={overlay} className="cp-command-field__marks" aria-hidden="true">
-            {marks.map((mark, index) => <span key={mark.start}>{value.slice(index ? marks[index - 1].end : 0, mark.start)}<mark><span className="cp-command-field__at">@</span>{value.slice(mark.start + 1, mark.end)}</mark></span>)}
+            {marks.map((mark, index) => <span key={mark.start}>{value.slice(index ? marks[index - 1].end : 0, mark.start)}<mark><span className="cp-at">@</span>{value.slice(mark.start + 1, mark.end)}</mark></span>)}
             {value.slice(marks.at(-1)!.end)}
             {/* a last empty line keeps its height, as in the field */}
             {'\u200b'}

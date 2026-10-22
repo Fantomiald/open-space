@@ -862,6 +862,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 .cp-composer__commands li { padding: var(--space-2) var(--space-3); cursor: pointer; display: grid; font-size: var(--text-sm); }
 .cp-composer__commands li[data-active='true'] { background: var(--color-accent); color: var(--color-accent-text); }
+/* a session named with "@": its face on the left of its name and folder */
+.cp-composer__commands li[data-face='true'] { grid-template-columns: auto 1fr; column-gap: var(--space-3); align-items: center; }
+.cp-composer__commands li[data-face='true'] .cp-face { grid-row: span 2; width: 2rem; height: 2rem; }
 .cp-composer__actions { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .cp-composer__actions > [type='submit'] { flex: none; white-space: nowrap; }
 /* a small window: the tools and a one-line field side by side, the tools' panels still opening upward */
@@ -1341,8 +1344,10 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   border: var(--border-width) solid transparent; white-space: pre-wrap; overflow-wrap: break-word; scrollbar-gutter: stable;
 }
 .cp-command-field__marks mark { background: none; color: var(--tone-peer); }
-/* the font's "@" hangs below the line, lifted to sit with the name, in the field and its suggestions (moved, not resized, so the text keeps its width) */
-.cp-command-field__at { position: relative; top: -0.12em; }
+/* the font's "@" hangs below the line, lifted to sit with the name (moved, not resized, so the text keeps its width) */
+.cp-at { position: relative; top: -0.12em; }
+/* a session named in a sent message */
+.cp-mention { color: var(--tone-peer); }
 .cp-command-field[data-marked='true'] textarea { color: transparent; caret-color: var(--color-text); scrollbar-gutter: stable; }
 
 /* ── A command run with "!" (like Claude Code's bash mode): the command, how it went, what it wrote ── */

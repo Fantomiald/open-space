@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
+import { findMentions } from '../../shared/mentions.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { locale, t } from '../i18n/index.ts';
 import { formatClock, formatDuration } from '../lib/format.ts';
@@ -205,6 +206,24 @@ function Stamp({ at }: { at: number }) {
   return shown ? <time className="cp-feed__time" dateTime={new Date(at).toISOString()}>{formatClock(at)}</time> : null;
 }
 
+/** A sent message, the sessions it names with "@" in color as in the field. */
+function Mentioned({ text }: { text: string }) {
+  const sessions = useSessions((s) => s.sessions);
+  const marks = useMemo(() => findMentions(text, Object.values(sessions).map((session) => session.name)), [text, sessions]);
+  if (!marks.length) return text;
+  return (
+    <>
+      {marks.map((mark, index) => (
+        <Fragment key={mark.start}>
+          {text.slice(index ? marks[index - 1].end : 0, mark.start)}
+          <span className="cp-mention"><span className="cp-at">@</span>{text.slice(mark.start + 1, mark.end)}</span>
+        </Fragment>
+      ))}
+      {text.slice(marks.at(-1)!.end)}
+    </>
+  );
+}
+
 function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEntry; sessionId: string; speaker: string; openAgent: (agentId: string) => void; onView: (image: Viewed) => void }) {
   const turnDuration = useSessions((s) => s.preferences.turnDuration);
   switch (item.kind) {
@@ -228,7 +247,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
               {item.files.map((file) => <span key={file.id} className="cp-file" title={file.name}><FileIcon />{file.name}<span className="cp-file__size">{bytes(file.size)}</span></span>)}
             </div>
           )}
-          {item.text && <div className="cp-feed__text">{item.text}</div>}
+          {item.text && <div className="cp-feed__text"><Mentioned text={item.text} /></div>}
         </li>
       );
     case 'assistant':
