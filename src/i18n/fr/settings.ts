@@ -148,6 +148,7 @@ export const settings = {
         title: 'Compte Claude',
         hint: 'Le compte de toutes les sessions, celui que /login et /logout règlent dans un terminal. Se connecter ouvre ton navigateur.',
         signedOut: 'Pas connecté',
+        via: (how: string) => `via ${how}`,
         login: 'Se connecter',
         switch: 'Changer de compte',
         logout: 'Se déconnecter',

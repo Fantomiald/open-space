@@ -260,6 +260,22 @@ describe('folders that run code of their own', () => {
   });
 });
 
+describe('mentions', () => {
+  it('introduces a session named by "@" to Claude, and wakes it up from the break room to be reached', async () => {
+    const { manager, processes } = setup();
+    await manager.init();
+    const pl = await manager.create({ cwd: projectA(), name: 'PL', text: 'hi' });
+    processes[0].feed('simple-turn');
+    await manager.rest(pl.id);
+    assert.equal(processes[0].alive, false);
+    await manager.create({ cwd: projectA(), name: 'Iris', text: 'va demander à @pl comment elle a fait' });
+    const asking = processes.find((process) => process.sent.some((text) => text.startsWith('va demander')));
+    assert.match(asking!.sent[0], /^va demander à @pl comment elle a fait\n\n@PL : la session « PL »[\s\S]*to: "PL"/);
+    assert.equal(processes.filter((process) => process.alive).length, 2, 'PL started again, waiting for the message');
+    await manager.shutdown();
+  });
+});
+
 describe('the break room', () => {
   it('puts a session to rest, releasing its process, and calls it back with a message', async () => {
     const dataDir = path.join(base, `data-rest-${++counter}`);

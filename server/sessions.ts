@@ -12,6 +12,7 @@ import { attachmentsFolder, copyAttachment, saveAttachment, sweepAttachments } f
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import type { ShellRunner } from './shell.ts';
+import { findMentions } from '../shared/mentions.ts';
 import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { CatalogProbe, ProcessFactory } from './claude-process.ts';
@@ -199,6 +200,18 @@ export class SessionManager {
     return log;
   }
 
+  /**
+   * The other sessions a message of `sessionId` names with "@": each woken up (a released process cannot be reached)
+   * and introduced to Claude, with how to write to it ('' : none named).
+   */
+  private introduceMentioned(sessionId: string, text: string): string {
+    const others = [...this.sessions.values()].map((session) => ({ session, info: session.snapshot() })).filter(({ info }) => info.id !== sessionId);
+    const named = new Set(findMentions(text, others.map(({ info }) => info.name)).map((mention) => mention.name));
+    const found = others.filter(({ info }) => named.has(info.name));
+    for (const { session } of found) session.wake();
+    return found.map(({ info }) => st.prompt.mention(info.name, info.cwd.replace(os.homedir(), '~'))).join('\n');
+  }
+
   private createSession(info: StoredInfo, log: SessionLog): Session {
     return new Session(info, {
       spawnProcess: (launch, handlers) => {
@@ -209,6 +222,7 @@ export class SessionManager {
       log,
       broadcast: this.deps.broadcast,
       persist: () => this.save(),
+      mentioned: (text) => this.introduceMentioned(info.id, text),
       // a process started: the folder's commands may have changed since they were probed (a skill added)
       onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
@@ -429,7 +443,7 @@ export class SessionManager {
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.deps.config.roots);
     if (!cwd) throw new Error(st.sessions.outsideRoots);
-    // a folder running code of its own (hooks, MCP servers) needs the user's word once (see trust.ts)
+    // a folder running code of its own (hooks, MCP servers, settings) needs the user's word once (see trust.ts)
     const code = folderCode(cwd);
     const trusted = !runsCode(code) || trustedInClaudeCode(cwd, this.deps.home) || this.trusted.has(cwd);
     if (!trusted && !options.trust) throw new TrustNeeded(cwd, code);
@@ -525,9 +539,9 @@ export class SessionManager {
     const worktree: WorktreeInfo = { branch, base, root, mainRoot: repo.root, home, canPr: await canOpenPullRequest(repo.root).catch(() => false) };
     const inside = path.join(root, repo.sub);
     const cwd = existsSync(inside) ? inside : root;
-    // the user agreed to what the main folder runs (trust.ts), not to hooks or MCP servers only the branch has
+    // the user agreed to what the main folder runs (trust.ts), not to hooks, MCP servers or settings only the branch has
     const info = session.snapshot();
-    const code = (folder: string) => { const { hooks, mcpServers } = folderCode(folder); return JSON.stringify({ hooks, mcpServers }); };
+    const code = (folder: string) => { const { hooks, mcpServers, settings } = folderCode(folder); return JSON.stringify({ hooks, mcpServers, settings }); };
     if (!info.untrusted && runsCode(folderCode(cwd)) && code(cwd) !== code(home) && !this.trusted.has(cwd) && !trustedInClaudeCode(cwd, this.deps.home)) {
       session.restrict();
       session.announce({ k: 'note', text: st.worktree.restricted(info.name) });

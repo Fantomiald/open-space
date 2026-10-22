@@ -44,7 +44,7 @@ async function transcripts(cwd: string, sessionId: string, home?: string): Promi
 }
 
 const git = (cwd: string, args: readonly string[]) => new Promise<string>((resolve, reject) => {
-  execFile('git', ['-c', 'core.quotepath=off', ...args], { cwd, timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' } },
+  execFile('git', ['-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', ...args], { cwd, timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' } },
     (error, stdout) => (error ? reject(error) : resolve(stdout)));
 });
 

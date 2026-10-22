@@ -80,7 +80,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   // a request for a new session (N, the palette, the room) lands here: the field takes the focus and the command asked for
   useEffect(() => {
     if (!draft) return;
-    setResuming(false);
+    setResuming(draft.resumeIn !== undefined);
+    if (draft.resumeIn) setFolder(draft.resumeIn);
     if (draft.command) setText(draft.command);
     if (draft.person) setAsked(draft.person);
     field.current?.focus();

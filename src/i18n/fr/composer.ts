@@ -28,6 +28,12 @@ export const composer = {
     /** "!command": run without Claude, like Claude Code's bash mode */
     placeholderShell: 'Commande shell, lancée dans le dossier de la session',
     run: 'Exécuter',
+    /** what /copy and /export say, in the field, for a moment */
+    copied: 'Réponse copiée',
+    nothingToCopy: 'Pas encore de réponse à copier',
+    you: 'Toi',
+    /** a session offered after "@", in the break room (a message wakes it up) */
+    resting: 'au repos, sera réveillée',
   },
   tune: {
     title: 'Modèle, effort, permissions et ultracode',
@@ -124,6 +130,7 @@ export const composer = {
     neverTrusted: 'n’a jamais été approuvé, ni ici ni dans Claude Code. Avec une session, il lancerait de lui-même :',
     hooks: 'Des hooks',
     mcpServers: 'Des serveurs MCP',
+    settings: 'Des réglages qui lancent ou autorisent du code',
     withoutSettings: 'Sans ses réglages, la session garde les tiens (tes serveurs MCP, tes autorisations) mais rien de ce dossier ne démarre.',
     instructionsRead: ' Son CLAUDE.md est lu dans les deux cas.',
     cancel: 'Annuler',

@@ -3,7 +3,7 @@ import { foldQuery } from '../../shared/search.ts';
 import { locale, t } from '../i18n/index.ts';
 import { defaultFolder, folderName, formatClock } from '../lib/format.ts';
 import { shownFolder } from '../state/worktrees.ts';
-import { nativeView, typedName } from '../state/commands.ts';
+import { nativeView, ownCommand, typedName, withOwnCommands } from '../state/commands.ts';
 import { attentionKind } from '../state/queue.ts';
 import { FILTERS, filterCounts, isCommandQuery, searchResults, type Action, type Filter, type Group, type Result } from '../state/search.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
@@ -12,6 +12,7 @@ import {
   BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
+import { runOwnCommand } from './ownCommands.ts';
 import { SessionFace } from './SessionFace.tsx';
 import { StateBadge } from './StateBadge.tsx';
 
@@ -57,7 +58,9 @@ function PaletteContent() {
   const [query, setQuery] = useState(initial);
   const [filter, setFilter] = useState<Filter>('all');
   const [target, setTarget] = useState<'selected' | 'new'>(selected ? 'selected' : 'new');
-  const commands = useSessions((s) => commandsIn(s, target === 'selected' ? selected?.cwd : undefined));
+  const folderCommands = useSessions((s) => commandsIn(s, target === 'selected' ? selected?.cwd : undefined));
+  const forSession = target === 'selected' && selected ? selected : undefined;
+  const commands = useMemo(() => withOwnCommands(folderCommands, !!forSession), [folderCommands, forSession]);
   const [active, setActive] = useState(0);
   const list = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -107,6 +110,9 @@ function PaletteContent() {
   const runCommand = (text: string) => {
     const s = store();
     close();
+    // Open Space's own (/focus, /tag…): never sent to a session, nor to a new one
+    const own = ownCommand(text);
+    if (own) { runOwnCommand(own.name, own.argument, forSession); return; }
     // a view of Open Space's own for the open session (/mcp, /context, /usage), rather than Claude Code's line of text
     const view = nativeView(text);
     if (target === 'selected' && selected && view) s.showPanel(view);

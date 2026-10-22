@@ -44,7 +44,8 @@ describe('buildClaudeArgs', () => {
 describe('parseAccount', () => {
   it('reads who `claude auth status --json` says is signed in, and nothing else', () => {
     const status = { loggedIn: true, authMethod: 'claude.ai', email: 'ada@example.com', orgId: 'org-1', orgName: 'Example', subscriptionType: 'team', configDirectory: '/x' };
-    assert.deepEqual(parseAccount(status), { loggedIn: true, email: 'ada@example.com', org: 'Example', plan: 'team' });
+    assert.deepEqual(parseAccount(status), { loggedIn: true, email: 'ada@example.com', org: 'Example', plan: 'team', via: 'claude.ai' });
+    assert.equal(parseAccount({ ...status, apiProvider: 'bedrock' })?.via, 'bedrock', 'the cloud it goes through, when not Anthropic');
   });
 
   it('says signed out, and null for an answer it does not know', () => {

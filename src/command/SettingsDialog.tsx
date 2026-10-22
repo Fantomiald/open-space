@@ -392,7 +392,7 @@ function SettingsEditor() {
       case 'account': return (
         <Row
           key={id} id={id} flash={flash} icon={<ItsMeIcon />} title={rows.account.title}
-          hint={account?.failed ? rows.account.failed(account.failed) : account?.loggedIn ? [account.org, account.plan].filter(Boolean).join(' · ') : rows.account.hint}
+          hint={account?.failed ? rows.account.failed(account.failed) : account?.loggedIn ? [account.org, account.plan, account.via && rows.account.via(account.via)].filter(Boolean).join(' · ') : rows.account.hint}
         >
           <span className="cp-prefs__value">{account ? (account.loggedIn ? account.email : rows.account.signedOut) : '-'}</span>
           {claude?.found && <AccountAction />}

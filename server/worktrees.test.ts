@@ -71,12 +71,15 @@ test('what is copied: .env files and node_modules / Pods folders, or what .workt
   write(path.join(root, 'mobile', 'ios', 'Pods', 'p.h'), 'p\n');
   write(path.join(root, 'scratch.log'), 'not this\n');
   assert.deepEqual((await includedEntries(root)).sort(), ['.env', 'mobile/.env.local', 'mobile/ios/Pods/', 'mobile/node_modules/', 'node_modules/']);
-  const made = await createWorktree({ mainRoot: root, name: 'Tom', about: 'dark mode', base: 'main', note: {} });
-  const copied = await copyIncluded(root, made.root, 'darwin');
-  assert.equal(copied.failed, 0);
-  assert.equal(readFileSync(path.join(made.root, '.env'), 'utf8'), 'SECRET=1\n');
-  assert.ok(existsSync(path.join(made.root, 'mobile/node_modules/y.js')));
-  assert.equal(sh(made.root, 'status', '--porcelain'), '');
+  // the copy clones with the Mac's cp -c, which the Linux CI does not have
+  if (process.platform === 'darwin') {
+    const made = await createWorktree({ mainRoot: root, name: 'Tom', about: 'dark mode', base: 'main', note: {} });
+    const copied = await copyIncluded(root, made.root, 'darwin');
+    assert.equal(copied.failed, 0);
+    assert.equal(readFileSync(path.join(made.root, '.env'), 'utf8'), 'SECRET=1\n');
+    assert.ok(existsSync(path.join(made.root, 'mobile/node_modules/y.js')));
+    assert.equal(sh(made.root, 'status', '--porcelain'), '');
+  }
   // elsewhere than on a Mac: nothing (the session installs what it needs)
   assert.deepEqual(await copyIncluded(root, path.join(scratch, 'nowhere'), 'linux'), { copied: 0, failed: 0, skipped: true });
   // a .worktreeinclude says what to take, among what git ignores (a tracked file or one git does not ignore goes with the branch)

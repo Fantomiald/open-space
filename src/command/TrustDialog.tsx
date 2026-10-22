@@ -4,7 +4,7 @@ import { useSessions } from '../state/sessions.ts';
 import { Modal } from './Modal.tsx';
 
 /**
- * Asked before the first session in a folder that runs code of its own (hooks, MCP servers) and was never trusted,
+ * Asked before the first session in a folder that runs code of its own (hooks, MCP servers, settings) and was never trusted,
  * here or in Claude Code: Claude Code asks this in a terminal, but not when Open Space runs it (server/trust.ts).
  */
 export function TrustDialog() {
@@ -29,6 +29,12 @@ export function TrustDialog() {
           <section>
             <h3>{words.mcpServers}</h3>
             <ul>{code.mcpServers.map((server) => <li key={server}><code>{server}</code></li>)}</ul>
+          </section>
+        )}
+        {code.settings.length > 0 && (
+          <section>
+            <h3>{words.settings}</h3>
+            <ul>{code.settings.map((setting) => <li key={setting}><code>{setting}</code></li>)}</ul>
           </section>
         )}
         <p className="cp-muted">
