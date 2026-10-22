@@ -4,6 +4,7 @@
 
 - Mentionner une autre session avec « @ » : le champ propose les sessions, le nom s'affiche en couleur, et la session nommée est réveillée si elle était au repos. Claude sait à qui écrire (« va demander à @PL comment elle a fait »).
 - Des commandes à nous dans le champ et dans ⌘K : `/tag front` pose le tag tout de suite, `/rename`, `/focus` (bascule focus et bureau), `/rc` (contrôle à distance), `/status`, `/login`, `/logout`, `/copy` (copie la dernière réponse), `/export` (la conversation en .md), `/diff`, `/cost`, `/fork`, `/stop`, `/resume`, `/stats`, `/theme`, `/help`, `/release-notes`, `/plan` et `/review`.
+- Mettre une session au repos (la lune) ferme aussi sa fenêtre de conversation.
 - À propos dit aussi par quoi passe le compte Claude (Bedrock, Vertex, clé API…) quand ce n'est pas un compte claude.ai.
 - Sécurité : la demande de confiance d'un dossier montre aussi les réglages du projet qui peuvent lancer du code (variables d'`env`, mode de permission…), git n'exécute plus le `core.fsmonitor` d'un repo, et une commande à autoriser ne peut plus se cacher derrière des centaines de lignes vides.
 

@@ -96,6 +96,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   const [restAsked, setRestAsked] = useState(false);
+  const rest = () => { send({ t: 'rest', sessionId }); closeOpen(sessionId); };
   // the sub-agent whose thread is shown, null for the conversation
   const [agent, setAgent] = useState<string | null>(null);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
@@ -154,7 +155,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : send({ t: 'rest', sessionId: session.id }))} onSwitchOff={() => setSwitchingOff(true)} />
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -196,7 +197,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>
             <div className="cp-form__actions">
               <button type="button" className="cp-button" autoFocus onClick={() => setRestAsked(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'rest', sessionId: session.id }); setRestAsked(false); }}>{t.session.detail.rest}</button>
+              <button type="button" className="cp-button" data-variant="danger" onClick={() => { setRestAsked(false); rest(); }}>{t.session.detail.rest}</button>
             </div>
           </Modal>
         )}
