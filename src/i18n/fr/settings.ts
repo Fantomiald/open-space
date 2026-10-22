@@ -200,7 +200,6 @@ export const settings = {
     },
     patterns: { plain: 'Uni', tabby: 'Tigré', calico: 'Tricolore', tuxedo: 'Smoking' },
     breeds: { labrador: 'Labrador', dalmatian: 'Dalmatien', husky: 'Husky', shiba: 'Shiba', corgi: 'Corgi', dachshund: 'Teckel', pug: 'Carlin' },
-    preview: 'Aperçu de ton animal',
     kind: 'Ton animal au bureau',
     pattern: 'Son motif',
     breed: 'Sa race',

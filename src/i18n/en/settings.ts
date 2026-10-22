@@ -197,7 +197,6 @@ export const settings: Dictionary['settings'] = {
     },
     patterns: { plain: 'Plain', tabby: 'Tabby', calico: 'Calico', tuxedo: 'Tuxedo' },
     breeds: { labrador: 'Labrador', dalmatian: 'Dalmatian', husky: 'Husky', shiba: 'Shiba', corgi: 'Corgi', dachshund: 'Dachshund', pug: 'Pug' },
-    preview: 'Preview of your pet',
     kind: 'Your office pet',
     pattern: 'Its pattern',
     breed: 'Its breed',

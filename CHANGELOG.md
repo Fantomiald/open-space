@@ -1,5 +1,11 @@
 # Versions
 
+## 1.14.1
+
+- Animal : chaque animal en tuile avec son aperçu (le choisi marche), motif du chat et race du chien en tuiles aussi, et les couleurs en haut.
+- Équipe : les onglets Visage, Cheveux… Chaussures restent visibles quand on fait défiler.
+- Le casque audio et la montre passent dans les accessoires, en tuiles, et se portent avec n'importe quel autre accessoire.
+
 ## 1.14.0
 
 - Les pages publiées par une session montrent enfin leurs images dans le fil : Open Space garde une copie des images et fichiers de la page avec elle.
