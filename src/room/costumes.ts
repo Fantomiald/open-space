@@ -247,10 +247,10 @@ export function paintCostumeHat(R: Paint, P: Dot, hat: CostumeHat, back: boolean
   }
 }
 
-/** The look's accessory, drawn over the face and the hair, under the hat. */
+/** The anime accessories, drawn over the face and the hair, under the hat. */
 export function paintAccessory(R: Paint, P: Dot, look: Look, b: Body) {
   const up = b.up, front = !b.back;
-  switch (look.accessory) {
+  switch (look.faceGear) {
     // two short lines across each cheek
     case 'whiskers': if (front) for (const y of [8, 10]) { R(3, y + up, 2, 1, b.skin.dark); R(12, y + up, 2, 1, b.skin.dark); } break;
     case 'scar': if (front) { P(10, 8 + up, C.scar); P(11, 8 + up, C.scar); } break;
@@ -260,6 +260,8 @@ export function paintAccessory(R: Paint, P: Dot, look: Look, b: Body) {
       if (front) { headRows(P, 8, 13, up, navy); P(11, 8 + up, navy.light); } else headRows(P, 11, 13, up, navy);
       break;
     }
+  }
+  switch (look.waistGear) {
     // at the left hip, hilt up, sheath trailing: the far side from the front, the near one from behind; earrings too
     case 'swords': {
       if (look.top === 'blanket') break;
@@ -278,6 +280,6 @@ export function paintAccessory(R: Paint, P: Dot, look: Look, b: Body) {
 
 /** What goes over the outline: the smoke of a cigarette. */
 export function paintSmoke(P: Dot, look: Look, b: Body) {
-  if (look.accessory !== 'cigarette' || b.back) return;
+  if (look.faceGear !== 'cigarette' || b.back) return;
   for (const [x, y] of [[15, 9], [15, 8], [16, 7], [16, 6], [15, 5], [16, 4]]) P(x, y + b.up, C.smoke);
 }

@@ -14,7 +14,7 @@ import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
-import { parseLook, randomLook } from '../../shared/look.ts';
+import { NO_GEAR, parseLook, randomLook } from '../../shared/look.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
@@ -454,12 +454,16 @@ describe('looks', () => {
   it('accepts only a complete look with known traits and #rrggbb colours', () => {
     assert.deepEqual(parseLook(look), look);
     assert.equal(parseLook({ ...look, hair: 'beehive' }), null);
-    const { sunglasses: _sun, headphones: _phones, hat: _hat, hatColor: _hatColor, eyes: _eyes, accessory: _accessory, ...older } = look;
-    assert.deepEqual(parseLook(older), { ...look, eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_LOOK.hatColor, accessory: 'none' }, 'a look saved before them keeps everything else');
-    const anime = { ...look, top: 'narutoJacket', bottom: 'luffyShorts', shoes: 'zoroBoots', hat: 'strawHat', accessory: 'mask' } as const;
+    const { sunglasses: _sun, headphones: _phones, hat: _hat, hatColor: _hatColor, eyes: _eyes, eyeGear: _eyeGear, faceGear: _faceGear, neckGear: _neckGear,
+      shoulderGear: _shoulderGear, backGear: _backGear, waistGear: _waistGear, handGear: _handGear, backColor: _backColor, ...older } = look;
+    assert.deepEqual(parseLook(older), { ...look, eyes: 'round', sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_LOOK.hatColor, ...NO_GEAR, backColor: DEFAULT_LOOK.backColor }, 'a look saved before them keeps everything else');
+    assert.equal(parseLook({ ...older, accessory: 'parrot' })?.shoulderGear, 'parrot', 'the single accessory of an older look goes where it is worn now');
+    assert.deepEqual(parseLook({ ...older, accessory: 'none' }), parseLook(older));
+    const anime = { ...look, top: 'narutoJacket', bottom: 'luffyShorts', shoes: 'zoroBoots', hat: 'strawHat', faceGear: 'mask', waistGear: 'swords' } as const;
     assert.deepEqual(parseLook(anime), anime, 'anime pieces mix like any other');
-    assert.equal(parseLook({ ...look, accessory: 'cape' }), null);
-    const dressedUp = { ...look, hair: 'dreadlocks', eyes: 'starry', top: 'kimono', bottom: 'hakama', shoes: 'geta', hat: 'hachimaki', accessory: 'katana' } as const;
+    assert.equal(parseLook({ ...look, backGear: 'cape' }), null);
+    assert.equal(parseLook({ ...look, backGear: 'parrot' }), null, 'each accessory only in its own place');
+    const dressedUp = { ...look, hair: 'dreadlocks', eyes: 'starry', top: 'kimono', bottom: 'hakama', shoes: 'geta', hat: 'hachimaki', waistGear: 'katana', backGear: 'shell', shoulderGear: 'parrot' } as const;
     assert.deepEqual(parseLook(dressedUp), dressedUp, 'the dress-up wardrobe mixes like any other');
     assert.equal(parseLook({ ...look, eyes: 'narrow' })?.eyes, 'round', 'eyes no longer offered: round ones, the rest kept');
     assert.equal(parseLook({ ...look, hat: 'sombrero' }), null);
@@ -479,7 +483,7 @@ describe('random looks', () => {
       for (const [trait, value] of Object.entries(look)) seen.set(trait, (seen.get(trait) ?? new Set()).add(value));
     }
     for (const [trait, values] of seen) assert.ok(values.size >= 2, `${trait} varies`);
-    assert.ok(seen.get('hat')?.has('none') && seen.get('accessory')?.has('none') && seen.get('beard')?.has('none'), 'optional pieces sometimes stay empty');
+    assert.ok(seen.get('hat')?.has('none') && seen.get('backGear')?.has('none') && seen.get('beard')?.has('none'), 'optional pieces sometimes stay empty');
   });
 
   it('is decided by the random source alone', () => {
