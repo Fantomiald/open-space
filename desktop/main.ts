@@ -119,14 +119,20 @@ function showWindow() {
   current.on('page-title-updated', (_event, title) => app.dock?.setBadge(/^\((\d+)\)/.exec(title)?.[1] ?? ''));
   // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space. A file a session sent
   // ("Open the original") opens in a window of the app: the browser has no session cookie to load it with.
+  const isAttachment = (url: string) => url.startsWith(`${address}/attachments/`);
   current.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`${address}/attachments/`)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, backgroundColor: BACKGROUND } };
+    if (isAttachment(url)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, backgroundColor: BACKGROUND } };
     openOutside(url);
     return { action: 'deny' };
   });
   current.webContents.on('did-create-window', (opened) => {
     opened.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
-    opened.webContents.on('will-navigate', (event, url) => { event.preventDefault(); openOutside(url); });
+    // the window's own first load goes through will-navigate too: stopping it sent the file to the browser
+    opened.webContents.on('will-navigate', (event, url) => {
+      if (isAttachment(url)) return;
+      event.preventDefault();
+      openOutside(url);
+    });
   });
   current.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith(`${address}/`) || url === address) return;

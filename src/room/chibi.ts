@@ -1,8 +1,8 @@
 // The people of the room in chibi pixel art: a big head on a small body, 16 x 25 art pixels, drawn from a Look
 // (shared/look.ts). Each pose is drawn once on its own little canvas, outlined, and kept.
-import { CLOTH_COLORS, COSTUME_COLORS, HAIR_COLORS, MANNEQUIN, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
+import { CLOTH_COLORS, COSTUME_COLORS, DEFAULT_BACK_COLOR, HAIR_COLORS, MANNEQUIN, PEOPLE_INK as INK, SKIN_TONES } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
-import { BEARD_STYLES, HAIR_STYLES, WARDROBE_HAIR, type HairStyle, type Look } from '../../shared/look.ts';
+import { BEARD_STYLES, HAIR_STYLES, NO_GEAR, WARDROBE_HAIR, type Gear, type HairStyle, type Look } from '../../shared/look.ts';
 import { costumeSleeve, isCostumeHat, paintAccessory, paintCostumeHat, paintCostumeLegs, paintCostumeTop, paintRaisedSleeve, paintSmoke, underCostume, type Body, type CostumeHat } from './costumes.ts';
 import { css, mix, rgb } from './lighting.ts';
 import { HAT_HEIGHT, NO_OUTFIT, outfitKey, wornOutfit, type Hat, type Outfit } from './outfits.ts';
@@ -516,6 +516,11 @@ export function chibiIcon(look: Look, scale = 2): HTMLCanvasElement {
 /** Where a piece of the wardrobe is worn: the square of the sprite its picture shows, in art pixels. `body` is the
  * whole person, `back` the whole person from behind (what is worn on the back). */
 export type BodyPart = 'hat' | 'head' | 'chest' | 'legs' | 'feet' | 'wrist' | 'body' | 'back';
+/** Where each accessory is shown in the wardrobe; the others are worn on the head. */
+export const GEAR_PARTS: Partial<Record<Gear, BodyPart>> = {
+  swords: 'chest', katana: 'chest', lei: 'chest', guitar: 'chest', staff: 'body', parrot: 'body', jetpack: 'back', backpack: 'back', backSword: 'back', shell: 'back',
+  scarf: 'chest', cat: 'body', lantern: 'body', wings: 'back', quiver: 'back', shield: 'back',
+};
 const PARTS: Readonly<Record<BodyPart, { x: number; y: number; size: number }>> = {
   hat: { x: 1, y: 6, size: 24 }, head: { x: 4, y: 12, size: 18 }, chest: { x: 5, y: 27, size: 16 }, legs: { x: 6, y: 29, size: 14 }, feet: { x: 7, y: 33, size: 12 }, wrist: { x: -1, y: 26, size: 11 },
   body: { x: -2, y: 13, size: 30 }, back: { x: -2, y: 13, size: 30 },
@@ -524,7 +529,7 @@ const PARTS: Readonly<Record<BodyPart, { x: number; y: number; size: number }>> 
 const NECK = 30;
 /** Nothing on but plain trousers, which stay see-through like the body unless they are the piece shown. */
 const DUMMY: Partial<Look> = {
-  hair: 'none', beard: 'none', hat: 'none', headphones: false, accessory: 'none', glasses: null, sunglasses: false, watch: false, top: 'none', bottom: 'pants', shoes: 'barefoot',
+  hair: 'none', beard: 'none', hat: 'none', headphones: false, ...NO_GEAR, glasses: null, sunglasses: false, watch: false, top: 'none', bottom: 'pants', shoes: 'barefoot',
 };
 const STANDING: Pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: true, gesture: 'none' };
 const FROM_BEHIND: Pose = { ...STANDING, direction: 'up-right' };
@@ -592,7 +597,7 @@ export function lookOfStranger(id: string): Look {
     hat: seed % 7 === 0 ? pick(['cap', 'beanie'] as const, 25) : 'none', hatColor: pick(CLOTH_COLORS, 27),
     top: pick(['tshirt', 'vneck', 'polo', 'suit', 'shirt', 'hoodie', 'sweater', 'jacket'] as const, 12),
     topColor: pick(CLOTH_COLORS, 14), accentColor: pick(CLOTH_COLORS, 18), bottom: seed % 5 === 0 ? 'shorts' : 'pants', bottomColor: pick(CLOTH_COLORS, 20),
-    shoes: pick(['sneakers', 'shoes', 'boots'] as const, 22), shoesColor: pick(CLOTH_COLORS, 23), watch: false, accessory: 'none',
+    shoes: pick(['sneakers', 'shoes', 'boots'] as const, 22), shoesColor: pick(CLOTH_COLORS, 23), watch: false, ...NO_GEAR, backColor: DEFAULT_BACK_COLOR,
   };
 }
 

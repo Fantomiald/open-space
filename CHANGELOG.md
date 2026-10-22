@@ -1,5 +1,11 @@
 # Versions
 
+## 1.15.0
+
+- Accessoires : un onglet rangé par endroit du corps (yeux, visage, cou, épaule, dos, taille, main), et on porte une pièce par endroit en même temps. L'onglet Tête y passe.
+- Neuf nouvelles pièces : carapace de tortue, ailes et bouclier viking (couleur au choix), carquois, écharpe, chat sur l'épaule, lanterne. Le bâton de mage change de main pour laisser l'épaule au perroquet.
+- « Ouvrir l’original » ouvre bien le fichier dans une fenêtre de l’app au lieu de le renvoyer au navigateur.
+
 ## 1.14.1
 
 - Animal : chaque animal en tuile avec son aperçu (le choisi marche), motif du chat et race du chien en tuiles aussi, et les couleurs en haut.

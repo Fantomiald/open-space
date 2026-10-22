@@ -1006,7 +1006,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 /* the parts stay in reach while the pieces scroll under them, on the panel's own background */
 .cp-crew__bar { position: sticky; top: calc(-1 * var(--space-4)); z-index: 1; display: grid; margin-block: calc(-1 * var(--space-4)) calc(-1 * var(--space-2)); padding-block: var(--space-4) var(--space-2); background: var(--glass-solid); }
 .cp-crew__tabs { justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.cp-crew__tabs button { flex: none; padding-inline: var(--space-3); cursor: pointer; }
+.cp-crew__tabs button { flex: none; padding-inline: var(--space-2); cursor: pointer; }
 .cp-crew__panel { display: grid; gap: var(--space-5); align-content: start; min-width: 0; }
 /* each choice worn by the see-through dummy, its name under it */
 .cp-crew__pieces { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: var(--space-2); }

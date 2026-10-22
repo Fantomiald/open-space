@@ -7,6 +7,7 @@ import { WARDROBE_COLORS as W } from '../design/people-palette.ts';
 import { WARDROBE_BOTTOMS, WARDROBE_SHOES, type Look } from '../../shared/look.ts';
 import { eachFoot, eachLeg, grid, sleeves, torso, trousers, type Body } from './costumes.ts';
 import type { Hat } from './outfits.ts';
+import { shade } from '../design/room-palette.ts';
 import { shadedBall, tones, type Tones } from './pixel-art.ts';
 
 type Paint = (x: number, y: number, width: number, height: number, colour: string) => void;
@@ -93,7 +94,7 @@ export function paintWardrobeBehind(R: Paint, P: Dot, look: Look, hat: Hat | und
   }
   if (front && look.top === 'wizardCape') cape(R, b, tones(look.topColor), false);
   if (look.top === 'blanket') return;
-  switch (look.accessory) {
+  switch (look.backGear) {
     case 'jetpack':
       if (front) { R(-1, 11 + up, 2, 7, W.steel); R(-1, 11 + up, 2, 1, W.red); R(15, 11 + up, 2, 7, W.steelDark); R(15, 11 + up, 2, 1, W.red); }
       break;
@@ -107,8 +108,80 @@ export function paintWardrobeBehind(R: Paint, P: Dot, look: Look, hat: Hat | und
       break;
     // the guitar's neck and head above the shoulder, the guitar on the back
     case 'guitar': if (b.back) break; R(14, 8 + up, 1, 5, W.fret); R(14, 6 + up, 2, 2, W.guitarDark); break;
+    // the whole shell behind the body, an oval showing over the shoulders, at the sides and between the legs, its rim round the edge
+    case 'shell': {
+      if (!front) break;
+      const plates = tones(look.backColor);
+      const inside = (x: number, row: number) => ((x + 0.5 - 8) / 9.5) ** 2 + ((row + 0.5 - 17) / 6.5) ** 2 <= 1;
+      for (let row = 10; row <= 23; row++) for (let x = -2; x <= 17; x++) {
+        if (!inside(x, row)) continue;
+        const edge = !inside(x - 1, row) || !inside(x + 1, row) || !inside(x, row - 1) || !inside(x, row + 1);
+        P(x, row + up, edge ? (x < 8 ? W.shellRim : W.shellRimDark) : x < 4 ? plates.light : x < 12 ? plates.base : plates.shade);
+      }
+      break;
+    }
+    // the wings spread out on each side, the body hiding where they join the back
+    case 'wings': if (front) wings(P, look.backColor, up); break;
+    // the arrows' feathers over the shoulder
+    case 'quiver':
+      if (!front) break;
+      for (const [x, row] of [[-1, 8], [1, 9]]) { R(x, row + up, 1, 2, W.red); R(x + 1, row + 1 + up, 1, 3, W.fret); }
+      P(0, 9 + up, W.white);
+      break;
+    // the round shield behind the body, its rim showing at the sides
+    case 'shield': if (front) shield(P, look.backColor, up, true); break;
   }
 }
+
+/** A pair of feathered wings, the left one drawn from this grid and the right one mirrored; the inner columns join the back. */
+const WING = [
+  'll.........',
+  'lhl........',
+  'lhbl.......',
+  'lhbbll.....',
+  '.lhbbbbll..',
+  '.lhbbbbbbbl',
+  '.lbbbbbbbbs',
+  '..sbbsbbbs.',
+  '..sbsbbbs..',
+  '...sbsbs...',
+  '...s.sb....',
+  '......s....',
+];
+
+function wings(P: Dot, colour: string, up: number) {
+  const feathers = tones(colour), shine = shade(colour, 1.4);
+  grid(P, -4, 8 + up, WING, { h: shine, l: feathers.light, b: feathers.base, s: feathers.shade });
+  grid(P, 9, 8 + up, WING.map((line) => [...line].reverse().join('')), { h: feathers.light, l: feathers.base, b: feathers.shade, s: feathers.dark });
+}
+
+/** A viking's round shield: painted quarters, a wooden rim, an iron boss in the middle; from the front, only the rim round the shoulders. */
+function shield(P: Dot, colour: string, up: number, rimOnly = false) {
+  const paint = tones(colour);
+  for (let row = 8; row <= 22; row++) for (let x = 0; x <= 16; x++) {
+    const d = Math.hypot(x + 0.5 - 8, row + 0.5 - 15);
+    if (d > 7 || (rimOnly && (d <= 6 || row > 18))) continue;
+    const quarter = (x < 8) === (row < 15);
+    P(x, row + up, d > 6 ? (x + row) % 3 ? W.wood : W.woodDark : d < 1.5 ? (x < 8 && row < 15 ? W.steelLight : W.steelDark) : d < 2.2 ? W.steel : quarter ? (x < 8 ? paint.light : paint.base) : x < 8 ? W.white : W.whiteShade);
+  }
+}
+
+/** A turtle's shell seen from behind, wider than the arms: a dome lit from the top left, plates down the middle, a notched rim. */
+const SHELL = [
+  '....rrRrrRrr....',
+  '..Rrlloooobbrr..',
+  '.Rllhohlllobbsr.',
+  'RlllhohlllobbssR',
+  'rlllhhoooobbbssr',
+  'rblllolllbobbssr',
+  'RbbooollbbooossR',
+  'roobbobbbbossoor',
+  'rbbbbboooosssssr',
+  'RssssossssossssR',
+  '.rsssossssosssR.',
+  '..rrssssssssrR..',
+  '....rrRrrRrr....',
+];
 
 /** The bottom and the shoes, after chibi.ts's legs (underWardrobe) and before the top, which covers the waist. */
 export function paintWardrobeLegs(R: Paint, P: Dot, look: Look, b: Body) {
@@ -323,7 +396,7 @@ export function paintWardrobeTop(R: Paint, P: Dot, look: Look, b: Body) {
   }
   if (look.top === 'blanket') return;
   // gear worn on the body
-  switch (look.accessory) {
+  switch (look.backGear) {
     case 'jetpack':
       if (front) { R(4, y(13), 1, 6, W.strap); R(11, y(13), 1, 6, W.strap); R(4, y(16), 8, 1, W.strap); break; }
       for (const x of [3, 9]) { R(x, y(12), 4, 8, W.steel); R(x, y(12), 1, 8, W.steelLight); R(x + 3, y(12), 1, 8, W.steelDark); R(x, y(12), 4, 2, W.red); R(x + 1, y(20), 2, 1, W.rubber); }
@@ -356,6 +429,24 @@ export function paintWardrobeTop(R: Paint, P: Dot, look: Look, b: Body) {
       }
       break;
     }
+    case 'shell': {
+      if (front) break;
+      const plates = tones(look.backColor);
+      grid(P, 0, y(11), SHELL, { r: W.shellRim, R: W.shellRimDark, h: shade(look.backColor, 1.5), l: plates.light, b: plates.base, s: plates.shade, o: shade(look.backColor, 0.45) });
+      break;
+    }
+    case 'wings': if (!front) wings(P, look.backColor, up); break;
+    // a leather quiver slung across the back, full of arrows; from the front, its strap
+    case 'quiver':
+      if (front) { for (let i = 0; i < 7; i++) P(3 + i, y(13 + i), W.leather); break; }
+      for (let t = 0; t < 9; t++) { const x = 12 - Math.floor(t * 0.8); R(x - 1, y(11 + t), 3, 1, t === 0 ? W.gold : t % 3 ? W.leather : W.leatherDark); }
+      for (const [x, row] of [[13, 8], [15, 9]]) { R(x, y(row), 1, 2, W.red); R(x - 1, y(row + 1), 1, 2, W.fret); }
+      P(14, y(9), W.white);
+      break;
+    case 'shield':
+      if (front) { for (let i = 0; i < 7; i++) P(11 - i, y(13 + i), W.leather); break; }
+      shield(P, look.backColor, up);
+      break;
   }
 }
 
@@ -368,7 +459,7 @@ export function paintWardrobeRaisedSleeve(R: Paint, look: Look, b: Body) {
 
 /** What goes over the outline: the flames under a jetpack, flickering with the step. */
 export function paintWardrobeGlow(P: Dot, look: Look, b: Body) {
-  if (look.accessory !== 'jetpack' || look.top === 'blanket') return;
+  if (look.backGear !== 'jetpack' || look.top === 'blanket') return;
   const flame = b.step ? [[0, W.flameCore], [1, W.flame], [2, W.flame]] as const : [[0, W.flameCore], [1, W.flame]] as const;
   const nozzles = b.back ? [4, 5, 10, 11] : [-1, 16];
   for (const x of nozzles) for (const [dy, colour] of flame) P(x, (b.back ? 21 : 18) + b.up + dy, colour);

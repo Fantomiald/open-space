@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
 import { JOBS, type Job } from '../../shared/jobs.ts';
-import { ACCESSORIES, BEARD_STYLES, BOTTOMS, EYES, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, randomLook, type Accessory, type Look } from '../../shared/look.ts';
+import { BEARD_STYLES, BOTTOMS, EYES, GEAR, GEAR_SLOTS, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, randomLook, type GearSlot, type Look } from '../../shared/look.ts';
 import type { CrewMember } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { HAT_ROWS, chibiHead, chibiPiece, chibiSprite, type BodyPart } from '../room/chibi.ts';
+import { GEAR_PARTS, HAT_ROWS, chibiHead, chibiPiece, chibiSprite, type BodyPart } from '../room/chibi.ts';
 import type { Pose } from '../room/sprites.ts';
 import { FIXED_COLOUR } from '../room/wardrobe.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -17,16 +17,13 @@ import { useDismiss } from './useDismiss.ts';
 
 /** The hats that take a colour of one's choice. */
 const COLOURED_HATS: ReadonlySet<Look['hat']> = new Set(['cap', 'beanie', 'beret', 'tophat', 'party', 'tricorne', 'wizardHat', 'sunHat', 'cowboyHat']);
+/** The accessories that take a colour of one's choice. */
+const COLOURED_GEAR: ReadonlySet<string> = new Set(['shell', 'wings', 'shield']);
 /** The pieces whose colour is their own (anime, armour...): no colour to pick. */
 const ownColour = (piece: string) => isCostumePiece(piece) || FIXED_COLOUR.has(piece);
-/** Where the accessories not worn on the head are shown. */
-const ACCESSORY_PARTS: Partial<Record<Accessory, BodyPart>> = {
-  swords: 'chest', katana: 'chest', lei: 'chest', guitar: 'chest', staff: 'body', parrot: 'body', jetpack: 'back', backpack: 'back', backSword: 'back',
-};
-
-const TABS = ['face', 'hair', 'beard', 'head', 'top', 'bottom', 'shoes'] as const;
+const TABS = ['face', 'hair', 'beard', 'gear', 'top', 'bottom', 'shoes'] as const;
 type Tab = (typeof TABS)[number];
-const HEAD_TABS: ReadonlySet<Tab> = new Set(['face', 'hair', 'beard', 'head']);
+const HEAD_TABS: ReadonlySet<Tab> = new Set(['face', 'hair', 'beard', 'gear']);
 
 /** The four directions of the room, turned one after the other by the preview's arrows. */
 const DIRECTIONS: Pose['direction'][] = ['down-right', 'down-left', 'up-left', 'up-right'];
@@ -298,19 +295,12 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
               {pieces(words.beard, BEARD_STYLES, labels.beard, look.beard, (beard) => change({ beard }), (beard) => ({ beard }), 'head')}
             </>
           )}
-          {tab === 'head' && (
+          {tab === 'gear' && (
             <>
               {COLOURED_HATS.has(look.hat) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.hatColor} onPick={(hatColor) => change({ hatColor })} />}
               {pieces(words.hat, HATS, labels.hat, look.hat, (hat) => change({ hat }), (hat) => ({ hat }), 'hat')}
-              <Pieces
-                label={words.accessory} options={ACCESSORIES} labels={labels.accessory} value={look.accessory} onPick={(accessory) => change({ accessory })}
-                picture={(accessory) => chibiPiece(look, { accessory }, ACCESSORY_PARTS[accessory] ?? 'head')}
-              >
-                {/* worn with any other accessory (the radio puts headphones on too), so each stays a trait of its own */}
-                <PieceButton label={words.headphones} picture={chibiPiece(look, { headphones: true }, 'head')} pressed={look.headphones} onPick={() => change({ headphones: !look.headphones })} />
-                <PieceButton label={words.watch} picture={chibiPiece(look, { watch: true }, 'wrist')} pressed={look.watch} onPick={() => change({ watch: !look.watch })} />
-              </Pieces>
               <p className="cp-muted cp-crew__note">{words.festivalHats}</p>
+              {GEAR_SLOTS.map((slot) => <GearPieces key={slot} slot={slot} look={look} onChange={change} />)}
             </>
           )}
           {tab === 'top' && (
@@ -387,6 +377,27 @@ function Pieces<T extends string>({ label, options, labels, value, onPick, pictu
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The accessories worn in one place of the body, with the headphones by the face and the watch by the hand: those two
+ * are worn with anything (the radio puts headphones on too), so each stays a trait of its own.
+ */
+function GearPieces<Slot extends GearSlot>({ slot, look, onChange }: { slot: Slot; look: Look; onChange: (part: Partial<Look>) => void }) {
+  const words = t.settings.look;
+  const worn = (gear: Look[Slot]) => ({ [slot]: gear }) as Partial<Look>;
+  return (
+    <>
+      {slot === 'backGear' && COLOURED_GEAR.has(look.backGear) && <Swatches label={words.colour} colours={CLOTH_COLORS} value={look.backColor} onPick={(backColor) => onChange({ backColor })} />}
+      <Pieces
+        label={words.gearSlots[slot]} options={GEAR[slot] as readonly Look[Slot][]} labels={words.options.gear} value={look[slot]} onPick={(gear) => onChange(worn(gear))}
+        picture={(gear) => chibiPiece(look, worn(gear), GEAR_PARTS[gear] ?? 'head')}
+      >
+        {slot === 'faceGear' && <PieceButton label={words.headphones} picture={chibiPiece(look, { headphones: true }, 'head')} pressed={look.headphones} onPick={() => onChange({ headphones: !look.headphones })} />}
+        {slot === 'handGear' && <PieceButton label={words.watch} picture={chibiPiece(look, { watch: true }, 'wrist')} pressed={look.watch} onPick={() => onChange({ watch: !look.watch })} />}
+      </Pieces>
+    </>
   );
 }
 

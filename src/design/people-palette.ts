@@ -25,12 +25,15 @@ export const OLDER_PET_FURS = { ginger: '#e08a3c', black: '#2a2a33', white: '#ee
 export const PET_EYE_COLORS = ['#3f9a4a', '#e8c547', '#4d8dff', '#c46a2a', '#1b1b22'] as const;
 /** A cap, a beanie, a beret or a top hat before one picks a colour. */
 export const DEFAULT_HAT_COLOR = '#2b4fb3';
+/** A turtle shell's green, until one picks another. */
+export const DEFAULT_BACK_COLOR = '#5fae5f';
 export const GLASSES_COLORS = ['#121419', '#eef1f5', '#a8743a', '#c43c5a', '#4d8dff'] as const;
 
 export const DEFAULT_LOOK: Look = {
   skin: '#f2c095', eyes: 'round', hair: 'short', hairColor: '#3b2a20', beard: 'none', beardColor: '#3b2a20', glasses: null,
   sunglasses: false, headphones: false, hat: 'none', hatColor: DEFAULT_HAT_COLOR,
-  top: 'tshirt', topColor: '#4d8dff', accentColor: '#8b919c', bottom: 'pants', bottomColor: '#2c3a66', shoes: 'sneakers', shoesColor: '#2a2d36', watch: false, accessory: 'none',
+  top: 'tshirt', topColor: '#4d8dff', accentColor: '#8b919c', bottom: 'pants', bottomColor: '#2c3a66', shoes: 'sneakers', shoesColor: '#2a2d36', watch: false,
+  eyeGear: 'none', faceGear: 'none', neckGear: 'none', shoulderGear: 'none', backGear: 'none', waistGear: 'none', handGear: 'none', backColor: DEFAULT_BACK_COLOR,
 };
 
 /** The colours of the anime pieces (src/room/costumes.ts), fixed like the characters'. */
@@ -71,4 +74,5 @@ export const WARDROBE_COLORS = {
   petalPink: '#ff8ab4', petalWhite: '#f6f4ee', petalYellow: '#ffd84a', petalRed: '#e8524a', petalPurple: '#b48cff', leaf: '#4f9a3a',
   straw: '#e9c45c', flame: '#ff9a3a', flameCore: '#fff1a8', rubber: '#2b2f38', snorkel: '#f2a33a',
   sheath: '#7a1f26', bag: '#d0603a', guitar: '#c8442e', guitarDark: '#7a2418', fret: '#5a3a22', sporran: '#5a3a22', sock: '#eef0f4',
+  shellRim: '#d9b86a', shellRimDark: '#a8873e',
 } as const;

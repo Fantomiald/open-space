@@ -2,7 +2,7 @@
 // chibi.ts on the head in its coordinates: the head is a ball centred on (8, 6.5), the eyes at x 6-7 and 10-11 on rows
 // 6-7, the visible ear at x 1-2 from the front; from behind, the ear is at x 13-14 (`up` lowers it all when seated).
 import { PEOPLE_INK as INK, WARDROBE_COLORS as W } from '../design/people-palette.ts';
-import { WARDROBE_ACCESSORIES, WARDROBE_HATS, type Look } from '../../shared/look.ts';
+import { WARDROBE_HATS, type Look } from '../../shared/look.ts';
 import { grid, type Body } from './costumes.ts';
 import { shadedBall, tones, type Tones } from './pixel-art.ts';
 
@@ -11,7 +11,6 @@ type Dot = (x: number, y: number, colour: string) => void;
 
 export type WardrobeHat = (typeof WARDROBE_HATS)[number];
 export const isWardrobeHat = (hat: string | undefined): hat is WardrobeHat => hat !== undefined && (WARDROBE_HATS as readonly string[]).includes(hat);
-const isWardrobeAccessory = (accessory: string) => (WARDROBE_ACCESSORIES as readonly string[]).includes(accessory);
 
 const inside = (x: number, y: number, cx: number, cy: number, rx: number, ry: number) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 <= 1;
 /** Whether a pixel is on the head's own ball (chibi.ts): what shaved hair shows as stubble on. */
@@ -305,8 +304,7 @@ export function paintWardrobeHat(R: Paint, P: Dot, hat: WardrobeHat, colour: str
 export function paintWardrobeOverHair(R: Paint, P: Dot, look: Look, b: Body, glasses: boolean) {
   const up = b.up, front = !b.back;
   if (look.eyes === 'angry' && front && !glasses) for (const [x, y] of [[4, 4], [5, 4], [6, 5], [7, 5], [13, 4], [12, 4], [11, 5], [10, 5]]) P(x, y + up, INK.pupil);
-  if (!isWardrobeAccessory(look.accessory)) return;
-  switch (look.accessory) {
+  switch (look.eyeGear) {
     // a cyber visor across the eyes, glowing
     case 'visor':
       if (!front) { R(1, 5 + up, 15, 2, W.rubber); break; }
@@ -331,40 +329,60 @@ export function paintWardrobeOverHair(R: Paint, P: Dot, look: Look, b: Body, gla
       for (const [x, y] of [[10, 4], [11, 4], [9, 5], [12, 5], [9, 6], [12, 6], [9, 7], [12, 7], [10, 8], [11, 8]]) P(x, y + up, W.gold);
       for (const [x, y] of [[12, 9], [13, 10], [13, 11], [12, 12]]) P(x, y + up, W.goldDark);
       break;
-    // neon earbuds in the ears
-    case 'earbuds':
-      if (front) { R(1, 6 + up, 2, 2, W.neonPink); P(2, 6 + up, W.neonCyan); P(1, 8 + up, W.neonPink); }
-      else { R(13, 6 + up, 2, 2, W.neonPink); P(13, 6 + up, W.neonCyan); P(14, 8 + up, W.neonPink); }
-      break;
-    // a garland of flowers round the neck
-    case 'lei': {
-      const petals = [W.petalPink, W.petalYellow, W.petalWhite, W.petalRed, W.petalPurple];
-      const spots = front ? [[3, 13], [5, 14], [7, 15], [9, 15], [11, 14], [12, 13]] : [[3, 13], [5, 13], [7, 13], [9, 13], [11, 13]];
-      spots.forEach(([x, y], index) => { R(x, y + up, 2, 1, petals[index % petals.length]); P(x + (index % 2), y + 1 + up, petals[(index + 2) % petals.length]); });
-      break;
-    }
-    // a parrot on the shoulder
-    case 'parrot': {
-      const lines = front ? ['.rr.', 'rwry', 'rrr.', 'grrr', 'ggrr', '.bb.', '.b..'] : ['.rr.', 'rrrr', 'grrr', 'gggr', 'gggr', '.bb.', '..b.'];
-      grid(P, front ? -2 : 15, 8 + up, lines, { r: W.red, w: INK.eyeWhite, y: W.yellow, g: W.green, b: W.blue });
-      break;
-    }
-    // a katana at the hip, its sheath trailing: the far side from the front, the near one from behind
-    case 'katana':
-      if (look.top === 'blanket') break;
-      for (let t = 0; t < 9; t++) {
-        const dx = Math.floor(t * 0.6);
-        P(b.back ? 4 - dx : 11 + dx, 14 + t + up, t < 2 ? (t % 2 ? W.white : W.strap) : t === 2 ? W.gold : W.sheath);
-      }
-      break;
-    // a wizard's staff in the hand, a glowing orb on top
-    case 'staff': {
-      if (look.top === 'blanket' || b.typing) break;
-      const x = front ? -1 : 16, shift = front ? b.swing : -b.swing;
-      R(x, 2 + up + shift, 1, 20 - up, W.wood); R(x, 22 + shift, 1, 3, W.woodDark);
-      shadedBall(P, x + 0.5, 0.5 + up + shift, 1.8, 1.8, tones(W.neonCyan));
-      P(x, 0 + up + shift, W.lensShine);
-      break;
+  }
+  // neon earbuds in the ears
+  if (look.faceGear === 'earbuds') {
+    if (front) { R(1, 6 + up, 2, 2, W.neonPink); P(2, 6 + up, W.neonCyan); P(1, 8 + up, W.neonPink); }
+    else { R(13, 6 + up, 2, 2, W.neonPink); P(13, 6 + up, W.neonCyan); P(14, 8 + up, W.neonPink); }
+  }
+  // a wizard's staff in the far hand, the parrot's shoulder free, a glowing orb on top; put down while that hand is raised
+  if (look.handGear === 'staff' && look.top !== 'blanket' && !b.typing && !b.raising) {
+    const x = front ? 16 : -1, shift = front ? -b.swing : b.swing;
+    R(x, 2 + up + shift, 1, 20 - up, W.wood); R(x, 22 + shift, 1, 3, W.woodDark);
+    shadedBall(P, x + 0.5, 0.5 + up + shift, 1.8, 1.8, tones(W.neonCyan));
+    P(x, 0 + up + shift, W.lensShine);
+  }
+  // a lit lantern hanging from a short pole in the same hand, at chest height; put down too while that hand is raised
+  if (look.handGear === 'lantern' && look.top !== 'blanket' && !b.typing && !b.raising) {
+    const hand = front ? 14 : 1, side = front ? 1 : -1, row = 19 + up + (front ? -b.swing : b.swing);
+    [[0, 0], [1, -1], [1, -2], [2, -3], [2, -4], [3, -5]].forEach(([dx, dy], index) => {
+      P(hand + side * dx, row + dy, index % 2 ? W.woodDark : W.wood);
+    });
+    const x = hand + side * 3;
+    P(x, row - 4, W.strap); R(x - 1, row - 3, 3, 1, W.steelDark); R(x - 1, row - 2, 3, 2, W.flameCore); P(x, row - 1, W.flame); R(x - 1, row, 3, 1, W.steelDark);
+  }
+  // a knitted scarf round the neck in the accent colour, striped, one end hanging down
+  if (look.neckGear === 'scarf') {
+    const wool = tones(look.accentColor);
+    R(3, 12 + up, 10, 2, wool.base); R(3, 13 + up, 10, 1, wool.shade);
+    for (let x = 4; x < 13; x += 3) P(x, 12 + up, wool.light);
+    const end = front ? 9 : 5;
+    for (let row = 14; row <= 18; row++) R(end, row + up, 2, 1, row % 2 ? W.white : wool.base);
+    P(end, 19 + up, wool.shade); P(end + 1, 19 + up, wool.shade);
+  }
+  // a garland of flowers round the neck
+  if (look.neckGear === 'lei') {
+    const petals = [W.petalPink, W.petalYellow, W.petalWhite, W.petalRed, W.petalPurple];
+    const spots = front ? [[3, 13], [5, 14], [7, 15], [9, 15], [11, 14], [12, 13]] : [[3, 13], [5, 13], [7, 13], [9, 13], [11, 13]];
+    spots.forEach(([x, y], index) => { R(x, y + up, 2, 1, petals[index % petals.length]); P(x + (index % 2), y + 1 + up, petals[(index + 2) % petals.length]); });
+  }
+  // a parrot on the shoulder
+  if (look.shoulderGear === 'parrot') {
+    const lines = front ? ['.rr.', 'rwry', 'rrr.', 'grrr', 'ggrr', '.bb.', '.b..'] : ['.rr.', 'rrrr', 'grrr', 'gggr', 'gggr', '.bb.', '..b.'];
+    grid(P, front ? -2 : 15, 8 + up, lines, { r: W.red, w: INK.eyeWhite, y: W.yellow, g: W.green, b: W.blue });
+  }
+  // a ginger cat sitting on the shoulder, its tail curled down the arm
+  if (look.shoulderGear === 'cat') {
+    const lines = front
+      ? ['o...o', 'oo.oo', 'oosoo', 'okoko', 'owpwo', '.www.', 'ooooo', 'soooo', 's....', 's....']
+      : ['o...o', 'oo.oo', 'ooooo', 'ososo', 'ooooo', '.ooo.', 'ooooo', 'oosoo', '....s', '....s'];
+    grid(P, front ? -3 : 14, 6 + up, lines, { o: W.orange, s: tones(W.orange).shade, w: W.white, k: INK.pupil, p: W.petalPink });
+  }
+  // a katana at the hip, its sheath trailing: the far side from the front, the near one from behind
+  if (look.waistGear === 'katana' && look.top !== 'blanket') {
+    for (let t = 0; t < 9; t++) {
+      const dx = Math.floor(t * 0.6);
+      P(b.back ? 4 - dx : 11 + dx, 14 + t + up, t < 2 ? (t % 2 ? W.white : W.strap) : t === 2 ? W.gold : W.sheath);
     }
   }
 }
