@@ -8,6 +8,7 @@ import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import { parseJobs } from '../shared/jobs.ts';
 import { parseLook } from '../shared/look.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
+import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
 import { CONVERSATION_ID } from './conversations.ts';
 import { asJson, asNumber, isJson } from './json.ts';
@@ -318,6 +319,54 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const query = boundedString(raw.query, MAX_SEARCH);
       return query !== null ? { t: 'musicLibrary', query: query.trim() } : null;
     }
+    case 'browser': {
+      const action = parseBrowserAction(raw.action);
+      return sessionId && action ? { t: 'browser', sessionId, lane: laneNumber(raw.lane), action } : null;
+    }
+    case 'browserInput': {
+      const input = parseBrowserInput(raw.input);
+      return sessionId && input ? { t: 'browserInput', sessionId, lane: laneNumber(raw.lane), input } : null;
+    }
+    default: return null;
+  }
+}
+
+/** which browser of the session (shared/browser.ts browserId): its own when not said */
+const laneNumber = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 100 ? value : 0);
+
+function parseBrowserAction(value: unknown): BrowserAction | null {
+  if (!isJson(value)) return null;
+  switch (value.kind) {
+    case 'open': case 'back': case 'forward': case 'reload': case 'stop': return { kind: value.kind };
+    case 'navigate': { const url = boundedString(value.url, 4000); return url ? { kind: 'navigate', url } : null; }
+    case 'tab': case 'closeTab': { const id = boundedString(value.id, 100); return id ? { kind: value.kind, id } : null; }
+    case 'format': return value.format === 'desktop' || value.format === 'mobile' ? { kind: 'format', format: value.format } : null;
+    default: return null;
+  }
+}
+
+const MOUSE_TYPES = new Set(['mousePressed', 'mouseReleased', 'mouseMoved']);
+const MOUSE_BUTTONS = new Set(['left', 'middle', 'right', 'none']);
+const fraction = (value: unknown) => (typeof value === 'number' && value >= 0 && value <= 1 ? value : null);
+const modifiers = (value: unknown) => (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 15 ? value : 0);
+const delta = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? Math.max(-10_000, Math.min(10_000, value)) : 0);
+
+function parseBrowserInput(value: unknown): BrowserInput | null {
+  if (!isJson(value)) return null;
+  const x = fraction(value.x), y = fraction(value.y);
+  switch (value.kind) {
+    case 'mouse': {
+      if (x === null || y === null || !MOUSE_TYPES.has(value.type as string) || !MOUSE_BUTTONS.has(value.button as string)) return null;
+      const clicks = typeof value.clicks === 'number' && Number.isInteger(value.clicks) ? Math.max(0, Math.min(3, value.clicks)) : 0;
+      return { kind: 'mouse', type: value.type as 'mouseMoved', x, y, button: value.button as MouseButton, clicks, modifiers: modifiers(value.modifiers) };
+    }
+    case 'wheel': return x === null || y === null ? null : { kind: 'wheel', x, y, dx: delta(value.dx), dy: delta(value.dy) };
+    case 'key': {
+      const key = boundedString(value.key, 40), code = boundedString(value.code, 40);
+      if (!key || code === null || (value.type !== 'keyDown' && value.type !== 'keyUp')) return null;
+      return { kind: 'key', type: value.type, key, code, modifiers: modifiers(value.modifiers) };
+    }
+    case 'text': { const text = boundedString(value.text, MAX_TEXT); return text ? { kind: 'text', text } : null; }
     default: return null;
   }
 }
