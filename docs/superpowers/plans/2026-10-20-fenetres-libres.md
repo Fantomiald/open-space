@@ -21,7 +21,7 @@
 - Sous `60rem` de large : rien ne change, gestes désactivés, rien d'effacé.
 - `prefers-reduced-motion` : pas d'animation de placement.
 - Vérifications de chaque tâche : `npm run check`, `npm run lint`, `npm test`. **Jamais** `npm run build`, `npm start` ni relance du serveur (le `dist` est servi en direct sur 4848, la relance coupe les sessions). Vérification visuelle : `npx vite --config vite.preview.local.ts` (port 5175, pages `src/zz-preview.html` et `src/zz-focus.html?open=4`) avec Playwright.
-- **Ne pas commiter** : Julien commite lui-même. Chaque tâche finit par « laisser non commité ».
+- **Ne pas commiter** : l'utilisateur commite lui-même. Chaque tâche finit par « laisser non commité ».
 
 Valeurs fixées par ce plan (le spec les laisse au constructeur) :
 
@@ -302,5 +302,5 @@ describe('moving a window in the grid', () => {
 
 - [ ] **Step 1:** relire le spec section par section et cocher chaque exigence contre ce qui a été fait ; corriger les écarts.
 - [ ] **Step 2:** `npm run check && npm run lint && npm test` → tout passe.
-- [ ] **Step 3:** captures finales (salle déplacée et zoomée, grille réordonnée, mode libre avec un guide visible, mobile 390 px) envoyées à Julien avec SendUserFile.
-- [ ] **Step 4:** ne pas builder ni relancer : dire à Julien qu'il faut « relance le serv » pour voir la version en direct, et laisser non commité.
+- [ ] **Step 3:** captures finales (salle déplacée et zoomée, grille réordonnée, mode libre avec un guide visible, mobile 390 px) envoyées à l'utilisateur avec SendUserFile.
+- [ ] **Step 4:** ne pas builder ni relancer : dire à l'utilisateur qu'il faut « relance le serv » pour voir la version en direct, et laisser non commité.

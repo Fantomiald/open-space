@@ -31,7 +31,7 @@ test('the branch and the folder share one stem, with a suffix when taken', () =>
 });
 
 test('a folder is inside a root, not beside it', () => {
-  assert.ok(isInside('/a/lilies', '/a/lilies'));
-  assert.ok(isInside('/a/lilies/mobile', '/a/lilies'));
-  assert.ok(!isInside('/a/lilies-web', '/a/lilies'));
+  assert.ok(isInside('/a/garden', '/a/garden'));
+  assert.ok(isInside('/a/garden/mobile', '/a/garden'));
+  assert.ok(!isInside('/a/garden-web', '/a/garden'));
 });

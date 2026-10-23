@@ -187,10 +187,10 @@ test('the branches of a repository: worktrees of Open Space and Claude Code, os/
 test("a conversation's transcripts move from one folder's key to another's, sub-agents included", async () => {
   const home = path.join(scratch, 'home');
   const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-  const from = projectFolder('/work/lilies/.claude/worktrees/os-lina', home), to = projectFolder('/work/lilies', home);
+  const from = projectFolder('/work/garden/.claude/worktrees/os-lina', home), to = projectFolder('/work/garden', home);
   write(path.join(from, `${id}.jsonl`), '{"a":1}\n');
   write(path.join(from, id, 'subagents', 'agent-1.jsonl'), '{}\n');
-  await moveConversation('/work/lilies/.claude/worktrees/os-lina', '/work/lilies', [id, id], home);
+  await moveConversation('/work/garden/.claude/worktrees/os-lina', '/work/garden', [id, id], home);
   assert.equal(readFileSync(path.join(to, `${id}.jsonl`), 'utf8'), '{"a":1}\n');
   assert.ok(existsSync(path.join(to, id, 'subagents', 'agent-1.jsonl')));
   assert.ok(!existsSync(path.join(from, `${id}.jsonl`)));

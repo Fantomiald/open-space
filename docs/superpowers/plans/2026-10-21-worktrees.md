@@ -1,6 +1,6 @@
 # Worktrees : plan
 
-Spec : `docs/superpowers/specs/2026-10-21-worktrees-design.md`. Maquettes : https://claude.ai/artifact/BwFbL6yVDANKFg8G2DJgBE.
+Spec : `docs/superpowers/specs/2026-10-21-worktrees-design.md`. Maquettes : (lien privé retiré)
 
 ## Fichiers
 
