@@ -121,6 +121,8 @@ export const common: Dictionary['common'] = {
     previousTrack: 'Previous track',
     nextTrack: 'Next track',
     closed: (app) => `${app} is closed`,
+    closedWindows: (app) => `Open ${app} and play a track to control it here`,
+    deniedWindows: (app) => `Windows or ${app} did not accept playback control. Open the app and try again.`,
     nothing: 'Nothing playing',
     paused: 'Paused',
     denied: 'Access denied',

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
 import type { AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { MusicApp } from '../shared/music.ts';
 import { createAsideRunner } from './aside.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
@@ -168,7 +169,9 @@ function changeNotes<T>(change: () => Promise<T>): Promise<T> {
 }
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
-const musicApps = installedMusicApps();
+// on Windows, looking for the players takes PowerShell a few seconds: the page learns them once found
+let musicApps: MusicApp[] = [];
+void installedMusicApps().then((apps) => { musicApps = apps; broadcast({ t: 'musicApps', apps }); });
 let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
 /** Tells every page when the badge of the numbers object comes or goes. */
 async function checkMetrics() {

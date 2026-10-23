@@ -120,6 +120,8 @@ export const common = {
     previousTrack: 'Morceau précédent',
     nextTrack: 'Morceau suivant',
     closed: (app: string) => `${app} est fermé`,
+    closedWindows: (app: string) => `Ouvre ${app} et lance un morceau pour le piloter ici`,
+    deniedWindows: (app: string) => `Windows ou ${app} n’a pas accepté le contrôle de lecture. Ouvre l’application et réessaie.`,
     nothing: 'Rien en lecture',
     paused: 'En pause',
     denied: 'Accès refusé',

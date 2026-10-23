@@ -1,6 +1,6 @@
 // The office radio, pinned to the top left corner under the header. Its own source: live lo-fi web radios, played
 // straight by the browser (the server stays offline); it starts on a click, as browsers refuse sound before one, and
-// the station and the volume are remembered. On a Mac it can instead drive Music or Spotify (server/music.ts): the
+// the station and the volume are remembered. It can instead drive Music or Spotify (server/music.ts): the
 // sound then comes from the app, the radio is its remote. The source chosen is remembered too.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MusicAction, MusicApp } from '../../shared/music.ts';
@@ -10,6 +10,7 @@ import { useSessions } from '../state/sessions.ts';
 import { ChevronDownIcon, LibraryIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon } from './Icons.tsx';
 import { Marquee } from './Marquee.tsx';
 import { useDismiss } from './useDismiss.ts';
+import { IS_WINDOWS } from '../lib/platform.ts';
 
 /** Direct MP3 streams, checked on 2026-10-16 (their names come from the streams' own ICY headers). */
 const STATIONS = [
@@ -152,12 +153,12 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
   const name = words.sources[app];
   const state = now?.state;
   const track = now?.track ?? null;
-  const title = state === 'denied' ? words.denied : state === 'closed' ? words.closed(name) : track ? [track.title, track.artist].filter(Boolean).join(' · ') : now ? words.nothing : '';
+  const title = state === 'denied' ? words.denied : state === 'closed' ? (IS_WINDOWS ? words.closedWindows(name) : words.closed(name)) : track ? [track.title, track.artist].filter(Boolean).join(' · ') : now ? words.nothing : '';
   return (
-    <section className="cp-radio" aria-label={name} data-playing={state === 'playing'} title={state === 'denied' ? words.deniedHelp(name) : undefined}>
+    <section className="cp-radio" aria-label={name} data-playing={state === 'playing'} title={state === 'denied' ? (IS_WINDOWS ? words.deniedWindows(name) : words.deniedHelp(name)) : undefined}>
       <button
         type="button" className="cp-icon-button" data-variant="outlined" aria-label={state === 'playing' ? words.pauseTrack : words.playTrack}
-        disabled={state === 'denied'} onClick={() => act({ kind: 'toggle' })}
+        disabled={state === 'denied' || now?.controls?.toggle === false} onClick={() => act({ kind: 'toggle' })}
       >
         {state === 'playing' ? <PauseIcon /> : <PlayIcon />}
       </button>
@@ -166,13 +167,13 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
         {picker(state === 'paused' ? `${name} · ${words.paused}` : name)}
         <Marquee className="cp-radio__title" live>{title}</Marquee>
       </span>
-      <button type="button" className="cp-icon-button cp-radio__previous" aria-label={words.previousTrack} title={words.previousTrack} disabled={!track} onClick={() => act({ kind: 'previous' })}><PreviousIcon /></button>
-      <button type="button" className="cp-icon-button" aria-label={words.nextTrack} title={words.nextTrack} disabled={!track} onClick={() => act({ kind: 'next' })}><NextIcon /></button>
-      <label className="cp-radio__volume">
+      <button type="button" className="cp-icon-button cp-radio__previous" aria-label={words.previousTrack} title={words.previousTrack} disabled={!track || now?.controls?.previous === false} onClick={() => act({ kind: 'previous' })}><PreviousIcon /></button>
+      <button type="button" className="cp-icon-button" aria-label={words.nextTrack} title={words.nextTrack} disabled={!track || now?.controls?.next === false} onClick={() => act({ kind: 'next' })}><NextIcon /></button>
+      {now?.controls?.volume !== false && <label className="cp-radio__volume">
         <span className="cp-sr-only">{words.volume}</span>
         <input type="range" min={0} max={100} step={5} value={volume ?? now?.volume ?? 0} disabled={!now || state === 'closed' || state === 'denied'} onChange={(e) => changeVolume(Number(e.target.value))} />
-      </label>
-      {app === 'music' && state !== 'denied' && <Library />}
+      </label>}
+      {app === 'music' && state !== 'denied' && now?.controls?.library !== false && <Library />}
     </section>
   );
 }
