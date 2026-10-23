@@ -10,7 +10,7 @@ const session = (extra: Partial<SessionInfo>): SessionInfo => ({
 });
 
 describe('notifications', () => {
-  it('forwards notifications to Electron on Windows as well as macOS', () => {
+  it('forwards notifications to the app on every platform', () => {
     const script = `process.parentPort = { postMessage: (message) => console.log(JSON.stringify(message)) }; const { notify } = await import(${JSON.stringify(new URL('./notifier.ts', import.meta.url).href)}); notify(${JSON.stringify(session({ lastMessage: 'Terminé' }))}, 'finished', () => {});`;
     const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', windowsHide: true });
     assert.deepEqual(JSON.parse(output), { t: 'notify', title: 'Lina a terminé', body: 'Terminé', sessionId: 's' });

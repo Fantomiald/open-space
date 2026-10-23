@@ -1,4 +1,4 @@
-// The channel to the macOS app (desktop/main.ts) when the bridge runs inside it, as an Electron utility process:
+// The channel to the desktop app (desktop/main.ts) when the bridge runs inside it, as an Electron utility process:
 // the app learns where to open the page, shows the notifications itself (its name, its icon, a click opens the
 // session) and restarts on a new version when asked; it tells the bridge about that new version. Absent when the
 // bridge runs on its own (npm start).

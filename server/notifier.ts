@@ -1,4 +1,7 @@
-// Desktop notifications on every Electron platform; standalone macOS falls back to AppleScript.
+// Notifications when a session needs the user and no tab of Open Space is in front: shown by the desktop app when
+// the bridge runs inside it (desktop/main.ts), on macOS and Windows, or on macOS when the applet runs
+// (scripts/macos-app.py), so they carry its name and icon and a click opens that session; otherwise on macOS by
+// osascript itself. Elsewhere, only through the app.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
