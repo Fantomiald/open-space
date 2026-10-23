@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
 import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
 import { furOf, petSprite } from '../room/pet.ts';
-import { homeRelative } from '../lib/format.ts';
+import { homeRelative, isAbsoluteFolder } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { PERMISSION_MODES, type Preferences, type RootSuggestion } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
@@ -20,10 +20,26 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
   withDefault?: boolean;
 }) {
   const [other, setOther] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [pickFailed, setPickFailed] = useState(false);
+  const nativePicker = window.openSpaceDesktop;
+  const browse = async () => {
+    if (!nativePicker || picking) return;
+    setPicking(true);
+    setPickFailed(false);
+    try {
+      const folder = await nativePicker.pickFolder();
+      if (folder && isAbsoluteFolder(folder)) {
+        if (!roots.some((root) => root.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === folder.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase())) onRoots([...roots, folder]);
+        setOther('');
+      }
+    } catch { setPickFailed(true); }
+    finally { setPicking(false); }
+  };
   const toggle = (folder: string) => onRoots(roots.includes(folder) ? roots.filter((root) => root !== folder) : [...roots, folder]);
   const add = () => {
-    const folder = other.trim().replace(/\/+$/, '');
-    if (!folder.startsWith('/')) return;
+    const folder = other.trim();
+    if (!isAbsoluteFolder(folder)) return;
     if (!roots.includes(folder)) onRoots([...roots, folder]);
     setOther('');
   };
@@ -50,9 +66,11 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
             {suggestions === null && <li className="cp-muted">{t.settings.folders.searching}</li>}
           </ul>
           <div className="cp-onboarding__other">
-            <input value={other} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
-            <button type="button" className="cp-button" disabled={!other.trim().startsWith('/')} onClick={add}>{t.settings.folders.add}</button>
+            <input value={other} disabled={picking} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={nativePicker ? t.settings.folders.windowsPlaceholder : t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
+            {nativePicker && <button type="button" className="cp-button" disabled={picking} onClick={() => { void browse(); }}>{picking ? t.settings.folders.browsing : t.settings.folders.browse}</button>}
+            <button type="button" className="cp-button" disabled={picking || !isAbsoluteFolder(other.trim())} onClick={add}>{t.settings.folders.add}</button>
           </div>
+          {pickFailed && <p className="cp-detail__error" role="alert">{t.settings.folders.browseFailed}</p>}
         </>
       )}
       {withDefault && roots.length > 1 && (
