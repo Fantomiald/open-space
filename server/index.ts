@@ -148,8 +148,8 @@ const sessions = new SessionManager({
     if (settings.notifications && ![...presence.values()].some(Boolean)) notify(session, kind, log);
   },
   browserMcp,
-  // a tester stopped midway: its browser goes with it, rather than staying in the views
-  onSubagentStopped: (sessionId, type) => {
+  // a tester is done (its report given, or stopped): its browser goes with it, rather than staying in the views
+  onSubagentLeft: (sessionId, type) => {
     const lane = testerLane(type);
     if (lane) browsers.stop(browserId(sessionId, lane));
   },

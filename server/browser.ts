@@ -330,6 +330,9 @@ export class Browsers {
       return;
     }
     if (method === 'Target.targetDestroyed' && live.tabs.delete(String(params.targetId))) {
+      // its last page closed (Playwright's browser_close, or the user's last tab): the browser goes, rather than staying
+      // blank in the views
+      if ([...live.tabs.values()].every((tab) => tab.url === 'about:blank')) { this.stop(id); return; }
       if (live.active === params.targetId) this.show(id, live, [...live.tabs.keys()].at(-1) ?? null);
       else this.deps.onState(id, this.state(id));
     }

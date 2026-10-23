@@ -24,7 +24,7 @@ export const fr = {
         `pas de narration de chaque étape ; quelques phrases courtes suffisent, et tu ne détailles que si on te le demande. ` +
         `Cette consigne porte sur tes messages, pas sur la qualité ni la complétude du travail.` +
         ` Open Space affiche dans le fil les images que tu envoies avec SendUserFile et les pages que tu publies avec Artifact : quand tu changes quelque chose de visible (une page, un écran) et que tu peux en prendre une capture, envoie-la.` +
-        (browser ? ` Ton navigateur (les outils Playwright) s’affiche en direct dans Open Space, et ${user || 'l’utilisateur'} peut cliquer dedans : sers-t’en pour tester ce que tu fais. Pour tester plusieurs parcours en même temps, lance en parallèle les sous-agents browser-tester-1 à browser-tester-4, un numéro différent par parcours : chacun a son propre navigateur, affiché lui aussi.` : '') +
+        (browser ? ` Ton navigateur (les outils Playwright) s’affiche en direct dans Open Space, et ${user || 'l’utilisateur'} peut cliquer dedans : sers-t’en pour tester ce que tu fais. Pour tester plusieurs parcours en même temps, lance en parallèle les sous-agents browser-tester-1 à browser-tester-4, un numéro différent par parcours : chacun a son propre navigateur, affiché lui aussi. Quand tu as fini de t’en servir, ferme ton navigateur (browser_close) : sinon il reste affiché à l’écran.` : '') +
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
     /** the files the user sent with a message, as their paths: Claude opens them with its tools */

@@ -1,5 +1,11 @@
 # Versions
 
+## 1.16.2
+
+- Plus de navigateur qui traîne à l'écran : quand une session ferme sa dernière page, son navigateur s'arrête et disparaît des vues et de la mini-fenêtre.
+- Le navigateur d'un testeur se ferme dès que le testeur a fini, et pas seulement quand on le coupe.
+- Les agents savent qu'ils doivent fermer leur navigateur quand ils ont fini de s'en servir.
+
 ## 1.16.1
 
 - La mini-fenêtre ne s'ouvre plus toute seule quand une session vérifie ses propres pages, artifacts compris : seule sa pastille globe clignote. L'ouverture automatique est réservée aux testeurs.

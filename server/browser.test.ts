@@ -60,7 +60,7 @@ describe('the Playwright server of a session', () => {
   });
 });
 
-describe('a stopped sub-agent', () => {
+describe('a sub-agent that is done', () => {
   it('takes its browser with it when it is a tester, not otherwise', () => {
     assert.equal(testerLane(testerAgent(3)), 3);
     assert.equal(testerLane('general-purpose'), 0);
