@@ -11,3 +11,8 @@ export function windowsScript(script: string, values: Record<string, string> = {
       (error, stdout, stderr) => error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout.trim()));
   });
 }
+
+/** Sends a file to the Recycle Bin. On a drive without one (network share, some USB keys), Windows deletes it, as the Mac does without a Trash. */
+export async function recycleFile(file: string): Promise<void> {
+  await windowsScript("Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($env:OPEN_SPACE_RECYCLE_FILE, 'OnlyErrorDialogs', 'SendToRecycleBin', 'ThrowException')", { OPEN_SPACE_RECYCLE_FILE: file });
+}

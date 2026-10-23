@@ -11,7 +11,7 @@ import { findInNote, MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import type { Note, NoteFile, NoteMatch } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { resolveInside } from './paths.ts';
-import { recycleFile } from './recycle.ts';
+import { recycleFile } from './windows.ts';
 
 export const versionOf = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
@@ -96,7 +96,10 @@ export async function renameNote(folder: string, name: string, newName: string):
   await unlink(from.file);
 }
 
-/** Uses the Windows Recycle Bin, or the Mac's Trash. An explicit folder is also used by tests. */
+/**
+ * Puts a note's file in the user's Trash (macOS) under a free name, or in the Recycle Bin (Windows); deletes it where
+ * there is neither. `trash`, given by the tests, is the Trash folder, on every platform.
+ */
 export async function deleteNote(folder: string, name: string, trash?: string): Promise<void> {
   const found = locateNote(folder, name);
   if (!found?.exists) throw new Error(st.journal.missing(name));
