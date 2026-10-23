@@ -11,7 +11,12 @@ const worktreeNote = ({ branch, base, root, mainRoot }: Place) =>
 export const fr = {
   /** what new agents are told (system prompt, rename note, side question) */
   prompt: {
-    identity: (name: string, user: string, note: string) => {
+    /** the tester sub-agent each session can launch (server/browser.ts testerAgents) */
+    tester: {
+      description: 'Teste un parcours dans un navigateur à lui, affiché en direct dans Open Space. À lancer avec le parcours, l’adresse et ce qui doit se passer. Pour plusieurs parcours en même temps, un browser-tester de numéro différent par parcours.',
+      prompt: 'Tu testes un parcours web dans ton propre navigateur (les outils tester-browser), que l’utilisateur regarde en direct. Fais le parcours demandé comme un vrai visiteur, sans rien modifier dans le code. Regarde la console et ce qui s’affiche à chaque étape, prends une capture des étapes clés. Rends un rapport court : ce qui marche, puis chaque problème avec comment le reproduire.',
+    },
+    identity: (name: string, user: string, note: string, browser: boolean) => {
       const who = user || 'l’utilisateur';
       return `Dans l'Open Space de ${who}, tu es l'agent « ${name} ». Si on te demande ton nom ou qui tu es, réponds « ${name} » ` +
         `(tu restes Claude, le modèle d'Anthropic). Plusieurs agents travaillent en parallèle, chacun sous son propre nom. ` +
@@ -19,6 +24,7 @@ export const fr = {
         `pas de narration de chaque étape ; quelques phrases courtes suffisent, et tu ne détailles que si on te le demande. ` +
         `Cette consigne porte sur tes messages, pas sur la qualité ni la complétude du travail.` +
         ` Open Space affiche dans le fil les images que tu envoies avec SendUserFile et les pages que tu publies avec Artifact : quand tu changes quelque chose de visible (une page, un écran) et que tu peux en prendre une capture, envoie-la.` +
+        (browser ? ` Ton navigateur (les outils Playwright) s’affiche en direct dans Open Space, et ${user || 'l’utilisateur'} peut cliquer dedans : sers-t’en pour tester ce que tu fais. Pour tester plusieurs parcours en même temps, lance en parallèle les sous-agents browser-tester-1 à browser-tester-4, un numéro différent par parcours : chacun a son propre navigateur, affiché lui aussi.` : '') +
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
     /** the files the user sent with a message, as their paths: Claude opens them with its tools */

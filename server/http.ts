@@ -36,6 +36,14 @@ export interface WebServerOptions {
   devPort: number;
   onConnection: (socket: WebSocket) => void;
   log: (message: string, error?: unknown) => void;
+  /** the sessions' browsers (see browser.ts) */
+  browser?: {
+    watch: (sessionId: string, lane: number, res: http.ServerResponse) => Promise<void>;
+    /** `lane`: the session's own browser (0) or one of its testers' (see shared/browser.ts browserId) */
+    version: (sessionId: string, lane: number) => Promise<Record<string, unknown>>;
+    key: (sessionId: string) => string;
+    known: (sessionId: string) => boolean;
+  };
 }
 
 /**
@@ -157,6 +165,28 @@ export function createWebServer(options: WebServerOptions) {
     });
   }
 
+  /**
+   * /browser/<session>/view?lane=n: the picture of a session's browser (lane: see browserId), to a page holding the session cookie.
+   * /browser/<session>/cdp/<key>[/lane/<n>]/json/version/: asked by the session's Playwright before it connects (no
+   * cookie: the key, given in its --mcp-config, is what lets it in), /lane/<n> by its nth tester's. Launches the browser.
+   */
+  async function serveBrowser(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const [sessionId = '', kind = '', key = '', ...rest] = url.pathname.slice('/browser/'.length).split('/');
+    const browser = options.browser;
+    if (!browser || req.method !== 'GET' || !/^[\w-]{1,100}$/.test(sessionId) || !browser.known(sessionId)) { res.writeHead(404).end(); return; }
+    if (kind === 'view' && !key) {
+      if (!hasSessionCookie(policy, req)) { res.writeHead(401).end(); return; }
+      const lane = Number(url.searchParams.get('lane') ?? 0);
+      await browser.watch(sessionId, Number.isInteger(lane) && lane >= 0 && lane < 100 ? lane : 0, res);
+      return;
+    }
+    const asked = rest.filter(Boolean).join('/');
+    const lane = /^(?:lane\/([1-9]\d?)\/)?json\/version$/.exec(asked);
+    if (kind !== 'cdp' || !lane || req.headers.origin !== undefined || !secretsMatch(browser.key(sessionId), key)) { res.writeHead(404).end(); return; }
+    const version = await browser.version(sessionId, Number(lane[1] ?? 0));
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(version));
+  }
+
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
     if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     const url = parseRequestUrl(req.url);
@@ -189,6 +219,7 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }
+    if (url.pathname.startsWith('/browser/')) { await serveBrowser(req, res, url); return; }
     if (url.pathname.startsWith('/sounds/')) {
       const sound = resolveInside(soundsDir, `.${url.pathname.slice('/sounds'.length)}`);
       if (!sound || !statSync(sound).isFile()) { res.writeHead(404).end(); return; }

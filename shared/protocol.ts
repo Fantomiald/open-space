@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
 import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
@@ -596,10 +597,14 @@ export type ClientMessage =
   /** what a music app of the computer plays, after `action` when there is one (the radio asks every few seconds) */
   | { t: 'music'; app: MusicApp; action?: MusicAction }
   /** Music's playlists, and the tracks of its library that match `query` (none for an empty query) */
-  | { t: 'musicLibrary'; query: string };
+  | { t: 'musicLibrary'; query: string }
+  /** the session's browser (shared/browser.ts): opened, taken to an address, another tab shown, stopped */
+  | { t: 'browser'; sessionId: string; lane: number; action: BrowserAction }
+  /** a click, a scroll or a key of the user over the picture of the session's browser */
+  | { t: 'browserInput'; sessionId: string; lane: number; input: BrowserInput };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null; /** by browserId (shared/browser.ts) */ browsers: Record<string, BrowserState>; browserAvailable: boolean }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */
@@ -650,7 +655,9 @@ export type ServerMessage =
   | { t: 'musicLibrary'; query: string; playlists: string[]; tracks: MusicTrack[] }
   | { t: 'searchResults'; id: number; query: string; hits: SearchHit[] }
   | { t: 'costs'; report: CostReport }
-  | { t: 'toast'; kind: 'info' | 'error'; text: string };
+  | { t: 'toast'; kind: 'info' | 'error'; text: string }
+  /** a session's browser changed tabs or address; null once it is closed */
+  | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };
 
 /** A side question (/btw) and its answer. */
 export interface Aside { question: string; answer: string; state: 'asking' | 'answered' | 'failed' }

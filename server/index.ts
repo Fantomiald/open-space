@@ -41,6 +41,8 @@ import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
 import { busySessions } from '../shared/app-update.ts';
 import { appPort } from './app-port.ts';
+import { Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
+import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -114,6 +116,21 @@ function broadcast(message: ServerMessage) {
   }
 }
 
+const browsers = new Browsers({
+  chrome: findChrome(process.env),
+  folder: path.join(config.dataDir, 'browsers'),
+  sessionAlive: (sessionId) => sessions.isAlive(sessionId),
+  onState: (id, browser) => broadcast({ t: 'browser', sessionId: sessionOfBrowser(id), lane: laneOf(id), browser }),
+  log,
+});
+const mcpServers = userMcpServers(path.join(os.homedir(), '.claude.json'));
+/** where a session's Playwright finds its browser: Open Space launches it on the first call (see server/browser.ts) */
+function browserMcp(sessionId: string) {
+  if (!browsers.available) return {};
+  const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
+  return { mcpConfig: browserMcpConfig(endpoint, mcpServers()), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester) };
+}
+
 const crew = new Crew(path.join(config.dataDir, 'crew.json'));
 await crew.load();
 
@@ -130,8 +147,15 @@ const sessions = new SessionManager({
   onAttention: (kind, session) => {
     if (settings.notifications && ![...presence.values()].some(Boolean)) notify(session, kind, log);
   },
+  browserMcp,
+  // a tester stopped midway: its browser goes with it, rather than staying in the views
+  onSubagentStopped: (sessionId, type) => {
+    const lane = testerLane(type);
+    if (lane) browsers.stop(browserId(sessionId, lane));
+  },
 });
 await sessions.init();
+browsers.sweepProfiles(new Set(sessions.list().map((session) => session.id))).catch((error: unknown) => log('cannot sweep the browser profiles', error));
 const usage = new UsageLedger({ home: os.homedir(), cacheFile: path.join(config.dataDir, 'usage-cache.json'), log });
 
 /** Writes, renames and deletes of notes one after the other: a save sent just before a rename lands on the old name first. */
@@ -185,7 +209,9 @@ setInterval(() => { checkClaudeVersion().catch((error: unknown) => log('cannot r
 let claudeDefaults = await readClaudeDefaults(os.homedir());
 const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded, claudeDefaults });
 prepareSounds(config.dataDir, log);
-const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection });
+const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+  browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId) },
+});
 
 function onConnection(socket: WebSocket) {
   clients.add(socket);
@@ -204,6 +230,7 @@ function onConnection(socket: WebSocket) {
     t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
+    browsers: browsers.states(), browserAvailable: browsers.available,
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });
@@ -281,8 +308,13 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tag': sessions.tag(message.sessionId, message.tag); break;
-    case 'rest': await sessions.rest(message.sessionId); break;
-    case 'forget': await sessions.forget(message.sessionId, message.branch); break;
+    case 'rest': await sessions.rest(message.sessionId); browsers.stopSession(message.sessionId); break;
+    case 'forget': await sessions.forget(message.sessionId, message.branch); await browsers.forget(message.sessionId); break;
+    case 'browser':
+      if (sessions.list().some((session) => session.id === message.sessionId)) await browsers.act(browserId(message.sessionId, message.lane), message.action).catch((error: unknown) => log('browser', error));
+      break;
+    // a click lost while a tab closes is not worth telling
+    case 'browserInput': await browsers.input(browserId(message.sessionId, message.lane), message.input).catch(() => {}); break;
     case 'folderInfo': send({ t: 'folderInfo', cwd: message.cwd, repo: await sessions.folderInfo(message.cwd) }); break;
     case 'branch':
       switch (message.action) {
@@ -470,6 +502,7 @@ async function shutdown() {
   stopping = true;
   const deadline = setTimeout(() => process.exit(1), 10_000);
   deadline.unref();
+  browsers.shutdown();
   await sessions.shutdown();
   process.exit(0);
 }
