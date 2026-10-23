@@ -8,6 +8,7 @@ import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronDownIcon, LibraryIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon } from './Icons.tsx';
+import { Marquee } from './Marquee.tsx';
 import { useDismiss } from './useDismiss.ts';
 
 /** Direct MP3 streams, checked on 2026-10-16 (their names come from the streams' own ICY headers). */
@@ -111,7 +112,7 @@ function Stations({ picker }: { picker: (label: string) => ReactNode }) {
       <span className="cp-radio__bars" aria-hidden="true"><span /><span /><span /></span>
       <span className="cp-radio__now">
         {picker(status === 'loading' ? words.connecting : status === 'failed' ? words.unreachable : status === 'on' ? words.live : words.label)}
-        <Marquee text={STATIONS[station].name} />
+        <Marquee className="cp-radio__title">{STATIONS[station].name}</Marquee>
       </span>
       <button type="button" className="cp-icon-button" aria-label={words.next} title={words.next} onClick={nextStation}><NextIcon /></button>
       <label className="cp-radio__volume">
@@ -163,7 +164,7 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
       {now?.artwork ? <img className="cp-radio__art" src={now.artwork} alt="" /> : <span className="cp-radio__bars" aria-hidden="true"><span /><span /><span /></span>}
       <span className="cp-radio__now">
         {picker(state === 'paused' ? `${name} · ${words.paused}` : name)}
-        <Marquee text={title} live />
+        <Marquee className="cp-radio__title" live>{title}</Marquee>
       </span>
       <button type="button" className="cp-icon-button cp-radio__previous" aria-label={words.previousTrack} title={words.previousTrack} disabled={!track} onClick={() => act({ kind: 'previous' })}><PreviousIcon /></button>
       <button type="button" className="cp-icon-button" aria-label={words.nextTrack} title={words.nextTrack} disabled={!track} onClick={() => act({ kind: 'next' })}><NextIcon /></button>
@@ -173,28 +174,6 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
       </label>
       {app === 'music' && state !== 'denied' && <Library />}
     </section>
-  );
-}
-
-/** The title, scrolling round when it is longer than its box (the second copy makes the loop seamless). */
-function Marquee({ text, live = false }: { text: string; live?: boolean }) {
-  const box = useRef<HTMLSpanElement>(null);
-  const first = useRef<HTMLSpanElement>(null);
-  const [scrolls, setScrolls] = useState(false);
-  useEffect(() => {
-    const measure = () => setScrolls((first.current?.offsetWidth ?? 0) > (box.current?.clientWidth ?? 0) + 1);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(box.current!);
-    return () => observer.disconnect();
-  }, [text]);
-  return (
-    <span className="cp-radio__title" ref={box} data-scroll={scrolls} aria-live={live ? 'polite' : undefined}>
-      <span className="cp-radio__marquee">
-        <span ref={first}>{text}</span>
-        {scrolls && <span aria-hidden="true">{text}</span>}
-      </span>
-    </span>
   );
 }
 

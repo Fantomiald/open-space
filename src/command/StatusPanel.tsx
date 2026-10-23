@@ -12,7 +12,9 @@ import { todoLabel } from '../state/labels.ts';
 import { attentionQueue, otherSessions } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronDownIcon, ChevronUpIcon, CompactIcon } from './Icons.tsx';
+import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
+import { Marquee } from './Marquee.tsx';
 
 const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
@@ -31,6 +33,17 @@ function StatusGroup({ group, count, folded, onFold, children }: { group: Group;
       </h2>
       <ul className="cp-status__list" id={`status-${group}`} hidden={folded}>{children}</ul>
     </div>
+  );
+}
+
+/** What a row says first: the label (the name, or what to do for whom), then the session's tag and branch. */
+function RowName({ session, label }: { session: SessionInfo; label: string }) {
+  return (
+    <>
+      <span className="cp-status__name">{label}</span>
+      {session.tag && <span className="cp-tag cp-status__tag">{session.tag}</span>}
+      {session.worktree && <BranchMark branch={session.worktree.branch} />}
+    </>
   );
 }
 
@@ -73,7 +86,7 @@ export function StatusPanel() {
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind={kind} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       <span className="cp-status__dot" aria-hidden="true" />
-                      <span className="cp-status__label">{todoLabel(session, kind)}{session.worktree && <BranchMark branch={session.worktree.branch} />}</span>
+                      <span className="cp-status__label"><RowName session={session} label={todoLabel(session, kind)} /></span>
                       <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
                     </button>
                   </li>
@@ -82,22 +95,26 @@ export function StatusPanel() {
           )}
           {working.length > 0 && (
             <StatusGroup {...groupProps('working', working.length)}>
-                {working.map((session) => (
+                {working.map((session) => {
+                  const notes = [
+                    session.compacting && words.compacting[session.compacting],
+                    session.state === 'starting' && words.starting,
+                    session.subagents.length > 0 && words.subagents(session.subagents.length),
+                    session.background && words.background(session.background.length),
+                  ].filter((note) => typeof note === 'string');
+                  return (
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind={session.compacting ? 'compacting' : 'working'} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       {session.compacting ? <span className="cp-status__compact" aria-hidden="true"><CompactIcon /></span> : <span className="cp-status__dot" aria-hidden="true" />}
                       <span className="cp-status__label">
-                        {session.name}
-                        {session.worktree && <BranchMark branch={session.worktree.branch} />}
-                        {session.compacting && <span className="cp-status__note">{words.compacting[session.compacting]}</span>}
-                        {session.state === 'starting' && <span className="cp-status__note">{words.starting}</span>}
-                        {session.subagents.length > 0 && <span className="cp-status__note">{words.subagents(session.subagents.length)}</span>}
-                        {session.background && <span className="cp-status__note">{words.background(session.background.length)}</span>}
+                        <RowName session={session} label={session.name} />
+                        {notes.length > 0 && <Marquee className="cp-status__notes">{notes.join(' · ')}</Marquee>}
                       </span>
                       <span className="cp-status__time">{formatAge(now - (session.busySince ?? session.stateSince))}</span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
             </StatusGroup>
           )}
           {ready.length > 0 && (
@@ -106,7 +123,7 @@ export function StatusPanel() {
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       <span className="cp-status__dot" aria-hidden="true" />
-                      <span className="cp-status__label">{session.name}{session.worktree && <BranchMark branch={session.worktree.branch} />}</span>
+                      <span className="cp-status__label"><RowName session={session} label={session.name} /></span>
                       <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
                     </button>
                   </li>
