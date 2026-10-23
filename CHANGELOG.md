@@ -1,5 +1,10 @@
 # Versions
 
+## 1.16.5
+
+- Le panneau État montre le tag de chaque session à côté de son nom.
+- Chaque ligne du panneau État tient sur une seule ligne : quand les sous-agents ou les commandes en fond ne rentrent pas, ils défilent comme le titre de la musique.
+
 ## 1.16.4
 
 - Éteindre une session qui avait ouvert un navigateur n'affiche plus l'erreur « ENOTEMPTY: directory not empty » : son profil est effacé une fois Chrome fermé, plus pendant qu'il se ferme.
