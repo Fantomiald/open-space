@@ -24,6 +24,7 @@ import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { suggestRoots } from './paths.ts';
+import { windowsKnownFolders } from './system-folders.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { UsageLedger } from './usage.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
@@ -67,6 +68,7 @@ process.on('unhandledRejection', (reason) => log('unhandled rejection', reason))
 process.on('uncaughtException', (error) => log('uncaught exception', error));
 
 const config = loadConfig(process.env, os.homedir());
+const knownFolders = process.platform === 'win32' ? windowsKnownFolders(os.homedir(), process.env.OPEN_SPACE_KNOWN_FOLDERS) : Promise.resolve(undefined);
 const secret = readOrCreateSecret(path.join(config.dataDir, 'secret'));
 const policy = loopbackPolicy(DEV ? [config.port, DEV_PORT] : [config.port], secret);
 const claude = await findClaude();
@@ -301,7 +303,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       broadcast(preferencesMessage());
       break;
     }
-    case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir()) }); break;
+    case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir(), await knownFolders) }); break;
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;

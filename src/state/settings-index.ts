@@ -3,6 +3,7 @@
 import { t } from '../i18n/index.ts';
 import type { SettingEntry } from './search.ts';
 import type { SettingsSection } from './sessions.ts';
+import { IS_MAC } from '../lib/platform.ts';
 
 export type SettingRow = keyof typeof t.settings.prefs.rows;
 
@@ -31,7 +32,7 @@ export const CONFIG_LABELS: Readonly<Partial<Record<SettingRow, string>>> = {
 /** The rows and the sections without rows, with the words they answer to (their title, hint and section). */
 export function settingEntries(): SettingEntry[] {
   const words = t.settings.prefs;
-  const rows = (Object.keys(ROWS) as SettingRow[]).map((row) => {
+  const rows = (Object.keys(ROWS) as SettingRow[]).filter((row) => (row !== 'dockApp' || IS_MAC)).map((row) => {
     const { title, hint } = words.rows[row] as { title: string; hint?: string };
     return { section: ROWS[row], row, label: title, sectionLabel: words.sections[ROWS[row]], words: `${hint ?? ''} ${CONFIG_LABELS[row] ? `${CONFIG_LABELS[row]} /config` : ''}` };
   });

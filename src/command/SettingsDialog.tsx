@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
+import { isFolderPath } from '../../shared/paths.ts';
+import { IS_MAC } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
@@ -154,7 +156,7 @@ function SettingsEditor() {
   const words = t.settings.prefs;
   const { status } = useAutosave(draft, (next) => {
     if (!next.roots.length) return t.settings.dialog.noFolder;
-    if (!/^(\/|~(\/|$))/.test(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
+    if (!isFolderPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });
@@ -368,12 +370,12 @@ function SettingsEditor() {
       );
       case 'journalFolder': return (
         <Row key={id} id={id} flash={flash} wide icon={<NotesIcon />} title={rows.journalFolder.title} hint={rows.journalFolder.hint}>
-          <input aria-labelledby={`setting-${id}-title`} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />
+          <input aria-labelledby={`setting-${id}-title`} title={preferences.journalFolder} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />
         </Row>
       );
       case 'metricsFile': return (
         <Row key={id} id={id} flash={flash} wide icon={<ChartIcon />} title={rows.metricsFile.title} hint={rows.metricsFile.hint}>
-          <input aria-labelledby={`setting-${id}-title`} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
+          <input aria-labelledby={`setting-${id}-title`} title={preferences.metricsFile || undefined} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
         </Row>
       );
       case 'version': return (
@@ -411,7 +413,7 @@ function SettingsEditor() {
           </span>
         </Row>
       );
-      case 'dockApp': return IN_APP ? null : (
+      case 'dockApp': return IN_APP || !IS_MAC ? null : (
         <Row key={id} id={id} flash={flash} icon={<DeskIcon />} title={rows.dockApp.title} hint={rows.dockApp.hint}>{null}</Row>
       );
     }

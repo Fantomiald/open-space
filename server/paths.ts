@@ -3,6 +3,7 @@
 import { readdirSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { expandHomePath } from '../shared/paths.ts';
 
 /** True when `child` is `parent` or inside it. Both must already be real paths. */
 export function isWithin(parent: string, child: string): boolean {
@@ -37,7 +38,7 @@ export function resolveFileWith(file: string, extension: string): string | null 
 
 /** The real path of an existing directory that lies inside one of the allowed roots, otherwise null. "~" is the home, as the page shows it. */
 export function resolveAllowedDirectory(directory: string, roots: readonly string[], home = os.homedir()): string | null {
-  const expanded = directory === '~' || directory.startsWith('~/') ? path.join(home, directory.slice(1)) : directory;
+  const expanded = expandHomePath(directory, home);
   if (!path.isAbsolute(expanded)) return null;
   try {
     const real = realpathSync(expanded);
@@ -83,7 +84,7 @@ export function listProjectDirectories(roots: readonly string[], limit = 1000): 
 /** What makes a folder a project. */
 const PROJECT_MARKERS = ['.git', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json', 'pubspec.yaml', 'pom.xml', 'build.gradle', 'Package.swift'];
 /** Folders of a Mac home that hold no code, or that the system keeps for itself. */
-const NOT_FOR_CODE = new Set(['Applications', 'Library', 'Movies', 'Music', 'Pictures', 'Public', 'Downloads', 'Applications (Parallels)']);
+const NOT_FOR_CODE = new Set(['Applications', 'Library', 'Movies', 'Music', 'Pictures', 'Public', 'Downloads', 'Applications (Parallels)', 'AppData', 'Contacts', 'Links', 'Saved Games', 'Searches']);
 /** Folders macOS asks the user's permission to read: offered without looking inside (`projects` -1), so no dialog pops up. */
 const PROTECTED = new Set(['Desktop', 'Documents']);
 
@@ -95,14 +96,19 @@ const isProject = (directory: string) => {
  * The folders of the home worth offering at the first start as places for sessions to run in: those holding projects
  * (at their first or second level), the ones with the most first, then Desktop and Documents, unread. Read-only.
  */
-export function suggestRoots(home: string): { path: string; projects: number }[] {
+export function suggestRoots(home: string, knownFolders?: readonly string[]): { path: string; projects: number }[] {
   let names: string[];
   try { names = readdirSync(home, { withFileTypes: true }).filter((entry) => entry.isDirectory() && isOffered(entry.name) && !NOT_FOR_CODE.has(entry.name)).map((entry) => entry.name); } catch { return []; }
-  return names.flatMap((name) => {
+  const offered = names.flatMap((name) => {
     const folder = path.join(home, name);
-    if (PROTECTED.has(name)) return [{ path: folder, projects: -1 }];
+    if (PROTECTED.has(name)) return knownFolders ? [] : [{ path: folder, projects: -1 }];
+    if (knownFolders && (name.startsWith('OneDrive') || knownFolders.some((known) => isWithin(folder, known)))) return [];
     const children = offeredChildren(folder, folder);
     const projects = children.filter((child) => isProject(child) || offeredChildren(child, folder).some(isProject)).length;
     return projects ? [{ path: folder, projects }] : [];
-  }).sort((a, b) => b.projects - a.projects);
+  });
+  for (const folder of new Set(knownFolders ?? [])) {
+    try { if (statSync(folder).isDirectory()) offered.push({ path: realpathSync(folder), projects: -1 }); } catch { /* missing folders are not offered */ }
+  }
+  return offered.sort((a, b) => b.projects - a.projects);
 }

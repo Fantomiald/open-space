@@ -8,6 +8,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { parsePassthrough } from './environment.ts';
+import { expandHomePath } from '../shared/paths.ts';
 
 export interface Config {
   port: number;
@@ -26,18 +27,13 @@ const positiveInteger = (raw: string | undefined, fallback: number) => {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
-function expandHome(value: string, home: string) {
-  if (value === '~') return home;
-  return value.startsWith('~/') ? path.join(home, value.slice(2)) : value;
-}
-
 export function loadConfig(env: NodeJS.ProcessEnv, home: string, exists: (folder: string) => boolean = existsSync): Config {
-  const roots = (env.OFFICE_ROOTS ?? '').split(path.delimiter).map((root) => root.trim()).filter(Boolean).map((root) => path.resolve(expandHome(root, home))).filter(exists);
+  const roots = (env.OFFICE_ROOTS ?? '').split(path.delimiter).map((root) => root.trim()).filter(Boolean).map((root) => path.resolve(expandHomePath(root, home))).filter(exists);
   return {
     port: positiveInteger(env.PORT, 4848),
     roots,
     rootsLocked: roots.length > 0,
-    dataDir: path.resolve(expandHome(env.OFFICE_DIR ?? '~/.open-space', home)),
+    dataDir: path.resolve(expandHomePath(env.OFFICE_DIR ?? '~/.open-space', home)),
     maxLive: positiveInteger(env.OFFICE_MAX_LIVE, 8),
     idleMs: positiveInteger(env.OFFICE_IDLE_MINUTES, 30) * 60_000,
     passthrough: parsePassthrough(env.OFFICE_ENV_PASSTHROUGH),

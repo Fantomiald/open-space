@@ -1,4 +1,5 @@
 import { plural, type Dictionary } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
 
 export const settings: Dictionary['settings'] = {
   noServer: 'No connection to the server: not saved yet.',
@@ -39,11 +40,11 @@ export const settings: Dictionary['settings'] = {
     noFolder: 'Keep at least one folder: sessions would have nowhere to work.',
     journalFolder: 'Whiteboard notes folder',
     journalFolderHint: 'one .md file per project, which your sessions can fill too',
-    journalFolderInvalid: 'The notes folder must be a full path (/… or ~/…).',
+    journalFolderInvalid: IS_WINDOWS ? 'The notes folder must be a full path (C:\\… or \\\\server\\share\\…).' : 'The notes folder must be a full path (/… or ~/…).',
     metricsFile: 'Numbers file (optional)',
     metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
-    metricsFilePlaceholder: '~/Journal/numbers.md',
-    metricsFileInvalid: 'The numbers file must be a full path to a .md file (/… or ~/…), or stay empty.',
+    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
+    metricsFileInvalid: IS_WINDOWS ? 'The numbers file must be a full path to a .md file (C:\\… or \\\\server\\share\\…), or stay empty.' : 'The numbers file must be a full path to a .md file (/… or ~/…), or stay empty.',
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   prefs: {
@@ -105,7 +106,7 @@ export const settings: Dictionary['settings'] = {
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
-      outputStyle: { title: 'Output style', hint: 'How Claude answers you. Your own styles come from ~/.claude/output-styles.', default: 'Default' },
+      outputStyle: { title: 'Output style', hint: IS_WINDOWS ? 'How Claude answers you. Your own styles come from %USERPROFILE%\\.claude\\output-styles.' : 'How Claude answers you. Your own styles come from ~/.claude/output-styles.', default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {
@@ -138,7 +139,7 @@ export const settings: Dictionary['settings'] = {
       previewFestival: { title: 'Try a festival', hint: 'The room dressed up without waiting for the day. Nothing is kept on reload.' },
       previewHour: { title: 'Try an hour', hint: 'The sky and the light at another time of day. Nothing is kept on reload.' },
       crew: { title: 'You, your crew and your pet', hint: 'Names, looks, birthdays and jobs.', action: 'Open crew' },
-      journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too.' },
+      journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too. The folder is created with the first note.' },
       metricsFile: { title: 'Numbers file', hint: 'A Markdown file kept up to date by your scripts or a session. Empty: no object.' },
       version: { title: 'Open Space', hint: 'The app downloads new versions and restarts on them as soon as no session is working.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Not found on this computer.' },
@@ -183,7 +184,7 @@ export const settings: Dictionary['settings'] = {
     notLookedInto: 'not looked into',
     projects: (count: number) => plural(count, 'project', 'projects'),
     searching: 'Looking for your projects…',
-    otherPlaceholder: '/Users/you/code',
+    otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\code' : '/Users/you/code',
     otherLabel: 'Another folder (full path)',
     add: 'Add',
     defaultFolder: 'Default folder (Shift+N starts a session in it)',

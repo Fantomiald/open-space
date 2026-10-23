@@ -44,7 +44,7 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
         <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
           {matches.map((directory, index) => {
             const shownPath = homeRelative(directory);
-            const cut = shownPath.lastIndexOf('/') + 1;
+            const cut = Math.max(shownPath.lastIndexOf('/'), shownPath.lastIndexOf('\\')) + 1;
             return (
               <li
                 key={directory} id={`folder-option-${index}`} role="option" aria-selected={index === active} className="cp-folder__option"
