@@ -155,7 +155,7 @@ export const fr = {
     error: 'a rencontré une erreur',
   },
   terminal: {
-    macOnly: 'Ouvrir un terminal ne marche que sur macOS pour l’instant.',
+    macOnly: 'Ouvrir un terminal est disponible sur macOS et Windows.',
     failed: 'Le terminal ne s’ouvre pas.',
   },
   /** a hook or an MCP server a folder would run */

@@ -146,7 +146,7 @@ export const en: ServerDictionary = {
     error: 'ran into an error',
   },
   terminal: {
-    macOnly: 'Opening a terminal only works on macOS for now.',
+    macOnly: 'Opening a terminal is available on macOS and Windows.',
     failed: 'The terminal won’t open.',
   },
   trust: {

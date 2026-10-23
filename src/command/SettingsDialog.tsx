@@ -1,6 +1,9 @@
+import { Select } from './Select.tsx';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
+import { IS_WINDOWS } from '../lib/platform.ts';
+import type { TerminalKind } from '../../shared/terminal.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
@@ -37,7 +40,7 @@ const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'terminal']], ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
@@ -139,6 +142,7 @@ function SettingsEditor() {
   const section = useSessions((s) => s.settingsSection);
   const flashRow = useSessions((s) => s.settingsRow);
   const language = useSessions((s) => s.language);
+  const terminals = useSessions((s) => s.terminals);
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
@@ -192,6 +196,14 @@ function SettingsEditor() {
       );
     }
     switch (id) {
+      case 'terminal': return !IS_WINDOWS ? null : (
+        <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.terminal.title} hint={rows.terminal.hint}>
+          <Select aria-labelledby={`setting-${id}-title`} title={terminals.find((terminal) => terminal.id === (draft.terminal ?? 'cmd'))?.path} value={draft.terminal ?? 'cmd'} disabled={!terminals.length} onChange={(e) => change({ terminal: e.target.value as TerminalKind })}>
+            {!terminals.some((terminal) => terminal.id === (draft.terminal ?? 'cmd')) && <option value={draft.terminal ?? 'cmd'} disabled>{rows.terminal.unavailable}</option>}
+            {terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}</option>)}
+          </Select>
+        </Row>
+      );
       case 'language': return (
         <Row key={id} id={id} flash={flash} icon={<LanguageIcon />} title={rows.language.title} hint={rows.language.hint}>
           <select aria-labelledby={`setting-${id}-title`} value={draft.language ?? language} onChange={(e) => change({ language: e.target.value as Language })}>

@@ -98,6 +98,7 @@ export const settings = {
       failed: (text: string) => `Échec : ${text}`,
     },
     rows: {
+      terminal: { title: 'Terminal', hint: 'Pour l’écran de ton personnage et Ctrl+Alt+T. Seuls les terminaux détectés sur cet ordinateur sont proposés.', unavailable: 'Terminal enregistré introuvable — choisis-en un autre' },
       language: { title: 'Langue', hint: 'Celle de la page, du serveur et des consignes des nouveaux agents.' },
       sound: { title: 'Son', hint: 'Un son quand une session a fini ou t’attend.' },
       notifications: { title: 'Notifications macOS', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },

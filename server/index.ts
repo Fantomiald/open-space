@@ -32,7 +32,7 @@ import { uploadsFolder } from './uploads.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
-import { openTerminal, openWebPage } from './desktop.ts';
+import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
@@ -234,6 +234,7 @@ function onConnection(socket: WebSocket) {
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });
+  send({ t: 'terminals', choices: findTerminals() });
   if (!signing) checkAccount().catch((error: unknown) => log('cannot read the Claude Code account', error));
   readClaudeDefaults(os.homedir()).then((found) => {
     if (JSON.stringify(found) === JSON.stringify(claudeDefaults)) return;
@@ -301,7 +302,10 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       broadcast(preferencesMessage());
       break;
     }
-    case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir()) }); break;
+    case 'suggestRoots':
+      send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir()) });
+      send({ t: 'terminals', choices: findTerminals() });
+      break;
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;
@@ -448,7 +452,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'musicLibrary': send({ t: 'musicLibrary', query: message.query, ...await musicLibrary(message.query) }); break;
     case 'openTerminal': {
       const folder = (message.sessionId && sessions.folderOf(message.sessionId)) || defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir();
-      await openTerminal(folder);
+      await openTerminal(folder, settings.preferences.terminal);
       break;
     }
   }

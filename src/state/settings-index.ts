@@ -3,12 +3,14 @@
 import { t } from '../i18n/index.ts';
 import type { SettingEntry } from './search.ts';
 import type { SettingsSection } from './sessions.ts';
+import { IS_WINDOWS } from '../lib/platform.ts';
 
 export type SettingRow = keyof typeof t.settings.prefs.rows;
 
 /** Where each row lives. A section without rows (usage, shortcuts) is found by its own name. */
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   language: 'general', timeFormat: 'general', reduceMotion: 'general', sound: 'general', notifications: 'general',
+  terminal: 'general',
   timestamps: 'general', turnDuration: 'general', copyOnSelect: 'general',
   model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', isolate: 'sessions', autoPip: 'sessions',
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
@@ -31,7 +33,7 @@ export const CONFIG_LABELS: Readonly<Partial<Record<SettingRow, string>>> = {
 /** The rows and the sections without rows, with the words they answer to (their title, hint and section). */
 export function settingEntries(): SettingEntry[] {
   const words = t.settings.prefs;
-  const rows = (Object.keys(ROWS) as SettingRow[]).map((row) => {
+  const rows = (Object.keys(ROWS) as SettingRow[]).filter((row) => (row !== 'terminal' || IS_WINDOWS)).map((row) => {
     const { title, hint } = words.rows[row] as { title: string; hint?: string };
     return { section: ROWS[row], row, label: title, sectionLabel: words.sections[ROWS[row]], words: `${hint ?? ''} ${CONFIG_LABELS[row] ? `${CONFIG_LABELS[row]} /config` : ''}` };
   });

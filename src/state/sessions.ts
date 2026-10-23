@@ -185,6 +185,7 @@ interface CommandPostState {
   appUpdate: AppUpdate | null;
   /** folders offered at the onboarding, once asked for */
   rootSuggestions: RootSuggestion[] | null;
+  terminals: import('../../shared/terminal.ts').TerminalChoice[];
   /** changes some of the settings (the server keeps them and tells every tab) */
   setPreferences: (changes: Partial<Preferences>) => boolean;
   /** a ding when a session finishes or needs the user */
@@ -397,6 +398,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   claudeAccount: null,
   appUpdate: null,
   rootSuggestions: null,
+  terminals: [],
   sound: readPreference('sound', true),
   paletteOpen: false,
   paletteQuery: '',
@@ -465,6 +467,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       }
       case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded, claudeDefaults: message.claudeDefaults }); break;
       case 'rootSuggestions': set({ rootSuggestions: message.suggestions }); break;
+      case 'terminals': set({ terminals: message.choices }); break;
       case 'trustNeeded': if (lastCreate) set({ trustRequest: { cwd: message.cwd, code: message.code, options: lastCreate } }); break;
       case 'forgotten': {
         const { [message.sessionId]: _removed, ...sessions } = s.sessions;

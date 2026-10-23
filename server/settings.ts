@@ -11,6 +11,7 @@ import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
+import { TERMINALS, type TerminalKind } from '../shared/terminal.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
@@ -38,6 +39,7 @@ const MAX_FAVORITE_NOTES = 200;
 export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Preferences> {
   if (!isJson(raw)) return {};
   const found: Partial<Preferences> = {};
+  if (TERMINALS.includes(raw.terminal as TerminalKind)) found.terminal = raw.terminal as TerminalKind;
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
