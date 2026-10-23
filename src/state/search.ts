@@ -28,7 +28,7 @@ const MAX = { session: 8, message: 24, command: 6, slash: 60, action: 6, setting
 /** The query asks for commands: it starts with "/". */
 export const isCommandQuery = (query: string) => query.trimStart().startsWith('/');
 
-const sessionText = (session: SessionInfo) => [session.name, session.tag, shownFolder(session).split('/').pop(), session.worktree?.branch, session.command, session.lastMessage].filter(Boolean).join(' ');
+const sessionText = (session: SessionInfo) => [session.name, session.tag, shownFolder(session).split(/[\\/]/).pop(), session.worktree?.branch, session.command, session.lastMessage].filter(Boolean).join(' ');
 
 /** Sessions whose name, tag, folder, last command or last words hold every word; those named so first, then the latest. */
 export function findSessions(sessions: readonly SessionInfo[], query: string): SessionInfo[] {

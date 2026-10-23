@@ -269,7 +269,9 @@ async function start() {
   } else {
     const found = await loginPath();
     try {
-      page = await startBridge({ ...process.env, ...(found ? { PATH: found } : {}) });
+      page = await startBridge({ ...process.env, ...(found ? { PATH: found } : {}),
+        ...(process.platform === 'win32' ? { OPEN_SPACE_KNOWN_FOLDERS: JSON.stringify([app.getPath('desktop'), app.getPath('documents')]) } : {}),
+      });
     } catch {
       showBroken();
       return;

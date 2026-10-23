@@ -19,8 +19,9 @@ export function LineCounts({ added, removed }: { added: number; removed: number 
 
 /** A path from the session's folder when it is inside it, from the home otherwise; the folder part quiet. */
 function shownPath(file: string, cwd: string) {
-  const relative = file.startsWith(`${cwd}/`) ? file.slice(cwd.length + 1) : homeRelative(file);
-  const cut = relative.lastIndexOf('/') + 1;
+  const normalized = file.replace(/\\/g, '/'), base = cwd.replace(/\\/g, '/');
+  const relative = normalized.startsWith(`${base}/`) ? normalized.slice(base.length + 1) : homeRelative(file);
+  const cut = Math.max(relative.lastIndexOf('/'), relative.lastIndexOf('\\')) + 1;
   return { folder: relative.slice(0, cut), name: relative.slice(cut) };
 }
 

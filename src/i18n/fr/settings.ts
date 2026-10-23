@@ -1,5 +1,6 @@
 import type { Job } from '../../../shared/jobs.ts';
 import { plural } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
 
 export const settings = {
   noServer: 'Pas de connexion au serveur : pas encore enregistré.',
@@ -42,11 +43,11 @@ export const settings = {
     noFolder: 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.',
     journalFolder: 'Dossier des notes du tableau',
     journalFolderHint: 'un fichier .md par projet, que tes sessions peuvent aussi remplir',
-    journalFolderInvalid: 'Le dossier des notes doit être un chemin complet (/… ou ~/…).',
+    journalFolderInvalid: IS_WINDOWS ? 'Le dossier des notes doit être un chemin complet (C:\\… ou \\\\serveur\\partage\\…).' : 'Le dossier des notes doit être un chemin complet (/… ou ~/…).',
     metricsFile: 'Fichier des chiffres (facultatif)',
     metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
-    metricsFilePlaceholder: '~/Journal/chiffres.md',
-    metricsFileInvalid: 'Le fichier des chiffres doit être un chemin complet vers un .md (/… ou ~/…), ou rester vide.',
+    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
+    metricsFileInvalid: IS_WINDOWS ? 'Le fichier des chiffres doit être un chemin complet vers un .md (C:\\… ou \\\\serveur\\partage\\…), ou rester vide.' : 'Le fichier des chiffres doit être un chemin complet vers un .md (/… ou ~/…), ou rester vide.',
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
@@ -108,7 +109,7 @@ export const settings = {
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
-      outputStyle: { title: 'Style de sortie', hint: 'La façon dont Claude te répond. Tes styles viennent de ~/.claude/output-styles.', default: 'Par défaut' },
+      outputStyle: { title: 'Style de sortie', hint: IS_WINDOWS ? 'La façon dont Claude te répond. Tes styles viennent de %USERPROFILE%\\.claude\\output-styles.' : 'La façon dont Claude te répond. Tes styles viennent de ~/.claude/output-styles.', default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {
@@ -141,7 +142,7 @@ export const settings = {
       previewFestival: { title: 'Essayer une fête', hint: 'La salle décorée sans attendre le jour J. Rien n’est gardé au rechargement.' },
       previewHour: { title: 'Essayer une heure', hint: 'Le ciel et la lumière à une autre heure. Rien n’est gardé au rechargement.' },
       crew: { title: 'Ton perso, ton équipe et ton animal', hint: 'Prénoms, looks, anniversaires et métiers.', action: 'Ouvrir l’équipe' },
-      journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir.' },
+      journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir. Le dossier est créé à la première note.' },
       metricsFile: { title: 'Fichier des chiffres', hint: 'Un markdown tenu à jour par tes scripts ou une session. Vide : pas d’objet.' },
       version: { title: 'Open Space', hint: 'L’app télécharge les nouvelles versions et redémarre dessus dès qu’aucune session ne travaille.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Introuvable sur cet ordinateur.' },
@@ -186,7 +187,7 @@ export const settings = {
     notLookedInto: 'pas regardé dedans',
     projects: (count: number) => plural(count, 'projet', 'projets'),
     searching: 'Je cherche tes projets…',
-    otherPlaceholder: '/Users/toi/code',
+    otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\code' : '/Users/toi/code',
     otherLabel: 'Un autre dossier (chemin complet)',
     add: 'Ajouter',
     defaultFolder: 'Dossier par défaut (Maj+N lance une session dedans)',
