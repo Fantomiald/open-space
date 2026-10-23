@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { isFullPath } from '../../shared/paths.ts';
-import { IS_MAC } from '../lib/platform.ts';
+import type { TerminalKind } from '../../shared/terminal.ts';
+import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
@@ -45,7 +46,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
-  folders: [['places', ['roots', 'defaultFolder']]],
+  folders: [['places', ['roots', 'defaultFolder', 'terminal']]],
   office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   notes: [['files', ['journalFolder', 'metricsFile']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
@@ -141,6 +142,7 @@ function SettingsEditor() {
   const section = useSessions((s) => s.settingsSection);
   const flashRow = useSessions((s) => s.settingsRow);
   const language = useSessions((s) => s.language);
+  const terminals = useSessions((s) => s.terminals);
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
@@ -148,6 +150,7 @@ function SettingsEditor() {
   const [draft, setDraft] = useState<Preferences>(() => ({
     ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), metricsFile: homeRelative(preferences.metricsFile),
   }));
+  const terminal = draft.terminal ?? 'cmd';
   const change = (changes: Partial<Preferences>) => setDraft((current) => ({ ...current, ...changes }));
 
   useEffect(() => { store().send({ t: 'suggestRoots' }); }, [store]);
@@ -194,6 +197,14 @@ function SettingsEditor() {
       );
     }
     switch (id) {
+      case 'terminal': return !IS_WINDOWS ? null : (
+        <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.terminal.title} hint={rows.terminal.hint}>
+          <select aria-labelledby={`setting-${id}-title`} title={terminals.find((choice) => choice.id === terminal)?.path} value={terminal} disabled={!terminals.length} onChange={(e) => change({ terminal: e.target.value as TerminalKind })}>
+            {!terminals.some((choice) => choice.id === terminal) && <option value={terminal} disabled>{rows.terminal.unavailable}</option>}
+            {terminals.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+          </select>
+        </Row>
+      );
       case 'language': return (
         <Row key={id} id={id} flash={flash} icon={<LanguageIcon />} title={rows.language.title} hint={rows.language.hint}>
           <select aria-labelledby={`setting-${id}-title`} value={draft.language ?? language} onChange={(e) => change({ language: e.target.value as Language })}>

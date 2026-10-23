@@ -99,6 +99,7 @@ export const settings: Dictionary['settings'] = {
       failed: (text: string) => `Failed: ${text}`,
     },
     rows: {
+      terminal: { title: 'Terminal', hint: 'For your character’s monitor and Ctrl+Alt+T. Only terminals detected on this computer are offered.', unavailable: 'Saved terminal not found, choose another' },
       language: { title: 'Language', hint: 'Of the page, the server and new agents’ instructions.' },
       sound: { title: 'Sound', hint: 'A sound when a session is done or waiting for you.' },
       notifications: { title: 'macOS notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
