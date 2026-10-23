@@ -212,20 +212,27 @@ export async function includedEntries(mainRoot: string): Promise<string[]> {
 export interface CopyResult { copied: number; failed: number; skipped: boolean }
 
 /**
- * Copies the included entries into the new worktree as APFS clones (`cp -c`: at once, without taking room). Elsewhere
- * than on a Mac, or when a clone fails (another file system), nothing is copied: the session installs what it needs.
+ * APFS clones on Mac; independent ordinary copies elsewhere (or when cloning is unavailable).
  */
 export async function copyIncluded(mainRoot: string, worktreeRoot: string, platform = process.platform): Promise<CopyResult> {
   const entries = await includedEntries(mainRoot);
   if (!entries.length) return { copied: 0, failed: 0, skipped: false };
-  if (platform !== 'darwin') return { copied: 0, failed: 0, skipped: true };
   let copied = 0, failed = 0;
   for (const entry of entries) {
     const relative = entry.replace(/\/$/, '');
     const target = path.join(worktreeRoot, relative);
     if (existsSync(target)) continue;
     await mkdir(path.dirname(target), { recursive: true });
-    const ok = await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', path.join(mainRoot, relative), target], { timeout: 120_000 }, (error) => resolve(!error)));
+    const source = path.join(mainRoot, relative);
+    let ok = platform === 'darwin' && await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', source, target], { timeout: 120_000 }, (error) => resolve(!error)));
+    if (!ok) {
+      try {
+        if (platform === 'darwin') await rm(target, { recursive: true, force: true });
+        // No hardlinks: a session editing its .env or dependencies must not change the main checkout.
+        await cp(source, target, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true });
+        ok = true;
+      } catch { /* reported below; remove any incomplete copy */ }
+    }
     if (ok) copied++;
     else { failed++; await rm(target, { recursive: true, force: true }); }
   }
