@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
-    proxy: { '/ws': { target: 'ws://127.0.0.1:4848', ws: true }, '/pair': { target: 'http://127.0.0.1:4848' }, '/sounds': { target: 'http://127.0.0.1:4848' }, '/attachments': { target: 'http://127.0.0.1:4848' }, '/upload': { target: 'http://127.0.0.1:4848' } },
+    proxy: { '/ws': { target: 'ws://127.0.0.1:4848', ws: true }, '/pair': { target: 'http://127.0.0.1:4848' }, '/sounds': { target: 'http://127.0.0.1:4848' }, '/attachments': { target: 'http://127.0.0.1:4848' }, '/upload': { target: 'http://127.0.0.1:4848' }, '/browser': { target: 'http://127.0.0.1:4848' } },
   },
   build: { outDir: 'dist', chunkSizeWarningLimit: 1500 },
 });

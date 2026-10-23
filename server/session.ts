@@ -32,6 +32,8 @@ export interface SessionDeps {
   allowedDirectory: (cwd: string) => string | null;
   /** the session now waits for the user (a turn ended, a permission or a question, an error) */
   onAttention?: (kind: AttentionKind, session: SessionInfo) => void;
+  /** a sub-agent was stopped before the end of its task (`type`: its subagent_type) */
+  onSubagentStopped?: (type: string) => void;
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
   saveImage: (image: ImageUpload) => string;
   /** where a file the user uploaded is (see uploads.ts), or null */
@@ -634,6 +636,8 @@ export class Session {
     if (ev.k === 'say' && ev.who === 'chef') this.info.lastMessage = tail(ev.text, LAST_MESSAGE_LENGTH);
     if (ev.k === 'hire') this.info.subagents = [...this.info.subagents, { id: ev.id, name: ev.name, type: ev.type }];
     if (ev.k === 'leave') {
+      const gone = this.info.subagents.find((subagent) => subagent.id === ev.who);
+      if (gone && !ev.ok) this.deps.onSubagentStopped?.(gone.type);
       this.info.subagents = this.info.subagents.filter((subagent) => subagent.id !== ev.who);
       // the last sub-agent working in the background is done: the idle process may now be released
       if (!this.info.subagents.length && this.context.state === 'wait') this.armIdleTimer();

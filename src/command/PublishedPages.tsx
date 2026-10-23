@@ -14,8 +14,8 @@ export function PublishedPages({ pages }: { pages: readonly PublishedPage[] }) {
 
   return (
     <div className="cp-pages" ref={box}>
-      <button type="button" className="cp-changes-chip" aria-expanded={open} aria-haspopup="true" title={words.pagesTitle} onClick={() => setOpen(!open)}>
-        <LinkIcon />{words.pages(pages.length)}
+      <button type="button" className="cp-changes-chip" aria-expanded={open} aria-haspopup="true" aria-label={words.pages(pages.length)} title={words.pagesTitle} onClick={() => setOpen(!open)}>
+        <LinkIcon />{pages.length}
       </button>
       {open && (
         <ul className="cp-pages__panel" aria-label={words.pagesTitle}>

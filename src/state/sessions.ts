@@ -1,6 +1,9 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
 import { create } from 'zustand';
+import { browserId, type BrowserState } from '../../shared/browser.ts';
+import { isRunning } from './labels.ts';
+import { wentToPage } from './pip.ts';
 import type { ClaudeDefaults } from '../../shared/claude-settings.ts';
 import { setClockFormat } from '../lib/format.ts';
 import type { Festival } from '../../shared/festivals.ts';
@@ -55,8 +58,10 @@ export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 /** `resumeIn`: the launcher opens on that folder's conversations (/resume) */
 export interface NewSessionDraft { command?: string; person?: string; resumeIn?: string }
 
-/** What the session panel shows under its header: the conversation, what the session changed, or one of the views of Claude Code. */
-export type PanelView = 'thread' | 'changes' | InspectView;
+/** What the session panel shows under its header: the conversation, what the session changed, its browser, or one of the views of Claude Code. */
+export type PanelView = 'thread' | 'changes' | 'browser' | InspectView;
+/** A browser of a session (its own: lane 0, or one of its testers'), shown in the floating window over the office. */
+export interface PipTarget { sessionId: string; lane: number }
 /** The answers to the views of Claude Code of a session, as last asked for. */
 export interface Inspections { mcp?: McpServer[]; context?: ContextUsage; usage?: UsageReport }
 
@@ -99,6 +104,16 @@ interface CommandPostState {
   directories: string[];
   /** what each session changed in its files, as last asked for */
   changes: Record<string, SessionChanges>;
+  /** the sessions' browsers that are running, by browserId: their own and their testers' (see server/browser.ts) */
+  browsers: Record<string, BrowserState>;
+  /** a Chrome to launch was found on the computer */
+  browserAvailable: boolean;
+  /** the browser each session's panel shows, when not its own */
+  browserLanes: Record<string, number>;
+  /** the browser floating over the office, kept in this browser across reloads */
+  pip: PipTarget | null;
+  /** sessions whose floating browser the user closed: it does not come back by itself before their turn ends */
+  pipDismissed: string[];
   /** the views of Claude Code answered so far, by session */
   inspections: Record<string, Inspections>;
   /** what the open session's panel shows (back to the conversation when another session opens) */
@@ -232,6 +247,14 @@ interface CommandPostState {
   fitOpen: () => void;
   /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
   showPanel: (view: PanelView) => void;
+  showBrowserLane: (sessionId: string, lane: number) => void;
+  /** takes a browser out of its session's window, which goes back to the conversation */
+  openPip: (target: PipTarget) => void;
+  closePip: () => void;
+  /** closed by the user: it stays closed while that session's turn goes on */
+  dismissPip: () => void;
+  /** puts the floating browser back in its session's window */
+  dockPip: () => void;
   /** the user is looking at this session: what it shows now is no longer news */
   markSeen: (sessionId: string) => void;
   setView: (view: View) => void;
@@ -329,6 +352,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   musicLibrary: null,
   directories: [],
   changes: {},
+  browsers: {},
+  browserAvailable: false,
+  browserLanes: {},
+  pip: readPreference<PipTarget | null>('pip', null),
+  pipDismissed: [],
   inspections: {},
   panelView: 'thread',
   conversations: null,
@@ -402,6 +430,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults, appUpdate: message.appUpdate,
+          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false,
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
@@ -492,6 +521,19 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'claudeAccount': set({ claudeAccount: message.account }); break;
       case 'appUpdate': set({ appUpdate: message.update }); break;
       case 'changes': set({ changes: { ...s.changes, [message.sessionId]: message.changes } }); break;
+      case 'browser': {
+        const id = browserId(message.sessionId, message.lane);
+        const { [id]: _closed, ...browsers } = s.browsers;
+        set({ browsers: message.browser ? { ...browsers, [id]: message.browser } : browsers });
+        // its agent or a tester takes it to a page while it is out of sight: it floats over the office
+        const session = s.sessions[message.sessionId];
+        const dismissed = s.pipDismissed.includes(message.sessionId) && session && isRunning(session);
+        const inView = s.selectedId === message.sessionId && s.panelView === 'browser';
+        if (!s.pip && !dismissed && !inView && session && wentToPage(s.browsers[id], message.browser)) get().openPip({ sessionId: message.sessionId, lane: message.lane });
+        // its browser closed: nothing left to float
+        if (!message.browser && s.pip && browserId(s.pip.sessionId, s.pip.lane) === id) get().closePip();
+        break;
+      }
       case 'inspection': {
         const { inspection } = message;
         const answer: Inspections = inspection.view === 'mcp' ? { mcp: inspection.servers } : inspection.view === 'context' ? { context: inspection.usage } : { usage: inspection.report };
@@ -649,7 +691,37 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   showPanel: (view) => {
     const s = get();
     set({ panelView: view });
-    if (s.selectedId && view !== 'thread' && view !== 'changes') s.send({ t: 'inspect', sessionId: s.selectedId, view });
+    if (s.selectedId && view !== 'thread' && view !== 'changes' && view !== 'browser') s.send({ t: 'inspect', sessionId: s.selectedId, view });
+  },
+
+  showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
+
+  openPip: (target) => {
+    const s = get();
+    set({ pip: target, pipDismissed: s.pipDismissed.filter((id) => id !== target.sessionId), ...(s.selectedId === target.sessionId && s.panelView === 'browser' ? { panelView: 'thread' } : {}) });
+    writePreference('pip', target);
+  },
+
+  closePip: () => {
+    set({ pip: null });
+    writePreference('pip', null);
+  },
+
+  dismissPip: () => {
+    const { pip, pipDismissed } = get();
+    if (pip) set({ pipDismissed: [...pipDismissed.filter((id) => id !== pip.sessionId), pip.sessionId] });
+    get().closePip();
+  },
+
+  dockPip: () => {
+    const s = get();
+    if (!s.pip) return;
+    const { sessionId, lane } = s.pip;
+    s.closePip();
+    if (!s.sessions[sessionId]) return;
+    s.show(sessionId);
+    s.showBrowserLane(sessionId, lane);
+    get().showPanel('browser');
   },
 
   markSeen: (sessionId) => {

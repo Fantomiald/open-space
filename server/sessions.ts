@@ -15,7 +15,7 @@ import type { ShellRunner } from './shell.ts';
 import { findMentions } from '../shared/mentions.ts';
 import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
-import type { CatalogProbe, ProcessFactory } from './claude-process.ts';
+import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, lastName, listConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
@@ -53,6 +53,7 @@ export interface SessionManagerDeps {
   home?: string;
   /** a session now waits for the user (see Session's deps) */
   onAttention?: SessionDeps['onAttention'];
+  onSubagentStopped?: (sessionId: string, type: string) => void;
   /** the user's first name and their note for every agent */
   identity?: SessionDeps['identity'];
   claudeSettings?: SessionDeps['claudeSettings'];
@@ -62,6 +63,8 @@ export interface SessionManagerDeps {
   runShell?: ShellRunner;
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
   probeCatalog?: CatalogProbe | null;
+  /** the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts) */
+  browserMcp?: (sessionId: string) => Pick<LaunchOptions, 'mcpConfig' | 'agents'>;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -231,7 +234,7 @@ export class SessionManager {
       spawnProcess: (launch, handlers) => {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)] }, handlers);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -247,6 +250,7 @@ export class SessionManager {
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
+      onSubagentStopped: (type) => this.deps.onSubagentStopped?.(info.id, type),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       peerName: (address) => this.peerName(address),
@@ -310,6 +314,9 @@ export class SessionManager {
   }
 
   list(): SessionInfo[] { return [...this.sessions.values()].map((session) => session.snapshot()); }
+
+  /** the session has a Claude Code process running */
+  isAlive(sessionId: string): boolean { return !!this.sessions.get(sessionId)?.alive; }
   getCommands(): SlashCommand[] { return this.commands; }
   getFolderCommands(): Record<string, SlashCommand[]> { return Object.fromEntries(this.folderCommands); }
   getModels(): ModelChoice[] { return this.models; }
