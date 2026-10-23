@@ -1,3 +1,4 @@
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
@@ -322,8 +323,8 @@ describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts 
     call('p1', { file_path: '/s/dl/index.html', root: '/s/dl', files: ['images/tilt.png', { path: 'previews/tilt.jpg' }] }, { url, path: '/s/dl/index.html' });
     call('p2', { file_path: 'site/index.html', files: { 'img/x.png': 'shots/x.png', 'data.json': { from: 'out/data.json' }, 'images/tilt.png': null, 'theirs.css': { artifact: url, path: 'a.css' } } }, { url, path: '/work/site/index.html' });
     assert.deepEqual(published, [
-      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'images/tilt.png': '/s/dl/images/tilt.png', 'previews/tilt.jpg': '/s/dl/previews/tilt.jpg' },
-      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'previews/tilt.jpg': '/s/dl/previews/tilt.jpg', 'img/x.png': '/work/shots/x.png', 'data.json': '/work/out/data.json' },
+      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'images/tilt.png': path.resolve('/s/dl/images/tilt.png'), 'previews/tilt.jpg': path.resolve('/s/dl/previews/tilt.jpg') },
+      { '_blob/aa': '/s/a.jpg', '_blob/bb': '/s/b.jpg', '_blob/cc': '/s/c.jpg', 'previews/tilt.jpg': path.resolve('/s/dl/previews/tilt.jpg'), 'img/x.png': path.resolve('/work/shots/x.png'), 'data.json': path.resolve('/work/out/data.json') },
     ]);
   });
 });

@@ -26,6 +26,16 @@ mac:
     NSAppleEventsUsageDescription: Open Space pilote Musique ou Spotify pour la radio du bureau, et ouvre ton terminal.
 dmg:
   artifactName: Open Space-${version}-${arch}.${ext}
+win:
+  target:
+    - nsis
+  artifactName: Open Space-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 publish:
   provider: github
   owner: Fantomiald

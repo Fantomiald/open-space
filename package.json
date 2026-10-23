@@ -31,11 +31,14 @@
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p desktop/tsconfig.json",
     "lint": "biome lint",
     "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"src/**/*.test.ts\"",
-    "app:build": "rm -rf out && vite build --outDir out/dist --emptyOutDir --logLevel warn && vite build -c vite.desktop.config.ts --logLevel warn",
+    "app:build": "node scripts/clean-app.mjs && vite build --outDir out/dist --emptyOutDir --logLevel warn && vite build -c vite.desktop.config.ts --logLevel warn",
     "app:dev": "npm run app:build && electron .",
-    "app": "npm run app:build && electron-builder --mac -c.mac.identity=-",
-    "app:release": "npm run app:build && electron-builder --mac",
-    "app:publish": "npm run app:build && electron-builder --mac --publish always"
+    "app": "npm run app:build && electron-builder",
+    "app:release": "npm run app:build && electron-builder",
+    "app:publish": "npm run app:build && electron-builder --publish always",
+    "app:win": "npm run app:build && electron-builder --win --x64",
+    "app:win:arm64": "npm run app:build && electron-builder --win --arm64",
+    "app:mac": "npm run app:build && electron-builder --mac -c.mac.identity=-"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

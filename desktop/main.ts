@@ -1,4 +1,4 @@
-// Open Space as a macOS app: a window on the bridge (server/index.ts), which runs inside the app as an Electron
+// Open Space as a desktop app: a window on the bridge (server/index.ts), which runs inside the app as an Electron
 // utility process and stops with it. When an Open Space already listens on the port (npm start), the window opens
 // that one instead, and quitting the app leaves it running. Closing the window keeps the sessions going: the Dock
 // icon brings it back, and the notifications still come.
@@ -46,6 +46,7 @@ const log = (line: string) => {
 
 /** An app opened from the Dock gets a bare PATH: the login shell's, so that claude, git and the MCP servers are found. */
 function loginPath(): Promise<string | undefined> {
+  if (process.platform !== 'darwin') return Promise.resolve(process.env.PATH);
   const marker = '__OPEN_SPACE_PATH__';
   return new Promise((resolve) => {
     execFile(process.env.SHELL || '/bin/zsh', ['-ilc', `printf '${marker}%s${marker}' "$PATH"`], { timeout: 5000 }, (error, stdout) => {
@@ -75,7 +76,7 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
     child.on('message', (message: AppMessage) => {
       if (message.t === 'ready') { resolve(message.link); if (update) tell(update); }
       else if (message.t === 'notify') showNotification(message.title, message.body, message.sessionId);
-      else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; child.kill(); }
+      else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; child.postMessage({ t: 'shutdown' } satisfies AppNews); }
       else if (message.t === 'check') checkNow();
     });
     child.once('exit', (code) => {
@@ -253,9 +254,13 @@ function watchForUpdates() {
 }
 
 async function start() {
+  if (process.platform === 'win32') app.setAppUserModelId('io.github.fantomiald.open-space');
   // the page is always dark: the title bar and the menus too
   nativeTheme.themeSource = 'dark';
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }]));
+  Menu.setApplicationMenu(process.platform === 'win32' ? null : Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : [{ label: 'Open Space', submenu: [{ role: 'quit' as const }] }]),
+    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+  ]));
   followAvatar();
   showWindow();
   if (await alreadyRunning()) {
@@ -283,7 +288,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showWindow());
   // the sessions keep running without a window: the Dock icon brings it back
-  app.on('window-all-closed', () => {});
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   app.on('activate', () => showWindow());
   // SIGTERM: the bridge closes its sessions (they can be resumed) and saves, then the app quits (see startBridge)
   app.on('before-quit', (event) => {
@@ -291,7 +296,7 @@ else {
     event.preventDefault();
     if (quitting) return;
     quitting = true;
-    bridge.kill();
+    bridge.postMessage({ t: 'shutdown' } satisfies AppNews);
   });
   app.whenReady().then(start).catch((error: unknown) => { log(`  !  ${error instanceof Error ? error.message : error}`); showBroken(); });
 }

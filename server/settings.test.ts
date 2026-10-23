@@ -11,7 +11,7 @@ after(() => rmSync(folder, { recursive: true, force: true }));
 describe('settings', () => {
   it('keeps only what is valid from the page: absolute folders, known modes, a short note', () => {
     assert.deepEqual(parsePreferences({ roots: ['/a/b', 'relative', '/a/b/', 3], permissionMode: 'bypassPermissions', model: 'opus; rm -rf', agentNote: ` ${'x'.repeat(700)} `, festivals: 'yes' }), {
-      roots: ['/a/b'], agentNote: 'x'.repeat(600),
+      roots: [path.resolve('/a/b')], agentNote: 'x'.repeat(600),
     });
     assert.deepEqual(parsePreferences({ model: 'claude-opus-5-5', permissionMode: 'plan', defaultFolder: '' }), { model: 'claude-opus-5-5', permissionMode: 'plan', defaultFolder: '' });
     assert.deepEqual(parsePreferences('nope'), {});
@@ -54,7 +54,7 @@ describe('settings', () => {
     const reloaded = new Settings(file);
     await reloaded.load();
     assert.equal(reloaded.onboarded, true);
-    assert.deepEqual(reloaded.preferences, { ...DEFAULT_PREFERENCES, notifications: false, roots: ['/w'], agentNote: 'Tutoie-moi.' });
+    assert.deepEqual(reloaded.preferences, { ...DEFAULT_PREFERENCES, notifications: false, roots: [path.resolve('/w')], agentNote: 'Tutoie-moi.' });
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).onboarded, true);
   });
 });

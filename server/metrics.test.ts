@@ -49,8 +49,8 @@ describe('the numbers object', () => {
   });
 
   it('keeps the numbers file of the settings a full path to a Markdown file ("~" being the home), or none', () => {
-    assert.deepEqual(parsePreferences({ metricsFile: '~/Journal/chiffres/chiffres.md' }, '/home/someone'), { metricsFile: '/home/someone/Journal/chiffres/chiffres.md' });
-    assert.deepEqual(parsePreferences({ metricsFile: ' /data/numbers.MD ' }, '/home/someone'), { metricsFile: '/data/numbers.MD' });
+    assert.deepEqual(parsePreferences({ metricsFile: '~/Journal/chiffres/chiffres.md' }, '/home/someone'), { metricsFile: path.resolve('/home/someone/Journal/chiffres/chiffres.md') });
+    assert.deepEqual(parsePreferences({ metricsFile: ' /data/numbers.MD ' }, '/home/someone'), { metricsFile: path.resolve('/data/numbers.MD') });
     assert.deepEqual(parsePreferences({ metricsFile: '  ' }, '/home/someone'), { metricsFile: '' }, 'emptied: no numbers object');
     for (const metricsFile of ['chiffres.md', '~other/chiffres.md', '/data/numbers.txt', '/data/', 3]) assert.deepEqual(parsePreferences({ metricsFile }, '/home/someone'), {}, String(metricsFile));
     assert.equal(isMetricsPath('~/x.md'), true);

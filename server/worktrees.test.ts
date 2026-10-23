@@ -24,6 +24,7 @@ function repository(): string {
   const root = path.join(scratch, `repo-${++count}`);
   mkdirSync(root);
   sh(root, 'init', '-q', '-b', 'main');
+  sh(root, 'config', 'core.autocrlf', 'false');
   write(path.join(root, '.gitignore'), 'node_modules/\n.env*\nPods/\n');
   write(path.join(root, 'app.ts'), 'export const a = 1;\n');
   write(path.join(root, 'mobile', 'index.ts'), 'export const b = 2;\n');
