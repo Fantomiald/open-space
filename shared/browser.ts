@@ -25,8 +25,17 @@ export interface BrowserState {
   tabs: BrowserTab[];
   /** the tab shown, and the one the user's clicks and keys go to */
   active: string | null;
+  /** the one picked in Open Space */
   format: BrowserFormat;
+  /** the page's size in its last picture: the format's, or the one its agent set (Playwright's browser_resize) */
+  size: { width: number; height: number } | null;
 }
+
+/** below this width, a page reads as laid out for a phone */
+const PHONE_WIDTH = 768;
+
+/** The format the shown page looks like: its agent may have resized it since the one picked. */
+export const shownFormat = (state: BrowserState): BrowserFormat => (state.size ? (state.size.width < PHONE_WIDTH ? 'mobile' : 'desktop') : state.format);
 
 export type BrowserAction =
   | { kind: 'open' }

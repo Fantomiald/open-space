@@ -1,4 +1,4 @@
-import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { lanesOf } from '../../shared/browser.ts';
@@ -33,15 +33,26 @@ function SessionMenu({ session, searchOpen, onSearch, onBrowser, onRest, onSwitc
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, box, close);
+  // the window clips what overflows it: the menu opens in the top layer, under the button or over it when it would not fit
+  useLayoutEffect(() => {
+    const element = menu.current, button = box.current;
+    if (!open || !element || !button) return;
+    element.showPopover();
+    const anchor = button.getBoundingClientRect(), height = element.offsetHeight, gap = 4;
+    const fitsBelow = anchor.bottom + gap + height <= window.innerHeight;
+    element.style.setProperty('--menu-right', `${Math.round(window.innerWidth - anchor.right)}px`);
+    element.style.setProperty('--menu-top', `${Math.round(fitsBelow ? anchor.bottom + gap : Math.max(gap, anchor.top - gap - height))}px`);
+  }, [open]);
   const words = t.session.detail;
   const pick = (action: () => void) => () => { action(); close(); };
   return (
     <div className="cp-detail__more" ref={box}>
       <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} title={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
       {open && (
-        <div className="cp-detail__menu" role="menu" aria-label={words.more}>
+        <div ref={menu} className="cp-detail__menu" popover="manual" role="menu" aria-label={words.more}>
           <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">⌘F</kbd></button>
           {!session.remote && (
             <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>

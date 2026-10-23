@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { browserId, lanesOf, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
+import { browserId, lanesOf, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { modifiersOf, pictureFraction, testersAtWork } from '../state/browser.ts';
@@ -98,7 +98,7 @@ function BrowserPane({ session, lane, driving, onBack, children }: { session: Se
             onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); event.currentTarget.blur(); } }}
           />
         </form>
-        <FormatSwitch session={session} lane={lane} format={browser?.format} />
+        <FormatSwitch session={session} lane={lane} format={browser && shownFormat(browser)} />
         <button type="button" className="cp-icon-button" data-size="small" aria-label={words.pip} title={words.pipTitle} disabled={!available} onClick={() => openPip({ sessionId: session.id, lane })}><PipIcon /></button>
         {browser && <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.close} title={words.closeTitle} onClick={() => act({ kind: 'stop' })}><PowerIcon /></button>}
       </header>

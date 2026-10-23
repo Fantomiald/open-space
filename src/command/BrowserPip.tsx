@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { browserId, lanesOf, sessionOfBrowser } from '../../shared/browser.ts';
+import { browserId, lanesOf, sessionOfBrowser, shownFormat } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -56,7 +56,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
   });
   const { openPip, dismissPip, dockPip } = useSessions.getState();
   const words = t.session.browser;
-  const format = browser?.format ?? 'desktop';
+  const format = browser ? shownFormat(browser) : 'desktop';
   const [placement, setPlacement] = useState<Placement>(() => readPreference<Placement>('pip-placement', { box: null, folded: false }));
   const box = placement.box ?? fitPip(null, format, surface());
   const place = (next: Placement) => { setPlacement(next); writePreference('pip-placement', next); };
@@ -121,7 +121,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
             <SessionLanes key={id} sessionId={id} first={at === 0} shown={id === session.id ? lane : null} onPick={(each) => openPip({ sessionId: id, lane: each })} />
           ))}
         </div>
-        {!placement.folded && <FormatSwitch session={session} lane={lane} format={browser?.format} />}
+        {!placement.folded && <FormatSwitch session={session} lane={lane} format={browser && format} />}
         <button type="button" className="cp-icon-button" data-size="small" aria-label={placement.folded ? words.unfold : words.fold} title={placement.folded ? words.unfold : words.fold} onClick={() => place({ ...placement, folded: !placement.folded })}>
           {placement.folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
         </button>

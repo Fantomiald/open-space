@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { addressOf, MODIFIERS } from '../shared/browser.ts';
+import { addressOf, MODIFIERS, shownFormat } from '../shared/browser.ts';
 import { browserKey, browserMcpConfig, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
@@ -80,6 +80,19 @@ describe('the address bar', () => {
 
   it('refuses other schemes', () => {
     for (const typed of ['javascript:alert(1)', 'file:///etc/passwd', 'chrome://settings', '  ']) assert.equal(addressOf(typed), null, typed);
+  });
+});
+
+describe('the format shown', () => {
+  const state = (size: { width: number; height: number } | null) => ({ tabs: [], active: null, format: 'desktop' as const, size });
+
+  it('is the one picked until a page is pictured', () => {
+    assert.equal(shownFormat(state(null)), 'desktop');
+  });
+
+  it('follows the size the agent gave the page', () => {
+    assert.equal(shownFormat(state({ width: 375, height: 667 })), 'mobile');
+    assert.equal(shownFormat(state({ width: 768, height: 1024 })), 'desktop');
   });
 });
 
