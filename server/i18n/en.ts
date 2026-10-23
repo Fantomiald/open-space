@@ -151,6 +151,7 @@ export const en: ServerDictionary = {
     missing: (name: string) => `The note ${name} is no longer in the whiteboard’s folder.`,
     badName: (name: string) => `"${name}" can’t be a whiteboard note.`,
     tooBig: 'This note is too long for the whiteboard (1 MB at most).',
+    taken: (name: string) => `A note is already called ${name}.`,
   },
   metrics: {
     tooBig: 'The numbers file is too long for the screen (1 MB at most).',

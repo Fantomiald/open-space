@@ -160,6 +160,7 @@ export const fr = {
     missing: (name: string) => `La note ${name} n’est plus dans le dossier du tableau.`,
     badName: (name: string) => `« ${name} » ne peut pas être une note du tableau.`,
     tooBig: 'Cette note est trop longue pour le tableau (1 Mo au plus).',
+    taken: (name: string) => `Une note s’appelle déjà ${name}.`,
   },
   metrics: {
     tooBig: 'Le fichier des chiffres est trop long pour l’écran (1 Mo au plus).',

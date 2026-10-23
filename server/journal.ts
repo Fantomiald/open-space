@@ -3,11 +3,12 @@
 // paths: a symlink or a sub-folder never leads outside the folder. A save carries the version of the note it was made
 // from, and is refused (with the note as it is now) when the file changed since, so a session's write is never lost.
 import { createHash } from 'node:crypto';
-import { lstatSync, realpathSync, statSync } from 'node:fs';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
+import { copyFile, link, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
-import type { Note, NoteFile } from '../shared/protocol.ts';
+import { findInNote, MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
+import type { Note, NoteFile, NoteMatch } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { resolveInside } from './paths.ts';
 
@@ -76,4 +77,67 @@ export async function writeNote(folder: string, name: string, text: string, vers
   await writeFile(found.file, text, { flag: found.exists ? 'w' : 'wx' });
   // the version of what was written, not re-read: a session writing right after must still be caught by the next save
   return { saved: true, note: { name, text, version: versionOf(text), mtime: Math.round((await stat(found.file)).mtimeMs) } };
+}
+
+/** Renames a note's file. A hard link then an unlink, so a note created under the new name meanwhile is never replaced. */
+export async function renameNote(folder: string, name: string, newName: string): Promise<void> {
+  const from = locateNote(folder, name);
+  if (!from?.exists) throw new Error(st.journal.missing(name));
+  const to = locateNote(folder, newName);
+  if (!to) throw new Error(st.journal.badName(newName));
+  if (to.exists) throw new Error(st.journal.taken(newName));
+  try {
+    await link(from.file, to.file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(st.journal.taken(newName));
+    throw error;
+  }
+  await unlink(from.file);
+}
+
+/** Puts a note's file in the user's Trash (macOS), under a free name; deletes it where there is no Trash. */
+export async function deleteNote(folder: string, name: string, trash = path.join(os.homedir(), '.Trash')): Promise<void> {
+  const found = locateNote(folder, name);
+  if (!found?.exists) throw new Error(st.journal.missing(name));
+  if (!existsSync(trash)) { await unlink(found.file); return; }
+  let target = path.join(trash, name);
+  for (let copy = 2; existsSync(target); copy++) target = path.join(trash, name.replace(/\.md$/, ` ${copy}.md`));
+  try {
+    await rename(found.file, target);
+  } catch (error) {
+    // the Trash on another disk than the folder: copied there, then removed here
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    await copyFile(found.file, target);
+    await unlink(found.file);
+  }
+}
+
+const MAX_MATCHES = 50;
+const EXCERPT_LENGTH = 120;
+
+/**
+ * The notes whose name or text holds `query`, case and accents aside, those with the most hits first. The excerpt is the
+ * first line holding it, cut around it when long.
+ */
+export async function searchNotes(folder: string, query: string): Promise<NoteMatch[]> {
+  if (!query.trim()) return [];
+  const matches: NoteMatch[] = [];
+  for (const { name } of await listNotes(folder)) {
+    let text = '';
+    try { text = (await readNote(folder, name)).text; } catch { /* gone or too big: searched by its name only */ }
+    const found = findInNote(text, query);
+    if (!found.length && !findInNote(name.replace(/\.md$/, ''), query).length) continue;
+    matches.push({ name, count: found.length, excerpt: found[0] ? excerptAt(text, found[0][0]) : '' });
+  }
+  return matches.sort((a, b) => b.count - a.count).slice(0, MAX_MATCHES);
+}
+
+function excerptAt(text: string, at: number): string {
+  const start = text.lastIndexOf('\n', at - 1) + 1;
+  const end = text.indexOf('\n', at);
+  const line = text.slice(start, end === -1 ? text.length : end);
+  const from = line.length <= EXCERPT_LENGTH ? 0 : Math.max(0, Math.min(at - start - EXCERPT_LENGTH / 3, line.length - EXCERPT_LENGTH));
+  const shown = line.slice(from, from + EXCERPT_LENGTH);
+  // a line's Markdown marks ("- ", "## ") are left out
+  return `${from > 0 ? '…' : ''}${(from > 0 ? shown : shown.replace(/^[\s#>*-]+/, '')).trim()}${from + EXCERPT_LENGTH < line.length ? '…' : ''}`;
 }

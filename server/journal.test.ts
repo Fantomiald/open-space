@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { noteFileName, noteTitle } from '../shared/journal.ts';
-import { listNotes, locateNote, readNote, versionOf, writeNote } from './journal.ts';
+import { findInNote, noteFileName, noteTitle } from '../shared/journal.ts';
+import { deleteNote, listNotes, locateNote, readNote, renameNote, searchNotes, versionOf, writeNote } from './journal.ts';
 import { parseClientMessage } from './messages.ts';
 import { parsePreferences } from './settings.ts';
 
@@ -59,10 +59,10 @@ describe('the whiteboard notes', () => {
 
   it('creates a note and its folder, but never over an existing one', async () => {
     const fresh = path.join(base, 'New Journal');
-    const created = await writeNote(fresh, 'sova.md', '# Sova\n', null);
+    const created = await writeNote(fresh, 'home.md', '# Sova\n', null);
     assert.equal(created.saved, true);
-    assert.equal(readFileSync(path.join(fresh, 'sova.md'), 'utf8'), '# Sova\n');
-    const again = await writeNote(fresh, 'sova.md', 'other', null);
+    assert.equal(readFileSync(path.join(fresh, 'home.md'), 'utf8'), '# Sova\n');
+    const again = await writeNote(fresh, 'home.md', 'other', null);
     assert.equal(again.saved, false);
     assert.equal(again.note.text, '# Sova\n');
     await assert.rejects(writeNote(folder, 'link.md', 'x', null), 'not through a link');
@@ -89,5 +89,66 @@ describe('the whiteboard notes', () => {
     assert.deepEqual(parsePreferences({ journalFolder: '/notes/' }, '/home/someone'), { journalFolder: '/notes' });
     assert.deepEqual(parsePreferences({ journalFolder: 'Journal' }, '/home/someone'), {});
     assert.deepEqual(parsePreferences({ journalFolder: '~other/Journal' }, '/home/someone'), {});
+  });
+
+  it('keeps the starred notes that are note names, once each', () => {
+    assert.deepEqual(parsePreferences({ favoriteNotes: ['work.md', 'work.md', '../secret.md', 'notes.txt', 3, 'home.md'] }), { favoriteNotes: ['work.md', 'home.md'] });
+    assert.deepEqual(parsePreferences({ favoriteNotes: 'work.md' }), {});
+  });
+
+  it('renames a note, never over another one nor from outside the folder', async () => {
+    writeFileSync(path.join(folder, 'draft.md'), 'brouillon');
+    await renameNote(folder, 'draft.md', 'final.md');
+    assert.equal(readFileSync(path.join(folder, 'final.md'), 'utf8'), 'brouillon');
+    assert.equal(existsSync(path.join(folder, 'draft.md')), false);
+    await assert.rejects(renameNote(folder, 'final.md', 'atlas.md'), /atlas\.md/);
+    assert.equal(readFileSync(path.join(folder, 'atlas.md'), 'utf8'), '# Atlas\n', 'the other note is untouched');
+    await assert.rejects(renameNote(folder, 'link.md', 'mine.md'));
+    await assert.rejects(renameNote(folder, 'gone.md', 'mine.md'));
+  });
+
+  it('puts a deleted note in the Trash under a free name, or deletes it where there is none', async () => {
+    const trash = path.join(base, 'Trash');
+    mkdirSync(trash);
+    writeFileSync(path.join(trash, 'old.md'), 'already there');
+    writeFileSync(path.join(folder, 'old.md'), 'to the trash');
+    await deleteNote(folder, 'old.md', trash);
+    assert.equal(existsSync(path.join(folder, 'old.md')), false);
+    assert.equal(readFileSync(path.join(trash, 'old 2.md'), 'utf8'), 'to the trash');
+    writeFileSync(path.join(folder, 'gone.md'), 'x');
+    await deleteNote(folder, 'gone.md', path.join(base, 'no-trash'));
+    assert.equal(existsSync(path.join(folder, 'gone.md')), false);
+    await assert.rejects(deleteNote(folder, 'link.md', trash));
+    assert.ok(existsSync(path.join(base, 'outside', 'secret.md')), 'nothing outside the folder is touched');
+  });
+
+  it('finds text case and accents aside, at its offsets in the text', () => {
+    assert.deepEqual(findInNote('Sécurité du serveur : SECURITE', 'securite'), [[0, 8], [22, 30]]);
+    assert.deepEqual(findInNote('Cafe\u0301 noir', 'café'), [[0, 5]], 'a decomposed accent counts in the offsets');
+    assert.deepEqual(findInNote('abc', '  '), []);
+  });
+
+  it('searches the notes by name and text, those with the most hits first', async () => {
+    const notes = path.join(base, 'Search');
+    mkdirSync(notes);
+    writeFileSync(path.join(notes, 'home.md'), '# Sova\n\n- le widget reste à faire\n- widget encore');
+    writeFileSync(path.join(notes, 'tilt.md'), '## Où j’en suis\n- un Widget pour Tilt');
+    writeFileSync(path.join(notes, 'widgets.md'), 'rien dedans');
+    assert.deepEqual(await searchNotes(notes, 'WIDGET'), [
+      { name: 'home.md', count: 2, excerpt: 'le widget reste à faire' },
+      { name: 'tilt.md', count: 1, excerpt: 'un Widget pour Tilt' },
+      { name: 'widgets.md', count: 0, excerpt: '' },
+    ]);
+    assert.deepEqual(await searchNotes(notes, ' '), []);
+  });
+
+  it('takes renames, deletes and searches of plain names only', () => {
+    assert.deepEqual(parseClientMessage({ t: 'renameNote', name: 'a.md', newName: 'b.md' }), { t: 'renameNote', name: 'a.md', newName: 'b.md' });
+    assert.equal(parseClientMessage({ t: 'renameNote', name: 'a.md', newName: '../b.md' }), null);
+    assert.equal(parseClientMessage({ t: 'renameNote', name: 'a.md', newName: 'a.md' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'deleteNote', name: 'a.md' }), { t: 'deleteNote', name: 'a.md' });
+    assert.equal(parseClientMessage({ t: 'deleteNote', name: '/etc/a.md' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'searchNotes', query: 'widget' }), { t: 'searchNotes', query: 'widget' });
+    assert.equal(parseClientMessage({ t: 'searchNotes', query: 'x'.repeat(201) }), null);
   });
 });

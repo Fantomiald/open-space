@@ -1,9 +1,13 @@
 // Per-session event log: JSONL on disk (source of truth, replayable), recent events in memory.
 // Appends go through one write stream so lines are always written in order.
 import { createReadStream, createWriteStream, type WriteStream } from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline';
 import type { LoggedEvent, OfficeEvent } from '../shared/protocol.ts';
 import { asNumber, isJson } from './json.ts';
+
+/** Where the thread of a switched off session waits, under its conversation's id, to come back if it is resumed. */
+export const switchedOffFolder = (logsDir: string) => path.join(logsDir, 'off');
 
 /** Events kept in memory per session; older ones stay on disk only. */
 export const MEMORY_LIMIT = 5000;

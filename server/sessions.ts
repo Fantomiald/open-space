@@ -4,7 +4,7 @@
 // On disk (OFFICE_DIR):  sessions.json  (the list, rewritten atomically)   logs/<session id>.jsonl  (one event per line)
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type SearchHit, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
@@ -17,7 +17,7 @@ import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectVi
 import type { AsideRunner } from './aside.ts';
 import type { CatalogProbe, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
-import { lastContextUse, lastExchanges, listConversations } from './conversations.ts';
+import { lastContextUse, lastExchanges, lastName, listConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME, MAX_TAG } from './messages.ts';
@@ -25,7 +25,7 @@ import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
 import { Session, newSessionInfo, type SessionDeps, type StoredInfo, type TurnEnd } from './session.ts';
-import { SessionLog } from './session-log.ts';
+import { SessionLog, switchedOffFolder } from './session-log.ts';
 import { searchSessions } from './search.ts';
 import {
   branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
@@ -37,6 +37,8 @@ const SAVE_DELAY_MS = 500;
 const MAX_COMMAND_DESCRIPTION = 200;
 /** a shorter conversation is not worth compacting while idle (Preferences.idleCompact): Claude Code alone starts near 45k */
 const IDLE_COMPACT_MIN_TOKENS = 100_000;
+/** how long the thread of a switched off session is kept to come back with it (see forget) */
+const SWITCHED_OFF_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface SessionManagerDeps {
   config: Config;
@@ -158,12 +160,24 @@ export class SessionManager {
   /** The Claude Code conversations a session has written: its own id, and the one it goes on with after a /clear. */
   private conversationIds(info: SessionInfo) { return [info.id, info.conversationId ?? info.id]; }
 
-  /** Removes in the background the stored pictures and files of forgotten sessions (see sweepAttachments). */
+  private switchedOffLog(conversationId: string) { return path.join(switchedOffFolder(this.logsDir), `${conversationId}.jsonl`); }
+
+  /** Removes in the background the threads of sessions switched off too long ago, then the stored pictures and files no thread names any more (see sweepAttachments). */
   private sweep() {
-    sweepAttachments(attachmentsFolder(this.deps.config.dataDir), this.logsDir, this.now())
+    this.dropOldThreads()
+      .catch((error) => this.deps.log('cannot drop the old threads', error))
+      .then(() => sweepAttachments(attachmentsFolder(this.deps.config.dataDir), this.logsDir, this.now()))
       .catch((error) => this.deps.log('cannot sweep the attachments', error));
     sweepUploads(uploadsFolder(this.deps.config.dataDir), this.logsDir, this.now())
       .catch((error) => this.deps.log('cannot sweep the uploads', error));
+  }
+
+  private async dropOldThreads() {
+    const folder = switchedOffFolder(this.logsDir);
+    for (const name of await readdir(folder).catch(() => [] as string[])) {
+      const file = path.join(folder, name);
+      if (this.now() - (await stat(file)).mtimeMs > SWITCHED_OFF_KEPT_MS) await rm(file, { force: true });
+    }
   }
 
   private async readStoredState(): Promise<{ sessions: StoredInfo[]; commands: SlashCommand[]; quota: Quota | null }> {
@@ -449,11 +463,18 @@ export class SessionManager {
     const trusted = !runsCode(code) || trustedInClaudeCode(cwd, this.deps.home) || this.trusted.has(cwd);
     if (!trusted && !options.trust) throw new TrustNeeded(cwd, code);
     if (!trusted && options.trust === 'folder') await this.trusted.add(cwd);
-    const name = options.name?.trim().slice(0, MAX_NAME) || pickSessionName(new Set([...this.sessions.values()].map((session) => session.snapshot().name)));
     if (options.resumeId && this.sessions.has(options.resumeId)) throw new Error(st.sessions.alreadyOpen);
+    const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
+    // a resumed conversation keeps the name its session had, unless someone else was asked for or took it since
+    const former = options.resumeId && !options.name?.trim() ? await lastName(cwd, options.resumeId, this.deps.home) : null;
+    const formerName = former && !taken.has(former) ? former.slice(0, MAX_NAME) : null;
+    const name = options.name?.trim().slice(0, MAX_NAME) || formerName || pickSessionName(taken);
     // a resumed conversation keeps its id: the session goes on with it through --resume
     const info = newSessionInfo({ id: options.resumeId ?? randomUUID(), name, cwd, model: options.model ?? '', permissionMode: options.permissionMode ?? DEFAULT_PERMISSION_MODE }, this.now());
     if (options.resumeId) info.resumable = true;
+    if (formerName) info.introducedAs = formerName;
+    // switched off, its session left its thread aside (see forget): it comes back whole
+    const restored = options.resumeId ? await rename(this.switchedOffLog(options.resumeId), path.join(this.logsDir, `${options.resumeId}.jsonl`)).then(() => true, () => false) : false;
     if (options.effort) info.effort = options.effort;
     if (options.ultracode) info.ultracode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
@@ -466,7 +487,7 @@ export class SessionManager {
     if (!this.folderCommands.has(cwd)) void this.probeFolder(cwd, !!info.untrusted);
     if (options.resumeId) {
       const found = (await listConversations(cwd, new Set(), this.deps.home)).find((conversation) => conversation.id === options.resumeId);
-      session.showHistory(found?.title ?? st.sessions.untitledConversation, await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
+      session.showHistory(found?.title ?? st.sessions.untitledConversation, restored ? [] : await lastExchanges(cwd, options.resumeId, 8, this.deps.home));
     }
     // on a branch of its own: the worktree is made while the first message waits in the queue; a conversation that
     // was switched off with its branch kept gets that branch's worktree back
@@ -857,7 +878,10 @@ export class SessionManager {
     const log = this.logs.get(id);
     this.logs.delete(id);
     await log?.close();
-    await rm(path.join(this.logsDir, `${id}.jsonl`), { force: true });
+    // its thread is kept aside under its conversation's id, to come back if it is resumed (create)
+    await mkdir(switchedOffFolder(this.logsDir), { recursive: true, mode: 0o700 });
+    await rename(path.join(this.logsDir, `${id}.jsonl`), this.switchedOffLog(session.conversationId))
+      .catch(() => rm(path.join(this.logsDir, `${id}.jsonl`), { force: true }));
     this.deps.broadcast({ t: 'forgotten', sessionId: id });
     this.save();
     this.sweep();

@@ -7,6 +7,7 @@ import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
+import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
@@ -14,6 +15,7 @@ import { asArray, isJson } from './json.ts';
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
   journalFolder: path.join(os.homedir(), 'Journal'),
+  favoriteNotes: [],
   metricsFile: '',
   copyOnSelect: false,
   effort: '',
@@ -29,6 +31,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
 
 export const MAX_AGENT_NOTE = 600;
 const MAX_ROOTS = 20;
+const MAX_FAVORITE_NOTES = 200;
 
 /** The settings found in untrusted JSON: what is valid is kept, the rest left out. Folders must be absolute (the journal's and the numbers file's may start with "~"). */
 export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Preferences> {
@@ -56,6 +59,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
     const folder = raw.journalFolder.trim().replace(/^~(?=$|\/)/, () => home);
     if (path.isAbsolute(folder) && folder.length <= 1000) found.journalFolder = path.resolve(folder);
   }
+  if (Array.isArray(raw.favoriteNotes)) found.favoriteNotes = [...new Set(asArray(raw.favoriteNotes).filter((name): name is string => typeof name === 'string' && NOTE_NAME.test(name)))].slice(0, MAX_FAVORITE_NOTES);
   if (typeof raw.metricsFile === 'string' && isMetricsPath(raw.metricsFile)) {
     const file = raw.metricsFile.trim();
     found.metricsFile = file && path.resolve(file.replace(/^~(?=\/)/, () => home));

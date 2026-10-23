@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -218,6 +218,43 @@ describe('resuming a conversation started elsewhere', () => {
     assert.deepEqual(texts, ['note', 'Où on en est ?', 'On en est au paywall.', 'note', 'On continue']);
     assert.deepEqual(await manager.conversations(projectA()), []);
     await assert.rejects(manager.create({ cwd: projectA(), resumeId: id }), /déjà ouverte/);
+    await manager.shutdown();
+  });
+
+  it('brings a switched off session back with its whole thread and its name, while it is free', async () => {
+    const home = path.join(base, `home-${++counter}`);
+    const { manager, processes, messages, find, dataDir } = setup({}, undefined, undefined, home);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), name: 'Zard', text: 'Fais la story' });
+    await manager.forget(id);
+    assert.ok(existsSync(path.join(dataDir, 'logs', 'off', `${id}.jsonl`)));
+    const folder = projectFolder(projectA(), home);
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, `${id}.jsonl`), [
+      JSON.stringify({ type: 'custom-title', customTitle: 'Zard' }),
+      JSON.stringify({ type: 'user', message: { content: 'Fais la story' } }),
+    ].join('\n'));
+    assert.equal((await manager.conversations(projectA()))[0].name, 'Zard');
+    messages.length = 0;
+    await manager.create({ cwd: projectA(), resumeId: id, text: 'Et en anglais ?' });
+    assert.equal(find(id).name, 'Zard');
+    assert.equal(processes[1].sent.at(-1), 'Et en anglais ?');
+    assert.ok(manager.logSince(id, 0).events.some((logged) => logged.ev.k === 'start' && logged.ev.text === 'Fais la story'));
+    assert.ok(!existsSync(path.join(dataDir, 'logs', 'off', `${id}.jsonl`)));
+    await manager.shutdown();
+  });
+
+  it('gives a resumed conversation a new name when its former one was taken since', async () => {
+    const home = path.join(base, `home-${++counter}`);
+    const id = '6d7a1f00-0000-4000-8000-000000000001';
+    const folder = projectFolder(projectA(), home);
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, `${id}.jsonl`), [JSON.stringify({ type: 'custom-title', customTitle: 'Zard' }), JSON.stringify({ type: 'user', message: { content: 'Salut' } })].join('\n'));
+    const { manager, find } = setup({}, undefined, undefined, home);
+    await manager.init();
+    await manager.create({ cwd: projectA(), name: 'Zard', text: 'hi' });
+    await manager.create({ cwd: projectA(), resumeId: id });
+    assert.notEqual(find(id).name, 'Zard');
     await manager.shutdown();
   });
 });
@@ -1166,7 +1203,7 @@ describe('persistence and resynchronisation', () => {
     await context.manager.shutdown();
   });
 
-  it('forget() closes a live session first, then removes it and its log', async () => {
+  it('forget() closes a live session first, then removes it and sets its log aside', async () => {
     const { manager, processes, messages } = setup();
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'hi' });

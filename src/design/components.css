@@ -374,7 +374,11 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-stack[data-rows='3'] > [data-span='1'][data-compact='true'] .cp-detail__agent-back { display: inline-flex; }
 .cp-stack__slot[data-compact='true'] .cp-detail__controls { flex: none; }
 .cp-stack__slot[data-compact='true'] .cp-detail__title { min-width: 0; }
-.cp-stack[data-rows='3'] > [data-compact='true'] .cp-detail__line { display: none; }
+.cp-stack[data-rows='3'] > [data-compact='true'] .cp-detail__line:not(:has(.cp-detail__edit)) { display: none; }
+/* with that line hidden, the tag moves next to the name */
+.cp-detail__title-tag { display: none; flex: none; max-width: 9rem; margin-inline-start: var(--space-1); }
+.cp-detail__title-tag > span { overflow: hidden; text-overflow: ellipsis; }
+.cp-stack[data-rows='3'] > [data-compact='true'] .cp-detail__title-tag { display: inline-flex; }
 .cp-stack__slot[data-compact='true'] .cp-detail__head { gap: var(--space-1); padding: var(--space-2) var(--space-3); }
 .cp-stack__slot[data-compact='true'] .cp-detail__title h2 { font-size: var(--text-lg); }
 /* the state as its dot alone, its words in the tooltip: the head has six buttons to fit */
@@ -898,7 +902,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-modal[data-wide] { width: min(46rem, calc(100vw - 2 * var(--space-4))); }
 .cp-modal::backdrop { background: var(--color-overlay); }
 /* a dialog is glass too, a little denser than the panels so its text reads over anything */
-.cp-modal:not([data-look='board']) {
+.cp-modal {
   --color-surface: var(--glass-tint); --color-surface-sunken: rgb(5 7 16 / 0.32); --color-surface-raised: rgb(255 255 255 / 0.08);
   --color-border: rgb(255 255 255 / 0.07); --color-border-strong: rgb(255 255 255 / 0.13);
 }
@@ -1030,130 +1034,121 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-swatch { width: 1.375rem; height: 1.375rem; flex: none; padding: 0; border: var(--border-width) solid rgb(0 0 0 / 0.25); border-radius: 50%; background: var(--swatch); cursor: pointer; transition: transform var(--duration) var(--easing); }
 .cp-swatch:hover { transform: scale(1.12); }
 .cp-swatch[aria-pressed='true'] { outline: 2px solid var(--selected); outline-offset: 2px; }
-/* ── The whiteboard's notes: a tab per file, the note rendered or in a plain text field ── */
-.cp-board { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; min-height: 0; }
-/* the note gives up height first when the window is short; everything else keeps its size */
-.cp-board > :not(.cp-board__page, .cp-board__editor) { flex: none; }
-.cp-board__bar { display: flex; align-items: flex-end; gap: var(--space-2); }
-.cp-board__bar > .cp-icon-button { flex: none; margin: 0 0 var(--space-1); }
-.cp-board__bar > .cp-icon-button:first-of-type { margin-left: auto; }
-.cp-board__help { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
+/* ── The whiteboard's notes: the notes on the left like the settings' sections, the open one on the right, read or written ── */
+.cp-board { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: var(--prefs-side) minmax(0, 1fr); }
+.cp-board__side { min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-3); border-right: var(--border-width) solid var(--color-border); background: var(--color-surface-sunken); }
+.cp-board__brand { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-2); font-size: var(--text-md); font-weight: var(--weight-bold); }
+.cp-board__brand > span { flex: 1; min-width: 0; }
+.cp-board__search { display: flex; align-items: center; gap: var(--space-2); height: var(--control-height); padding: 0 var(--space-3); border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text-muted); }
+.cp-board__search:focus-within { border-color: var(--color-accent); }
+.cp-board .cp-board__search input[type='search'] { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; outline: none; font-size: var(--text-sm); color: var(--color-text); }
+.cp-board .cp-board__search input[type='search']::-webkit-search-cancel-button { filter: invert(0.7); }
+.cp-board__status { margin: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
+.cp-board__new { display: grid; gap: var(--space-2); }
+.cp-board__new input { width: 100%; height: var(--control-height); padding-block: 0; }
+.cp-board__new-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
+.cp-board__new-actions .cp-button { padding: var(--space-1) var(--space-3); }
+.cp-board__problem { margin: 0; font-size: var(--text-xs); color: var(--tone-error); }
+.cp-board__list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 2px; }
+.cp-board__item { position: relative; display: flex; align-items: center; }
+/* the starred notes end with a line before the others */
+.cp-board__item[data-last-favorite='true'] { margin-bottom: var(--space-1); padding-bottom: var(--space-1); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-board__list [role='tab'] {
+  flex: 1; min-width: 0;
+  display: flex; align-items: baseline; gap: var(--space-2); min-height: var(--control-height); padding: var(--space-1) var(--space-3); border: 0; border-radius: var(--radius-md);
+  background: transparent; color: var(--color-text-muted); text-align: left;
+  transition: background var(--duration) var(--easing), color var(--duration) var(--easing);
+}
+.cp-board__list [role='tab']:hover { background: var(--color-surface); color: var(--color-text); }
+.cp-board__list [role='tab'][aria-selected='true'] { background: var(--color-surface-raised); color: var(--color-text); box-shadow: inset 0 0 0 var(--border-width) var(--glass-edge); }
+.cp-board__name { flex: 1; min-width: 0; overflow: hidden; text-transform: capitalize; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: var(--weight-medium); }
+/* a star: hollow and shown on hover until pressed, then filled in amber and always there */
+.cp-board__star {
+  display: grid; place-items: center; width: 1.5rem; height: 1.5rem; flex: none; padding: 0; border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--color-text-muted); cursor: pointer; transition: color var(--duration) var(--easing), opacity var(--duration) var(--easing);
+}
+.cp-board__star:hover { color: var(--color-text); }
+.cp-board__star[aria-pressed='true'] { color: var(--tone-permission); }
+/* the rename pencil beside the title shows on hover, like the list's stars */
+.cp-board__star[data-quiet='true'] { opacity: 0; }
+.cp-board__title:is(:hover, :focus-within) .cp-board__star[data-quiet='true'] { opacity: 1; }
+@media (hover: none) { .cp-board__star[data-quiet='true'] { opacity: 1; } }
+.cp-board__star[aria-pressed='true'] .cp-icon { fill: currentColor; }
+.cp-board__item .cp-board__star { position: absolute; right: var(--space-1); opacity: 0; }
+.cp-board__item:is(:hover, :focus-within) .cp-board__star, .cp-board__item .cp-board__star[aria-pressed='true'] { opacity: 1; }
+/* the star shows over the age on hover; a starred note keeps room for it beside its age */
+.cp-board__item:not([data-favorite='true']):is(:hover, :focus-within) .cp-board__age { visibility: hidden; }
+.cp-board__item[data-favorite='true'] [role='tab'] { padding-right: calc(var(--space-1) + 1.75rem); }
+/* a note found: its name and how many times, then the first line holding what was searched */
+.cp-board__item[data-found='true'] [role='tab'] { flex-wrap: wrap; row-gap: 2px; padding-block: var(--space-2); }
+.cp-board__count { flex: none; min-width: 1.25rem; padding: 0 0.4em; border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent); font-size: var(--text-xs); font-weight: var(--weight-medium); text-align: center; font-variant-numeric: tabular-nums; }
+.cp-board__excerpt { flex-basis: 100%; font-size: var(--text-xs); line-height: 1.45; color: var(--color-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cp-board__age { flex: none; font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.cp-board__foot { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0 0 var(--space-2); border-top: var(--border-width) solid var(--color-border); }
+.cp-board__foot code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-xs) / 1.4 var(--font-mono); color: var(--color-text-muted); }
+
+.cp-board__main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.cp-board__head { flex: none; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-board__heading { flex: 1; min-width: 0; }
+.cp-board__title { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.cp-board__heading h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-lg); text-transform: capitalize; }
+.cp-board__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-2); font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-board__meta .cp-save-note { margin: 0; font-size: inherit; }
+.cp-board__meta > * + *::before { content: '·'; margin-right: var(--space-2); }
+.cp-board__rename { display: flex; align-items: center; gap: var(--space-1); }
+.cp-board__rename input { flex: 1; min-width: 0; height: var(--control-height); padding-block: 0; font-size: var(--text-md); font-weight: var(--weight-bold); }
+.cp-board__heading > .cp-board__problem { margin-top: 2px; }
+.cp-board__confirm { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-3) var(--space-5) 0; padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border: var(--border-width) solid color-mix(in srgb, var(--tone-error) 45%, transparent); border-radius: var(--radius-md); background: var(--color-surface); }
+.cp-board__confirm p { flex: 1; min-width: 12rem; margin: 0; font-size: var(--text-sm); }
+/* what was searched for, marked in the open note (useSearchMarks) */
+::highlight(board-search) { background-color: color-mix(in srgb, var(--tone-permission) 40%, transparent); color: var(--color-text); }
+.cp-board__actions { flex: none; display: flex; align-items: center; gap: var(--space-1); }
+.cp-board__actions .cp-button { height: var(--control-height); padding-block: 0; }
+.cp-board__help, .cp-board__notice { flex: none; display: grid; gap: var(--space-1); margin: var(--space-3) var(--space-5) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface); font-size: var(--text-sm); }
+.cp-board__help { border: var(--border-width) solid var(--color-border); }
+.cp-board__notice { border: var(--border-width) solid color-mix(in srgb, var(--tone-error) 45%, transparent); }
 .cp-board__help p { margin: 0; max-width: 65ch; }
-.cp-board__new { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.cp-board__new input { flex: 1; min-width: min(12rem, 100%); }
-.cp-board__problem { flex-basis: 100%; margin: 0; font-size: var(--text-sm); }
-.cp-board__notice { margin: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
-.cp-board__page { flex: 0 1 auto; height: min(56vh, 34rem); min-height: 6rem; overflow-y: auto; padding: var(--space-1) var(--space-1) var(--space-2); cursor: text; }
-.cp-board__editor { flex: 0 1 auto; height: min(56vh, 34rem); min-height: 6rem; width: 100%; resize: none; padding: var(--space-3); font: var(--text-sm) / 1.55 var(--font-mono); }
-
-/*
- * Drawn like the room's whiteboard, in pixel art: hard edges, no blur, every frame width a multiple of a board pixel.
- * The dialog is the aluminium frame (corner caps, a bevel, a hard drop shadow), the board is its light writing
- * surface, the tray holds the markers. Note titles are written in the marker font; the note stays in the app's font.
- */
-.cp-modal[data-look='board'] {
-  --board-frame-width: calc(6 * var(--board-pixel));
-  border: 0; border-radius: 0; color: var(--board-ink);
-  background:
-    linear-gradient(var(--board-frame-cap) 0 0) top left / var(--board-frame-width) var(--board-frame-width) no-repeat,
-    linear-gradient(var(--board-frame-cap) 0 0) top right / var(--board-frame-width) var(--board-frame-width) no-repeat,
-    linear-gradient(var(--board-frame-cap) 0 0) bottom left / var(--board-frame-width) var(--board-frame-width) no-repeat,
-    linear-gradient(var(--board-frame-cap) 0 0) bottom right / var(--board-frame-width) var(--board-frame-width) no-repeat,
-    var(--board-frame);
-  box-shadow:
-    inset 0 0 0 var(--board-pixel) var(--board-frame-edge),
-    inset calc(2 * var(--board-pixel)) calc(2 * var(--board-pixel)) 0 0 var(--board-frame-light),
-    inset calc(-2 * var(--board-pixel)) calc(-2 * var(--board-pixel)) 0 0 var(--board-frame-dark),
-    calc(2 * var(--board-pixel)) calc(2 * var(--board-pixel)) 0 0 var(--board-shadow);
+.cp-board :is(.cp-board__help, .cp-empty-state) code { padding: 0 0.3em; border-radius: var(--radius-sm); background: var(--color-surface-sunken); font: 0.92em var(--font-mono); }
+.cp-board__content { flex: 1; min-height: 0; margin: 0; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-6); }
+.cp-board__editor {
+  flex: 1; min-height: 0; width: 100%; margin: 0; resize: none; padding: var(--space-4) var(--space-5) var(--space-6);
+  border: 0; border-radius: 0; background: var(--color-surface-sunken); font: var(--text-sm) / 1.6 var(--font-mono);
 }
-.cp-modal[data-look='board'][open] { display: flex; flex-direction: column; }
-.cp-modal[data-look='board'] .cp-modal__body { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0; padding: var(--board-frame-width); }
-.cp-modal[data-look='board'] .cp-board {
-  flex: 0 1 auto;
-  padding: var(--space-2) var(--space-4) var(--space-5);
-  background: var(--board-surface); color: var(--board-ink); caret-color: var(--board-marker-blue); color-scheme: light;
-  border: var(--board-pixel) solid var(--board-frame-edge);
-  box-shadow: inset var(--board-pixel) var(--board-pixel) 0 0 var(--board-surface-shade);
-}
-.cp-board * { scrollbar-color: var(--board-ink-faint) transparent; }
-.cp-board :focus-visible { outline-color: var(--board-marker-blue); }
-.cp-board :is(.cp-muted, .cp-empty-state p, .cp-save-note) { color: var(--board-ink-muted); }
-.cp-board :is(.cp-save-note[data-state='blocked'], .cp-board__problem) { color: var(--board-marker-red); }
-.cp-board__notice { border-left: var(--board-pixel) solid var(--board-marker-red); background: var(--board-surface-shade); }
-.cp-board__help { border-left: var(--board-pixel) solid var(--board-marker-blue); background: var(--board-surface-shade); color: var(--board-ink); }
-.cp-board :is(.cp-board__help, .cp-empty-state) code { padding: 0 0.3em; background: var(--board-surface-shade); color: var(--board-ink); font-family: var(--font-mono); font-size: 0.92em; }
+.cp-board__editor:focus { outline: none; box-shadow: inset 0 2px 0 var(--color-accent); }
 
-/* the board's header: one note title a tab, in marker, the open one underlined in blue */
-.cp-board__tabs { gap: var(--space-3); }
-.cp-board .cp-board__tabs button {
-  padding: 0 var(--space-1); border-bottom: var(--board-pixel) solid transparent;
-  font: var(--weight-bold) var(--board-heading-2) / 1.5 var(--font-marker); color: var(--board-ink-muted);
-}
-.cp-board .cp-board__tabs button:hover { color: var(--board-ink); }
-.cp-board .cp-board__tabs button[aria-selected='true'] { color: var(--board-marker-blue); border-bottom-color: var(--board-marker-blue); }
-.cp-board .cp-board__tabs button:focus-visible { outline-offset: -2px; }
+/* the note, for reading: a comfortable measure, sections as labels, the journal's dates as headings */
+.cp-board__prose { max-width: 72ch; font-size: var(--text-sm); line-height: 1.65; }
+/* the header already shows the note's name */
+.cp-board__prose > h1:first-child { display: none; }
+.cp-board__prose h1 { font-size: var(--text-lg); }
+.cp-board__prose h2 { margin: var(--space-5) 0 var(--space-2); font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+.cp-board__prose > h2:first-child, .cp-board__prose > h1:first-child + h2 { margin-top: 0; }
+.cp-board__prose h3 { margin: var(--space-4) 0 var(--space-1); font-size: var(--text-sm); }
+.cp-board__prose hr { height: var(--border-width); margin: var(--space-4) 0; border: 0; background: var(--color-border-strong); }
+.cp-board__prose li::marker { color: var(--color-text-muted); }
 
-/* controls written on the board: square, in ink */
-.cp-board :is(.cp-button, .cp-icon-button) { border-radius: 0; color: var(--board-ink); }
-.cp-board .cp-icon-button { color: var(--board-ink-muted); }
-.cp-board .cp-icon-button[aria-expanded='true'] { color: var(--board-marker-blue); }
-.cp-board .cp-button { background: var(--board-surface); border: var(--board-pixel) solid var(--board-ink); }
-.cp-board :is(.cp-button, .cp-icon-button):hover:not(:disabled) { background: var(--board-surface-shade); border-color: var(--board-ink); color: var(--board-ink); }
-.cp-board .cp-button[data-variant='quiet'] { background: transparent; border-color: transparent; color: var(--board-ink-muted); }
-.cp-board .cp-button[data-variant='quiet'][aria-pressed='true'] { color: var(--board-marker-blue); }
-.cp-board .cp-button[data-variant='primary'] { background: var(--board-marker-blue); border-color: var(--board-marker-blue); color: var(--board-marker-barrel); }
-.cp-board .cp-button[data-variant='primary']:hover:not(:disabled) { filter: none; background: var(--board-marker-blue); border-color: var(--board-ink); color: var(--board-marker-barrel); }
-.cp-board :is(input:not([type='checkbox']):not([type='radio']), textarea) { border-radius: 0; border: var(--board-pixel) solid var(--board-ink-faint); background: var(--board-surface); color: var(--board-ink); }
-.cp-board :is(input, textarea)::placeholder { color: var(--board-ink-muted); }
-.cp-board .cp-board__editor { border-color: var(--board-ink-faint); }
-
-/* the note in the app's font, in marker inks: headings a clear step apart, rules drawn with a marker, italics faded */
-.cp-board__prose { color: var(--board-ink); }
-.cp-board__prose :is(h1, h2, h3) { color: var(--board-ink); }
-.cp-board__prose h1 { font-size: var(--board-heading-1); margin-bottom: var(--space-2); }
-.cp-board__prose h2 { font-size: var(--board-heading-2); margin-top: var(--space-5); }
-.cp-board__prose h3 { font-size: var(--board-heading-3); margin-top: var(--space-4); }
-.cp-board__prose :is(h4, h5, h6) { color: var(--board-ink-muted); }
-.cp-board__prose hr { height: var(--board-pixel); margin: var(--space-4) 0; border: 0; background: var(--board-marker-blue); }
-.cp-board__prose em { color: var(--board-ink-muted); }
-.cp-board__prose strong { color: var(--board-ink); }
-.cp-board__prose li::marker { color: var(--board-marker-blue); }
-.cp-board__prose :is(a, li > input[type='checkbox']) { color: var(--board-marker-blue); accent-color: var(--board-marker-blue); }
-.cp-board__prose :is(blockquote, del) { color: var(--board-ink-muted); }
-.cp-board__prose blockquote { border-left: var(--board-pixel) solid var(--board-marker-green); }
-.cp-board__prose :is(pre, :not(pre) > code) { background: var(--board-surface-shade); border: 0; border-radius: 0; }
-.cp-board__prose :is(th, td) { border-color: var(--board-ink-faint); }
-.cp-board__prose th { background: var(--board-surface-shade); }
-.cp-board__prose tbody tr:nth-child(even) { background: transparent; }
-
-/* the tray along the bottom edge, its markers and eraser lying in it and showing above its lip */
-.cp-board__tray {
-  flex: none; position: relative; height: calc(5 * var(--board-pixel)); margin: 0 calc(-2 * var(--board-pixel));
-  background: var(--board-frame);
-  box-shadow:
-    inset 0 0 0 var(--board-pixel) var(--board-frame-edge),
-    inset 0 calc(2 * var(--board-pixel)) 0 0 var(--board-frame-light),
-    inset 0 calc(-2 * var(--board-pixel)) 0 0 var(--board-frame-dark);
-}
-.cp-board__tools { position: absolute; left: calc(6 * var(--board-pixel)); right: calc(6 * var(--board-pixel)); bottom: calc(2 * var(--board-pixel)); display: flex; align-items: flex-end; gap: calc(3 * var(--board-pixel)); }
-.cp-board__tools svg { flex: none; width: auto; }
-.cp-board__marker { height: calc(7 * var(--board-pixel)); }
-.cp-board__eraser { height: calc(8 * var(--board-pixel)); margin-left: auto; }
-.cp-board__tools [data-ink='k'] { fill: var(--board-ink); }
-.cp-board__tools [data-ink='c'] { fill: currentColor; }
-.cp-board__tools [data-ink='h'] { fill: var(--board-marker-glint); }
-.cp-board__tools [data-ink='w'] { fill: var(--board-marker-barrel); }
-.cp-board__tools [data-ink='s'] { fill: var(--board-marker-barrel-shade); }
-.cp-board__tools [data-ink='g'] { fill: var(--board-eraser-grip); }
-.cp-board__tools [data-ink='l'] { fill: var(--board-eraser-grip-light); }
-.cp-board__tools [data-ink='f'] { fill: var(--board-eraser-felt); }
-.cp-board__marker[data-ink='black'] { color: var(--board-marker-black); }
-.cp-board__marker[data-ink='blue'] { color: var(--board-marker-blue); }
-.cp-board__marker[data-ink='red'] { color: var(--board-marker-red); }
-.cp-board__marker[data-ink='green'] { color: var(--board-marker-green); }
-@media (max-width: 30rem) {
-  .cp-modal[data-look='board'] .cp-board { padding-inline: var(--space-3); }
-  .cp-board__marker:nth-child(n + 3) { display: none; }
+@media (max-width: 60rem) {
+  .cp-board { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cp-board__side { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3); border-right: 0; border-bottom: var(--border-width) solid var(--color-border); }
+  .cp-board__brand { flex: none; padding-left: 0; }
+  .cp-board__brand > span, .cp-board__brand > .cp-icon, .cp-board__foot code { display: none; }
+  .cp-board__new { flex: 1 1 100%; order: 3; }
+  .cp-board__list { flex: 1; display: flex; overflow-x: auto; scrollbar-width: none; }
+  .cp-board__item { flex: none; }
+  .cp-board__item[data-last-favorite='true'] { margin: 0 var(--space-1) 0 0; padding: 0 var(--space-1) 0 0; border-bottom: 0; border-right: var(--border-width) solid var(--color-border); }
+  .cp-board__item .cp-board__star { display: none; }
+  .cp-board__item:not([data-favorite='true']):is(:hover, :focus-within) .cp-board__age { visibility: visible; }
+  .cp-board__item[data-favorite='true'] [role='tab'] { padding-right: var(--space-3); }
+  .cp-board__age { display: none; }
+  .cp-board__foot { flex: none; padding: 0; border: 0; }
+  .cp-board__head { flex-wrap: wrap; padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4); }
+  .cp-board__heading { flex-basis: calc(100% - 3rem); }
+  .cp-board__actions { order: 3; flex: 1 1 100%; }
+  .cp-board__actions .cp-kbd { display: none; }
+  .cp-board__content, .cp-board__editor { padding: var(--space-3) var(--space-4) var(--space-5); }
+  .cp-board__help, .cp-board__notice, .cp-board__confirm { margin-inline: var(--space-4); }
+  .cp-board__search { flex: 1 1 100%; order: 2; }
+  .cp-board__item[data-found='true'] { max-width: 16rem; }
 }
 
 /* ── The numbers object's file, read only: figures in columns that line up, a clear line between rows ── */
