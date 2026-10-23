@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, typ
 import { browserId, lanesOf, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { IS_WINDOWS } from '../lib/platform.ts';
 import { modifiersOf, pictureFraction, testersAtWork } from '../state/browser.ts';
 import { useSessions } from '../state/sessions.ts';
 import { BackIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
@@ -148,8 +149,8 @@ export function BrowserScreen({ session, lane, driving }: { session: SessionInfo
     if (at) input({ kind: 'mouse', type, ...at, button, clicks, modifiers: modifiersOf(event) });
   };
   const key = (event: KeyboardEvent<HTMLDivElement>, type: 'keyDown' | 'keyUp') => {
-    // ⌘V comes as a paste event, with the text of the Mac's clipboard
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
+    // ⌘V (Ctrl+V on Windows) comes as a paste event, with the text of the computer's clipboard
+    if ((event.metaKey || (IS_WINDOWS && event.ctrlKey)) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
     event.stopPropagation();
     input({ kind: 'key', type, key: event.key, code: event.code, modifiers: modifiersOf(event) });

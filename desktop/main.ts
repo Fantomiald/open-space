@@ -30,6 +30,12 @@ const boundsFile = path.join(app.getPath('userData'), 'window.json');
 
 let window: BrowserWindow | null = null;
 let bridge: UtilityProcess | null = null;
+
+/** SIGTERM, or a message on Windows, where kill() ends the bridge at once, before it closes its sessions. */
+function stopBridge(child: UtilityProcess) {
+  if (process.platform === 'win32') child.postMessage({ t: 'shutdown' } satisfies AppNews);
+  else child.kill();
+}
 /** where the window goes: the /pair link, which sets the session cookie, then the page */
 let page = '';
 let quitting = false;
@@ -76,7 +82,7 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
     child.on('message', (message: AppMessage) => {
       if (message.t === 'ready') { resolve(message.link); if (update) tell(update); }
       else if (message.t === 'notify') showNotification(message.title, message.body, message.sessionId);
-      else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; child.postMessage({ t: 'shutdown' } satisfies AppNews); }
+      else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; stopBridge(child); }
       else if (message.t === 'check') checkNow();
     });
     child.once('exit', (code) => {
@@ -296,7 +302,7 @@ else {
     event.preventDefault();
     if (quitting) return;
     quitting = true;
-    bridge.postMessage({ t: 'shutdown' } satisfies AppNews);
+    stopBridge(bridge);
   });
   app.whenReady().then(start).catch((error: unknown) => { log(`  !  ${error instanceof Error ? error.message : error}`); showBroken(); });
 }

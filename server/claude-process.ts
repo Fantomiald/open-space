@@ -13,13 +13,14 @@ import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
 
-/** Run npm's Claude shim through Node directly, keeping JSON arguments out of cmd.exe. */
+/** Runs what npm's Claude shim points to, keeping JSON arguments out of cmd.exe: the native claude.exe, or cli.js through Node for older versions. */
 export function claudeCommand(file: string, args: string[]): [string, string[]] {
-  if (process.platform === 'win32' && /\.cmd$/i.test(file)) {
-    const node = path.join(path.dirname(file), 'node.exe');
-    return [existsSync(node) ? node : 'node.exe', [path.join(path.dirname(file), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'), ...args]];
-  }
-  return [file, args];
+  if (process.platform !== 'win32' || !/\.cmd$/i.test(file)) return [file, args];
+  const npmPackage = path.join(path.dirname(file), 'node_modules', '@anthropic-ai', 'claude-code');
+  const native = path.join(npmPackage, 'bin', 'claude.exe');
+  if (existsSync(native)) return [native, args];
+  const node = path.join(path.dirname(file), 'node.exe');
+  return [existsSync(node) ? node : 'node.exe', [path.join(npmPackage, 'cli.js'), ...args]];
 }
 
 export interface ClaudeBinary { path: string; version: string }
