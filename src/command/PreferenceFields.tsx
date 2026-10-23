@@ -9,6 +9,7 @@ import { PERMISSION_MODES, type Preferences, type RootSuggestion } from '../../s
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useReducedMotion } from '../lib/motion.ts';
 
 /**
  * The folders sessions may run in: the suggested ones and those already chosen, checked or not, plus any folder typed in
@@ -86,6 +87,7 @@ type Habits = Pick<Preferences, 'model' | 'permissionMode' | 'notifications' | '
 
 /** A pet drawn at three screen pixels per art pixel: walking when it is the one picked, sitting otherwise. */
 function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>; moving: boolean }) {
+  const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const context = canvas.current!.getContext('2d')!;
@@ -98,10 +100,10 @@ function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>;
       frame = frame ? 0 : 1;
     };
     paint();
-    if (!moving || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!moving || still) return;
     const timer = window.setInterval(paint, 220);
     return () => window.clearInterval(timer);
-  }, [pet, moving]);
+  }, [pet, moving, still]);
   return <canvas ref={canvas} width={22 * 3} height={17 * 3} />;
 }
 

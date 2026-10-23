@@ -7,6 +7,7 @@ import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
 import { availability } from '../state/availability.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useReducedMotion } from '../lib/motion.ts';
 import { USER_SPEAKER, onSpeech } from '../state/speech.ts';
 import type { FestivalDay } from '../../shared/festivals.ts';
 import type { Look } from '../../shared/look.ts';
@@ -62,6 +63,7 @@ function showSky(document: Document, lighting: Lighting) {
 
 /** Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. */
 export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
+  const reducedMotion = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const { festival, guests } = day;
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
@@ -129,7 +131,6 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     context.imageSmoothingEnabled = false;
     const backdrop = paintBackdrop(floor.layout, festival, room, guests);
     const dozing = room === 'lounge';
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let timer: number | undefined;
     let last = 0;
     const frame = () => {
@@ -158,7 +159,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     void document.fonts.load(TAG_FONT);
     start();
     return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [scene, floor, room, festival, guests, sprites, furniture]);
+  }, [scene, floor, room, festival, guests, sprites, furniture, reducedMotion]);
 
   useEffect(() => {
     let lastId = 0;

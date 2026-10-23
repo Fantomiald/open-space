@@ -2,7 +2,7 @@ import { plural, type Dictionary } from '../index.ts';
 import { IS_WINDOWS } from '../../lib/platform.ts';
 
 const FULL_PATH = IS_WINDOWS ? 'C:\\… or \\\\server\\share\\…' : '/… or ~/…';
-const CLAUDE_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude' : '~/.claude';
+const STYLES_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude\\output-styles' : '~/.claude/output-styles';
 
 export const settings: Dictionary['settings'] = {
   noServer: 'No connection to the server: not saved yet.',
@@ -105,12 +105,12 @@ export const settings: Dictionary['settings'] = {
       notifications: { title: 'System notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
       copyOnSelect: { title: 'Copy on select', hint: 'Text you select is copied at once, like in a terminal.' },
       timeFormat: { title: 'Time format', hint: 'In the threads and the usage view.', options: { auto: 'From the language', '24h': '24-hour (14:05)', '12h': '12-hour (2:05 PM)' } },
-      reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations, even when macOS keeps them.' },
+      reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations and stills the room, even when the system keeps them.' },
       timestamps: { title: 'Message timestamps', hint: 'The time next to each message in the threads.' },
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
-      outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${CLAUDE_FOLDER}${IS_WINDOWS ? '\\' : '/'}output-styles.`, default: 'Default' },
+      outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${STYLES_FOLDER}.`, default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {

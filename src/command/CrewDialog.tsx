@@ -10,6 +10,7 @@ import { FIXED_COLOUR } from '../room/wardrobe.ts';
 import { useSessions } from '../state/sessions.ts';
 import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, ShuffleIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
+import { reducedMotion } from '../lib/motion.ts';
 import { PetPicker } from './PreferenceFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
 import { useAutosave } from './useAutosave.ts';
@@ -437,7 +438,7 @@ function Preview({ look, direction, label, onRow, hint }: { look: Look; directio
       step = step ? 0 : 1;
     };
     paint();
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (reducedMotion()) return;
     const timer = window.setInterval(paint, 320);
     return () => window.clearInterval(timer);
   }, [look, direction]);

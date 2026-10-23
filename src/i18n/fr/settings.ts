@@ -3,7 +3,7 @@ import { plural } from '../index.ts';
 import { IS_WINDOWS } from '../../lib/platform.ts';
 
 const FULL_PATH = IS_WINDOWS ? 'C:\\… ou \\\\serveur\\partage\\…' : '/… ou ~/…';
-const CLAUDE_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude' : '~/.claude';
+const STYLES_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude\\output-styles' : '~/.claude/output-styles';
 
 export const settings = {
   noServer: 'Pas de connexion au serveur : pas encore enregistré.',
@@ -108,12 +108,12 @@ export const settings = {
       notifications: { title: 'Notifications système', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },
       copyOnSelect: { title: 'Copier à la sélection', hint: 'Le texte que tu sélectionnes est copié tout de suite, comme dans un terminal.' },
       timeFormat: { title: 'Format de l’heure', hint: 'Dans les fils et les relevés.', options: { auto: 'Selon la langue', '24h': '24 h (14:05)', '12h': '12 h (2:05 PM)' } },
-      reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page, même si macOS les laisse.' },
+      reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page et fige la salle, même si le système les laisse.' },
       timestamps: { title: 'Heure des messages', hint: 'L’heure à côté de chaque message des fils.' },
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
-      outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${CLAUDE_FOLDER}${IS_WINDOWS ? '\\' : '/'}output-styles.`, default: 'Par défaut' },
+      outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${STYLES_FOLDER}.`, default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {
