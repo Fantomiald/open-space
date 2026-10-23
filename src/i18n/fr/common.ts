@@ -1,3 +1,4 @@
+import { MODIFIER } from '../../lib/platform.ts';
 export const common = {
   duration: {
     seconds: (seconds: number) => `${seconds} s`,
@@ -94,7 +95,7 @@ export const common = {
     stats: { description: 'Le récap de la semaine : temps, sessions, projets' },
     status: { description: 'Versions, compte Claude et connexion (Réglages, À propos)' },
     theme: { description: 'Change le thème du bureau' },
-    help: { description: 'Toutes les commandes et la recherche (⌘K)' },
+    help: { description: `Toutes les commandes et la recherche (${MODIFIER}+K)` },
     'release-notes': { description: 'Les nouveautés de Claude Code' },
     login: { description: 'Se connecter à Claude Code ou changer de compte (ton navigateur s’ouvre)' },
     logout: { description: 'Se déconnecter de Claude Code, après confirmation dans les réglages' },
