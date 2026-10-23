@@ -1,5 +1,14 @@
 # Versions
 
+## 1.16.0
+
+- Navigateur intégré : chaque session a son Chrome, que pilotent ses outils Playwright. Tu le vois en direct dans sa fenêtre et tu peux cliquer et taper dedans.
+- Jusqu'à quatre testeurs en parallèle, chacun avec son propre navigateur. Leurs noms permettent de passer de l'un à l'autre, et le navigateur d'un testeur coupé se ferme avec lui.
+- La page s'affiche en format ordinateur (1920 × 1080) ou mobile (390 × 844), quelle que soit la taille de la fenêtre.
+- Mini-fenêtre au-dessus du bureau : elle s'ouvre toute seule quand un agent va sur une page. Tu peux la déplacer, la redimensionner, la replier ou la remettre dans la fenêtre de la session. Elle se cache quand tu es dans la vue Navigateur et revient quand tu en sors.
+- Tableau : recherche dans les notes (sans tenir compte des accents ni des majuscules), renommer, mettre à la corbeille, favoris, mode écriture avec ⌘E et date de dernière modification.
+- Une session éteinte se reprend avec son nom, et avec tout son fil pendant 30 jours.
+
 ## 1.15.0
 
 - Accessoires : un onglet rangé par endroit du corps (yeux, visage, cou, épaule, dos, taille, main), et on porte une pièce par endroit en même temps. L'onglet Tête y passe.
