@@ -239,6 +239,8 @@ select, input:not([type='checkbox']):not([type='radio']):not([type='range']), te
   padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface); min-width: 0;
 }
+/* the list a select opens: Windows paints it with the page's colours, light text on a light list without these */
+option, optgroup { background-color: var(--menu-solid); color: var(--color-text); }
 textarea { resize: vertical; width: 100%; }
 /* sliders (volume, the hour to try): a thin track and a light knob */
 input[type='range'] { appearance: none; height: 1rem; padding: 0; border: 0; border-radius: 0; background: none; cursor: pointer; }
