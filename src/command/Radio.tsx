@@ -134,7 +134,7 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
   useEffect(() => {
     const ask = () => { if (!document.hidden) send({ t: 'music', app }); };
     ask();
-    const poll = window.setInterval(ask, POLL_MS);
+    const poll = window.setInterval(ask, IS_WINDOWS ? 500 : POLL_MS);
     document.addEventListener('visibilitychange', ask);
     return () => { window.clearInterval(poll); document.removeEventListener('visibilitychange', ask); };
   }, [app, send]);

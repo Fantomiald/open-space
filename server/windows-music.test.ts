@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { windowsNowPlaying } from './windows-music.ts';
+import { closeWindowsMusic, windowsMediaSessions, windowsNowPlaying } from './windows-music.ts';
 
 test('Windows media exposes only the controls that the selected application supports', async () => {
   let selected: Record<string, string> | undefined;
@@ -18,4 +18,20 @@ test('Windows media exposes only the controls that the selected application supp
   assert.deepEqual(selected, { OPEN_SPACE_MEDIA_APP: 'music', OPEN_SPACE_MEDIA_ACTION: '' }, 'unsupported actions never affect system volume or other players');
   assert.equal((await windowsNowPlaying('spotify', undefined, async () => '')).state, 'closed');
   assert.equal((await windowsNowPlaying('spotify', undefined, async () => { throw new Error('denied'); })).state, 'denied');
+});
+
+test('native Windows bridge shares reads and represents missing sessions as closed', { skip: process.platform !== 'win32' || process.env.OPEN_SPACE_TEST_WINDOWS_MEDIA !== '1' }, async () => {
+  try {
+    const sessions = await windowsMediaSessions();
+    for (const app of ['spotify', 'music'] as const) {
+      const first = windowsNowPlaying(app);
+      assert.equal(windowsNowPlaying(app), first, 'concurrent polls reuse the pending read');
+      const result = await first;
+      assert.notEqual(result.state, 'denied');
+      if (!sessions.some((id) => (app === 'spotify' ? /Spotify/i : /Apple.*Music/i).test(id))) {
+        assert.equal(result.state, 'closed');
+        assert.equal(result.track, null);
+      }
+    }
+  } finally { closeWindowsMusic(); }
 });
