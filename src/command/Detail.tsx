@@ -1,18 +1,21 @@
 import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { lanesOf } from '../../shared/browser.ts';
+import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed, publishedPages } from '../state/feed.ts';
 import { backgroundWork, isRunning } from '../state/labels.ts';
 import { attentionKind } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
 import { DropOverlay } from './Attachments.tsx';
 import { AsidePanel } from './AsidePanel.tsx';
+import { BrowserView } from './BrowserView.tsx';
 import { ChangesView, LineCounts } from './Changes.tsx';
 import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
 import { Composer, RemoteButton } from './Composer.tsx';
 import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { AgentBack, Feed } from './Feed.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, GlobeIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
@@ -26,7 +29,7 @@ import { useDismiss } from './useDismiss.ts';
 const NO_EVENTS: never[] = [];
 
 /** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
-function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onRest: () => void; onSwitchOff: () => void }) {
+function SessionMenu({ session, searchOpen, onSearch, onBrowser, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onBrowser: () => void; onRest: () => void; onSwitchOff: () => void }) {
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -46,6 +49,7 @@ function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { s
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
           )}
+          <button type="button" role="menuitem" title={t.session.browser.openTitle} onClick={pick(onBrowser)}><GlobeIcon />{t.session.browser.open}</button>
           <button type="button" role="menuitem" title={words.terminalHereTitle} onClick={pick(() => useSessions.getState().openTerminal(session.id))}><TerminalIcon />{words.terminalHere}</button>
           {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(onRest)}><RestIcon />{words.rest}</button>}
           <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
@@ -81,6 +85,10 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const seen = useSessions((s) => s.seen);
   const feed = useMemo(() => buildFeed(events), [events]);
   const pages = useMemo(() => publishedPages(feed.items), [feed]);
+  const browser = useSessions((s) => lanesOf(Object.keys(s.browsers), sessionId).length > 0);
+  // its agent is at work in its browser: the chip says so, and the view shows who drives
+  const running = !!session && isRunning(session);
+  const driving = useMemo(() => running && drivesBrowser(feed.items), [feed, running]);
   const changes = useSessions((s) => s.changes[sessionId]);
   const live = useSessions((s) => s.connection === 'live');
   const panelView = useSessions((s) => (active ? s.panelView : 'thread'));
@@ -155,7 +163,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onBrowser={() => showPanel('browser')} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -177,6 +185,12 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <LineCounts added={changes.added} removed={changes.removed} />
               <span>{t.session.files(changes.files.length)}</span>
             </button>
+          )}
+          {(browser || driving) && (
+            <button
+              type="button" className="cp-changes-chip cp-browser-chip" data-live={driving} aria-pressed={panelView === 'browser'} aria-label={t.session.browser.chip} title={t.session.browser.chipTitle}
+              onClick={() => showPanel(panelView === 'browser' ? 'thread' : 'browser')}
+            ><GlobeIcon /></button>
           )}
           {pages.length > 0 && <PublishedPages pages={pages} />}
           {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
@@ -212,7 +226,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           <ul>{feed.plan.map((item) => <li key={item.text} data-status={item.status}>{item.text}</li>)}</ul>
         </details>
       )}
-      {panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
+      {panelView === 'browser' ? <BrowserView session={session} driving={driving} onBack={back} />
+        : panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
         : panelView === 'mcp' ? <McpView sessionId={session.id} cwd={session.cwd} onBack={back} />
           : panelView === 'context' ? <ContextView sessionId={session.id} onBack={back} />
             : panelView === 'usage' ? <UsageView sessionId={session.id} onBack={back} />
