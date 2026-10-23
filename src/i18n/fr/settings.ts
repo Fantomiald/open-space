@@ -191,6 +191,8 @@ export const settings = {
     projects: (count: number) => plural(count, 'projet', 'projets'),
     searching: 'Je cherche tes projets…',
     otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\code' : '/Users/toi/code',
+    browse: 'Parcourir…',
+    browseFailed: 'Impossible d’ouvrir le sélecteur de dossiers. Réessaie ou saisis le chemin complet.',
     otherLabel: 'Un autre dossier (chemin complet)',
     add: 'Ajouter',
     defaultFolder: 'Dossier par défaut (Maj+N lance une session dedans)',

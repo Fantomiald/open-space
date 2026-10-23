@@ -21,11 +21,22 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
   withDefault?: boolean;
 }) {
   const [other, setOther] = useState('');
+  const [pickFailed, setPickFailed] = useState(false);
+  const nativePicker = window.openSpaceDesktop;
+  const addFolder = (folder: string) => { if (!roots.includes(folder)) onRoots([...roots, folder]); };
+  const browse = async () => {
+    setPickFailed(false);
+    try {
+      const folder = await nativePicker?.pickFolder();
+      if (folder) addFolder(folder);
+    } catch { setPickFailed(true); }
+  };
   const toggle = (folder: string) => onRoots(roots.includes(folder) ? roots.filter((root) => root !== folder) : [...roots, folder]);
   const add = () => {
-    const folder = other.trim();
+    // a trailing separator would make the same folder twice; a drive root or "/" keeps its own
+    const folder = other.trim().replace(/(?<=[^\\/:])[\\/]+$/, '');
     if (!isAbsolutePath(folder)) return;
-    if (!roots.includes(folder)) onRoots([...roots, folder]);
+    addFolder(folder);
     setOther('');
   };
   const listed = [...(suggestions ?? []).map((folder) => folder.path), ...roots.filter((root) => !suggestions?.some((folder) => folder.path === root))];
@@ -52,8 +63,10 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
           </ul>
           <div className="cp-onboarding__other">
             <input value={other} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
+            {nativePicker && <button type="button" className="cp-button" onClick={() => { void browse(); }}>{t.settings.folders.browse}</button>}
             <button type="button" className="cp-button" disabled={!isAbsolutePath(other.trim())} onClick={add}>{t.settings.folders.add}</button>
           </div>
+          {pickFailed && <p className="cp-detail__error" role="alert">{t.settings.folders.browseFailed}</p>}
         </>
       )}
       {withDefault && roots.length > 1 && (

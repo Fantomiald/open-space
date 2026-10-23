@@ -188,6 +188,8 @@ export const settings: Dictionary['settings'] = {
     projects: (count: number) => plural(count, 'project', 'projects'),
     searching: 'Looking for your projects…',
     otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\code' : '/Users/you/code',
+    browse: 'Browse…',
+    browseFailed: 'Could not open the folder picker. Try again or enter the full path.',
     otherLabel: 'Another folder (full path)',
     add: 'Add',
     defaultFolder: 'Default folder (Shift+N starts a session in it)',

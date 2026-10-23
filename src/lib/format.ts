@@ -1,6 +1,7 @@
 // Small display helpers.
 import type { TimeFormat } from '../../shared/protocol.ts';
 import { locale, t } from '../i18n/index.ts';
+export { isAbsolutePath as isAbsoluteFolder } from '../../shared/paths.ts';
 
 /** The user's time format (Preferences.timeFormat), set with the language whenever the settings arrive. */
 let clockFormat: TimeFormat = 'auto';

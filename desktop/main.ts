@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSy
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, Menu, Notification, app, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
+import { BrowserWindow, Menu, Notification, app, dialog, ipcMain, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
@@ -114,7 +114,7 @@ function showWindow() {
   window = new BrowserWindow({
     width: 1440, height: 900, ...readBounds(), minWidth: 380, minHeight: 520,
     title: 'Open Space', backgroundColor: BACKGROUND, show: false,
-    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true },
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
   });
   const current = window;
   current.once('ready-to-show', () => current.show());
@@ -261,6 +261,18 @@ function watchForUpdates() {
 
 async function start() {
   if (process.platform === 'win32') app.setAppUserModelId('io.github.fantomiald.open-space');
+  let pickingFolder = false;
+  ipcMain.handle('open-space:pick-folder', async (event) => {
+    const owner = window;
+    // Only the main app page can open a native dialog, never attachments, subframes or other origins.
+    if (process.platform !== 'win32' || config.rootsLocked || !owner || event.sender !== owner.webContents
+      || event.senderFrame !== owner.webContents.mainFrame || !event.senderFrame.url.startsWith(`${address}/`) || pickingFolder) return null;
+    pickingFolder = true;
+    try {
+      const result = await dialog.showOpenDialog(owner, { properties: ['openDirectory'] });
+      return result.canceled ? null : result.filePaths[0] ?? null;
+    } finally { pickingFolder = false; }
+  });
   // the page is always dark: the title bar and the menus too
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(process.platform === 'win32' ? null : Menu.buildFromTemplate([

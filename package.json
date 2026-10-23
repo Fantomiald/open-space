@@ -31,7 +31,7 @@
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p desktop/tsconfig.json",
     "lint": "biome lint",
     "test": "node --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"src/**/*.test.ts\"",
-    "app:build": "node scripts/clean-app.mjs && vite build --outDir out/dist --emptyOutDir --logLevel warn && vite build -c vite.desktop.config.ts --logLevel warn",
+    "app:build": "node scripts/clean-app.mjs && vite build --outDir out/dist --emptyOutDir --logLevel warn && vite build -c vite.desktop.config.ts --logLevel warn && node scripts/copy-desktop-assets.mjs",
     "app:dev": "npm run app:build && electron .",
     "app": "npm run app:build && electron-builder --mac -c.mac.identity=-",
     "app:release": "npm run app:build && electron-builder --mac",
