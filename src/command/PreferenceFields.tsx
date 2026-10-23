@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
 import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
 import { furOf, petSprite } from '../room/pet.ts';
-import { homeRelative, isAbsoluteFolder } from '../lib/format.ts';
+import { isAbsolutePath } from '../../shared/paths.ts';
+import { homeRelative } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { PERMISSION_MODES, type Preferences, type RootSuggestion } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
@@ -23,7 +24,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
   const toggle = (folder: string) => onRoots(roots.includes(folder) ? roots.filter((root) => root !== folder) : [...roots, folder]);
   const add = () => {
     const folder = other.trim();
-    if (!isAbsoluteFolder(folder)) return;
+    if (!isAbsolutePath(folder)) return;
     if (!roots.includes(folder)) onRoots([...roots, folder]);
     setOther('');
   };
@@ -51,7 +52,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
           </ul>
           <div className="cp-onboarding__other">
             <input value={other} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
-            <button type="button" className="cp-button" disabled={!isAbsoluteFolder(other.trim())} onClick={add}>{t.settings.folders.add}</button>
+            <button type="button" className="cp-button" disabled={!isAbsolutePath(other.trim())} onClick={add}>{t.settings.folders.add}</button>
           </div>
         </>
       )}

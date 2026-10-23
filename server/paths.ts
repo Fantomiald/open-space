@@ -83,9 +83,9 @@ export function listProjectDirectories(roots: readonly string[], limit = 1000): 
 
 /** What makes a folder a project. */
 const PROJECT_MARKERS = ['.git', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json', 'pubspec.yaml', 'pom.xml', 'build.gradle', 'Package.swift'];
-/** Folders of a Mac home that hold no code, or that the system keeps for itself. */
+/** Folders of a home that hold no code, or that the system keeps for itself. */
 const NOT_FOR_CODE = new Set(['Applications', 'Library', 'Movies', 'Music', 'Pictures', 'Public', 'Downloads', 'Applications (Parallels)', 'AppData', 'Contacts', 'Links', 'Saved Games', 'Searches']);
-/** Folders macOS asks the user's permission to read: offered without looking inside (`projects` -1), so no dialog pops up. */
+/** Folders macOS asks the user's permission to read: offered without looking inside (`projects` -1), so no dialog pops up. On Windows, the system's own Desktop and Documents take their place, wherever they were moved. */
 const PROTECTED = new Set(['Desktop', 'Documents']);
 
 const isProject = (directory: string) => {

@@ -1,7 +1,6 @@
 // Small display helpers.
 import type { TimeFormat } from '../../shared/protocol.ts';
 import { locale, t } from '../i18n/index.ts';
-export { isAbsolutePath as isAbsoluteFolder } from '../../shared/paths.ts';
 
 /** The user's time format (Preferences.timeFormat), set with the language whenever the settings arrive. */
 let clockFormat: TimeFormat = 'auto';
@@ -32,6 +31,12 @@ export const since = (from: number, now: number) => t.common.since(formatDuratio
 
 /** The last folder of a path: the project name. */
 export const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
+/** "~/code/" and "app.ts": a path cut after its last / or \\. */
+export function splitPath(path: string) {
+  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1;
+  return { folder: path.slice(0, cut), name: path.slice(cut) };
+}
 
 /** Native full paths on Windows; familiar home-relative paths on Unix. */
 export const homeRelative = (path: string) => /^[a-z]:[\\/]|^(?:\\\\|\/\/)/i.test(path)

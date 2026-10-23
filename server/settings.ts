@@ -11,7 +11,7 @@ import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
-import { expandHomePath, isFolderPath } from '../shared/paths.ts';
+import { expandHomePath, isFullPath } from '../shared/paths.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
@@ -57,14 +57,14 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;
   if (isLanguage(raw.language)) found.language = raw.language;
-  if (typeof raw.journalFolder === 'string' && isFolderPath(raw.journalFolder.trim())) {
+  if (typeof raw.journalFolder === 'string' && isFullPath(raw.journalFolder.trim())) {
     const folder = expandHomePath(raw.journalFolder.trim(), home);
     if (path.isAbsolute(folder) && folder.length <= 1000) found.journalFolder = path.resolve(folder);
   }
   if (Array.isArray(raw.favoriteNotes)) found.favoriteNotes = [...new Set(asArray(raw.favoriteNotes).filter((name): name is string => typeof name === 'string' && NOTE_NAME.test(name)))].slice(0, MAX_FAVORITE_NOTES);
   if (typeof raw.metricsFile === 'string' && isMetricsPath(raw.metricsFile)) {
-    const file = raw.metricsFile.trim();
-    found.metricsFile = file && path.resolve(expandHomePath(file, home));
+    const file = expandHomePath(raw.metricsFile.trim(), home);
+    if (!file || path.isAbsolute(file)) found.metricsFile = file && path.resolve(file);
   }
   return found;
 }

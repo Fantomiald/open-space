@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
-import { isFolderPath } from '../../shared/paths.ts';
+import { isFullPath } from '../../shared/paths.ts';
 import { IS_MAC } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
@@ -156,7 +156,7 @@ function SettingsEditor() {
   const words = t.settings.prefs;
   const { status } = useAutosave(draft, (next) => {
     if (!next.roots.length) return t.settings.dialog.noFolder;
-    if (!isFolderPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
+    if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });

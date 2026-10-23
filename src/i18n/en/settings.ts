@@ -1,6 +1,9 @@
 import { plural, type Dictionary } from '../index.ts';
 import { IS_WINDOWS } from '../../lib/platform.ts';
 
+const FULL_PATH = IS_WINDOWS ? 'C:\\… or \\\\server\\share\\…' : '/… or ~/…';
+const CLAUDE_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude' : '~/.claude';
+
 export const settings: Dictionary['settings'] = {
   noServer: 'No connection to the server: not saved yet.',
   close: 'Close',
@@ -40,11 +43,11 @@ export const settings: Dictionary['settings'] = {
     noFolder: 'Keep at least one folder: sessions would have nowhere to work.',
     journalFolder: 'Whiteboard notes folder',
     journalFolderHint: 'one .md file per project, which your sessions can fill too',
-    journalFolderInvalid: IS_WINDOWS ? 'The notes folder must be a full path (C:\\… or \\\\server\\share\\…).' : 'The notes folder must be a full path (/… or ~/…).',
+    journalFolderInvalid: `The notes folder must be a full path (${FULL_PATH}).`,
     metricsFile: 'Numbers file (optional)',
     metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
-    metricsFileInvalid: IS_WINDOWS ? 'The numbers file must be a full path to a .md file (C:\\… or \\\\server\\share\\…), or stay empty.' : 'The numbers file must be a full path to a .md file (/… or ~/…), or stay empty.',
+    metricsFileInvalid: `The numbers file must be a full path to a .md file (${FULL_PATH}), or stay empty.`,
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   prefs: {
@@ -106,7 +109,7 @@ export const settings: Dictionary['settings'] = {
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
-      outputStyle: { title: 'Output style', hint: IS_WINDOWS ? 'How Claude answers you. Your own styles come from %USERPROFILE%\\.claude\\output-styles.' : 'How Claude answers you. Your own styles come from ~/.claude/output-styles.', default: 'Default' },
+      outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${CLAUDE_FOLDER}${IS_WINDOWS ? '\\' : '/'}output-styles.`, default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { FileChange, SessionChanges } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { homeRelative } from '../lib/format.ts';
+import { homeRelative, splitPath } from '../lib/format.ts';
 import { diffRows } from '../state/diff.ts';
 import { PanelFrame } from './PanelFrame.tsx';
 
@@ -21,8 +21,7 @@ export function LineCounts({ added, removed }: { added: number; removed: number 
 function shownPath(file: string, cwd: string) {
   const normalized = file.replace(/\\/g, '/'), base = cwd.replace(/\\/g, '/');
   const relative = normalized.startsWith(`${base}/`) ? normalized.slice(base.length + 1) : homeRelative(file);
-  const cut = Math.max(relative.lastIndexOf('/'), relative.lastIndexOf('\\')) + 1;
-  return { folder: relative.slice(0, cut), name: relative.slice(cut) };
+  return splitPath(relative);
 }
 
 function FileDiff({ change, cwd, open }: { change: FileChange; cwd: string; open: boolean }) {

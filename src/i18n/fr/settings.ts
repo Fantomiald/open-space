@@ -2,6 +2,9 @@ import type { Job } from '../../../shared/jobs.ts';
 import { plural } from '../index.ts';
 import { IS_WINDOWS } from '../../lib/platform.ts';
 
+const FULL_PATH = IS_WINDOWS ? 'C:\\… ou \\\\serveur\\partage\\…' : '/… ou ~/…';
+const CLAUDE_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude' : '~/.claude';
+
 export const settings = {
   noServer: 'Pas de connexion au serveur : pas encore enregistré.',
   close: 'Fermer',
@@ -43,11 +46,11 @@ export const settings = {
     noFolder: 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.',
     journalFolder: 'Dossier des notes du tableau',
     journalFolderHint: 'un fichier .md par projet, que tes sessions peuvent aussi remplir',
-    journalFolderInvalid: IS_WINDOWS ? 'Le dossier des notes doit être un chemin complet (C:\\… ou \\\\serveur\\partage\\…).' : 'Le dossier des notes doit être un chemin complet (/… ou ~/…).',
+    journalFolderInvalid: `Le dossier des notes doit être un chemin complet (${FULL_PATH}).`,
     metricsFile: 'Fichier des chiffres (facultatif)',
     metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
-    metricsFileInvalid: IS_WINDOWS ? 'Le fichier des chiffres doit être un chemin complet vers un .md (C:\\… ou \\\\serveur\\partage\\…), ou rester vide.' : 'Le fichier des chiffres doit être un chemin complet vers un .md (/… ou ~/…), ou rester vide.',
+    metricsFileInvalid: `Le fichier des chiffres doit être un chemin complet vers un .md (${FULL_PATH}), ou rester vide.`,
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
@@ -109,7 +112,7 @@ export const settings = {
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
-      outputStyle: { title: 'Style de sortie', hint: IS_WINDOWS ? 'La façon dont Claude te répond. Tes styles viennent de %USERPROFILE%\\.claude\\output-styles.' : 'La façon dont Claude te répond. Tes styles viennent de ~/.claude/output-styles.', default: 'Par défaut' },
+      outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${CLAUDE_FOLDER}${IS_WINDOWS ? '\\' : '/'}output-styles.`, default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {

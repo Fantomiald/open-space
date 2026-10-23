@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { homeRelative } from '../lib/format.ts';
+import { homeRelative, splitPath } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -43,15 +43,14 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
       {shown && (
         <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
           {matches.map((directory, index) => {
-            const shownPath = homeRelative(directory);
-            const cut = Math.max(shownPath.lastIndexOf('/'), shownPath.lastIndexOf('\\')) + 1;
+            const { folder, name } = splitPath(homeRelative(directory));
             return (
               <li
                 key={directory} id={`folder-option-${index}`} role="option" aria-selected={index === active} className="cp-folder__option"
                 onPointerDown={(e) => e.preventDefault()} onClick={() => pick(directory)} onPointerEnter={() => setActive(index)}
               >
-                <span className="cp-folder__name">{shownPath.slice(cut)}</span>
-                <span className="cp-folder__parent">{shownPath.slice(0, cut)}</span>
+                <span className="cp-folder__name">{name}</span>
+                <span className="cp-folder__parent">{folder}</span>
               </li>
             );
           })}

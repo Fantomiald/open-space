@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { plural, t } from '../i18n/index.ts';
+import { IS_MAC } from '../lib/platform.ts';
 import { roomSessions } from '../room/cast.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
@@ -7,7 +8,7 @@ import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge']] as const satisfies readonly (readonly [View, () => unknown, 'office' | 'lounge'])[];
-const MODIFIER = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+const MODIFIER = IS_MAC ? '⌘' : 'Ctrl';
 /** The search opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both); focus mode, with Cmd+. or Ctrl+. */
 const PALETTE_KEYS = `${MODIFIER} K`;
 const FOCUS_KEYS = `${MODIFIER} .`;
