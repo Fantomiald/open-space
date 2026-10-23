@@ -491,28 +491,32 @@ export class Browsers {
     }
   }
 
-  stop(id: string) {
+  /** Resolves once Chrome has exited: it still writes to its profile while it shuts down. */
+  stop(id: string): Promise<void> {
     const live = this.live.get(id);
-    if (!live) return;
+    if (!live) return Promise.resolve();
     this.live.delete(id);
+    const exited = live.process.exitCode !== null || live.process.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => { live.process.once('exit', () => resolve()); });
     for (const viewer of live.viewers) viewer.end();
     live.cdp.close();
     live.process.kill('SIGTERM');
     setTimeout(() => { if (live.process.exitCode === null) live.process.kill('SIGKILL'); }, 3000).unref();
     // a tester starts from a clean profile each time its browser is launched
-    if (id !== sessionOfBrowser(id)) live.process.once('exit', () => { void rm(path.join(this.deps.folder, id), { recursive: true, force: true }); });
+    if (id !== sessionOfBrowser(id)) void exited.then(() => rm(path.join(this.deps.folder, id), { recursive: true, force: true }));
     this.deps.onState(id, null);
+    return exited;
   }
 
-  /** The session is gone: its browser and its profile (cookies, history) with it. */
   /** The session's browser and its testers'. */
-  stopSession(sessionId: string) {
-    for (const id of [...this.live.keys()]) if (sessionOfBrowser(id) === sessionId) this.stop(id);
+  async stopSession(sessionId: string) {
+    await Promise.all([...this.live.keys()].filter((id) => sessionOfBrowser(id) === sessionId).map((id) => this.stop(id)));
   }
 
   /** The session is gone: its browsers and its profile (cookies, history) with them. */
   async forget(sessionId: string) {
-    this.stopSession(sessionId);
+    await this.stopSession(sessionId);
     await rm(path.join(this.deps.folder, sessionId), { recursive: true, force: true });
   }
 
