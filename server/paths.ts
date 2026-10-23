@@ -68,7 +68,7 @@ function offeredChildren(directory: string, root: string): string[] {
 
 /**
  * The choices for a new session, as real paths: the sub-folders of each root and their own sub-folders
- * (many first-level folders hold several projects, e.g. lumina/mobile). The roots themselves are not offered.
+ * (many first-level folders hold several projects, e.g. atlas/mobile). The roots themselves are not offered.
  */
 export function listProjectDirectories(roots: readonly string[], limit = 1000): string[] {
   const found: string[] = [];

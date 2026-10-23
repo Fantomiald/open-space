@@ -1,16 +1,16 @@
 # Fenêtres libres, grille réordonnable et salle déplaçable
 
-20/10/2026. Demande de Julien, qui laisse carte blanche sur l'UX tant que c'est « le mieux du mieux possible ».
+20/10/2026. Demande de l'utilisateur, qui laisse carte blanche sur l'UX tant que c'est « le mieux du mieux possible ».
 
 ## Pourquoi
 
-Aujourd'hui tout est rangé d'office : les fenêtres de session suivent `src/state/stack.ts` (colonnes de trois depuis la droite au-dessus de la salle, colonnes depuis la gauche en mode focus) et la salle est centrée dans sa zone. Julien veut disposer son poste lui-même, comme sur le bureau d'un Mac : agrandir ou réduire une fenêtre, la poser en bas à droite, réordonner la grille, et déplacer la salle avec tout le monde dedans.
+Aujourd'hui tout est rangé d'office : les fenêtres de session suivent `src/state/stack.ts` (colonnes de trois depuis la droite au-dessus de la salle, colonnes depuis la gauche en mode focus) et la salle est centrée dans sa zone. l'utilisateur veut disposer son poste lui-même, comme sur le bureau d'un Mac : agrandir ou réduire une fenêtre, la poser en bas à droite, réordonner la grille, et déplacer la salle avec tout le monde dedans.
 
 Réussi si : on arrange tout à la souris sans lire de mode d'emploi, rien ne sort de l'écran, rien ne saute, et la disposition est retrouvée au rechargement.
 
 Raté même si ça marche si : une fenêtre se perd hors de l'écran, une fenêtre se remonte en perdant son brouillon ou son défilement, le verre décroche pendant un déplacement, ou le langage visuel actuel (verre foncé, hauteurs égales, gouttière de 12 px) est cassé.
 
-## Ordre de livraison (décidé par Julien)
+## Ordre de livraison (décidé par l'utilisateur)
 
 1. Déplacer la salle.
 2. Grille : réordonner et redimensionner.
@@ -22,7 +22,7 @@ Chaque étape est livrable seule.
 
 - ⌥ + glisser sur la salle la déplace (Alt sur Windows et Linux). Curseur « main » quand ⌥ est enfoncé au-dessus de la salle, « main fermée » pendant le glisser.
 - Bornes : la salle reste entièrement dans la fenêtre du navigateur, sous l'en-tête. Elle peut passer derrière les fenêtres de session.
-- ⌥ + molette sur la salle la rétrécit ou l'agrandit, centré sur le pointeur (validé par Julien). Le pincement du trackpad (événement `wheel` avec `ctrlKey`) fait pareil au-dessus de la salle, sans zoomer la page.
+- ⌥ + molette sur la salle la rétrécit ou l'agrandit, centré sur le pointeur (validé par l'utilisateur). Le pincement du trackpad (événement `wheel` avec `ctrlKey`) fait pareil au-dessus de la salle, sans zoomer la page.
 - Taille bornée (choix de JBP) : au plus sa taille actuelle (le plus grand 4:3 qui tient dans sa zone), au moins assez grande pour que les persos restent lisibles (le constructeur fixe le minimum). Le pixel art reste net (pas de lissage).
 - Double-clic avec ⌥ sur la salle : elle revient à sa place et à sa taille par défaut, animée.
 - Position et taille mémorisées par salle (Bureau, Salle de repos), en coordonnées relatives à la zone pour survivre à un redimensionnement du navigateur ; reclampée si la fenêtre du navigateur rétrécit.
@@ -100,7 +100,7 @@ Le mode actuel, rendu `Grille` dans l'interface.
 - Styles dans `src/design/` seulement, aucun style inline ni couleur littérale dans `src/command/`, icônes via `Icons.tsx`.
 - Pas de `backdrop-filter`.
 - Raccourcis dans le listener unique de `App.tsx`.
-- Vérifications : `npm run check`, `npm run lint`, `npm test`. Ne jamais lancer `npm run build` ni relancer le serveur sans que Julien le demande : `dist` est servi en direct et la relance coupe les sessions en cours.
+- Vérifications : `npm run check`, `npm run lint`, `npm test`. Ne jamais lancer `npm run build` ni relancer le serveur sans que l'utilisateur le demande : `dist` est servi en direct et la relance coupe les sessions en cours.
 
 ## Laissé au constructeur
 

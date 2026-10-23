@@ -4,21 +4,21 @@ import type { BranchRow, BranchStatus, FolderRepo, SessionInfo, SessionState, Wo
 import { asksBeforeSwitchingOff, branchCard, branchLines, branchPreview, branchSignature, checkedByDefault, isolationOffer, keyOf, loss, occupants, shownFolder } from './worktrees.ts';
 
 const session = (id: string, state: SessionState, extra: Partial<SessionInfo> = {}): SessionInfo => ({
-  id, name: id, cwd: '/work/lilies', model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
+  id, name: id, cwd: '/work/garden', model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
   subagents: [], command: '', lastMessage: '', resumable: true, lastSeq: 5, ...extra,
 });
-const repo: FolderRepo = { root: '/work/lilies', sub: '', branch: 'main', branches: ['main'], dirty: 0, merged: 0 };
+const repo: FolderRepo = { root: '/work/garden', sub: '', branch: 'main', branches: ['main'], dirty: 0, merged: 0 };
 const status = (extra: Partial<BranchStatus> = {}): BranchStatus => ({ ahead: 0, behind: 0, files: 0, dirty: 0, head: 'abc', ...extra });
 const worktree = (extra: Partial<WorktreeInfo> = {}): WorktreeInfo => ({
-  branch: 'os/lina-pay', base: 'main', root: '/work/lilies/.claude/worktrees/os-lina-pay', mainRoot: '/work/lilies', home: '/work/lilies', ...extra,
+  branch: 'os/lina-pay', base: 'main', root: '/work/garden/.claude/worktrees/os-lina-pay', mainRoot: '/work/garden', home: '/work/garden', ...extra,
 });
 const row = (branch: string, extra: Partial<BranchRow> = {}): BranchRow => ({ branch, folder: null, base: 'main', head: 'a'.repeat(40), at: 1, ahead: 0, dirty: 0, merged: true, claude: false, ...extra });
 
 describe('isolating a new session', () => {
   it('counts the sessions of the main checkout, resting ones included, not the isolated ones nor those elsewhere', () => {
     const list = [
-      session('Hugo', 'work', { cwd: '/work/lilies/mobile', stateSince: 3 }), session('Zoe', 'wait', { resting: true, stateSince: 5 }),
-      session('Lina', 'wait', { cwd: worktree().root, worktree: worktree() }), session('Tom', 'work', { cwd: '/work/lilies-web' }),
+      session('Hugo', 'work', { cwd: '/work/garden/mobile', stateSince: 3 }), session('Zoe', 'wait', { resting: true, stateSince: 5 }),
+      session('Lina', 'wait', { cwd: worktree().root, worktree: worktree() }), session('Tom', 'work', { cwd: '/work/garden-web' }),
     ];
     assert.deepEqual(occupants(list, repo).map((one) => one.name), ['Zoe', 'Hugo']);
     assert.deepEqual(occupants(list, repo, 'Zoe').map((one) => one.name), ['Hugo']);
@@ -60,7 +60,7 @@ describe("an isolated session's card", () => {
     assert.equal(asksBeforeSwitchingOff(session('Lina', 'wait', { worktree: worktree({ status: status() }) })), false);
     assert.equal(asksBeforeSwitchingOff(session('Lina', 'wait', { worktree: worktree() })), true, 'not known yet: asked');
     assert.equal(asksBeforeSwitchingOff(session('Lina', 'wait')), false);
-    assert.equal(shownFolder(session('Lina', 'wait', { cwd: worktree().root, worktree: worktree() })), '/work/lilies');
+    assert.equal(shownFolder(session('Lina', 'wait', { cwd: worktree().root, worktree: worktree() })), '/work/garden');
   });
 });
 

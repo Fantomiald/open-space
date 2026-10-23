@@ -50,7 +50,7 @@ const commit = (cwd: string, file: string, text: string) => { write(path.join(cw
 
 let count = 0;
 function repository(): string {
-  const repo = path.join(root, `lilies-${++count}`);
+  const repo = path.join(root, `garden-${++count}`);
   mkdirSync(repo);
   git(repo, 'init', '-q', '-b', 'main');
   write(path.join(repo, '.gitignore'), 'node_modules/\n');

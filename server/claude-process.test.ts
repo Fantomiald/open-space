@@ -105,18 +105,18 @@ describe('parseCatalog', () => {
 });
 
 describe('isolated sessions', () => {
-  const worktree = { branch: 'os/lina-pay', base: 'main', root: '/w/lilies/.claude/worktrees/os-lina-pay', mainRoot: '/w/lilies' };
+  const worktree = { branch: 'os/lina-pay', base: 'main', root: '/w/garden/.claude/worktrees/os-lina-pay', mainRoot: '/w/garden' };
   it('tells a new conversation its branch, its folder and the main folder it must not write in', () => {
-    const prompt = identityPrompt('Lina', 'Julien', '', worktree);
+    const prompt = identityPrompt('Lina', 'Sam', '', worktree);
     assert.match(prompt, /« os\/lina-pay »/);
-    assert.match(prompt, /\/w\/lilies\/.claude\/worktrees\/os-lina-pay/);
-    assert.match(prompt, /\/w\/lilies, est celui des autres sessions : n’y écris jamais/);
+    assert.match(prompt, /\/w\/garden\/.claude\/worktrees\/os-lina-pay/);
+    assert.match(prompt, /\/w\/garden, est celui des autres sessions : n’y écris jamais/);
     assert.match(prompt, /second Metro/);
-    assert.doesNotMatch(identityPrompt('Lina', 'Julien', ''), /worktree/);
+    assert.doesNotMatch(identityPrompt('Lina', 'Sam', ''), /worktree/);
   });
   it('tells a conversation where it moved: into its worktree, or back to the main folder', () => {
     assert.match(placeNote(worktree.root, worktree), /changé de dossier[\s\S]*os\/lina-pay/);
-    assert.match(placeNote('/w/lilies', undefined), /dossier principal du projet, \/w\/lilies/);
+    assert.match(placeNote('/w/garden', undefined), /dossier principal du projet, \/w\/garden/);
   });
 });
 

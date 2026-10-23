@@ -310,7 +310,7 @@ describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts 
       emit: () => {}, onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
       names: new Set(), onArtifact: (_who, artifact) => published.push(artifact.files), cwd: '/work',
     });
-    const url = 'https://claude.ai/artifact/8xenifh1amiKJMWP2Up7H8';
+    const url = 'https://claude.ai/artifact/abc123';
     const call = (id: string, input: object, result: object) => {
       normalizer.handle({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: 'Artifact', input }] } });
       normalizer.handle({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] }, tool_use_result: result });
