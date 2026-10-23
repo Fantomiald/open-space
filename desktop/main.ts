@@ -13,6 +13,7 @@ import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
 import { loadConfig } from '../server/config.ts';
 import { ROOM_PALETTE } from '../src/design/room-palette.ts';
+import { attentionBadge } from './badge.ts';
 
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE = path.join(OUT, 'server', 'index.js');
@@ -30,6 +31,7 @@ const boundsFile = path.join(app.getPath('userData'), 'window.json');
 
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let avatarIcon: NativeImage | null = null;
 let bridge: UtilityProcess | null = null;
 
 /** SIGTERM, or a message on Windows, where kill() ends the bridge at once, before it closes its sessions. */
@@ -115,6 +117,7 @@ function showWindow() {
   window = new BrowserWindow({
     width: 1440, height: 900, ...readBounds(), minWidth: 380, minHeight: 520,
     title: 'Open Space', backgroundColor: BACKGROUND, show: false,
+    ...(process.platform === 'win32' ? { icon: avatarIcon ?? path.join(OUT, 'desktop', 'icon.png') } : {}),
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
   });
   const current = window;
@@ -127,7 +130,9 @@ function showWindow() {
   current.on('closed', () => { window = null; });
   // "(2) Open Space": two sessions wait for the user, on the Dock icon too
   current.on('page-title-updated', (_event, title) => {
-    app.dock?.setBadge(/^\((\d+)\)/.exec(title)?.[1] ?? '');
+    const count = /^\((\d+)\)/.exec(title)?.[1] ?? '';
+    app.dock?.setBadge(count);
+    if (process.platform === 'win32') current.setOverlayIcon(count ? attentionBadge(Number(count)) : null, count);
     tray?.setToolTip(title);
   });
   // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space. A file a session sent
@@ -220,8 +225,9 @@ function followAvatar() {
   const avatar = path.join(config.dataDir, 'avatar.png');
   const apply = () => {
     if (!existsSync(avatar)) return;
-    const icon = dockIcon(avatar);
-    if (icon) app.dock?.setIcon(icon);
+    avatarIcon = dockIcon(avatar);
+    if (avatarIcon) app.dock?.setIcon(avatarIcon);
+    if (avatarIcon && process.platform === 'win32') window?.setIcon(avatarIcon);
     // one screen pixel per pixel of the bust: a smoothed downscale blurs it
     const small = tray && dockIcon(avatar, 1);
     if (small) tray?.setImage(small);

@@ -27,6 +27,7 @@ mac:
 dmg:
   artifactName: Open Space-${version}-${arch}.${ext}
 win:
+  icon: desktop/build/icon.ico
   target:
     - nsis
   artifactName: Open Space-Setup-${version}-${arch}.${ext}
