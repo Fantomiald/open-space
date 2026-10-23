@@ -34,6 +34,7 @@ export function Onboarding() {
     notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, isolate: 'busy',
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
+    favoriteNotes: [],
     metricsFile: '',
     copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0,
   });

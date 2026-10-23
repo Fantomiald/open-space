@@ -9,7 +9,7 @@ import type { Job } from '../../shared/jobs.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, NoteMatch, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -80,6 +80,8 @@ interface CommandPostState {
   boardOpen: boolean;
   /** the journal folder and its notes, as last listed */
   notes: { folder: string; files: NoteFile[] } | null;
+  /** the whiteboard's search: what was looked for, and the notes found */
+  noteMatches: { query: string; matches: NoteMatch[] } | null;
   /** the last note the server sent: read, saved, or refused because it changed on the disk (see the 'note' message) */
   lastNote: { note: Note; outcome: 'read' | 'saved' | 'conflict' } | null;
   /** the numbers panel is open (a click on the numbers object of the room) */
@@ -317,6 +319,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   searchResults: null,
   boardOpen: false,
   notes: null,
+  noteMatches: null,
   lastNote: null,
   metricsOpen: false,
   metrics: undefined,
@@ -357,7 +360,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0, isolate: 'busy' },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0, isolate: 'busy' },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -502,6 +505,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'quota': set({ quota: message.quota }); break;
       case 'notes': set({ notes: { folder: message.folder, files: message.files } }); break;
       case 'note': set({ lastNote: { note: message.note, outcome: message.outcome } }); break;
+      case 'noteMatches': set({ noteMatches: { query: message.query, matches: message.matches } }); break;
       case 'metrics': set({ metrics: message.metrics }); break;
       case 'metricsStatus': set({ metricsUnread: message.unread }); break;
       case 'musicApps': set({ musicApps: message.apps }); break;

@@ -410,7 +410,8 @@ export interface SessionOptions {
 }
 
 /** A Claude Code conversation found on disk for a folder, that a new session can go on with. updatedAt: ms. */
-export interface Conversation { id: string; title: string; preview: string; updatedAt: number }
+/** `name`: what Open Space called its session, when it ran there (its custom title) */
+export interface Conversation { id: string; title: string; preview: string; updatedAt: number; name?: string }
 
 /** Someone of the user's crew: sessions named like them wear their look; `self` is the user's own avatar. Null: the default look. */
 /** `birthday`: "MM-DD", the day the rooms throw them a party. `jobs`: what they do, to send them the requests that fit (shared/jobs.ts). */
@@ -439,6 +440,8 @@ export interface Preferences {
   theme: RoomTheme;
   /** the folder of the whiteboard's notes, one Markdown file per project (absolute; ~/Journal by default) */
   journalFolder: string;
+  /** the notes starred on the whiteboard, by file name: listed first */
+  favoriteNotes: string[];
   /** the Markdown file the office's numbers object shows, kept up to date by the user's scripts or sessions (absolute; '' by default: no object) */
   metricsFile: string;
   /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
@@ -479,6 +482,8 @@ export interface SearchHit { sessionId: string; seq: number; at: number; who: 'u
 export interface NoteFile { name: string; mtime: number }
 /** A note's text, and its version (a hash of the text): a save carries the version it was made from, and is refused when the file changed since. */
 export interface Note extends NoteFile { text: string; version: string }
+/** A note the whiteboard's search found: by its name or its text (how many times, and the first line it is on) */
+export interface NoteMatch { name: string; count: number; excerpt: string }
 
 /** The numbers file as it is on the disk: its text and its last change (ms). */
 export interface MetricsFile { text: string; mtime: number }
@@ -576,6 +581,12 @@ export type ClientMessage =
   | { t: 'readNote'; name: string }
   /** saves a note made from `version` (null: a new one); the folder is created if needed */
   | { t: 'writeNote'; name: string; text: string; version: string | null }
+  /** renames a note's file, never over another note */
+  | { t: 'renameNote'; name: string; newName: string }
+  /** puts a note's file in the Trash (deleted where there is none) */
+  | { t: 'deleteNote'; name: string }
+  /** the notes whose name or text holds `query`, case and accents aside */
+  | { t: 'searchNotes'; query: string }
   /** reads the numbers file to show it: its numbers then count as seen */
   | { t: 'metrics' }
   /** the threads of every session searched for `query` (answered with `searchResults` carrying the same `id`) */
@@ -627,6 +638,8 @@ export type ServerMessage =
   | { t: 'notes'; folder: string; files: NoteFile[] }
   /** a note as it is on the disk: read, just saved, or changed since the version a save was made from (`conflict`: not saved) */
   | { t: 'note'; note: Note; outcome: 'read' | 'saved' | 'conflict' }
+  /** the answer to 'searchNotes' */
+  | { t: 'noteMatches'; query: string; matches: NoteMatch[] }
   /** the numbers file, null when there is none yet (asked for with 'metrics') */
   | { t: 'metrics'; metrics: MetricsFile | null }
   /** whether the numbers file changed since the page last showed it (the badge on the numbers object); sent at connection and when it flips */

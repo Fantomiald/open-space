@@ -151,7 +151,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
               <ul className="cp-resume__list" aria-label={words.conversationsOf(homeRelative(cwd))}>
                 {conversations.map((conversation) => (
                   <li key={conversation.id}>
-                    <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); field.current?.focus(); }}>
+                    <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); if (conversation.name) setAsked(conversation.name); field.current?.focus(); }}>
                       <span className="cp-resume__title">{conversation.title}</span>
                       <span className="cp-resume__when">{formatAgo(Date.now() - conversation.updatedAt)}</span>
                       {conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}

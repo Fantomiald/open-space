@@ -139,6 +139,10 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             <h2>
               <span className="cp-detail__name">{session.name}</span>
               <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
+              {/* shown only where the line under the title is hidden for room */}
+              {session.tag
+                ? <button type="button" className="cp-tag cp-detail__title-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{session.tag}</span></button>
+                : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.tagShort}</button>}
             </h2>
           )}
           <StateBadge session={session} kind={attentionKind(session, seen)} />

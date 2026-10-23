@@ -28,6 +28,7 @@ const boundedString = (value: unknown, max: number): string | null => (typeof va
 const INSPECT_VIEWS: ReadonlySet<InspectView> = new Set(['mcp', 'context', 'usage']);
 const MCP_ACTIONS: ReadonlySet<McpAction> = new Set(['reconnect', 'enable', 'disable', 'authenticate']);
 const identifier = (value: unknown): string | null => (typeof value === 'string' && /^[\w-]{1,100}$/.test(value) ? value : null);
+const MAX_NOTE_QUERY = 200;
 const noteName = (value: unknown): string | null => (typeof value === 'string' && NOTE_NAME.test(value) ? value : null);
 
 /** The upload ids of the files sent with a message (see uploads.ts): undefined when none, null when malformed. */
@@ -300,6 +301,19 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const text = boundedString(raw.text, MAX_NOTE);
       const version = raw.version === null ? null : typeof raw.version === 'string' && /^[0-9a-f]{16}$/.test(raw.version) ? raw.version : undefined;
       return name && text !== null && version !== undefined ? { t: 'writeNote', name, text, version } : null;
+    }
+    case 'renameNote': {
+      const name = noteName(raw.name);
+      const newName = noteName(raw.newName);
+      return name && newName && name !== newName ? { t: 'renameNote', name, newName } : null;
+    }
+    case 'deleteNote': {
+      const name = noteName(raw.name);
+      return name ? { t: 'deleteNote', name } : null;
+    }
+    case 'searchNotes': {
+      const query = boundedString(raw.query, MAX_NOTE_QUERY);
+      return query !== null ? { t: 'searchNotes', query } : null;
     }
     case 'metrics': return { t: 'metrics' };
     case 'search': {

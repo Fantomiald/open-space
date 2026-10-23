@@ -14,7 +14,6 @@
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --font-pixel: 'Pixelify Sans', 'Plus Jakarta Sans Variable', ui-monospace, monospace;
   /* the whiteboard's note titles, as written with a marker (Kalam, OFL, bundled from @fontsource/kalam) */
-  --font-marker: 'Kalam', 'Plus Jakarta Sans Variable', system-ui, sans-serif;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-md: 0.9375rem;
@@ -169,35 +168,5 @@
   /* a setting row lit for a moment (picked in the search palette) */
   --flash: rgb(154 168 255 / 0.16);
 
-  /*
-   * The whiteboard's notes (BoardDialog): drawn like the room's whiteboard, in pixel art. Its writing surface stays light
-   * like a real board; the frame, surface and markers take the room's colours (whiteboard, boardFrame, markers in
-   * room-palette.ts). One board pixel is the unit of the frame, the tray and the markers.
-   */
-  --board-pixel: 3px;
-  --board-frame: #b9bec8;
-  --board-frame-light: #dde1e8;
-  --board-frame-dark: #8d939f;
-  --board-frame-edge: #474c58;
-  --board-frame-cap: #6f7582;
-  --board-surface: #f7f8fa;
-  --board-surface-shade: #e4e7ed;
-  --board-ink: #2b2f3a;
-  --board-ink-muted: #5f6677;
-  --board-ink-faint: #c4c9d3;
-  --board-shadow: rgb(0 0 0 / 0.55);
-  --board-heading-1: 1.5rem;
-  --board-heading-2: 1.25rem;
-  --board-heading-3: 1.0625rem;
-  --board-marker-black: #2b2f3a;
-  --board-marker-blue: #2f6fd8;
-  --board-marker-red: #d8343f;
-  --board-marker-green: #2f8a4a;
-  --board-marker-barrel: #f4f5f8;
-  --board-marker-barrel-shade: #c6cad3;
-  --board-marker-glint: #ffffff;
-  --board-eraser-grip: #3b404c;
-  --board-eraser-grip-light: #5d6474;
-  --board-eraser-felt: #d3d6dd;
 }
 

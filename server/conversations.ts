@@ -98,7 +98,7 @@ export async function listConversations(cwd: string, exclude: ReadonlySet<string
       // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
       // "Margot · what it was asked"
       const about = aiTitle || preview.slice(0, 80);
-      conversations.push({ id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt });
+      conversations.push({ id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt, ...(customTitle ? { name: customTitle } : {}) });
     } catch { /* unreadable: skipped */ }
   }
   return conversations;
@@ -118,6 +118,21 @@ export async function lastExchanges(cwd: string, id: string, max = 8, home = os.
     return exchanges.slice(-max);
   } catch {
     return [];
+  }
+}
+
+/** The name a session of Open Space last gave the conversation (its custom title, claude --name), or null. */
+export async function lastName(cwd: string, id: string, home = os.homedir()): Promise<string | null> {
+  if (!CONVERSATION_ID.test(id)) return null;
+  const file = path.join(projectFolder(cwd, home), `${id}.jsonl`);
+  try {
+    for (const fromEnd of [true, false]) {
+      const titles = records(await readSlice(file, fromEnd, fromEnd ? TAIL_BYTES : HEAD_BYTES)).flatMap((record) => (record.type === 'custom-title' && asString(record.customTitle) ? [asString(record.customTitle)] : []));
+      if (titles.length) return titles.at(-1) ?? null;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 

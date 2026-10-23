@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { ImageType, ImageUpload } from '../shared/protocol.ts';
+import { switchedOffFolder } from './session-log.ts';
 
 export const IMAGE_EXTENSIONS: Readonly<Record<ImageType, string>> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 /** A stored file's name: its SHA-256 and its extension (a file without one gets "bin"). */
@@ -89,8 +90,10 @@ export const SWEEP_GRACE_MS = 60 * 60 * 1000;
  */
 export async function namedInLogs(logsDir: string, pattern: RegExp): Promise<Set<string>> {
   const named = new Set<string>();
-  for (const log of (await readdir(logsDir)).filter((name) => name.endsWith('.jsonl'))) {
-    for (const [name] of (await readFile(path.join(logsDir, log), 'utf8')).matchAll(pattern)) named.add(name);
+  for (const folder of [logsDir, switchedOffFolder(logsDir)]) {
+    for (const log of (await readdir(folder).catch(() => [] as string[])).filter((name) => name.endsWith('.jsonl'))) {
+      for (const [name] of (await readFile(path.join(folder, log), 'utf8')).matchAll(pattern)) named.add(name);
+    }
   }
   return named;
 }

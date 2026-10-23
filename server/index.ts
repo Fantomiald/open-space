@@ -34,7 +34,7 @@ import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
 import { openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
-import { listNotes, readNote, writeNote } from './journal.ts';
+import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
@@ -134,6 +134,13 @@ const sessions = new SessionManager({
 await sessions.init();
 const usage = new UsageLedger({ home: os.homedir(), cacheFile: path.join(config.dataDir, 'usage-cache.json'), log });
 
+/** Writes, renames and deletes of notes one after the other: a save sent just before a rename lands on the old name first. */
+let noteChanges: Promise<unknown> = Promise.resolve();
+function changeNotes<T>(change: () => Promise<T>): Promise<T> {
+  const run = noteChanges.then(change);
+  noteChanges = run.catch(() => undefined);
+  return run;
+}
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
 const musicApps = installedMusicApps();
@@ -369,11 +376,25 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'notes': send(await notesMessage()); break;
     case 'readNote': send({ t: 'note', note: await readNote(settings.preferences.journalFolder, message.name), outcome: 'read' }); break;
     case 'writeNote': {
-      const { saved, note } = await writeNote(settings.preferences.journalFolder, message.name, message.text, message.version);
+      const { saved, note } = await changeNotes(() => writeNote(settings.preferences.journalFolder, message.name, message.text, message.version));
       send({ t: 'note', note, outcome: saved ? 'saved' : 'conflict' });
       send(await notesMessage());
       break;
     }
+    case 'renameNote':
+    case 'deleteNote': {
+      const folder = settings.preferences.journalFolder;
+      await changeNotes(() => (message.t === 'renameNote' ? renameNote(folder, message.name, message.newName) : deleteNote(folder, message.name)));
+      // a starred note keeps its star under its new name, and loses it once deleted
+      const favorites = settings.preferences.favoriteNotes;
+      if (favorites.includes(message.name)) {
+        await settings.update({ favoriteNotes: favorites.flatMap((name) => (name !== message.name ? [name] : message.t === 'renameNote' ? [message.newName] : [])) });
+        broadcast(preferencesMessage());
+      }
+      send(await notesMessage());
+      break;
+    }
+    case 'searchNotes': send({ t: 'noteMatches', query: message.query, matches: await searchNotes(settings.preferences.journalFolder, message.query) }); break;
     case 'metrics': {
       const metrics = await readMetrics(settings.preferences.metricsFile);
       send({ t: 'metrics', metrics });
