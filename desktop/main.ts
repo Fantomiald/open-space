@@ -3,7 +3,7 @@
 // that one instead, and quitting the app leaves it running. Closing the window keeps the sessions going: the Dock
 // icon brings it back, and the notifications still come.
 import { execFile } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
 import { loadConfig } from '../server/config.ts';
 import { ROOM_PALETTE } from '../src/design/room-palette.ts';
+import { attentionBadge } from './badge.ts';
 
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE = path.join(OUT, 'server', 'index.js');
@@ -22,6 +23,9 @@ const UPDATE_CHECK_MS = 60 * 60 * 1000;
 const STEADY_AFTER_MS = 10_000;
 /** the room behind the page while it loads, so the window does not flash white */
 const BACKGROUND = ROOM_PALETTE.icon.bottom;
+// Keep packaged Windows windows and shortcuts separate from electron.exe development/test windows.
+// The installer identity stays unchanged; only the Shell's taskbar grouping identity is migrated.
+const APP_ID = app.isPackaged ? 'io.github.fantomiald.open-space.windows' : 'io.github.fantomiald.open-space.development';
 
 const config = loadConfig(process.env, os.homedir());
 const address = `http://127.0.0.1:${config.port}`;
@@ -29,6 +33,8 @@ const logFile = path.join(config.dataDir, 'server.log');
 const boundsFile = path.join(app.getPath('userData'), 'window.json');
 
 let window: BrowserWindow | null = null;
+let avatarIcon: NativeImage | null = null;
+let attentionCount = 0;
 let bridge: UtilityProcess | null = null;
 /** where the window goes: the /pair link, which sets the session cookie, then the page */
 let page = '';
@@ -107,16 +113,23 @@ function showWindow() {
   window = new BrowserWindow({
     width: 1440, height: 900, ...readBounds(), minWidth: 380, minHeight: 520,
     title: 'Open Space', backgroundColor: BACKGROUND, show: false,
+    ...(process.platform === 'win32' ? { icon: avatarIcon ?? path.join(OUT, 'desktop', 'icon.png') } : {}),
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true },
   });
   const current = window;
+  configureWindowsIcon(current);
   current.once('ready-to-show', () => current.show());
   current.on('close', () => {
     try { writeFileSync(boundsFile, JSON.stringify(current.getNormalBounds())); } catch { /* not kept */ }
   });
   current.on('closed', () => { window = null; });
   // "(2) Open Space": two sessions wait for the user, on the Dock icon too
-  current.on('page-title-updated', (_event, title) => app.dock?.setBadge(/^\((\d+)\)/.exec(title)?.[1] ?? ''));
+  current.on('page-title-updated', (_event, title) => {
+    attentionCount = Number(/^\((\d+)\)/.exec(title)?.[1] ?? 0);
+    app.dock?.setBadge(attentionCount ? String(attentionCount) : '');
+    updateWindowsBadge();
+  });
+  updateWindowsBadge();
   // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space. A file a session sent
   // ("Open the original") opens in a window of the app: the browser has no session cookie to load it with.
   const isAttachment = (url: string) => url.startsWith(`${address}/attachments/`);
@@ -126,6 +139,7 @@ function showWindow() {
     return { action: 'deny' };
   });
   current.webContents.on('did-create-window', (opened) => {
+    configureWindowsIcon(opened);
     opened.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
     // the window's own first load goes through will-navigate too: stopping it sent the file to the browser
     opened.webContents.on('will-navigate', (event, url) => {
@@ -140,6 +154,42 @@ function showWindow() {
     openOutside(url);
   });
   if (page) void current.loadURL(page);
+}
+
+/** Explorer reads relaunch metadata from disk, so this ICO must live outside app.asar. */
+function configureWindowsIcon(owner: BrowserWindow) {
+  if (process.platform !== 'win32') return;
+  owner.setIcon(avatarIcon ?? nativeImage.createFromPath(path.join(OUT, 'desktop', 'icon.png')));
+  owner.setAppDetails({
+    appId: APP_ID,
+    appIconPath: app.isPackaged ? path.join(process.resourcesPath, 'icon.ico') : path.join(OUT, 'desktop', 'icon.ico'),
+    appIconIndex: 0,
+    relaunchCommand: app.isPackaged ? `"${process.execPath}"` : `"${process.execPath}" "${app.getAppPath()}"`,
+    relaunchDisplayName: 'Open Space',
+  });
+}
+
+/** Migrate only this installed executable's existing shortcuts, preserving arguments and user choices. */
+function updateWindowsShortcuts() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const roaming = app.getPath('appData');
+  const pinned = path.join(roaming, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+  let pinnedLinks: string[] = [];
+  try { pinnedLinks = readdirSync(pinned).filter((name) => name.toLowerCase().endsWith('.lnk')).map((name) => path.join(pinned, name)); } catch { /* no pinned apps */ }
+  const links = [
+    path.join(app.getPath('desktop'), 'Open Space.lnk'),
+    path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Open Space.lnk'),
+    ...pinnedLinks,
+  ];
+  const icon = path.join(process.resourcesPath, 'icon.ico');
+  for (const link of links) {
+    try {
+      const current = shell.readShortcutLink(link);
+      if (path.resolve(current.target).toLowerCase() !== path.resolve(process.execPath).toLowerCase()) continue;
+      if (current.appUserModelId === APP_ID && current.icon === icon && current.iconIndex === 0) continue;
+      if (!shell.writeShortcutLink(link, 'update', { ...current, appUserModelId: APP_ID, icon, iconIndex: 0 })) log(`  !  cannot update shortcut: ${link}`);
+    } catch { /* missing, read-only or another user's shortcut: leave it alone */ }
+  }
 }
 
 function openOutside(url: string) {
@@ -206,12 +256,22 @@ function dockIcon(avatar: string): NativeImage | null {
 /** The Dock icon follows the user's look: the page saves a new bust whenever it changes. */
 function followAvatar() {
   const avatar = path.join(config.dataDir, 'avatar.png');
-  const apply = () => { const icon = existsSync(avatar) ? dockIcon(avatar) : null; if (icon) app.dock?.setIcon(icon); };
+  const apply = () => {
+    avatarIcon = existsSync(avatar) ? dockIcon(avatar) : null;
+    if (!avatarIcon) return;
+    app.dock?.setIcon(avatarIcon);
+    if (process.platform === 'win32') { window?.setIcon(avatarIcon); }
+  };
   apply();
   try {
     mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
     watch(config.dataDir, (_event, name) => { if (name === 'avatar.png') apply(); });
   } catch { /* the bundle's icon stays */ }
+}
+
+function updateWindowsBadge() {
+  if (process.platform !== 'win32') return;
+  window?.setOverlayIcon(attentionCount ? attentionBadge(attentionCount) : null, attentionCount ? String(attentionCount) : '');
 }
 
 function tell(found: AppUpdate) {
@@ -253,6 +313,7 @@ function watchForUpdates() {
 }
 
 async function start() {
+  if (process.platform === 'win32') { app.setAppUserModelId(APP_ID); updateWindowsShortcuts(); }
   // the page is always dark: the title bar and the menus too
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }]));

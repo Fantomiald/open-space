@@ -30,3 +30,13 @@ publish:
   provider: github
   owner: Fantomiald
   repo: open-space
+
+win:
+  icon: desktop/build/icon.ico
+  extraResources:
+    - from: desktop/build/icon.ico
+      to: icon.ico
+nsis:
+  include: desktop/build/installer.nsh
+  installerIcon: desktop/build/icon.ico
+  uninstallerIcon: desktop/build/icon.ico
