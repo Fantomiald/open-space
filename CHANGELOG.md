@@ -1,5 +1,11 @@
 # Versions
 
+## 1.16.3
+
+- Le tag ne s'affiche plus deux fois : à côté du nom dans les petites fenêtres, en dessous dans les grandes.
+- Le menu « ⋯ » d'une fenêtre n'est plus coupé par son bord : il en sort, et s'ouvre vers le haut quand il manque de place en bas.
+- Quand un agent ou un testeur redimensionne sa page (une taille mobile par exemple), le navigateur l'affiche à cette taille, au lieu d'un coin de page sur fond noir. Le bouton ordinateur ou mobile suit, et un clic dessus reprend la main sur la taille.
+
 ## 1.16.2
 
 - Plus de navigateur qui traîne à l'écran : quand une session ferme sa dernière page, son navigateur s'arrête et disparaît des vues et de la mini-fenêtre.

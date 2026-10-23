@@ -13,7 +13,7 @@ import type http from 'node:http';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
-import { addressOf, browserId, FORMATS, MODIFIERS, sessionOfBrowser } from '../shared/browser.ts';
+import { addressOf, browserId, FORMATS, MODIFIERS, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import { asJson, isJson } from './json.ts';
 
 const CHROMES = [
@@ -29,6 +29,8 @@ const IDLE_MS = 10 * 60_000;
 /** a page that does not read its pictures fast enough skips some rather than piling them up */
 const MAX_PENDING_BYTES = 2_000_000;
 const BOUNDARY = 'frame';
+/** the largest picture asked for, either side: a computer's screen, or a phone's at its scale, whatever the agent resized it to */
+const PICTURE_MAX = 1920;
 
 /** The Chrome Open Space launches: OFFICE_CHROME, else the first one installed. */
 export function findChrome(env: NodeJS.ProcessEnv): string | null {
@@ -223,7 +225,7 @@ export class Browsers {
 
   state(id: string): BrowserState | null {
     const live = this.live.get(id);
-    return live ? { tabs: [...live.tabs.values()], active: live.active, format: live.format } : null;
+    return live ? { tabs: [...live.tabs.values()], active: live.active, format: live.format, size: live.frame && { width: live.frame.width, height: live.frame.height } } : null;
   }
 
   states(): Record<string, BrowserState> {
@@ -302,8 +304,11 @@ export class Browsers {
     if (method === 'Page.screencastFrame' && session && session === live.attached?.session) {
       void live.cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }, session).catch(() => {});
       const meta = asJson(params.metadata);
-      live.frame = { data: Buffer.from(String(params.data), 'base64'), width: Number(meta.deviceWidth) || VIEWPORT.width, height: Number(meta.deviceHeight) || VIEWPORT.height };
+      const width = Number(meta.deviceWidth) || VIEWPORT.width, height = Number(meta.deviceHeight) || VIEWPORT.height;
+      const resized = live.frame?.width !== width || live.frame?.height !== height;
+      live.frame = { data: Buffer.from(String(params.data), 'base64'), width, height };
       for (const viewer of live.viewers) this.sendFrame(viewer, live.frame.data);
+      if (resized) this.deps.onState(id, this.state(id));
       return;
     }
     // Open Space's session on the tab was cut (the tab moved to another process, or another client detached it): followed again
@@ -379,11 +384,16 @@ export class Browsers {
     await live.cdp.send('Emulation.setTouchEmulationEnabled', mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false }, page);
   }
 
-  private restart(live: Live): Promise<void> {
+  /**
+   * The pictures asked for again, and with `refit` the format laid out again. Not refitted otherwise: the layout lasts
+   * through navigations, and setting it once more after the agent resized the page (browser_resize) would size the
+   * pictures for the format around a page left at the agent's size.
+   */
+  private restart(live: Live, refit = false): Promise<void> {
     const next = live.following.then(async () => {
       const page = live.attached?.session;
       if (!page) return;
-      await this.fit(live);
+      if (refit) await this.fit(live);
       if (!live.casting) return;
       await live.cdp.send('Page.stopScreencast', {}, page).catch(() => {});
       live.casting = false;
@@ -398,8 +408,7 @@ export class Browsers {
     const wanted = live.viewers.size > 0;
     if (!live.attached || wanted === live.casting) return;
     live.casting = wanted;
-    const { width, height, scale } = FORMATS[live.format];
-    if (wanted) await live.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 75, maxWidth: width * scale, maxHeight: height * scale }, live.attached.session);
+    if (wanted) await live.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 75, maxWidth: PICTURE_MAX, maxHeight: PICTURE_MAX }, live.attached.session);
     else await live.cdp.send('Page.stopScreencast', {}, live.attached.session).catch(() => {});
   }
 
@@ -432,11 +441,12 @@ export class Browsers {
     switch (action.kind) {
       case 'open': return;
       case 'format':
-        if (live.format === action.format) return;
+        // picked again while the agent's resizing shows another one: laid out again, the user takes the page back
+        if (live.format === action.format && shownFormat(this.state(id) as BrowserState) === action.format) return;
         live.format = action.format;
         this.formats.set(id, action.format);
         this.deps.onState(id, this.state(id));
-        await this.restart(live);
+        await this.restart(live, true);
         return;
       case 'navigate': {
         const url = addressOf(action.url);

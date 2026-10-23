@@ -45,7 +45,7 @@ describe('the floating browser', () => {
   });
 
   it('floats a browser that goes to a page, not one that opens blank or stays where it is', () => {
-    const at = (url: string) => ({ tabs: [{ id: 't', url, title: '' }], active: 't', format: 'desktop' as const });
+    const at = (url: string) => ({ tabs: [{ id: 't', url, title: '' }], active: 't', format: 'desktop' as const, size: null });
     assert.equal(wentToPage(undefined, at('about:blank')), false);
     assert.equal(wentToPage(at('about:blank'), at('http://localhost:3000/')), true);
     assert.equal(wentToPage(at('http://localhost:3000/'), at('http://localhost:3000/')), false);
