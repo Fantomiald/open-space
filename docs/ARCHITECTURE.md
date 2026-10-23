@@ -245,3 +245,7 @@ Spec : `docs/superpowers/specs/2026-10-21-worktrees-design.md`. Une session isol
 - `npm start` avec un onglet déjà connecté : le cas « aucun onglet » a ouvert le lien comme prévu (testé avec un faux `open`). Le cas où un onglet se reconnecte avant 3 s n'a pas été lancé en réel.
 - Navigateurs : utilisé au quotidien avec le vrai CLI dans Arc et testé dans Chromium (Playwright) ; ni Firefox, ni Safari, ni lecteur d'écran.
 - Comportement après une mise à jour du CLI : le format stream-json n'est pas versionné, et les tests rejouent des captures de la 2.1.301.
+
+### Socle Windows
+
+Le packaging NSIS, les processus et l’arrêt IPC Windows sont documentés dans [windows-runtime.md](windows/windows-runtime.md). Les autres intégrations Windows sont séparées en PRs par fonctionnalité ; leurs notes de revue vivent dans `docs/windows/`.

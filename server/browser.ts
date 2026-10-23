@@ -36,7 +36,13 @@ const PICTURE_MAX = 1920;
 export function findChrome(env: NodeJS.ProcessEnv): string | null {
   const chosen = env.OFFICE_CHROME;
   if (chosen) return existsSync(chosen) ? chosen : null;
-  return CHROMES.find((file) => existsSync(file)) ?? null;
+  const windows = [env.PROGRAMFILES, env['ProgramFiles(x86)'], env.LOCALAPPDATA].filter((folder): folder is string => !!folder).flatMap((folder) => [
+    path.join(folder, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(folder, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(folder, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    path.join(folder, 'Chromium', 'Application', 'chrome.exe'),
+  ]);
+  return [...windows, ...CHROMES, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((file) => existsSync(file)) ?? null;
 }
 
 /** The key in the CDP endpoint given to a session: without it, another program of the machine cannot launch its browser. */
@@ -56,7 +62,9 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
     const server = asJson(raw);
     return name === 'playwright' || (Array.isArray(server.args) && server.args.some((arg) => typeof arg === 'string' && arg.includes('@playwright/mcp')));
   });
-  const base: McpServer = found ? { ...asJson(found[1]) } : { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] };
+  const base: McpServer = found ? { ...asJson(found[1]) } : process.platform === 'win32'
+    ? { type: 'stdio', command: 'cmd.exe', args: ['/d', '/c', 'npx', '-y', '@playwright/mcp@latest'] }
+    : { type: 'stdio', command: 'npx', args: ['-y', '@playwright/mcp@latest'] };
   const args: string[] = [];
   const given = Array.isArray(base.args) ? base.args.filter((arg): arg is string => typeof arg === 'string') : [];
   for (let at = 0; at < given.length; at++) {

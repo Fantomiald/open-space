@@ -53,6 +53,7 @@ function repository(): string {
   const repo = path.join(root, `garden-${++count}`);
   mkdirSync(repo);
   git(repo, 'init', '-q', '-b', 'main');
+  git(repo, 'config', 'core.autocrlf', 'false');
   write(path.join(repo, '.gitignore'), 'node_modules/\n');
   write(path.join(repo, 'app.ts'), 'export const a = 1;\n');
   git(repo, 'add', '.');
@@ -453,7 +454,7 @@ describe('the cases asked for', () => {
   it('11. its terminal opens in its worktree', async () => {
     const { manager, find, id } = await isolated();
     assert.equal(manager.folderOf(id), find(id).cwd);
-    assert.ok(manager.folderOf(id)?.includes('/.claude/worktrees/os-lina-'));
+    assert.ok(manager.folderOf(id)?.split(path.sep).join('/').includes('/.claude/worktrees/os-lina-'));
     await manager.shutdown();
   });
 
@@ -575,7 +576,7 @@ describe('an isolated session never loses work, nor touches what it should not',
     const { manager, processes, find, events, repo, id } = await isolated();
     processes[0].turn(id);
     await manager.rest(id);
-    rmSync(find(id).worktree!.root, { recursive: true, force: true });
+    rmSync(find(id).worktree!.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     await manager.refreshBranch(id);
     assert.equal(find(id).worktree, undefined);
     assert.equal(find(id).cwd, repo);

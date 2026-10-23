@@ -261,7 +261,7 @@ export async function branchStatus(worktreeRoot: string, base: string): Promise<
 /** True when an executable called `name` is on the PATH given. */
 function onPath(name: string, searchPath: string) {
   return searchPath.split(path.delimiter).filter((folder) => path.isAbsolute(folder)).some((folder) => {
-    try { accessSync(path.join(folder, name), constants.X_OK); return true; } catch { return false; }
+    try { accessSync(path.join(folder, process.platform === 'win32' ? `${name}.exe` : name), constants.X_OK); return true; } catch { return false; }
   });
 }
 

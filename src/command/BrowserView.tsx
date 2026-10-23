@@ -149,7 +149,7 @@ export function BrowserScreen({ session, lane, driving }: { session: SessionInfo
   };
   const key = (event: KeyboardEvent<HTMLDivElement>, type: 'keyDown' | 'keyUp') => {
     // ⌘V comes as a paste event, with the text of the Mac's clipboard
-    if (event.metaKey && event.key.toLowerCase() === 'v') return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') return;
     event.preventDefault();
     event.stopPropagation();
     input({ kind: 'key', type, key: event.key, code: event.code, modifiers: modifiersOf(event) });

@@ -12,7 +12,7 @@ export type AppMessage =
   | { t: 'check' };
 
 /** From the app to the bridge. */
-export type AppNews = { t: 'update'; update: AppUpdate };
+export type AppNews = { t: 'update'; update: AppUpdate } | { t: 'shutdown' };
 
 interface ParentPort {
   postMessage(message: AppMessage): void;

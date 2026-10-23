@@ -11,12 +11,22 @@ import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
+import { signalTree } from './process-tree.ts';
+
+/** Run npm's Claude shim through Node directly, keeping JSON arguments out of cmd.exe. */
+export function claudeCommand(file: string, args: string[]): [string, string[]] {
+  if (process.platform === 'win32' && /\.cmd$/i.test(file)) {
+    const node = path.join(path.dirname(file), 'node.exe');
+    return [existsSync(node) ? node : 'node.exe', [path.join(path.dirname(file), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'), ...args]];
+  }
+  return [file, args];
+}
 
 export interface ClaudeBinary { path: string; version: string }
 
 function run(file: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 15000 }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
+    execFile(...claudeCommand(file, args), { timeout: 15000, windowsHide: true }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
   });
 }
 
@@ -52,7 +62,7 @@ export function runAuth(file: string, environment: NodeJS.ProcessEnv, action: 'l
 
 function runClaude(file: string, args: string[], environment: NodeJS.ProcessEnv, timeout: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { env: environment, timeout }, (error, stdout, stderr) => {
+    execFile(...claudeCommand(file, args), { env: environment, timeout, windowsHide: true }, (error, stdout, stderr) => {
       if (!error) { resolve(stdout); return; }
       if (error.killed) { reject(new Error(st.process.timedOut)); return; }
       const lines = `${stderr}\n${stdout}`.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -64,7 +74,7 @@ function runClaude(file: string, args: string[], environment: NodeJS.ProcessEnv,
 /** Who Claude Code is signed in as, or null when it does not answer (signed out, it prints the same JSON with exit code 1). */
 export function readAccount(file: string, environment: NodeJS.ProcessEnv): Promise<ClaudeAccount | null> {
   return new Promise((resolve) => {
-    execFile(file, ['auth', 'status', '--json'], { env: environment, timeout: 15_000 }, (_error, stdout) => {
+    execFile(...claudeCommand(file, ['auth', 'status', '--json']), { env: environment, timeout: 15_000, windowsHide: true }, (_error, stdout) => {
       try { resolve(parseAccount(JSON.parse(stdout))); } catch { resolve(null); }
     });
   });
@@ -82,8 +92,11 @@ export function parseAccount(status: unknown): ClaudeAccount | null {
 /** Finds the `claude` executable without going through terminal aliases. Relative PATH entries are ignored. */
 export async function findClaude(env: NodeJS.ProcessEnv = process.env): Promise<ClaudeBinary | null> {
   const home = os.homedir();
-  const fromPath = (env.PATH ?? '').split(path.delimiter).filter((directory) => path.isAbsolute(directory)).map((directory) => path.join(directory, 'claude'));
-  const candidates = [env.CLAUDE_BIN, ...fromPath, path.join(home, '.local/bin/claude'), path.join(home, '.claude/local/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
+  const names = process.platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude'];
+  const searchPath = env.PATH ?? env.Path ?? '';
+  const folders = [...searchPath.split(path.delimiter), path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'), ...(process.platform === 'win32' ? [path.join(env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'npm')] : ['/opt/homebrew/bin', '/usr/local/bin'])];
+  const fromPath = folders.filter((directory) => path.isAbsolute(directory)).flatMap((directory) => names.map((name) => path.join(directory, name)));
+  const candidates = [env.CLAUDE_BIN, ...fromPath];
   for (const candidate of new Set(candidates.filter((c): c is string => !!c))) {
     if (!path.isAbsolute(candidate) || !existsSync(candidate)) continue;
     const version = await readVersion(candidate);
@@ -197,8 +210,8 @@ export function createCatalogProbe(binary: ClaudeBinary, environment: NodeJS.Pro
   return (cwd, untrusted) => new Promise((resolve, reject) => {
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-prompt-tool', 'stdio', '--strict-mcp-config'];
     if (untrusted) args.push('--setting-sources', 'user');
-    const child = spawn(binary.path, args, { cwd, env: environment, stdio: ['pipe', 'pipe', 'ignore'], detached: true });
-    const end = () => { try { process.kill(-child.pid!, 'SIGTERM'); } catch { /* already gone */ } };
+    const child = spawn(...claudeCommand(binary.path, args), { cwd, env: environment, stdio: ['pipe', 'pipe', 'ignore'], detached: process.platform !== 'win32', windowsHide: true });
+    const end = () => signalTree(child.pid, 'SIGTERM');
     const timer = setTimeout(() => { end(); reject(new Error('no answer to initialize')); }, PROBE_TIMEOUT_MS);
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       let message: unknown;
@@ -284,7 +297,7 @@ class ClaudeProcess implements ProcessHandle {
     // auto-compact turned off in Claude Code's own /config is kept in ~/.claude.json, which wins over --settings: the
     // variable turns it off whatever that file says
     const env = { ...environment, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
-    const child = spawn(binary.path, buildClaudeArgs(launch), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+    const child = spawn(...claudeCommand(binary.path, buildClaudeArgs(launch)), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true });
     this.child = child;
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       if (!line.trim()) return;
@@ -366,7 +379,7 @@ class ClaudeProcess implements ProcessHandle {
   private signalGroup(signal: NodeJS.Signals) {
     const pid = this.child.pid;
     if (pid === undefined) return;
-    try { process.kill(-pid, signal); } catch { /* group already gone */ }
+    signalTree(pid, signal);
   }
 
   stop(graceMs: number): Promise<void> {

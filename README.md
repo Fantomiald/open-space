@@ -160,3 +160,7 @@ How it works inside (server, protocol, office, and what was checked against a re
 - Clawd is Claude Code's mascot, drawn here as a fan's nod. Open Space isn't an Anthropic product. Claude and Claude Code are trademarks of Anthropic.
 
 MIT licence, by [Fantomiald](https://github.com/Fantomiald).
+
+### Install on Windows
+
+Install Git for Windows and Claude Code, then run `npm ci` and `npm run app:win`. The x64 NSIS installer is written to `release/`. For ARM64 use `npm run app:win:arm64`. Local installers are unsigned. See the [Windows implementation and review notes](docs/windows/windows-runtime.md).

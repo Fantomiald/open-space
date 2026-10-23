@@ -88,6 +88,7 @@ let stopping = false;
 /** A new Open Space the Mac app found, as it last said. */
 let appUpdate: AppUpdate | null = null;
 appPort?.on('message', ({ data }) => {
+  if (data.t === 'shutdown') { void shutdown(); return; }
   if (data.t !== 'update') return;
   appUpdate = data.update;
   broadcast({ t: 'appUpdate', update: appUpdate });
