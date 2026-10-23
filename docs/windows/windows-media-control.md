@@ -10,6 +10,8 @@ La télécommande de la radio dépendait d’AppleScript et n’offrait aucun le
 - Lire état, titre, artiste, album, durée/position et capacités via GlobalSystemMediaTransportControlsSessionManager.
 - Piloter seulement la session de l’application sélectionnée : lecture/pause, précédent et suivant. Ne pas injecter de touches multimédias globales.
 - Ajouter des capacités facultatives à NowPlaying pour désactiver les commandes non proposées et masquer volume/bibliothèque Windows.
+- Réutiliser un worker PowerShell caché : initialisation WinRT unique, requêtes JSON par stdin/stdout, lectures concurrentes de la même application regroupées, commandes sérialisées sans rejeu automatique. File limitée à huit requêtes en attente, timeout de 12 s par requête active, fermeture après 30 s sans requête et à la sortie du serveur ; redémarrage paresseux après échec.
+- Rafraîchir l’état toutes les 500 ms sous Windows, toujours sans polling si la page est masquée. Le délai macOS reste à 2 s. Le premier appel reste un démarrage à froid.
 - Adapter les messages FR/EN quand le lecteur doit être ouvert ou que Windows refuse la commande.
 
 ## Dépendances et ordre de fusion
@@ -24,6 +26,8 @@ Les changements de la migration initiale ont été séparés en PRs par fonction
 
 - `server/index.ts`
 - `server/music.ts`
+- `server/media-worker.ts`
+- `server/media-worker.test.ts`
 - `server/windows-music.test.ts`
 - `server/windows-music.ts`
 - `server/windows.ts`
@@ -37,7 +41,11 @@ Les changements de la migration initiale ont été séparés en PRs par fonction
 
 `npm run check`, `npm run lint` et `npm run build` réussis sur cette branche isolée sous Windows x64.
 
-`node --test server/windows-music.test.ts` : 1 tests réussis, 0 échec, 0 ignoré(s).
+`node --test server/media-worker.test.ts server/windows-music.test.ts` avec `OPEN_SPACE_TEST_WINDOWS_MEDIA=1` : **6 tests réussis, 0 échec**. Couverture : réutilisation du processus, ordre des commandes, Unicode/JSON, refus de commande, crash, timeout, file bornée, absence de rejeu, redémarrage après inactivité, capabilities et lectures SMTC natives. Sans cette variable, le test natif est ignoré (les cinq autres restent exécutés).
+
+Mesure locale en lecture seule : cinq cycles liste des sessions + état Spotify, sans session média active, environ **334 ms au premier cycle puis 1 ms par cycle**. Ce microbenchmark ne mesure ni le rendu navigateur ni le délai propre à Spotify/Apple Music pendant la lecture. Aucun lecteur personnel n’a été commandé pour ce correctif.
+
+`npm test` sur cette branche : **540 réussites, 25 échecs, 1 test natif ignoré**, 566 tests au total. Comparaison avec le même environnement Windows/Git 2.53 sur la base amont `abae1fd` : **535 réussites et les mêmes 25 échecs**, 560 tests au total. Aucun nouvel emplacement de test en échec. Les échecs concernent les chemins Windows, les fixtures CRLF et les commandes Unix/arrêts de processus, pris en charge par le socle #2 ; cette PR isolée ne doit donc pas être présentée comme passant toute la suite Windows. Rejouer la suite après intégration du socle.
 
 ## Observations natives antérieures
 
@@ -52,6 +60,8 @@ Après checkout de `codex/windows-media-control` : `npm ci`, `npm run check`, `n
 - Sur Windows 10 1809+ ou Windows 11, ouvrir Spotify et lancer un morceau ; sélectionner cette source dans la radio et tester lecture/pause/précédent/suivant.
 - Répéter avec Apple Music si installé. Lancer deux lecteurs et vérifier qu’une commande ne touche que la source choisie.
 - Fermer le lecteur, supprimer sa session, refuser une commande et vérifier les états sans plantage de l’app.
+- Mesurer les commandes et changements externes dans Spotify/Apple Music : le démarrage à froid peut rester visible, mais les requêtes suivantes doivent réutiliser le même PowerShell. Vérifier les changements externes dans l’UI au prochain rafraîchissement de 500 ms, sous réserve de la propagation SMTC du lecteur.
+- Ouvrir plusieurs onglets, cliquer rapidement suivant/lecture/précédent, puis tuer seulement le worker média de test : vérifier l’ordre, l’absence de rejeu et la reprise au prochain appel. Fermer les onglets et vérifier sa sortie après 30 s ; tester aussi la sortie du serveur.
 - Contrôler que radio web, AppleScript macOS et anciens messages NowPlaying sans capabilities continuent de fonctionner.
 
 ## Limites et problèmes non résolus
@@ -60,14 +70,14 @@ Après checkout de `codex/windows-media-control` : `npm ci`, `npm run check`, `n
 - Les pochettes ont été essayées mais leur chargement a bloqué dans le test natif ; ce code a été retiré. artwork reste null sous Windows.
 - Le lecteur doit publier une session : ouvrir un morceau dans l’application avant de le piloter. Les installations atypiques peuvent ne pas être détectées.
 - Spotify a été détecté sur la machine, mais la validation réelle lecture/pause/métadonnées a utilisé un lecteur Windows muet temporaire ; Apple Music n’a pas été validé sur une installation réelle.
-- À revoir : coût du processus PowerShell par interrogation (polling de 2 s), absence de cache/sérialisation et attente possible au démarrage pendant la détection. Aucun benchmark multi-onglets n’a été fait.
+- Le coût PowerShell par interrogation et le polling de 2 s ont été corrigés. Restent le démarrage à froid, la propagation des changements par le lecteur, et l’attente possible pendant la détection des packages AppX. Aucun benchmark UI avec Spotify/Apple Music réellement en lecture ou charge multi-onglets n’a été fait sur cette révision. Un timeout/crash abandonne les commandes en attente sans les rejouer ; le prochain appel peut recréer le worker.
 
 ## Reprise par Claude Code
 
 Lire d’abord `CLAUDE.md` et `docs/ARCHITECTURE.md`, examiner le diff de cette seule PR puis les dépendances. Vérifier la branche sur sa base courante, conserver les modifications amont de 1.16.4 et réexécuter les tests après toute résolution de conflit. Les observations ci-dessus ne dispensent pas de relire les contrôles de chemins, de processus et d’IPC.
 
-- Vérifier les versions Windows/WinRT et la gestion des erreurs/timeout ; envisager un cache et limiter les requêtes concurrentes.
-- Conserver des commandes statiques et les arguments en environnement. Ne pas ajouter d’appel réseau sortant du serveur ni élargir le contrôle à tous les lecteurs.
+- Vérifier les versions Windows/WinRT, les limites de file et la gestion des erreurs/timeout. Préserver le regroupement des lectures et la sérialisation des commandes sans rejeu. Vérifier que la fermeture du worker et son stdin ne laissent pas de processus orphelin.
+- Conserver le script du worker statique et ses données en JSON (app/action validées), sans interpolation de code. La découverte AppX conserve windowsScript et ses arguments en environnement. Ne pas ajouter d’appel réseau sortant du serveur ni élargir le contrôle à tous les lecteurs.
 - Le helper windowsScript est identique aux PRs corbeille et navigateur. Conserver la compatibilité de capabilities facultatif pour le client macOS.
 
 Si un scénario ne peut pas être vérifié sur la machine de revue, le signaler précisément dans le compte rendu ; ne pas le déclarer réussi. Les scénarios natifs macOS/Linux, l’ARM64 matériel et la distribution signée restent à traiter selon les limites propres à la fonctionnalité.
