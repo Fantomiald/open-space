@@ -53,7 +53,7 @@ export interface SessionManagerDeps {
   home?: string;
   /** a session now waits for the user (see Session's deps) */
   onAttention?: SessionDeps['onAttention'];
-  onSubagentStopped?: (sessionId: string, type: string) => void;
+  onSubagentLeft?: (sessionId: string, type: string) => void;
   /** the user's first name and their note for every agent */
   identity?: SessionDeps['identity'];
   claudeSettings?: SessionDeps['claudeSettings'];
@@ -250,7 +250,7 @@ export class SessionManager {
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
-      onSubagentStopped: (type) => this.deps.onSubagentStopped?.(info.id, type),
+      onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       peerName: (address) => this.peerName(address),
