@@ -71,7 +71,7 @@ export const settings = {
       about: 'La version d’Open Space et de Claude Code.',
     },
     groups: {
-      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', places: 'Dossiers de travail', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
+      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
     },
     inherit: (value: string) => `Comme Claude Code (${value})`,
     inheritAction: 'Comme Claude Code',
@@ -132,6 +132,7 @@ export const settings = {
         hint: 'Une nouvelle session sur une branche et dans un dossier à elle (un worktree git), pour ne pas toucher aux fichiers des autres. Open Space fusionne quand tu le demandes.',
         options: { busy: 'Quand le dossier est déjà pris', always: 'Toujours', never: 'Jamais' },
       },
+      autoPip: { title: 'Mini-fenêtre automatique', hint: 'Le navigateur d’un testeur s’ouvre tout seul en mini-fenêtre, et revient quand tu quittes la vue Navigateur. Une session qui vérifie ses propres pages fait juste clignoter son globe.' },
       roots: { title: 'Dossiers autorisés', hint: 'Coche ceux où tu ranges tes projets.' },
       defaultFolder: { title: 'Dossier par défaut', hint: 'Maj+N lance une session dedans.' },
       theme: { title: 'Thème du bureau', hint: 'Le bureau et la salle de repos changent de décor, meubles compris.', options: { office: 'Bureau', space: 'Navette spatiale', tokyo: 'Tokyo néon', dungeon: 'Donjon', beach: 'Plage', pirate: 'Bateau pirate', forest: 'Cabane en forêt' } },
