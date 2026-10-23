@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { homeRelative } from '../lib/format.ts';
+import { folderName, homeRelative } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -13,7 +13,8 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const box = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => { setOpen(false); setActive(-1); }, []);
+  const input = useRef<HTMLInputElement>(null);
+  const close = useCallback(() => { setOpen(false); setActive(-1); input.current?.blur(); }, []);
   useDismiss(open, box, close);
   const matches = useMemo(() => matchFolders(directories, value), [directories, value]);
   const shown = open && matches.length > 0;
@@ -35,16 +36,18 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
   return (
     <div className="cp-chip cp-folder" data-folder title={t.composer.folderPicker.title} ref={box}>
       <input
+        ref={input} title={value || placeholder}
         aria-label={t.composer.folderPicker.label} role="combobox" aria-expanded={shown} aria-controls="folder-picker" aria-autocomplete="list" autoComplete="off" spellCheck={false}
         aria-activedescendant={shown && active >= 0 ? `folder-option-${active}` : undefined}
-        value={value} placeholder={placeholder} onFocus={() => setOpen(true)} onKeyDown={onKeyDown}
+        value={open ? value : folderName(value)} placeholder={open ? placeholder : folderName(placeholder)}
+        onFocus={() => { setOpen(true); requestAnimationFrame(() => { if (document.activeElement === input.current) input.current?.select(); }); }} onBlur={close} onKeyDown={onKeyDown}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
       />
       {shown && (
         <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
           {matches.map((directory, index) => {
             const shownPath = homeRelative(directory);
-            const cut = shownPath.lastIndexOf('/') + 1;
+            const cut = Math.max(shownPath.lastIndexOf('/'), shownPath.lastIndexOf('\\')) + 1;
             return (
               <li
                 key={directory} id={`folder-option-${index}`} role="option" aria-selected={index === active} className="cp-folder__option"

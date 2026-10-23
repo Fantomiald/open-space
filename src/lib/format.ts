@@ -30,7 +30,7 @@ export const formatAgo = (ms: number) => (ms < 60_000 ? t.common.justNow : t.com
 export const since = (from: number, now: number) => t.common.since(formatDuration(now - from));
 
 /** The last folder of a path: the project name. */
-export const folderName = (path: string) => path.split('/').filter(Boolean).pop() ?? path;
+export const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 /** Replaces the home folder with "~" so full user paths never fill the screen. */
 export const homeRelative = (path: string) => path.replace(/^\/(?:Users|home)\/[^/]+/, '~');
