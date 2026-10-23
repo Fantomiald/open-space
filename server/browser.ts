@@ -15,6 +15,8 @@ import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
 import { addressOf, browserId, FORMATS, MODIFIERS, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import { asJson, isJson } from './json.ts';
+import { recoverWindowsBrowser } from './browser-recovery.ts';
+import { signalTree } from './process-tree.ts';
 
 const CHROMES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -264,6 +266,11 @@ export class Browsers {
    * it is stopped, its lock is its "host-pid". Only if that process is still a Chrome on this profile: a pid is reused.
    */
   private async freeProfile(profile: string) {
+    if (process.platform === 'win32') {
+      // a failed recovery (PowerShell blocked, WMI down) must not stop the launch: Chrome says itself if the profile is taken
+      await recoverWindowsBrowser(profile, this.deps.chrome!).catch((error) => this.deps.log('cannot free the browser profile', error));
+      return;
+    }
     const lock = path.join(profile, 'SingletonLock');
     const pid = Number((await readlink(lock).catch(() => '')).split('-').at(-1));
     if (!Number.isInteger(pid) || pid <= 0) return;
@@ -285,6 +292,7 @@ export class Browsers {
     const portFile = path.join(profile, 'DevToolsActivePort');
     await rm(portFile, { force: true });
     const child = spawn(chrome, [
+      ...(process.platform === 'win32' ? ['--enable-automation'] : []),
       '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${VIEWPORT.width},${VIEWPORT.height}`, `--force-device-scale-factor=${VIEWPORT.scale}`,
       '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--hide-crash-restore-bubble', 'about:blank',
     ], { stdio: 'ignore' });
@@ -508,11 +516,20 @@ export class Browsers {
       ? Promise.resolve()
       : new Promise<void>((resolve) => { live.process.once('exit', () => resolve()); });
     for (const viewer of live.viewers) viewer.end();
-    live.cdp.close();
-    live.process.kill('SIGTERM');
-    setTimeout(() => { if (live.process.exitCode === null) live.process.kill('SIGKILL'); }, 3000).unref();
+    if (process.platform === 'win32') {
+      // Let Chromium release its profile and stop its sandboxed subprocesses itself first.
+      void live.cdp.send('Browser.close').catch(() => {}).finally(() => live.cdp.close());
+    } else {
+      live.cdp.close();
+      live.process.kill('SIGTERM');
+    }
+    setTimeout(() => {
+      if (live.process.exitCode !== null || live.process.signalCode !== null) return;
+      if (process.platform === 'win32') signalTree(live.process.pid, 'SIGKILL');
+      else live.process.kill('SIGKILL');
+    }, 3000).unref();
     // a tester starts from a clean profile each time its browser is launched
-    if (id !== sessionOfBrowser(id)) void exited.then(() => rm(path.join(this.deps.folder, id), { recursive: true, force: true }));
+    if (id !== sessionOfBrowser(id)) void exited.then(() => rm(path.join(this.deps.folder, id), { recursive: true, force: true, maxRetries: 5 }));
     this.deps.onState(id, null);
     return exited;
   }
