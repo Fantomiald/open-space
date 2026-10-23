@@ -167,7 +167,7 @@ function changeNotes<T>(change: () => Promise<T>): Promise<T> {
 }
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
-const musicApps = installedMusicApps();
+const musicApps = await installedMusicApps();
 let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
 /** Tells every page when the badge of the numbers object comes or goes. */
 async function checkMetrics() {

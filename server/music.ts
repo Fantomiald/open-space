@@ -1,6 +1,6 @@
 // The music apps of the user's Mac, driven by AppleScript (osascript) for the office radio: what plays, play/pause,
 // next, previous, volume; for Music also the playlists and a search of the library (AppleScript sees only the
-// library, not Apple Music's catalogue). macOS only: elsewhere no app is offered and the radio keeps its web radios.
+// library, not Apple Music's catalogue). Windows uses SMTC for playback and metadata (windows-music.ts).
 // An app that is not open is never launched just to be asked what it plays; an action (play...) opens it.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -8,6 +8,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from '../shared/music.ts';
+import { windowsMusicApps, windowsNowPlaying } from './windows-music.ts';
 
 const PLACES: Readonly<Record<MusicApp, readonly string[]>> = {
   music: ['/System/Applications/Music.app'],
@@ -17,7 +18,8 @@ const NAMES: Readonly<Record<MusicApp, string>> = { music: 'Music', spotify: 'Sp
 const FIELD = '\u001f', RECORD = '\u001e';
 const MAX_TRACKS = 25;
 
-export function installedMusicApps(): MusicApp[] {
+export async function installedMusicApps(): Promise<MusicApp[]> {
+  if (process.platform === 'win32') return windowsMusicApps();
   if (process.platform !== 'darwin') return [];
   return (Object.keys(PLACES) as MusicApp[]).filter((app) => PLACES[app].some((place) => existsSync(place)));
 }
@@ -92,6 +94,7 @@ async function musicArtwork(trackId: string): Promise<string | null> {
 }
 
 export async function nowPlaying(app: MusicApp): Promise<NowPlaying> {
+  if (process.platform === 'win32') return windowsNowPlaying(app);
   const empty: NowPlaying = { app, state: 'closed', track: null, position: 0, volume: 0, artwork: null };
   let output: string;
   try { output = await run(NOW_PLAYING[app]); } catch (error) { return { ...empty, state: error instanceof Denied ? 'denied' : 'closed' }; }
@@ -105,6 +108,7 @@ export async function nowPlaying(app: MusicApp): Promise<NowPlaying> {
 const COMMANDS = { toggle: 'playpause', next: 'next track', previous: 'previous track' } as const;
 
 export async function controlMusic(app: MusicApp, action: MusicAction): Promise<NowPlaying> {
+  if (process.platform === 'win32') return windowsNowPlaying(app, action);
   const name = NAMES[app];
   try {
     switch (action.kind) {
@@ -121,6 +125,7 @@ export async function controlMusic(app: MusicApp, action: MusicAction): Promise<
 
 /** Music's playlists (made by the user, not the library itself), and the library's tracks that match `query` when there is one. */
 export async function musicLibrary(query: string): Promise<{ playlists: string[]; tracks: MusicTrack[] }> {
+  if (process.platform !== 'darwin') return { playlists: [], tracks: [] };
   try {
     const playlists = await run([
       'tell application "Music" to set l to name of (user playlists whose special kind is none)',
