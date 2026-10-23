@@ -1,13 +1,13 @@
 // Open Space as a macOS app: a window on the bridge (server/index.ts), which runs inside the app as an Electron
 // utility process and stops with it. When an Open Space already listens on the port (npm start), the window opens
 // that one instead, and quitting the app leaves it running. Closing the window keeps the sessions going: the Dock
-// icon brings it back, and the notifications still come.
+// or Windows tray icon brings it back, and the notifications still come.
 import { execFile } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, Menu, Notification, app, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
@@ -29,6 +29,7 @@ const logFile = path.join(config.dataDir, 'server.log');
 const boundsFile = path.join(app.getPath('userData'), 'window.json');
 
 let window: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let bridge: UtilityProcess | null = null;
 /** where the window goes: the /pair link, which sets the session cookie, then the page */
 let page = '';
@@ -111,8 +112,10 @@ function showWindow() {
   });
   const current = window;
   current.once('ready-to-show', () => current.show());
-  current.on('close', () => {
+  current.on('close', (event) => {
     try { writeFileSync(boundsFile, JSON.stringify(current.getNormalBounds())); } catch { /* not kept */ }
+    // Keep the page and its unread counts alive. The tray's Quit action stops sessions cleanly.
+    if (process.platform === 'win32' && tray && !quitting) { event.preventDefault(); current.hide(); }
   });
   current.on('closed', () => { window = null; });
   // "(2) Open Space": two sessions wait for the user, on the Dock icon too
@@ -214,6 +217,35 @@ function followAvatar() {
   } catch { /* the bundle's icon stays */ }
 }
 
+function createWindowsTray() {
+  if (process.platform !== 'win32') return;
+  const avatar = path.join(config.dataDir, 'avatar.png');
+  const icon = (existsSync(avatar) ? dockIcon(avatar) : null) ?? nativeImage.createFromPath(path.join(OUT, 'desktop', 'icon.png'));
+  tray = new Tray(icon.resize({ width: 32, height: 32 }));
+  tray.setToolTip('Open Space');
+  app.once('browser-window-created', (_event, owner) => {
+    owner.on('page-title-updated', (_event, title) => tray?.setToolTip(title));
+  });
+  try {
+    watch(config.dataDir, (_event, name) => {
+      if (name !== 'avatar.png') return;
+      const changed = existsSync(avatar) ? dockIcon(avatar) : null;
+      if (changed) tray?.setImage(changed.resize({ width: 32, height: 32 }));
+    });
+  } catch { /* the initial tray icon stays */ }
+  tray.on('click', () => showWindow());
+  tray.on('double-click', () => showWindow());
+  tray.on('right-click', () => {
+    let english = false;
+    try { english = JSON.parse(readFileSync(path.join(config.dataDir, 'settings.json'), 'utf8')).language === 'en'; } catch { /* French by default */ }
+    tray?.popUpContextMenu(Menu.buildFromTemplate([
+      { label: english ? 'Open Open Space' : 'Ouvrir Open Space', click: () => showWindow() },
+      { type: 'separator' },
+      { label: english ? 'Quit Open Space' : 'Quitter Open Space', click: () => app.quit() },
+    ]));
+  });
+}
+
 function tell(found: AppUpdate) {
   update = found;
   bridge?.postMessage({ t: 'update', update: found } satisfies AppNews);
@@ -257,6 +289,7 @@ async function start() {
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }]));
   followAvatar();
+  createWindowsTray();
   showWindow();
   if (await alreadyRunning()) {
     // the bridge started by npm start: same data folder, so same secret
@@ -283,11 +316,11 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showWindow());
   // the sessions keep running without a window: the Dock icon brings it back
-  app.on('window-all-closed', () => {});
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !tray) app.quit(); });
   app.on('activate', () => showWindow());
   // SIGTERM: the bridge closes its sessions (they can be resumed) and saves, then the app quits (see startBridge)
   app.on('before-quit', (event) => {
-    if (!bridge) return;
+    if (!bridge) { quitting = true; return; }
     event.preventDefault();
     if (quitting) return;
     quitting = true;
