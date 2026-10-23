@@ -1,5 +1,10 @@
 # Versions
 
+## 1.16.1
+
+- La mini-fenêtre ne s'ouvre plus toute seule quand une session vérifie ses propres pages, artifacts compris : seule sa pastille globe clignote. L'ouverture automatique est réservée aux testeurs.
+- Nouveau réglage Sessions > Navigateur > « Mini-fenêtre automatique » pour la couper complètement.
+
 ## 1.16.0
 
 - Navigateur intégré : chaque session a son Chrome, que pilotent ses outils Playwright. Tu le vois en direct dans sa fenêtre et tu peux cliquer et taper dedans.

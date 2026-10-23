@@ -449,6 +449,8 @@ export interface Preferences {
   language?: Language;
   /** text selected in the page is copied at once, like in a terminal */
   copyOnSelect: boolean;
+  /** a tester's browser floats over the office by itself when the tester goes to a page */
+  autoPip: boolean;
   /** the effort a new session starts with ('' : the model's default) */
   effort: Effort | '';
   /** Claude Code settings for Open Space's sessions only (shared/claude-settings.ts); what is left out is Claude Code's own */

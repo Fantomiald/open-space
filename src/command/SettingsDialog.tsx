@@ -11,7 +11,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, BellIcon, BranchIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, BellIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -38,7 +38,7 @@ type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
   general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']], ['branches', ['isolate']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -312,6 +312,11 @@ function SettingsEditor() {
           <select aria-labelledby={`setting-${id}-title`} value={draft.isolate} onChange={(e) => change({ isolate: e.target.value as Preferences['isolate'] })}>
             {ISOLATE_MODES.map((mode) => <option key={mode} value={mode}>{rows.isolate.options[mode]}</option>)}
           </select>
+        </Row>
+      );
+      case 'autoPip': return (
+        <Row key={id} id={id} flash={flash} icon={<PipIcon />} title={rows.autoPip.title} hint={rows.autoPip.hint}>
+          <Switch checked={draft.autoPip} onChange={(autoPip) => change({ autoPip })} label={rows.autoPip.title} />
         </Row>
       );
       case 'roots': return (

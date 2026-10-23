@@ -38,7 +38,7 @@ export function BrowserPip() {
   // leaving a session's browser view (for its conversation, another view or another session), its browser floats on
   useEffect(() => useSessions.subscribe((s, before) => {
     const left = before.panelView === 'browser' ? before.selectedId : null;
-    if (!left || (s.panelView === 'browser' && s.selectedId === left) || s.pip?.sessionId === left) return;
+    if (!s.preferences.autoPip || !left || (s.panelView === 'browser' && s.selectedId === left) || s.pip?.sessionId === left) return;
     const lanes = lanesOf(Object.keys(s.browsers), left);
     if (!lanes.length) return;
     const chosen = s.browserLanes[left] ?? 0;

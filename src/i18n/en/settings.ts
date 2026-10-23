@@ -68,7 +68,7 @@ export const settings: Dictionary['settings'] = {
     },
     groups: {
       appearance: 'Display', alerts: 'Alerts', text: 'Threads', reasoning: 'Thinking and answers', autonomy: 'Autonomy', workflows: 'Workflows', together: 'Between sessions',
-      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', places: 'Work folders', life: 'Ambience', crew: 'Crew', files: 'Files',
+      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', life: 'Ambience', crew: 'Crew', files: 'Files',
     },
     inherit: (value: string) => `As in Claude Code (${value})`,
     inheritAction: 'As in Claude Code',
@@ -129,6 +129,7 @@ export const settings: Dictionary['settings'] = {
         hint: 'A new session on a branch and in a folder of its own (a git worktree), away from the others’ files. Open Space merges when you ask.',
         options: { busy: 'When the folder is taken', always: 'Always', never: 'Never' },
       },
+      autoPip: { title: 'Automatic mini window', hint: 'A tester’s browser pops up in a mini window, and comes back when you leave the Browser view. A session checking its own pages just lights up its globe.' },
       roots: { title: 'Allowed folders', hint: 'Check the ones where you keep your projects.' },
       defaultFolder: { title: 'Default folder', hint: 'Shift+N starts a session in it.' },
       theme: { title: 'Office theme', hint: 'The office and the break room get a new setting, furniture included.', options: { office: 'Office', space: 'Space shuttle', tokyo: 'Neon Tokyo', dungeon: 'Dungeon', beach: 'Beach', pirate: 'Pirate ship', forest: 'Treehouse' } },

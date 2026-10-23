@@ -388,7 +388,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0, isolate: 'busy' },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0, isolate: 'busy' },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -525,11 +525,13 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const id = browserId(message.sessionId, message.lane);
         const { [id]: _closed, ...browsers } = s.browsers;
         set({ browsers: message.browser ? { ...browsers, [id]: message.browser } : browsers });
-        // its agent or a tester takes it to a page while it is out of sight: it floats over the office
+        // a tester takes its browser to a page while it is out of sight: it floats over the office. A session's own agent
+        // only lights its globe: it mostly checks the pages it writes, which is not worth a window.
         const session = s.sessions[message.sessionId];
+        const testing = message.lane > 0;
         const dismissed = s.pipDismissed.includes(message.sessionId) && session && isRunning(session);
         const inView = s.selectedId === message.sessionId && s.panelView === 'browser';
-        if (!s.pip && !dismissed && !inView && session && wentToPage(s.browsers[id], message.browser)) get().openPip({ sessionId: message.sessionId, lane: message.lane });
+        if (s.preferences.autoPip && testing && !s.pip && !dismissed && !inView && session && wentToPage(s.browsers[id], message.browser)) get().openPip({ sessionId: message.sessionId, lane: message.lane });
         // its browser closed: nothing left to float
         if (!message.browser && s.pip && browserId(s.pip.sessionId, s.pip.lane) === id) get().closePip();
         break;
