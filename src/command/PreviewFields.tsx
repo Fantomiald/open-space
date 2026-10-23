@@ -1,3 +1,4 @@
+import { Select } from './Select.tsx';
 // To try the room's festivals and hours without waiting for them, from the settings. Nothing is kept: a reload goes back
 // to the real day and time.
 import { FESTIVALS, festivalDay, type Festival } from '../../shared/festivals.ts';
@@ -22,11 +23,11 @@ export function PreviewFestival({ labelledBy }: { labelledBy: string }) {
     setPreview(next === 'today' ? rest : { ...rest, festival: next === 'none' ? null : next as Festival });
   };
   return (
-    <select aria-labelledby={labelledBy} value={value} onChange={(e) => choose(e.target.value)}>
+    <Select aria-labelledby={labelledBy} value={value} onChange={(e) => choose(e.target.value)}>
       <option value="today">{words.today(today ? t.room.festivals[today] : words.todayNone)}</option>
       <option value="none">{words.none}</option>
       {FESTIVALS.map((festival) => <option key={festival} value={festival}>{t.room.festivals[festival]}</option>)}
-    </select>
+    </Select>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Select } from './Select.tsx';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
 import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
@@ -56,12 +57,12 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
         </>
       )}
       {withDefault && roots.length > 1 && (
-        <label className="cp-onboarding__field">
+        <div className="cp-onboarding__field">
           <span>{t.settings.folders.defaultFolder}</span>
-          <select value={roots.includes(defaultFolder) ? defaultFolder : roots[0]} onChange={(e) => onDefaultFolder(e.target.value)}>
+          <Select aria-label={t.settings.folders.defaultFolder} value={roots.includes(defaultFolder) ? defaultFolder : roots[0]} onChange={(e) => onDefaultFolder(e.target.value)}>
             {roots.map((root) => <option key={root} value={root}>{homeRelative(root)}</option>)}
-          </select>
-        </label>
+          </Select>
+        </div>
       )}
     </>
   );
@@ -182,18 +183,18 @@ export function HabitsFields({ habits, onHabits }: { habits: Habits; onHabits: (
   return (
     <>
       <div className="cp-onboarding__grid">
-        <label className="cp-onboarding__field">
+        <div className="cp-onboarding__field">
           <span>{t.settings.habits.model}</span>
-          <select value={habits.model} onChange={(e) => onHabits({ ...habits, model: e.target.value })}>
+          <Select aria-label={t.settings.habits.model} value={habits.model} onChange={(e) => onHabits({ ...habits, model: e.target.value })}>
             {models().map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <label className="cp-onboarding__field">
+          </Select>
+        </div>
+        <div className="cp-onboarding__field">
           <span>{t.settings.habits.permissions}</span>
-          <select value={habits.permissionMode} onChange={(e) => onHabits({ ...habits, permissionMode: e.target.value as Preferences['permissionMode'] })}>
+          <Select aria-label={t.settings.habits.permissions} value={habits.permissionMode} onChange={(e) => onHabits({ ...habits, permissionMode: e.target.value as Preferences['permissionMode'] })}>
             {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
-          </select>
-        </label>
+          </Select>
+        </div>
       </div>
       <label className="cp-crew__check"><input type="checkbox" checked={sound} onChange={toggleSound} /> {t.settings.habits.sound}</label>
       <label className="cp-crew__check"><input type="checkbox" checked={habits.notifications} onChange={(e) => onHabits({ ...habits, notifications: e.target.checked })} /> {t.settings.habits.notifications}</label>
@@ -213,11 +214,11 @@ export const LANGUAGE_NAMES: Record<Language, string> = { fr: 'Français', en: '
 /** The language of the page, of the server's messages and of new agents' instructions. */
 export function LanguagePicker({ language, onLanguage }: { language: Language; onLanguage: (language: Language) => void }) {
   return (
-    <label className="cp-onboarding__field">
+    <div className="cp-onboarding__field">
       <span>{t.settings.language}</span>
-      <select value={language} onChange={(e) => onLanguage(e.target.value as Language)}>
+      <Select aria-label={t.settings.language} value={language} onChange={(e) => onLanguage(e.target.value as Language)}>
         {LANGUAGES.map((option) => <option key={option} value={option} lang={option}>{LANGUAGE_NAMES[option]}</option>)}
-      </select>
-    </label>
+      </Select>
+    </div>
   );
 }

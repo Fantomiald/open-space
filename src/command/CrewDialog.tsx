@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CLOTH_COLORS, DEFAULT_LOOK, FANCY_SKINS, GLASSES_COLORS, HAIR_COLORS, SKIN_TONES } from '../design/people-palette.ts';
 import { JOBS, type Job } from '../../shared/jobs.ts';
 import { BEARD_STYLES, BOTTOMS, EYES, GEAR, GEAR_SLOTS, HAIR_STYLES, HATS, SHOES, TOPS, isCostumePiece, randomLook, type GearSlot, type Look } from '../../shared/look.ts';
@@ -250,14 +250,10 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
           <div className="cp-crew__name" role="group" aria-label={words.birthday}>
             <span>{words.birthday}</span>
             <div className="cp-crew__birthday">
-              <select aria-label={words.day} value={day} onChange={(e) => setBirthday(month || '01', e.target.value)}>
-                <option value="">{words.day}</option>
-                {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((value) => <option key={value} value={value}>{Number(value)}</option>)}
-              </select>
-              <select aria-label={words.month} value={month} onChange={(e) => setBirthday(e.target.value, day || '01')}>
-                <option value="">{words.month}</option>
-                {words.months.map((label, index) => { const value = String(index + 1).padStart(2, '0'); return <option key={value} value={value}>{label}</option>; })}
-              </select>
+              <BirthdaySelect label={words.day} value={day} onChange={(value) => setBirthday(month || '01', value)}
+                options={Array.from({ length: 31 }, (_, index) => ({ value: String(index + 1).padStart(2, '0'), label: String(index + 1) }))} />
+              <BirthdaySelect label={words.month} value={month} onChange={(value) => setBirthday(value, day || '01')}
+                options={words.months.map((label, index) => ({ value: String(index + 1).padStart(2, '0'), label }))} />
             </div>
           </div>
           {jobs && <JobPicker chosen={jobs.chosen} onChange={jobs.onChange} />}
@@ -331,6 +327,50 @@ export function LookEditor({ look, onLook, name, onName, birthday, onBirthday, j
         </div>
       </div>
     </>
+  );
+}
+
+/** The birthday uses the same solid, readable popup as the jobs, instead of a native white Windows list. */
+function BirthdaySelect({ label, value, options, onChange }: {
+  label: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => { setOpen(false); trigger.current?.focus(); }, []);
+  useDismiss(open, box, close);
+  useEffect(() => {
+    if (!open) return;
+    const selected = box.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
+    selected?.focus();
+    selected?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
+  const choices = [{ value: '', label }, ...options];
+  return (
+    <div className="cp-crew__jobs" ref={box}>
+      <button ref={trigger} type="button" className="cp-crew__jobs-button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined}
+        onClick={() => setOpen(!open)} onKeyDown={(event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }}>
+        <span>{choices.find((choice) => choice.value === value)?.label ?? label}</span><ChevronDownIcon />
+      </button>
+      {open && (
+        <div id={id} className="cp-crew__jobs-menu cp-crew__birthday-menu" role="listbox" aria-label={label} onKeyDown={(event) => {
+          if (event.key === 'Tab') { setOpen(false); return; }
+          const buttons = Array.from(box.current!.querySelectorAll<HTMLButtonElement>('[role="option"]'));
+          const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+          const next = event.key === 'ArrowDown' ? (current + 1) % buttons.length : event.key === 'ArrowUp' ? (current - 1 + buttons.length) % buttons.length
+            : event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : -1;
+          if (next >= 0) { event.preventDefault(); buttons[next].focus(); }
+        }}>
+          {choices.map((choice) => (
+            <button key={choice.value} type="button" role="option" aria-selected={choice.value === value} tabIndex={choice.value === value ? 0 : -1}
+              onClick={() => { onChange(choice.value); close(); }}>
+              <span className="cp-crew__jobs-check" aria-hidden="true">{choice.value === value && <CheckIcon />}</span>{choice.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

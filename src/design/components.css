@@ -1001,6 +1001,23 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-crew__birthday { display: flex; gap: var(--space-2); }
 .cp-crew__name input { height: var(--control-height); padding-block: 0; }
 /* the jobs: a field that opens a menu of checkboxes over what is under it */
+.cp-select { min-width: 0; width: 100%; }
+.cp-select__button {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; height: var(--control-height); padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); text-align: left; cursor: pointer;
+}
+.cp-select__button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-select__button[aria-expanded='true'] { anchor-name: --cp-select-anchor; border-color: var(--color-accent); }
+.cp-select__menu {
+  position: fixed; position-anchor: --cp-select-anchor; inset: auto; top: anchor(bottom); left: anchor(left); position-try-fallbacks: flip-block, flip-inline;
+  margin: var(--space-1) 0; min-width: anchor-size(width); max-width: min(36rem, calc(100vw - 2rem)); max-height: min(20rem, 50vh); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-1); background: var(--menu-solid); color: var(--color-text); border: var(--border-width) solid var(--glass-edge); border-radius: var(--radius-lg); box-shadow: var(--glass-shadow);
+}
+.cp-select__menu:popover-open { display: grid; }
+.cp-select__menu button { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-text); text-align: left; cursor: pointer; }
+.cp-select__menu button:hover, .cp-select__menu button:focus-visible { background: var(--color-surface); }
+.cp-select__menu button[aria-selected='true'] { background: var(--color-accent-soft); }
+.cp-select__check { display: grid; place-items: center; width: 1rem; height: 1rem; flex: none; }
 .cp-crew__jobs { position: relative; }
 .cp-crew__jobs-button {
   display: flex; align-items: center; gap: var(--space-2); width: 100%; height: var(--control-height); padding: 0 var(--space-2) 0 var(--space-3);
@@ -1020,8 +1037,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-crew__jobs-check { display: grid; place-items: center; width: 1rem; height: 1rem; flex: none; border: var(--border-width) solid var(--color-border-strong); border-radius: 4px; }
 .cp-crew__jobs-menu button[aria-checked='true'] .cp-crew__jobs-check { border-color: var(--color-accent); background: var(--color-accent); color: var(--color-accent-text); }
 .cp-crew__jobs-check .cp-icon { width: 12px; height: 12px; }
-.cp-crew__birthday select:first-child { flex: 0 0 5.5rem; }
-.cp-crew__birthday select { flex: 1; min-width: 0; height: var(--control-height); padding-block: 0; padding: var(--space-2); border-radius: var(--radius-md); border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); font: inherit; }
+.cp-crew__birthday > .cp-crew__jobs { flex: 1; min-width: 0; }
+.cp-crew__birthday > .cp-crew__jobs:first-child { flex: 0 0 5.5rem; }
+.cp-crew__birthday-menu { max-height: min(16rem, 45vh); overflow-y: auto; overscroll-behavior: contain; }
+.cp-crew__birthday > .cp-crew__jobs:last-child .cp-crew__birthday-menu { min-width: 11rem; left: auto; }
+.cp-crew__birthday-menu button[aria-selected='true'] { background: var(--color-accent-soft); }
 
 /* ── The first start ── */
 .cp-onboarding { min-height: 100%; overflow: auto; display: grid; place-items: center; padding: var(--space-6) max(16px, var(--space-4)); }

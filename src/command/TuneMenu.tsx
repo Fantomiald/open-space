@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useId, useRef, useState } from 'react';
+import { Select } from './Select.tsx';
 import { EFFORTS, PERMISSION_MODES, type Effort, type PermissionMode, type TuneChange } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
@@ -58,24 +59,24 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
       )}
       {open && (
         <div className="cp-tune__panel" id={panelId} role="group" aria-label={words.title}>
-          <label className="cp-popover-field">
+          <div className="cp-popover-field">
             <span>{words.model}</span>
-            <select value={chosen} onChange={(e) => onChange({ model: e.target.value === 'default' ? '' : e.target.value })}>
+            <Select aria-label={words.model} value={chosen} onChange={(e) => onChange({ model: e.target.value === 'default' ? '' : e.target.value })}>
               {options.map((choice) => <option key={choice.value} value={choice.value}>{shortModelName(choice)}</option>)}
-            </select>
-          </label>
+            </Select>
+          </div>
           {steps.length > 1 && (
             <label className="cp-popover-field cp-effort" style={fill}>
               <span>{words.effort} <output>{effortName(effort)}</output></span>
               <input type="range" min={0} max={steps.length - 1} step={1} value={steps.indexOf(effort)} onChange={(e) => onChange({ effort: steps[Number(e.target.value)] })} />
             </label>
           )}
-          <label className="cp-popover-field">
+          <div className="cp-popover-field">
             <span>{words.permissions}</span>
-            <select value={tuning.permissionMode} title={modeLabel(tuning.permissionMode)} onChange={(e) => onChange({ permissionMode: e.target.value as PermissionMode })}>
+            <Select aria-label={words.permissions} value={tuning.permissionMode} title={modeLabel(tuning.permissionMode)} onChange={(e) => onChange({ permissionMode: e.target.value as PermissionMode })}>
               {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
-            </select>
-          </label>
+            </Select>
+          </div>
           {isolation && (
             <div className="cp-popover-field">
               <span id={`${panelId}-folder`}>{t.branches.tune.folder}</span>

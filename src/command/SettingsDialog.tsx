@@ -1,3 +1,4 @@
+import { Select } from './Select.tsx';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
@@ -194,16 +195,16 @@ function SettingsEditor() {
     switch (id) {
       case 'language': return (
         <Row key={id} id={id} flash={flash} icon={<LanguageIcon />} title={rows.language.title} hint={rows.language.hint}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.language ?? language} onChange={(e) => change({ language: e.target.value as Language })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.language ?? language} onChange={(e) => change({ language: e.target.value as Language })}>
             {LANGUAGES.map((option) => <option key={option} value={option} lang={option}>{LANGUAGE_NAMES[option]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'timeFormat': return (
         <Row key={id} id={id} flash={flash} icon={<ClockIcon />} title={rows.timeFormat.title} hint={rows.timeFormat.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.timeFormat} onChange={(e) => change({ timeFormat: e.target.value as Preferences['timeFormat'] })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.timeFormat} onChange={(e) => change({ timeFormat: e.target.value as Preferences['timeFormat'] })}>
             {TIME_FORMATS.map((format) => <option key={format} value={format}>{rows.timeFormat.options[format]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'reduceMotion': return (
@@ -223,10 +224,10 @@ function SettingsEditor() {
       );
       case 'effort': return (
         <Row key={id} id={id} flash={flash} icon={<GaugeIcon />} title={rows.effort.title} hint={rows.effort.hint}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.effort} onChange={(e) => change({ effort: e.target.value as Preferences['effort'] })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.effort} onChange={(e) => change({ effort: e.target.value as Preferences['effort'] })}>
             <option value="">{rows.effort.auto}</option>
             {EFFORTS.map((effort) => <option key={effort} value={effort}>{capitalized(t.composer.tune.efforts[effort])}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'outputStyle': {
@@ -234,10 +235,10 @@ function SettingsEditor() {
         const styles = draft.claude.outputStyle && !outputStyles.includes(draft.claude.outputStyle) ? [...outputStyles, draft.claude.outputStyle] : outputStyles;
         return (
           <Row key={id} id={id} flash={flash} icon={<NotesIcon />} title={rows.outputStyle.title} hint={rows.outputStyle.hint} config={config}>
-            <select aria-labelledby={`setting-${id}-title`} value={draft.claude.outputStyle ?? ''} onChange={(e) => setClaude('outputStyle', e.target.value || undefined)}>
+            <Select aria-labelledby={`setting-${id}-title`} value={draft.claude.outputStyle ?? ''} onChange={(e) => setClaude('outputStyle', e.target.value || undefined)}>
               <option value="">{words.inherit(styleName(claudeDefaults.outputStyle))}</option>
               {styles.map((style) => <option key={style} value={style}>{styleName(style)}</option>)}
-            </select>
+            </Select>
           </Row>
         );
       }
@@ -252,25 +253,25 @@ function SettingsEditor() {
       );
       case 'idleCompact': return (
         <Row key={id} id={id} flash={flash} icon={<TimerIcon />} title={rows.idleCompact.title} hint={rows.idleCompact.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.idleCompact} onChange={(e) => change({ idleCompact: Number(e.target.value) })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.idleCompact} onChange={(e) => change({ idleCompact: Number(e.target.value) })}>
             {IDLE_COMPACT_MINUTES.map((minutes) => <option key={minutes} value={minutes}>{minutes ? rows.idleCompact.after(minutes) : rows.idleCompact.off}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'workflowSize': return (
         <Row key={id} id={id} flash={flash} icon={<CrewIcon />} title={rows.workflowSize.title} hint={rows.workflowSize.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.claude.workflowSizeGuideline ?? ''} onChange={(e) => setClaude('workflowSizeGuideline', (e.target.value || undefined) as ClaudeSettings['workflowSizeGuideline'])}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.claude.workflowSizeGuideline ?? ''} onChange={(e) => setClaude('workflowSizeGuideline', (e.target.value || undefined) as ClaudeSettings['workflowSizeGuideline'])}>
             <option value="">{words.inherit(rows.workflowSize.options[claudeDefaults.workflowSizeGuideline ?? 'medium'])}</option>
             {WORKFLOW_SIZES.map((size) => <option key={size} value={size}>{rows.workflowSize.options[size]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'inbound': return (
         <Row key={id} id={id} flash={flash} icon={<InboxIcon />} title={rows.inbound.title} hint={rows.inbound.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.claude.crossSessionInbound ?? ''} onChange={(e) => setClaude('crossSessionInbound', (e.target.value || undefined) as ClaudeSettings['crossSessionInbound'])}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.claude.crossSessionInbound ?? ''} onChange={(e) => setClaude('crossSessionInbound', (e.target.value || undefined) as ClaudeSettings['crossSessionInbound'])}>
             <option value="">{words.inherit(rows.inbound.options[claudeDefaults.crossSessionInbound ?? 'default'])}</option>
             {INBOUND_POLICIES.map((policy) => <option key={policy} value={policy}>{rows.inbound.options[policy]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'sound': return (
@@ -290,16 +291,16 @@ function SettingsEditor() {
       );
       case 'model': return (
         <Row key={id} id={id} flash={flash} icon={<SparklesIcon />} title={rows.model.title} hint={rows.model.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.model} onChange={(e) => change({ model: e.target.value })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.model} onChange={(e) => change({ model: e.target.value })}>
             {models().map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'permissions': return (
         <Row key={id} id={id} flash={flash} icon={<TuneIcon />} title={rows.permissions.title} hint={rows.permissions.hint} config={config}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.permissionMode} onChange={(e) => change({ permissionMode: e.target.value as Preferences['permissionMode'] })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.permissionMode} onChange={(e) => change({ permissionMode: e.target.value as Preferences['permissionMode'] })}>
             {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'agentNote': return (
@@ -309,9 +310,9 @@ function SettingsEditor() {
       );
       case 'isolate': return (
         <Row key={id} id={id} flash={flash} icon={<BranchIcon />} title={rows.isolate.title} hint={rows.isolate.hint}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.isolate} onChange={(e) => change({ isolate: e.target.value as Preferences['isolate'] })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.isolate} onChange={(e) => change({ isolate: e.target.value as Preferences['isolate'] })}>
             {ISOLATE_MODES.map((mode) => <option key={mode} value={mode}>{rows.isolate.options[mode]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'autoPip': return (
@@ -329,16 +330,16 @@ function SettingsEditor() {
       );
       case 'defaultFolder': return (
         <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.defaultFolder.title} hint={rows.defaultFolder.hint}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.roots.includes(draft.defaultFolder) ? draft.defaultFolder : draft.roots[0]} onChange={(e) => change({ defaultFolder: e.target.value })} disabled={draft.roots.length < 2}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.roots.includes(draft.defaultFolder) ? draft.defaultFolder : draft.roots[0]} onChange={(e) => change({ defaultFolder: e.target.value })} disabled={draft.roots.length < 2}>
             {draft.roots.map((root) => <option key={root} value={root}>{homeRelative(root)}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'theme': return (
         <Row key={id} id={id} flash={flash} icon={<PaletteIcon />} title={rows.theme.title} hint={rows.theme.hint}>
-          <select aria-labelledby={`setting-${id}-title`} value={draft.theme} onChange={(e) => change({ theme: e.target.value as RoomTheme })}>
+          <Select aria-labelledby={`setting-${id}-title`} value={draft.theme} onChange={(e) => change({ theme: e.target.value as RoomTheme })}>
             {ROOM_THEMES.map((theme) => <option key={theme} value={theme}>{rows.theme.options[theme]}</option>)}
-          </select>
+          </Select>
         </Row>
       );
       case 'festivals': return (
