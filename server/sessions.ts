@@ -557,14 +557,14 @@ export class SessionManager {
 
   /** The worktree is there: what git does not carry is copied, the session moves in, and its queue leaves. */
   private async settleWorktree(session: Session, repo: Omit<FolderRepo, 'merged'>, root: string, branch: string, base: string, home: string) {
-    const copied = await copyIncluded(repo.root, root).catch(() => ({ copied: 0, failed: 1, skipped: false }));
+    const copied = await copyIncluded(repo.root, root).catch(() => ({ copied: 0, failed: 1 }));
     // switched off while its folder was made: the folder goes, and the branch too when it holds nothing of its own
     if (this.sessions.get(session.id) !== session) {
       await removeWorktree(repo.root, root, false).catch((error) => this.deps.log(`cannot remove the worktree ${root}`, error));
       await deleteBranch(repo.root, branch, base).catch((error) => this.deps.log(`cannot delete the branch ${branch}`, error));
       return;
     }
-    if (copied.failed || copied.skipped) session.announce({ k: 'note', text: st.worktree.notCopied(session.snapshot().name) });
+    if (copied.failed) session.announce({ k: 'note', text: st.worktree.notCopied(session.snapshot().name) });
     const worktree: WorktreeInfo = { branch, base, root, mainRoot: repo.root, home, canPr: await canOpenPullRequest(repo.root).catch(() => false) };
     const inside = path.join(root, repo.sub);
     const cwd = existsSync(inside) ? inside : root;

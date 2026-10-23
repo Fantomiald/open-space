@@ -209,14 +209,15 @@ export async function includedEntries(mainRoot: string): Promise<string[]> {
   return entries.filter((entry) => !isInside(`/${entry.replace(/\/$/, '')}`, `/${WORKTREES_FOLDER}`) && !entry.startsWith('.git/'));
 }
 
-export interface CopyResult { copied: number; failed: number; skipped: boolean }
+export interface CopyResult { copied: number; failed: number }
 
 /**
- * APFS clones on Mac; independent ordinary copies elsewhere (or when cloning is unavailable).
+ * Copies the included entries into the new worktree: as APFS clones on a Mac (`cp -c`: at once, without taking room;
+ * when a clone fails, nothing is copied and the session installs what it needs), as plain copies elsewhere.
  */
-export async function copyIncluded(mainRoot: string, worktreeRoot: string, platform = process.platform): Promise<CopyResult> {
+export async function copyIncluded(mainRoot: string, worktreeRoot: string): Promise<CopyResult> {
   const entries = await includedEntries(mainRoot);
-  if (!entries.length) return { copied: 0, failed: 0, skipped: false };
+  if (!entries.length) return { copied: 0, failed: 0 };
   let copied = 0, failed = 0;
   for (const entry of entries) {
     const relative = entry.replace(/\/$/, '');
@@ -224,19 +225,13 @@ export async function copyIncluded(mainRoot: string, worktreeRoot: string, platf
     if (existsSync(target)) continue;
     await mkdir(path.dirname(target), { recursive: true });
     const source = path.join(mainRoot, relative);
-    let ok = platform === 'darwin' && await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', source, target], { timeout: 120_000 }, (error) => resolve(!error)));
-    if (!ok) {
-      try {
-        if (platform === 'darwin') await rm(target, { recursive: true, force: true });
-        // No hardlinks: a session editing its .env or dependencies must not change the main checkout.
-        await cp(source, target, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true });
-        ok = true;
-      } catch { /* reported below; remove any incomplete copy */ }
-    }
+    const ok = process.platform === 'darwin'
+      ? await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', source, target], { timeout: 120_000 }, (error) => resolve(!error)))
+      : await cp(source, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true }).then(() => true, () => false);
     if (ok) copied++;
     else { failed++; await rm(target, { recursive: true, force: true }); }
   }
-  return { copied, failed, skipped: false };
+  return { copied, failed };
 }
 
 /**

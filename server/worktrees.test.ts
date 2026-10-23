@@ -78,7 +78,6 @@ test('what is copied: .env files and node_modules / Pods folders, or what .workt
     const copied = await copyIncluded(root, made.root);
     assert.equal(copied.failed, 0);
     assert.equal(copied.copied, 5);
-    assert.equal(copied.skipped, false);
     assert.equal(readFileSync(path.join(made.root, '.env'), 'utf8'), 'SECRET=1\n');
     assert.ok(existsSync(path.join(made.root, 'mobile/node_modules/y.js')));
     assert.equal(sh(made.root, 'status', '--porcelain'), '');
@@ -86,7 +85,7 @@ test('what is copied: .env files and node_modules / Pods folders, or what .workt
     write(path.join(made.root, 'mobile/node_modules/y.js'), 'modified\n');
     assert.equal(readFileSync(path.join(root, '.env'), 'utf8'), 'SECRET=1\n');
     assert.equal(readFileSync(path.join(root, 'mobile/node_modules/y.js'), 'utf8'), 'y\n');
-    assert.deepEqual(await copyIncluded(root, made.root), { copied: 0, failed: 0, skipped: false }, 'existing files are never overwritten');
+    assert.deepEqual(await copyIncluded(root, made.root), { copied: 0, failed: 0 }, 'existing files are never overwritten');
   }
   // a .worktreeinclude says what to take, among what git ignores (a tracked file or one git does not ignore goes with the branch)
   write(path.join(root, '.worktreeinclude'), '.env\nscratch.log\napp.ts\nmobile/node_modules/\n');
