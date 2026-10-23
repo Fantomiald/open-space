@@ -26,6 +26,7 @@ import { runningShells } from './state/feed.ts';
 import { isRunning } from './state/labels.ts';
 import { selectAttentionCount, useSessions } from './state/sessions.ts';
 import { tabTitle } from './state/queue.ts';
+import { useReducedMotion } from './lib/motion.ts';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -45,7 +46,7 @@ export function App() {
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
-  const reduceMotion = useSessions((s) => s.preferences.reduceMotion);
+  const reduceMotion = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
   useEffect(() => { document.documentElement.dataset.motion = reduceMotion ? 'reduced' : 'full'; }, [reduceMotion]);

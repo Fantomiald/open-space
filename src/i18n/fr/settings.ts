@@ -1,5 +1,6 @@
 import type { Job } from '../../../shared/jobs.ts';
 import { plural } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
 
 export const settings = {
   noServer: 'Pas de connexion au serveur : pas encore enregistré.',
@@ -103,7 +104,7 @@ export const settings = {
       notifications: { title: 'Notifications macOS', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },
       copyOnSelect: { title: 'Copier à la sélection', hint: 'Le texte que tu sélectionnes est copié tout de suite, comme dans un terminal.' },
       timeFormat: { title: 'Format de l’heure', hint: 'Dans les fils et les relevés.', options: { auto: 'Selon la langue', '24h': '24 h (14:05)', '12h': '12 h (2:05 PM)' } },
-      reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page, même si macOS les laisse.' },
+      reduceMotion: { title: 'Réduire les animations', hint: IS_WINDOWS ? 'Réduit les mouvements de l’interface et du décor. Les animations désactivées dans Windows restent désactivées ici.' : 'Réduit les mouvements de l’interface et du décor, en complément des préférences d’accessibilité du système.' },
       timestamps: { title: 'Heure des messages', hint: 'L’heure à côté de chaque message des fils.' },
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },

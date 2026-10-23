@@ -1,4 +1,5 @@
 import { plural, type Dictionary } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
 
 export const settings: Dictionary['settings'] = {
   noServer: 'No connection to the server: not saved yet.',
@@ -100,7 +101,7 @@ export const settings: Dictionary['settings'] = {
       notifications: { title: 'macOS notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
       copyOnSelect: { title: 'Copy on select', hint: 'Text you select is copied at once, like in a terminal.' },
       timeFormat: { title: 'Time format', hint: 'In the threads and the usage view.', options: { auto: 'From the language', '24h': '24-hour (14:05)', '12h': '12-hour (2:05 PM)' } },
-      reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations, even when macOS keeps them.' },
+      reduceMotion: { title: 'Reduce motion', hint: IS_WINDOWS ? 'Reduces interface and scenery motion. Animations disabled in Windows stay disabled here.' : 'Reduces interface and scenery motion, in addition to the system’s accessibility preferences.' },
       timestamps: { title: 'Message timestamps', hint: 'The time next to each message in the threads.' },
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
