@@ -1,5 +1,9 @@
 # Versions
 
+## 1.16.4
+
+- Éteindre une session qui avait ouvert un navigateur n'affiche plus l'erreur « ENOTEMPTY: directory not empty » : son profil est effacé une fois Chrome fermé, plus pendant qu'il se ferme.
+
 ## 1.16.3
 
 - Le tag ne s'affiche plus deux fois : à côté du nom dans les petites fenêtres, en dessous dans les grandes.
