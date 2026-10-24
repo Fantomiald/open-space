@@ -1,5 +1,9 @@
 # Versions
 
+## 1.17.1
+
+- Quand la limite de session est atteinte, la compaction des longues conversations au repos ne se relance plus toutes les 30 minutes et n'écrit plus « Error during compaction » dans le fil : elle reprend après le premier tour qui se termine bien.
+
 ## 1.17.0
 
 - Open Space tourne sous Windows, grâce à Quentin : un installateur `.exe` sur la page des versions, qui se met à jour tout seul.
