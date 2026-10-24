@@ -11,6 +11,7 @@ import { SettingsDialog } from './command/SettingsDialog.tsx';
 import { Header } from './command/Header.tsx';
 import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
+import { activeProject, projectsOf } from './state/projects.ts';
 import { RoomView } from './room/RoomView.tsx';
 import { SessionList } from './command/SessionList.tsx';
 import { Sky, refreshFrost } from './room/Sky.tsx';
@@ -157,9 +158,9 @@ export function App() {
       }
       if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
         e.preventDefault();
-        // Shift+N: a session at once, in the default folder with the default model and mode, opened to write to it; N: the launcher's field
+        // Shift+N: a session at once, in the project picked in the header (else the default folder) with the default model and mode, opened to write to it; N: the launcher's field
         const { preferences } = state;
-        if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
+        if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, activeProject(projectsOf(Object.values(state.sessions), state.seen), state.project) || preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
         else state.openNewSession({});
       }
     };

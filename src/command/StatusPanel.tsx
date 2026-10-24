@@ -10,7 +10,9 @@ import { useNow } from '../lib/useNow.ts';
 import { roomSessions } from '../room/cast.ts';
 import { todoLabel } from '../state/labels.ts';
 import { attentionQueue, otherSessions } from '../state/queue.ts';
+import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useProjects } from '../state/useProjects.ts';
 import { ChevronDownIcon, ChevronUpIcon, CompactIcon } from './Icons.tsx';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
@@ -60,10 +62,12 @@ export function StatusPanel() {
     setFoldedGroups(next);
   };
   const groupProps = (group: Group, count: number) => ({ group, count, folded: foldedGroups.includes(group), onFold: () => foldGroup(group) });
-  const waiting = useMemo(() => attentionQueue(Object.values(sessions), seen), [sessions, seen]);
-  const working = useMemo(() => otherSessions(Object.values(sessions), seen).working, [sessions, seen]);
+  const { project } = useProjects();
+  const shown = useMemo(() => Object.values(sessions).filter((session) => inProject(session, project)), [sessions, project]);
+  const waiting = useMemo(() => attentionQueue(shown, seen), [shown, seen]);
+  const working = useMemo(() => otherSessions(shown, seen).working, [shown, seen]);
   // the office's idle ones (not the resting ones, in the break room), the most recently ready first
-  const ready = useMemo(() => [...roomSessions(Object.values(sessions), seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [sessions, seen]);
+  const ready = useMemo(() => [...roomSessions(shown, seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [shown, seen]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);
   if (!waiting.length && !working.length && !ready.length) return null;

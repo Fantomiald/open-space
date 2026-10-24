@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions } from '../room/cast.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
+import { useProjects } from '../state/useProjects.ts';
 import { CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
@@ -63,6 +64,7 @@ export function Header() {
           </button>
         </div>
       </div>
+      <ProjectFilter />
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
@@ -81,5 +83,34 @@ export function Header() {
         </button>
       </div>
     </header>
+  );
+}
+
+/** One pill per folder the sessions work in, once there are two or more: a click keeps that project's sessions in sight, a second one shows them all. */
+function ProjectFilter() {
+  const { projects, project } = useProjects();
+  const setProject = useSessions((s) => s.setProject);
+  // the pill scrolls when the projects overflow it: the one picked stays in sight
+  const pill = useRef<HTMLDivElement>(null);
+  useEffect(() => { pill.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [project, projects.length]);
+  if (projects.length < 2) return null;
+  const words = t.common.header;
+  const total = projects.reduce((sum, { count }) => sum + count, 0);
+  return (
+    <div className="cp-header__projects" ref={pill}>
+      <div className="cp-segmented" role="group" aria-label={words.projects}>
+        <button type="button" aria-pressed={project === ''} title={words.allProjectsTitle} onClick={() => setProject('')}>
+          {words.allProjects}<span className="cp-header__room-count">{total}</span>
+        </button>
+        {projects.map(({ folder, name, count, waiting }) => (
+          <button
+            key={folder} type="button" aria-pressed={project === folder} title={words.projectTitle(folder, waiting)}
+            onClick={() => setProject(project === folder ? '' : folder)}
+          >
+            {name}<span className="cp-header__room-count" data-waiting={waiting}>{count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

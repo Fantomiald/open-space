@@ -1,5 +1,11 @@
 # Versions
 
+## 1.18.0
+
+- Un filtre par projet dans l'en-tête, dès que des sessions travaillent dans au moins deux dossiers : un clic sur un projet ne garde que ses sessions dans la liste Focus et le panneau État, les autres restent dans la salle en gris, sans nom. Un projet où une session t'attend a son compteur en orange.
+- Une nouvelle session part dans le projet sélectionné. Si tu en lances une ailleurs, le filtre passe sur son projet.
+- La radio de l'en-tête n'a plus de curseur de volume, pour laisser la place à l'usage.
+
 ## 1.17.1
 
 - Quand la limite de session est atteinte, la compaction des longues conversations au repos ne se relance plus toutes les 30 minutes et n'écrit plus « Error during compaction » dans le fil : elle reprend après le premier tour qui se termine bien.

@@ -50,6 +50,8 @@ export interface FrameOptions {
   hoveredThing: HoveredThing;
   /** something new waits in the numbers file: a badge over the numbers object */
   metricsBadge: boolean;
+  /** the sessions of the projects the header's filter leaves out: their people are ghosts, grey and without a tag */
+  ghostIds: ReadonlySet<string>;
   /** the person under the pointer (a person id, or PLAYER_ID): their name tag shows in full, the others are faint */
   hoveredId: string | null;
   /** the festival the room is dressed for and who it is for (see festivalDay), and which room it is */
@@ -404,6 +406,9 @@ const HEAD_STEP = 7;
 const SHOWN_AGENTS = 3;
 /** A name tag away from the pointer and from the open session, and not calling the user: there to read, without hiding the room. */
 const FAINT_TAG_ALPHA = 0.7;
+/** the people of the projects left out by the header's filter: still at their desk, but dark grey and a little see-through, so they draw no eye */
+const GHOST_FILTER = 'grayscale(1) brightness(0.4)';
+const GHOST_ALPHA = 0.7;
 /** room pixels between the top of a head and its name tag */
 const TAG_LIFT = 5;
 /** the room a hairline takes between two parts of a tag, with the gaps on both sides */
@@ -604,13 +609,22 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const seated = characters.filter((character) => character.phase === 'seated');
   const occupied = new Set(seated.map((character) => character.seat));
   const isSelected = (character: Character) => options.openSessionIds.includes(character.person.sessionId);
+  const isGhost = (character: Character) => options.ghostIds.has(character.person.sessionId);
+  const ghostly = (character: Character, paint: (on: Context) => void) => (on: Context) => {
+    if (!isGhost(character)) return paint(on);
+    on.filter = GHOST_FILTER;
+    on.globalAlpha = GHOST_ALPHA;
+    paint(on);
+    on.filter = 'none';
+    on.globalAlpha = 1;
+  };
   const layers: Layer[] = [];
   const bossAtDesk = scene.playerSpot?.atDesk === true;
   for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: (on) => furniture.draw(on, piece) });
   for (const character of characters) {
     const pose = characterPose(character, options);
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
-    layers.push({ depth: depthOf(character.position), paint: (on) => paintPerson(on, sprites, character.person.id, character, pose, isSelected(character), lift) });
+    layers.push({ depth: depthOf(character.position), paint: ghostly(character, (on) => paintPerson(on, sprites, character.person.id, character, pose, isSelected(character), lift)) });
   }
   // the keys of a desk's laptop that show, right of its lid, where the visible hand of whoever types there rests
   for (const piece of layout.furniture) {
@@ -621,7 +635,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (pose.gesture !== 'typing' || pose.direction !== 'down-left') continue;
     const feet = raise(toScreen(typist.position), scene.floor.seatLift(typist.seat));
     const hand = raise(toScreen({ x: piece.x + 0.96, y: piece.y + 0.22 }), 12 * ART_SCALE);
-    layers.push({ depth: furnitureDepth(piece) + 0.01, paint: (on) => sprites.drawTypingHand(on, typist.person.id, feet, hand, pose.step) });
+    layers.push({ depth: furnitureDepth(piece) + 0.01, paint: ghostly(typist, (on) => sprites.drawTypingHand(on, typist.person.id, feet, hand, pose.step)) });
   }
   // those still outside, behind the first of two, are not in the room yet
   const visitors = [...(scene.visits?.visitors.values() ?? [])].filter((visitor) => visitor.outside <= 0);
@@ -663,6 +677,8 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   context.textAlign = 'center';
   const tags: { tag: NameTag; x: number; bottom: number; faint: boolean }[] = [];
   for (const character of characters) {
+    // a ghost says nothing: no tag, no state, no Z's, until the pointer is on it
+    if (isGhost(character) && options.hoveredId !== character.person.id) continue;
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
     const feet = raise(toScreen(character.position), lift);
     const head = feet.y - sprites.height(characterPose(character, options), character.person.id);

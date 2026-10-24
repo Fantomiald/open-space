@@ -29,28 +29,33 @@ h1, h2, p { margin: 0; }
 /* the pixel sky behind everything (src/room/sky.ts), over the plain gradient it stands in for */
 .cp-sky { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
 /* what floats over the room: frosted glass (see --glass-surface in tokens.css) */
-.cp-header__where, .cp-header__windows, .cp-header__tools, .cp-radio, .cp-status {
+.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools, .cp-radio, .cp-status {
   background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow);
 }
 /*
  * The header: pills floating over the sky, one height, one gap (--gutter, also the margin of the panel and the status
  * card). Left: the connection when it is lost, the rooms and focus mode; then how the windows are laid out; then the
- * radio; right: the tools.
+ * projects (when the sessions work in two folders or more), the radio; right: the tools.
  */
 .cp-header {
   position: relative; z-index: 2;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gutter);
   padding: var(--gutter) var(--gutter) 0;
 }
-.cp-header__where, .cp-header__windows, .cp-header__tools, .cp-radio { height: var(--pill-height); border-radius: 999px; display: flex; align-items: center; flex-wrap: nowrap; }
+.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools, .cp-radio { height: var(--pill-height); border-radius: 999px; display: flex; align-items: center; flex-wrap: nowrap; }
 /* inside a pill, controls are --control-height high and sit as far from its edge top and bottom as at its ends */
-.cp-header__where, .cp-header__windows, .cp-header__tools { gap: var(--space-1); padding: 0 var(--pill-inset); }
+.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools { gap: var(--space-1); padding: 0 var(--pill-inset); }
 .cp-header__where { gap: var(--space-2); }
 .cp-header__where:has(.cp-header__signal) { padding-left: var(--space-3); }
 .cp-header :is(.cp-button, .cp-icon-button, .cp-quota__trigger) { height: var(--control-height); padding-top: 0; padding-bottom: 0; }
 .cp-header .cp-icon-button { width: var(--control-height); }
-:is(.cp-header__where, .cp-header__windows) .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
-:is(.cp-header__where, .cp-header__windows) .cp-segmented button { height: 100%; }
+:is(.cp-header__where, .cp-header__projects, .cp-header__windows) .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
+:is(.cp-header__where, .cp-header__projects, .cp-header__windows) .cp-segmented button { height: 100%; }
+/* the projects: as many as there are folders, so the pill scrolls sideways past what fits rather than pushing the tools down */
+.cp-header__projects { flex: 0 1 auto; min-width: 8rem; max-width: 20rem; overflow-x: auto; scrollbar-width: none; }
+.cp-header__projects .cp-segmented { flex: none; }
+.cp-header__projects .cp-segmented button { display: inline-flex; align-items: center; gap: var(--space-1); padding-inline: var(--space-3); white-space: nowrap; }
+.cp-header__room-count[data-waiting='true'] { color: var(--tone-permission); font-weight: var(--weight-bold); }
 /* between the two rooms and focus mode: two ways of looking, not three rooms. Same margins whichever is pressed, so the pill keeps its width. */
 .cp-header__divider { align-self: center; flex: none; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
 /* the windows can only be moved on a wide screen: the switch between grid and free windows shows there only */
@@ -116,8 +121,9 @@ h1, h2, p { margin: 0; }
   .cp-header__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (max-width: 40rem) {
-  /* first row: the rooms and the tools; the radio gets the second row to itself */
+  /* first row: the rooms and the tools; the projects, then the radio, get a row each */
   .cp-header { gap: var(--space-2); }
+  .cp-header .cp-header__projects { order: 1; flex: 1 1 100%; max-width: none; }
   .cp-header .cp-radio { order: 1; flex: 1 1 100%; }
   .cp-header__tools .cp-meter, .cp-quota__label { display: none; }
   .cp-quota__details { left: 0; right: auto; width: min(18rem, calc(100vw - 2 * var(--space-4))); }
@@ -1480,6 +1486,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-radio[data-playing='true'] .cp-radio__bars span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes cp-bars { 0%, 100% { transform: scaleY(0.3); } 50% { transform: none; } }
 .cp-radio__volume input { width: 4.5rem; accent-color: var(--color-accent); }
+/* in the header, the volume stays the computer's: the room goes to the usage and the projects */
+.cp-header .cp-radio__volume { display: none; }
 /* the cover of what a music app plays, in place of the bars */
 .cp-radio__art { flex: none; width: 1.75rem; height: 1.75rem; border-radius: var(--radius-sm); object-fit: cover; }
 /* the label opens the sources (radio, Music, Spotify): a segmented pill under the radio */

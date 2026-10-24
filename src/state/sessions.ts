@@ -25,6 +25,7 @@ import { afterEvent, withPartial, type Partials } from './partials.ts';
 import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowMode, type WindowsPreference } from './windows.ts';
 import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
+import { projectOf } from './projects.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
 
 /** The open windows, kept in this browser so a reload finds them as they were. */
@@ -166,6 +167,8 @@ interface CommandPostState {
   /** the mode asked for in the header, which the stack applies (it knows where the windows are on the screen) */
   windowModeRequest: WindowMode | null;
   view: View;
+  /** the folder whose sessions the header's filter keeps in sight ('' = all): the others are ghosts in the room, out of the list */
+  project: string;
   /** false until the user changes room: they then come in through the door instead of sitting at their desk */
   enteredThroughDoor: boolean;
   /** the user's settings (kept by the server) */
@@ -260,6 +263,7 @@ interface CommandPostState {
   /** the user is looking at this session: what it shows now is no longer news */
   markSeen: (sessionId: string) => void;
   setView: (view: View) => void;
+  setProject: (project: string) => void;
   toggleNotifications: () => void;
   toggleSound: () => void;
   openPalette: (open: boolean, query?: string) => void;
@@ -387,6 +391,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   windowModeRequest: null,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
   view: (['repos', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
+  project: readPreference('project', ''),
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
@@ -455,6 +460,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           // a new session with several open joins them when there is room, else takes the place of the one in use
           // in focus mode it opens where the launcher's window was (the same place in the grid) and that window closes
           set({ awaitingNew: false, launcherOpen: false });
+          // started in another project than the one in sight: the filter follows it, so it does not arrive as a ghost
+          const project = projectOf(message.session);
+          if (s.project && s.project !== project) get().setProject(project);
           const fits = s.openIds.length > 1 && addTo(s.columns, message.session.id, maxColumnsIn(s.view), tilingOf(s.view));
           if (fits) get().toggleOpen(message.session.id);
           else get().show(message.session.id);
@@ -739,6 +747,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ seen });
   },
 
+  setProject: (project) => {
+    writePreference('project', project);
+    set({ project });
+  },
   setView: (view) => {
     const s = get();
     writePreference('view', view);

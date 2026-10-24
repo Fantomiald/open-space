@@ -3,6 +3,7 @@ import { BRANCH_PREFIX, workSlug } from '../../shared/worktrees.ts';
 import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
 import { defaultFolder, folderName, formatAgo, homeRelative } from '../lib/format.ts';
 import { availability, stillFree } from '../state/availability.ts';
+import { useProjects } from '../state/useProjects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { branchPreview, isolationOffer, occupants } from '../state/worktrees.ts';
 import { BranchName } from './BranchCard.tsx';
@@ -53,7 +54,10 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const [resumeId, setResumeId] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const attachments = useAttachments();
-  const cwd = folder.trim() || defaultFolder(roots, preferences.defaultFolder);
+  // a project picked in the header is where a new session goes, while it is one the sessions may work in
+  const { project } = useProjects();
+  const startFolder = defaultFolder(roots, project || preferences.defaultFolder);
+  const cwd = folder.trim() || startFolder;
   const conversations = found && found.cwd === cwd ? found.list : null;
 
   // the folder's repository, asked for once the user stops typing it: whether to offer a branch of its own
@@ -141,7 +145,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
             <p>{replacing ? words.replaces(replacing) : words.intro}</p>
             <ul className="cp-launcher__keys">
               <li><kbd className="cp-kbd">N</kbd> {words.newRequest}</li>
-              <li><kbd className="cp-kbd">{words.shiftN}</kbd> {words.startNow(homeRelative(defaultFolder(roots, preferences.defaultFolder)))}</li>
+              <li><kbd className="cp-kbd">{words.shiftN}</kbd> {words.startNow(homeRelative(startFolder))}</li>
               <li><kbd className="cp-kbd">/</kbd> {words.commandKey}</li>
             </ul>
           </div>
@@ -202,7 +206,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
-          <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(defaultFolder(roots, preferences.defaultFolder))} />
+          <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(startFolder)} />
           <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} />
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
           <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>
