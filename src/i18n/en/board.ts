@@ -1,4 +1,4 @@
-import { MODIFIER } from '../../lib/platform.ts';
+import { shortcut } from '../../lib/platform.ts';
 import type { Dictionary } from '../index.ts';
 
 export const board: Dictionary['board'] = {
@@ -17,9 +17,9 @@ export const board: Dictionary['board'] = {
   helpFolder: 'The notes folder is changed in Settings.',
   claudeLine: (folder) => `When a task is done, add a line to ${folder}/<project>.md`,
   edit: 'Edit',
-  editHint: `Write in the note (${MODIFIER}+E)`,
+  editHint: `Write in the note (${shortcut('E')})`,
   view: 'Done',
-  viewHint: `Back to reading (${MODIFIER}+E or Esc)`,
+  viewHint: `Back to reading (${shortcut('E')} or Esc)`,
   copy: 'Copy',
   search: 'Search the notes',
   searching: 'Searching…',

@@ -1,4 +1,4 @@
-import { MODIFIER } from '../../lib/platform.ts';
+import { shortcut } from '../../lib/platform.ts';
 import type { Dictionary } from '../index.ts';
 
 export const common: Dictionary['common'] = {
@@ -96,7 +96,7 @@ export const common: Dictionary['common'] = {
     stats: { description: 'The week in review: time, sessions, projects' },
     status: { description: 'Versions, Claude account and connection (Settings, About)' },
     theme: { description: 'Changes the office theme' },
-    help: { description: `Every command, and the search (${MODIFIER}+K)` },
+    help: { description: `Every command, and the search (${shortcut('K')})` },
     'release-notes': { description: 'What is new in Claude Code' },
     login: { description: 'Log in to Claude Code or switch accounts (your browser opens)' },
     logout: { description: 'Log out of Claude Code, after confirming in the settings' },

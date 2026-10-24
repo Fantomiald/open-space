@@ -1,4 +1,4 @@
-import { MODIFIER } from '../../lib/platform.ts';
+import { shortcut } from '../../lib/platform.ts';
 export const board = {
   /** the whiteboard of the room: the notes of the journal folder, one tab per Markdown file */
   title: 'Tableau',
@@ -19,9 +19,9 @@ export const board = {
   /** an example of a line for CLAUDE.md that makes sessions keep the notes */
   claudeLine: (folder: string) => `Quand une tâche est finie, ajoute une ligne dans ${folder}/<projet>.md`,
   edit: 'Modifier',
-  editHint: `Écrire dans la note (${MODIFIER}+E)`,
+  editHint: `Écrire dans la note (${shortcut('E')})`,
   view: 'Terminer',
-  viewHint: `Revenir à la lecture (${MODIFIER}+E ou Échap)`,
+  viewHint: `Revenir à la lecture (${shortcut('E')} ou Échap)`,
   copy: 'Copier',
   search: 'Chercher dans les notes',
   searching: 'Recherche…',
