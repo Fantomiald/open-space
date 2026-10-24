@@ -6,9 +6,10 @@ A pixel-art office to run several Claude Code sessions at once.
 
 [![Latest release](https://img.shields.io/github/v/release/Fantomiald/open-space)](https://github.com/Fantomiald/open-space/releases/latest)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-lightgrey)
+![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-blue)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
-**[Download for Mac](https://github.com/Fantomiald/open-space/releases/latest)** · [Run from source](#run-from-source) · [What's new](CHANGELOG.md) (in French)
+**[Install on Mac or Windows](#install)** · [Run from source](#run-from-source) · [What's new](CHANGELOG.md) (in French)
 
 ![Lina raises her hand for a Bash permission, a click on her opens the thread, Yes, and she goes back to work while the others keep typing](docs/images/office.gif)
 
@@ -22,24 +23,24 @@ Open Space runs the `claude` installed on your machine, so your skills, plugins,
 
 - **See who needs you.** The Status panel lists what waits for you and for how long, who is working, and who is ready for a new message.
 - **Open up to six conversations** side by side. Tab slides them aside to see the room, Tab brings them back.
-- **Focus mode** (Cmd+.) swaps the room for the list of your sessions, grouped by what they need. The list folds down to faces when you want more room.
-- **Search everything** with Cmd+K: sessions, messages, commands and settings.
-- **Get notified** by a sound and a macOS notification when a session is done or waiting, even with the window closed.
+- **Focus mode** (Cmd+. on Mac, Ctrl+. on Windows) swaps the room for the list of your sessions, grouped by what they need. The list folds down to faces when you want more room.
+- **Search everything** with Cmd+K on Mac or Ctrl+K on Windows: sessions, messages, commands and settings.
+- **Get notified** by a sound and a native macOS or Windows app notification when a session is done or waiting, even with the window closed.
 - **Continue on your phone** with Remote Control: one button, and the session shows up in claude.ai/code and the Claude app.
 
 ### Arrange it your way
 
 ![Free windows: three conversations placed by hand over the room, Lina's in front](docs/images/free-windows.png)
 
-Drag a window by its title bar to reorder the grid, or switch the top bar to free windows and put each one wherever you like. Windows snap to each other (hold Cmd to turn that off); drop one on a screen edge for half the screen, in a corner for a quarter, at the top for all of it. Back to the grid, everything tidies itself.
+Drag a window by its title bar to reorder the grid, or switch the top bar to free windows and put each one wherever you like. Windows snap to each other (hold Cmd on Mac or Ctrl on Windows to turn that off); drop one on a screen edge for half the screen, in a corner for a quarter, at the top for all of it. Back to the grid, everything tidies itself.
 
-Option + drag moves the room, Option + scroll or pinch zooms it. Sizes and positions are kept between visits.
+Alt (Option on Mac) + drag moves the room; Alt + scroll or pinch zooms it. Sizes and positions are kept between visits.
 
 ## In the conversation
 
 - **Answer without a terminal**: permissions (Yes, No, Always) and Claude's questions, one tab each as in Claude Code.
 - **Write while a session works.** Your message joins the running turn (Claude reads it at its next step). `/btw your question` asks something on the side without cluttering the thread.
-- **Attach any file**: paste a screenshot with Cmd+V, drop files, or use the paperclip. Pictures go as pictures, a zip or a PDF goes as its path.
+- **Attach any file**: paste a screenshot with Cmd+V on Mac or Ctrl+V on Windows, drop files, or use the paperclip. Pictures go as pictures, a zip or a PDF goes as its path.
 - **Type `/`** to pick a command or a skill of the session's folder, with its options. Type `!` to run a shell command in that folder.
 - **Change the model, the effort and the permissions** of a session in one panel, even mid-task.
 - **Follow sub-agents**: their faces on the session's label, a tab for each one, then its report.
@@ -51,11 +52,11 @@ Option + drag moves the room, Option + scroll or pinch zooms it. Sizes and posit
 
 ## A branch per session
 
-Several sessions in one project no longer step on each other. When another session already works in the folder, the launcher offers **Isolate on a branch**, already checked: the new session starts on a branch of its own (`os/lina-apple-pay`), in a folder of its own (a git worktree in `.claude/worktrees/`), with the project's `.env` files and `node_modules` copied in an instant.
+Several sessions in one project no longer step on each other. When another session already works in the folder, the launcher offers **Isolate on a branch**, already checked: the new session starts on a branch of its own (`os/lina-apple-pay`), in a folder of its own (a git worktree in `.claude/worktrees/`), with the project's `.env` files and `node_modules` copied into the new folder (duration depends on their size and the file system).
 
 - **You never touch git.** When it is done, a "Ready to merge into main" card shows at the end of the thread. **Merge** asks the session to squash its work into one commit and catch up; Open Space checks, moves `main` on and removes the folder. The session goes on in the project, on `main`. **Open a PR** pushes the branch and opens the pull request with `gh`.
 - **Nothing is lost without you knowing.** Switching off a session whose branch has work asks what to do with it: merge then switch off, keep the branch (its work is committed, and it comes back if you resume the conversation), or throw it all away.
-- **Tidying up**: the branch pill, ⌘K "Branches" or a reminder in the launcher open the project's branches, with who, how old, merged or not. The merged ones are checked, the rest waits for your word.
+- **Tidying up**: the branch pill, Cmd+K on Mac or Ctrl+K on Windows, then "Branches", or a reminder in the launcher open the project's branches, with who, how old, merged or not. The merged ones are checked, the rest waits for your word.
 - The **Isolate sessions** setting (Settings > Sessions): when the folder is taken, always, or never. The session's settings panel (Folder: Shared / Isolated) forces it for one session.
 
 ## Your crew
@@ -78,7 +79,7 @@ Six themes under **Settings > Office**: a space shuttle, a neon Tokyo street, a 
 
 The sky follows your clock: clouds by day, stars and a lit-up office at night. The rooms dress up for 14 occasions, from Christmas and Halloween to Songkran and each crew member's birthday. The calendar icon in the top bar lets you try them all.
 
-Around the office, click the screen on your desk to open a terminal, and the whiteboard to read and edit your notes (one tab per Markdown file of `~/Journal`, which your sessions can fill too). Point Settings at a file of numbers and a pile of banknotes shows up on your desk, with a red "!" when the file changed. The radio plays lo-fi, or drives Music or Spotify on a Mac.
+Around the office, click the screen on your desk to open a terminal, and the whiteboard to read and edit your notes (one tab per Markdown file in the notes folder (`~/Journal` on Mac, `%USERPROFILE%\Journal` on Windows, configurable in Settings), which your sessions can fill too). Point Settings at a file of numbers and a pile of banknotes shows up on your desk, with a red "!" when the file changed. The radio plays lo-fi, or drives Music/Apple Music or Spotify on macOS and Windows. On Windows, the player must be open and expose a media session: track information, play/pause and previous/next are available according to its capabilities; volume, artwork and the library are not available through this remote.
 
 ## Install
 
@@ -90,9 +91,17 @@ Download the `.dmg` from the [latest release](https://github.com/Fantomiald/open
 
 Closing the window keeps your sessions running: the Dock icon brings it back and notifications still come. Quitting stops them, and they resume at the next launch.
 
+### On Windows
+
+Download the `.exe` installer from the [latest release](https://github.com/Fantomiald/open-space/releases/latest): `x64` for an Intel/AMD PC, `arm64` for Windows on ARM. Run `Open Space-Setup-<version>-<architecture>.exe` and follow the installation wizard. Node.js is not needed to use the installed app; Claude Code must be installed and signed in.
+
+If the installer is unsigned, Windows may display a SmartScreen warning.
+
+Closing the window keeps your sessions running: the notification-area icon brings it back. To stop the app, right-click that icon and choose **Quit Open Space**. Sessions resume at the next launch.
+
 ### Run from source
 
-You need **Node.js 22.18 or later**.
+You need **Node.js 22.18 or later** and Git (**Git for Windows** on Windows).
 
 ```bash
 git clone https://github.com/Fantomiald/open-space.git
@@ -101,7 +110,7 @@ npm ci --ignore-scripts
 npm start
 ```
 
-`npm start` builds the interface, starts the server and opens **http://127.0.0.1:4848**. The first time, the "Allow a browser" link opens too: it sets a cookie valid for 400 days. If the Mac app is installed, it opens on that server instead of starting its own.
+`npm start` builds the interface, starts the server and opens **http://127.0.0.1:4848**. The first time, the "Allow a browser" link opens too: it sets a cookie valid for 400 days. If the desktop app is installed, it can connect to that server instead of starting its own.
 
 The first launch asks your first name and character, the folders sessions may work in, then your habits (model, permissions, sound, pet). The interface is in English or French, following your browser, and both can be changed in **Settings**.
 
@@ -115,7 +124,7 @@ The first launch asks your first name and character, the folders sessions may wo
 
 ## Good to know
 
-- Tested on macOS with Chromium browsers (Chrome, Arc). Notifications, the app and the Music and Spotify remote are macOS only.
+- The desktop app supports macOS and Windows. The browser driven by agents requires an installed Chromium browser (such as Chrome or Edge); Firefox is not supported for this automation.
 - Open Space relies on `claude -p` in stream-json mode, some of whose options are undocumented. A newer Claude Code may break a feature: please [open an issue](https://github.com/Fantomiald/open-space/issues) if it does.
 - The changelog, the code's comments and the internal docs ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) are partly in French.
 
@@ -124,8 +133,8 @@ The first launch asks your first name and character, the folders sessions may wo
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `OFFICE_ROOTS` | Allowed folders, separated by `:`. Replaces the ones chosen in the page | those from onboarding |
-| `OFFICE_DIR` | Where your data lives (crew, sessions, logs) | `~/.open-space` |
+| `OFFICE_ROOTS` | Allowed folders, separated by `:` on macOS or `;` on Windows. Replaces the ones chosen in the page | those from onboarding |
+| `OFFICE_DIR` | Where your data lives (crew, sessions, logs) | `~/.open-space` on macOS; `%USERPROFILE%\.open-space` on Windows |
 | `PORT` | Server port | `4848` |
 | `OFFICE_MAX_LIVE` | Claude Code sessions running at the same time | `8` |
 | `OFFICE_IDLE_MINUTES` | After this long, an idle session releases its process (it resumes with the next message) | `30` |
@@ -143,10 +152,23 @@ The first launch asks your first name and character, the folders sessions may wo
 | `npm run check` | types: client, server and app |
 | `npm run lint` | linter ([Biome](https://biomejs.dev), rules explained in `biome.jsonc`) |
 | `npm test` | tests (`node:test`, no dependency) |
-| `npm run app:dev` | the Mac app from the repo, without packaging it |
+| `npm run app:dev` | the desktop app from the repo, without packaging it (macOS or Windows) |
+| `npm run app:win` | a Windows NSIS x64 installer in `release/` |
+| `npm run app:win:arm64` | a Windows NSIS ARM64 installer in `release/` |
 | `npm run app` | a `.dmg` for Apple Silicon and Intel, signed ad hoc (on another Mac: **System Settings > Privacy & Security > Open Anyway**) |
 | `npm run app:release` | the same, signed with a "Developer ID Application" certificate and notarized by Apple: needs an App Store Connect API key in `APPLE_API_KEY` (path to the `.p8`), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` |
 | `npm run app:publish` | the same, uploaded to a draft GitHub release (`GH_TOKEN`); installed apps update from the latest published release |
+
+To build the Windows app from source, install Git for Windows and Node.js 22.18 or later, then run in PowerShell:
+
+```powershell
+git clone https://github.com/Fantomiald/open-space.git
+cd open-space
+npm ci
+npm run app:win
+```
+
+The x64 installer is created in `release/`. For ARM64, use `npm run app:win:arm64`. Local installers are unsigned. Publishing Windows updates requires the installer and the corresponding update files in a GitHub release.
 
 How it works inside (server, protocol, office, and what was checked against a real Claude Code) is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The rules for changing the code are in [CLAUDE.md](CLAUDE.md).
 
@@ -160,7 +182,3 @@ How it works inside (server, protocol, office, and what was checked against a re
 - Clawd is Claude Code's mascot, drawn here as a fan's nod. Open Space isn't an Anthropic product. Claude and Claude Code are trademarks of Anthropic.
 
 MIT licence, by [Fantomiald](https://github.com/Fantomiald).
-
-### Install on Windows
-
-Install Git for Windows and Claude Code, then run `npm ci` and `npm run app:win`. The x64 NSIS installer is written to `release/`. For ARM64 use `npm run app:win:arm64`. Local installers are unsigned. See the [Windows implementation and review notes](docs/windows/windows-runtime.md).
