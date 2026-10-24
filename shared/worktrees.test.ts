@@ -34,4 +34,7 @@ test('a folder is inside a root, not beside it', () => {
   assert.ok(isInside('/a/garden', '/a/garden'));
   assert.ok(isInside('/a/garden/mobile', '/a/garden'));
   assert.ok(!isInside('/a/garden-web', '/a/garden'));
+  assert.ok(isInside('C:\\Code\\Garden\\mobile', 'c:/code/garden'));
+  assert.ok(!isInside('C:\\Code\\Garden-web', 'C:\\Code\\Garden'));
+  assert.ok(!isInside('D:\\Code\\Garden', 'C:\\Code\\Garden'));
 });

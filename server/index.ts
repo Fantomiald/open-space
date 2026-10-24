@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
 import type { AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { MusicApp } from '../shared/music.ts';
 import { createAsideRunner } from './aside.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
@@ -24,6 +25,7 @@ import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { suggestRoots } from './paths.ts';
+import { windowsKnownFolders } from './system-folders.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { UsageLedger } from './usage.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
@@ -32,7 +34,7 @@ import { uploadsFolder } from './uploads.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
-import { openTerminal, openWebPage } from './desktop.ts';
+import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
@@ -167,7 +169,9 @@ function changeNotes<T>(change: () => Promise<T>): Promise<T> {
 }
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
 /** something new waits in the numbers file, as last told to the pages */
-const musicApps = installedMusicApps();
+// on Windows, looking for the players takes PowerShell a few seconds: the page learns them once found
+let musicApps: MusicApp[] = [];
+void installedMusicApps().then((apps) => { musicApps = apps; broadcast({ t: 'musicApps', apps }); });
 let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
 /** Tells every page when the badge of the numbers object comes or goes. */
 async function checkMetrics() {
@@ -234,6 +238,7 @@ function onConnection(socket: WebSocket) {
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });
+  if (process.platform === 'win32') send({ t: 'terminals', choices: findTerminals() });
   if (!signing) checkAccount().catch((error: unknown) => log('cannot read the Claude Code account', error));
   readClaudeDefaults(os.homedir()).then((found) => {
     if (JSON.stringify(found) === JSON.stringify(claudeDefaults)) return;
@@ -301,7 +306,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       broadcast(preferencesMessage());
       break;
     }
-    case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir()) }); break;
+    case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir(), process.platform === 'win32' ? await windowsKnownFolders(os.homedir(), process.env.OPEN_SPACE_KNOWN_FOLDERS) : undefined) }); break;
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;
@@ -448,7 +453,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'musicLibrary': send({ t: 'musicLibrary', query: message.query, ...await musicLibrary(message.query) }); break;
     case 'openTerminal': {
       const folder = (message.sessionId && sessions.folderOf(message.sessionId)) || defaultFolder(config.roots, settings.preferences.defaultFolder) || os.homedir();
-      await openTerminal(folder);
+      await openTerminal(folder, settings.preferences.terminal);
       break;
     }
   }
@@ -507,3 +512,5 @@ async function shutdown() {
   process.exit(0);
 }
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(signal, () => { void shutdown(); });
+// Windows has no signals: the app asks through its port
+appPort?.on('message', ({ data }) => { if (data.t === 'shutdown') void shutdown(); });

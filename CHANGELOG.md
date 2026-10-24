@@ -1,5 +1,14 @@
 # Versions
 
+## 1.17.0
+
+- Open Space tourne sous Windows, grâce à Quentin : un installateur `.exe` sur la page des versions, qui se met à jour tout seul.
+- Sous Windows, fermer la fenêtre garde les sessions en route : l'icône près de l'horloge la rouvre et sert à quitter. L'icône de la barre des tâches est celle de ton personnage, avec une pastille quand une session t'attend.
+- Sous Windows aussi : les notifications, la radio qui pilote Spotify ou Apple Music, le choix du terminal (cmd, PowerShell ou Git Bash) dans Réglages > Général, le bouton Parcourir pour ajouter un dossier, et les notes supprimées qui vont dans la Corbeille.
+- Le lanceur affiche le nom du dossier, et son chemin complet quand tu tapes dedans.
+- Quand le système demande moins d'animations, la salle, le ciel et l'équipe se figent aussi, sans toucher au réglage.
+- Le bouton Terminer d'une note n'est plus vide en édition : la coche et le texte se voient sur le fond violet.
+
 ## 1.16.5
 
 - Le panneau État montre le tag de chaque session à côté de son nom.

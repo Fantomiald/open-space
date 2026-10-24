@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Festival } from '../../shared/festivals.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useReducedMotion } from '../lib/motion.ts';
 import { currentHour, lightingAt } from './lighting.ts';
 import { SKY_PIXEL, paintClouds, paintSky, paintSkyFestival, skyIsBusy } from './sky.ts';
 import { themeKit, themedLighting } from './themes/index.ts';
@@ -22,12 +23,12 @@ export const refreshFrost = () => window.dispatchEvent(new Event(FROST_EVENT));
  * system asks for less motion.
  */
 export function Sky({ festival }: { festival: Festival | null }) {
+  const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const sky = useRef<HTMLCanvasElement>(null);
   const moving = useRef<HTMLCanvasElement>(null);
   const previewHour = useSessions((s) => s.preview.hour);
   useEffect(() => {
     const back = sky.current!, front = moving.current!;
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let painted = '';
     let lighting = themedLighting(lightingAt(previewHour ?? currentHour()));
     const move = () => {
@@ -55,7 +56,7 @@ export function Sky({ festival }: { festival: Festival | null }) {
     const frames = still ? undefined : window.setInterval(() => { if (!document.hidden) move(); }, skyIsBusy(festival) ? FESTIVAL_MS : themeKit()?.skyFrameMs ?? CLOUD_MS);
     window.addEventListener('resize', paint);
     return () => { window.clearInterval(hourly); window.clearInterval(frames); window.removeEventListener('resize', paint); };
-  }, [previewHour, festival]);
+  }, [previewHour, festival, still]);
   useEffect(() => frost([sky.current!, moving.current!]), []);
   return <><canvas ref={sky} className="cp-sky" /><canvas ref={moving} className="cp-sky" /></>;
 }

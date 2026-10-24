@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as Reac
 import type { Note, NoteFile } from '../../shared/protocol.ts';
 import { noteFileName, noteTitle } from '../../shared/journal.ts';
 import { t } from '../i18n/index.ts';
+import { IS_MAC, shortcut } from '../lib/platform.ts';
 import { formatAgo, homeRelative } from '../lib/format.ts';
 import { useNow } from '../lib/useNow.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -358,9 +359,9 @@ function Board() {
                 <button type="button" className="cp-button" data-variant="quiet" onClick={copy} disabled={!shown.text.trim()} aria-live="polite">
                   {copied ? <CheckIcon /> : <CopyIcon />}{copied ? t.common.copied : words.copy}
                 </button>
-                <button type="button" className="cp-button" data-variant={editing ? 'primary' : undefined} aria-pressed={editing} onClick={toggleEditing} title={editing ? words.viewHint : words.editHint}>
+                <button type="button" className="cp-button" data-variant={editing ? 'primary' : undefined} aria-pressed={editing} aria-keyshortcuts={IS_MAC ? 'Meta+E' : 'Control+E'} onClick={toggleEditing} title={editing ? words.viewHint : words.editHint}>
                   {editing ? <CheckIcon /> : <PencilIcon />}{editing ? words.view : words.edit}
-                  <kbd className="cp-kbd">⌘E</kbd>
+                  <kbd className="cp-kbd">{shortcut('E')}</kbd>
                 </button>
                 <button type="button" className="cp-icon-button" aria-label={words.delete} title={words.delete} aria-expanded={confirmingDelete} onClick={() => setConfirmingDelete(!confirmingDelete)}><RemoveIcon /></button>
               </div>

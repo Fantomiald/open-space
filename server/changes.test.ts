@@ -56,7 +56,7 @@ describe('changes', () => {
     writeFileSync(path.join(folder, 'session', 'subagents', 'agent-1.jsonl'), toolUse('Write', { file_path: path.join(repo, 'new.txt') }));
 
     const changes = await sessionChanges(repo, 'session', (directory) => directory !== hidden, home);
-    assert.deepEqual(changes.files.map(({ path: file, status, added, removed }) => ({ file: path.relative(base, file), status, added, removed })), [
+    assert.deepEqual(changes.files.map(({ path: file, status, added, removed }) => ({ file: path.relative(base, file).split(path.sep).join('/'), status, added, removed })), [
       { file: 'repo/new.txt', status: 'added', added: 2, removed: 0 },
       { file: 'repo/gone.txt', status: 'deleted', added: 0, removed: 1 },
       { file: 'loose/note.txt', status: 'outside', added: 0, removed: 0 },

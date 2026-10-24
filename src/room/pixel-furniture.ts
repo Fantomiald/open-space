@@ -1,6 +1,7 @@
 // The office's furniture in pixel art: each piece is a few boxes on the isometric grid (a lit top and the two faces
 // turned to the viewer), with its details, drawn once at art resolution on its own canvas, outlined, and kept.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
+import { reducedMotion } from '../lib/motion.ts';
 import { TOPS, type FurniturePiece, type PieceKind } from '../../shared/room-layout.ts';
 import { toScreen, type Point } from './geometry.ts';
 import { ART_SCALE, artCanvas, fillPolygon, outline, ring, shadedBall, tones } from './pixel-art.ts';
@@ -723,13 +724,12 @@ export interface FurnitureSprites {
 export function pixelFurniture(board: BoardContent = { kind: 'notes' }): FurnitureSprites {
   const drawn = new Map<FurniturePiece, Drawn>();
   const highlights = new Map<FurniturePiece, Drawn>();
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const place = (context: CanvasRenderingContext2D, piece: FurniturePiece, image: Drawn) => {
     const far = toScreen({ x: piece.x, y: piece.y });
     const left = Math.round(far.x - image.corner.x * ART_SCALE), top = Math.round(far.y - image.corner.y * ART_SCALE);
     const size = [image.canvas.width * ART_SCALE, image.canvas.height * ART_SCALE] as const;
     if (image.ground) context.drawImage(image.ground, left, top, ...size);
-    const bob = image.float && !still ? bobOf(piece, image.float, performance.now()) : 0;
+    const bob = image.float && !reducedMotion() ? bobOf(piece, image.float, performance.now()) : 0;
     context.drawImage(image.canvas, left, top - bob, ...size);
   };
   return {

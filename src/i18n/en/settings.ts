@@ -1,4 +1,8 @@
 import { plural, type Dictionary } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
+
+const FULL_PATH = IS_WINDOWS ? 'C:\\… or \\\\server\\share\\…' : '/… or ~/…';
+const STYLES_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude\\output-styles' : '~/.claude/output-styles';
 
 export const settings: Dictionary['settings'] = {
   noServer: 'No connection to the server: not saved yet.',
@@ -39,11 +43,11 @@ export const settings: Dictionary['settings'] = {
     noFolder: 'Keep at least one folder: sessions would have nowhere to work.',
     journalFolder: 'Whiteboard notes folder',
     journalFolderHint: 'one .md file per project, which your sessions can fill too',
-    journalFolderInvalid: 'The notes folder must be a full path (/… or ~/…).',
+    journalFolderInvalid: `The notes folder must be a full path (${FULL_PATH}).`,
     metricsFile: 'Numbers file (optional)',
     metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
-    metricsFilePlaceholder: '~/Journal/numbers.md',
-    metricsFileInvalid: 'The numbers file must be a full path to a .md file (/… or ~/…), or stay empty.',
+    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
+    metricsFileInvalid: `The numbers file must be a full path to a .md file (${FULL_PATH}), or stay empty.`,
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   prefs: {
@@ -68,7 +72,7 @@ export const settings: Dictionary['settings'] = {
     },
     groups: {
       appearance: 'Display', alerts: 'Alerts', text: 'Threads', reasoning: 'Thinking and answers', autonomy: 'Autonomy', workflows: 'Workflows', together: 'Between sessions',
-      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', life: 'Ambience', crew: 'Crew', files: 'Files',
+      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', system: 'System', life: 'Ambience', crew: 'Crew', files: 'Files',
     },
     inherit: (value: string) => `As in Claude Code (${value})`,
     inheritAction: 'As in Claude Code',
@@ -95,17 +99,18 @@ export const settings: Dictionary['settings'] = {
       failed: (text: string) => `Failed: ${text}`,
     },
     rows: {
+      terminal: { title: 'Terminal', hint: 'For your character’s monitor and Ctrl+Alt+T. Only terminals detected on this computer are offered.', unavailable: 'Saved terminal not found, choose another' },
       language: { title: 'Language', hint: 'Of the page, the server and new agents’ instructions.' },
       sound: { title: 'Sound', hint: 'A sound when a session is done or waiting for you.' },
-      notifications: { title: 'macOS notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
+      notifications: { title: 'System notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
       copyOnSelect: { title: 'Copy on select', hint: 'Text you select is copied at once, like in a terminal.' },
       timeFormat: { title: 'Time format', hint: 'In the threads and the usage view.', options: { auto: 'From the language', '24h': '24-hour (14:05)', '12h': '12-hour (2:05 PM)' } },
-      reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations, even when macOS keeps them.' },
+      reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations and stills the room, even when the system keeps them.' },
       timestamps: { title: 'Message timestamps', hint: 'The time next to each message in the threads.' },
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
-      outputStyle: { title: 'Output style', hint: 'How Claude answers you. Your own styles come from ~/.claude/output-styles.', default: 'Default' },
+      outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${STYLES_FOLDER}.`, default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {
@@ -138,7 +143,7 @@ export const settings: Dictionary['settings'] = {
       previewFestival: { title: 'Try a festival', hint: 'The room dressed up without waiting for the day. Nothing is kept on reload.' },
       previewHour: { title: 'Try an hour', hint: 'The sky and the light at another time of day. Nothing is kept on reload.' },
       crew: { title: 'You, your crew and your pet', hint: 'Names, looks, birthdays and jobs.', action: 'Open crew' },
-      journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too.' },
+      journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too. The folder is created with the first note.' },
       metricsFile: { title: 'Numbers file', hint: 'A Markdown file kept up to date by your scripts or a session. Empty: no object.' },
       version: { title: 'Open Space', hint: 'The app downloads new versions and restarts on them as soon as no session is working.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Not found on this computer.' },
@@ -183,7 +188,9 @@ export const settings: Dictionary['settings'] = {
     notLookedInto: 'not looked into',
     projects: (count: number) => plural(count, 'project', 'projects'),
     searching: 'Looking for your projects…',
-    otherPlaceholder: '/Users/you/code',
+    otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\code' : '/Users/you/code',
+    browse: 'Browse…',
+    browseFailed: 'Could not open the folder picker. Try again or enter the full path.',
     otherLabel: 'Another folder (full path)',
     add: 'Add',
     defaultFolder: 'Default folder (Shift+N starts a session in it)',
@@ -215,7 +222,7 @@ export const settings: Dictionary['settings'] = {
     model: 'Default model',
     permissions: 'Default permissions',
     sound: 'A sound when a session is done or waiting for you',
-    notifications: 'A macOS notification when Open Space isn’t in front of you',
+    notifications: 'A system notification when Open Space isn’t in front of you',
     festivals: 'The office dresses up for the holidays (Christmas, Halloween, birthdays…)',
     officeLife: 'Office life: your free crew drops by for a coffee, a book, a look out of the window',
     agentNote: 'A note for all your agents',

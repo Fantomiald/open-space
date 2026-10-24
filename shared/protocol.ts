@@ -9,6 +9,7 @@ import type { PetChoice } from './pets.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
+import type { TerminalChoice, TerminalKind } from './terminal.ts';
 import type { CostReport } from './usage.ts';
 
 export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'completed' }
@@ -420,6 +421,8 @@ export interface CrewMember { name: string; look: Look | null; self?: boolean; b
 
 /** The user's settings, chosen at the first start (the onboarding) and changed later in the page. */
 export interface Preferences {
+  /** Native terminal opened by the room and shortcut; absent in older settings means cmd on Windows. */
+  terminal?: TerminalKind;
   /** macOS notifications when a session needs the user and the page is not in front */
   notifications: boolean;
   /** the folders sessions may run in (OFFICE_ROOTS, when set, wins over them) */
@@ -612,6 +615,7 @@ export type ServerMessage =
   /** the settings changed (from any tab); `roots`: the folders in effect */
   | { t: 'preferences'; preferences: Preferences; roots: string[]; onboarded: boolean; claudeDefaults: ClaudeDefaults }
   | { t: 'rootSuggestions'; suggestions: RootSuggestion[] }
+  | { t: 'terminals'; choices: TerminalChoice[] }
   | { t: 'crew'; crew: CrewMember[] }
   | { t: 'conversations'; cwd: string; conversations: Conversation[] }
   /** `repo` null: not in a git repository */

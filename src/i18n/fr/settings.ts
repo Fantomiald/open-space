@@ -1,5 +1,9 @@
 import type { Job } from '../../../shared/jobs.ts';
 import { plural } from '../index.ts';
+import { IS_WINDOWS } from '../../lib/platform.ts';
+
+const FULL_PATH = IS_WINDOWS ? 'C:\\… ou \\\\serveur\\partage\\…' : '/… ou ~/…';
+const STYLES_FOLDER = IS_WINDOWS ? '%USERPROFILE%\\.claude\\output-styles' : '~/.claude/output-styles';
 
 export const settings = {
   noServer: 'Pas de connexion au serveur : pas encore enregistré.',
@@ -42,11 +46,11 @@ export const settings = {
     noFolder: 'Garde au moins un dossier : les sessions ne pourraient travailler nulle part.',
     journalFolder: 'Dossier des notes du tableau',
     journalFolderHint: 'un fichier .md par projet, que tes sessions peuvent aussi remplir',
-    journalFolderInvalid: 'Le dossier des notes doit être un chemin complet (/… ou ~/…).',
+    journalFolderInvalid: `Le dossier des notes doit être un chemin complet (${FULL_PATH}).`,
     metricsFile: 'Fichier des chiffres (facultatif)',
     metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
-    metricsFilePlaceholder: '~/Journal/chiffres.md',
-    metricsFileInvalid: 'Le fichier des chiffres doit être un chemin complet vers un .md (/… ou ~/…), ou rester vide.',
+    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
+    metricsFileInvalid: `Le fichier des chiffres doit être un chemin complet vers un .md (${FULL_PATH}), ou rester vide.`,
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
@@ -71,7 +75,7 @@ export const settings = {
       about: 'La version d’Open Space et de Claude Code.',
     },
     groups: {
-      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
+      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', system: 'Système', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
     },
     inherit: (value: string) => `Comme Claude Code (${value})`,
     inheritAction: 'Comme Claude Code',
@@ -98,17 +102,18 @@ export const settings = {
       failed: (text: string) => `Échec : ${text}`,
     },
     rows: {
+      terminal: { title: 'Terminal', hint: 'Pour l’écran de ton personnage et Ctrl+Alt+T. Seuls les terminaux détectés sur cet ordinateur sont proposés.', unavailable: 'Terminal enregistré introuvable, choisis-en un autre' },
       language: { title: 'Langue', hint: 'Celle de la page, du serveur et des consignes des nouveaux agents.' },
       sound: { title: 'Son', hint: 'Un son quand une session a fini ou t’attend.' },
-      notifications: { title: 'Notifications macOS', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },
+      notifications: { title: 'Notifications système', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },
       copyOnSelect: { title: 'Copier à la sélection', hint: 'Le texte que tu sélectionnes est copié tout de suite, comme dans un terminal.' },
       timeFormat: { title: 'Format de l’heure', hint: 'Dans les fils et les relevés.', options: { auto: 'Selon la langue', '24h': '24 h (14:05)', '12h': '12 h (2:05 PM)' } },
-      reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page, même si macOS les laisse.' },
+      reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page et fige la salle, même si le système les laisse.' },
       timestamps: { title: 'Heure des messages', hint: 'L’heure à côté de chaque message des fils.' },
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
-      outputStyle: { title: 'Style de sortie', hint: 'La façon dont Claude te répond. Tes styles viennent de ~/.claude/output-styles.', default: 'Par défaut' },
+      outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${STYLES_FOLDER}.`, default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {
@@ -141,7 +146,7 @@ export const settings = {
       previewFestival: { title: 'Essayer une fête', hint: 'La salle décorée sans attendre le jour J. Rien n’est gardé au rechargement.' },
       previewHour: { title: 'Essayer une heure', hint: 'Le ciel et la lumière à une autre heure. Rien n’est gardé au rechargement.' },
       crew: { title: 'Ton perso, ton équipe et ton animal', hint: 'Prénoms, looks, anniversaires et métiers.', action: 'Ouvrir l’équipe' },
-      journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir.' },
+      journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir. Le dossier est créé à la première note.' },
       metricsFile: { title: 'Fichier des chiffres', hint: 'Un markdown tenu à jour par tes scripts ou une session. Vide : pas d’objet.' },
       version: { title: 'Open Space', hint: 'L’app télécharge les nouvelles versions et redémarre dessus dès qu’aucune session ne travaille.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Introuvable sur cet ordinateur.' },
@@ -186,7 +191,9 @@ export const settings = {
     notLookedInto: 'pas regardé dedans',
     projects: (count: number) => plural(count, 'projet', 'projets'),
     searching: 'Je cherche tes projets…',
-    otherPlaceholder: '/Users/toi/code',
+    otherPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\code' : '/Users/toi/code',
+    browse: 'Parcourir…',
+    browseFailed: 'Impossible d’ouvrir le sélecteur de dossiers. Réessaie ou saisis le chemin complet.',
     otherLabel: 'Un autre dossier (chemin complet)',
     add: 'Ajouter',
     defaultFolder: 'Dossier par défaut (Maj+N lance une session dedans)',
@@ -218,7 +225,7 @@ export const settings = {
     model: 'Modèle par défaut',
     permissions: 'Autorisations par défaut',
     sound: 'Un son quand une session a fini ou t’attend',
-    notifications: 'Une notification macOS quand Open Space n’est pas devant toi',
+    notifications: 'Une notification système quand Open Space n’est pas devant toi',
     festivals: 'Le bureau se décore pour les fêtes (Noël, Halloween, les anniversaires…)',
     officeLife: 'Vie au bureau : ton équipe libre passe prendre un café, lire, regarder par la fenêtre',
     agentNote: 'Un mot pour tous tes agents',

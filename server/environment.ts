@@ -1,8 +1,13 @@
 // The environment handed to `claude` (and therefore to every command its Bash tool runs).
 // Allow-list only: a secret exported in the shell that started the bridge must not reach the agents.
 // API keys are deliberately absent so the CLI always uses the logged-in subscription.
+import path from 'node:path';
+
 const ALLOWED_NAMES = [
   'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TZ',
+  'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT',
+  'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432',
+  'CLAUDE_CODE_GIT_BASH_PATH',
   'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'COLORTERM',
   // ssh and git over ssh through the user's agent (the socket path, not a key)
   'SSH_AUTH_SOCK',
@@ -22,8 +27,8 @@ export function parsePassthrough(raw: string | undefined): string[] {
  * `npm start` puts the bridge's own tools first in PATH: <dir>/node_modules/.bin for the project and every parent folder,
  * plus npm's node-gyp-bin. Handed to the agents, they would make a bare `tsc` or `vite` in another project run this one's copy.
  */
-export function withoutNpmEntries(searchPath: string): string {
-  return searchPath.split(':').filter((entry) => entry && !/\/node_modules\/\.bin\/?$/.test(entry) && !/\/node-gyp-bin\/?$/.test(entry)).join(':');
+export function withoutNpmEntries(searchPath: string, delimiter = path.delimiter): string {
+  return searchPath.split(delimiter).filter((entry) => entry && !/[\\/]node_modules[\\/]\.bin[\\/]?$/i.test(entry) && !/[\\/]node-gyp-bin[\\/]?$/i.test(entry)).join(delimiter);
 }
 
 /**
@@ -36,7 +41,8 @@ const FIXED: Readonly<Record<string, string>> = { CLAUDE_CODE_ARTIFACT: '1' };
 export function buildClaudeEnvironment(source: NodeJS.ProcessEnv, passthrough: readonly string[] = []): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = { ...FIXED };
   for (const name of [...ALLOWED_NAMES, ...passthrough]) {
-    const value = source[name];
+    const key = process.platform === 'win32' ? Object.keys(source).find((key) => key.toLowerCase() === name.toLowerCase()) : name;
+    const value = key === undefined ? undefined : source[key];
     if (value !== undefined) result[name] = value;
   }
   if (result.PATH !== undefined) result.PATH = withoutNpmEntries(result.PATH);

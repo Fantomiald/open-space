@@ -1,6 +1,7 @@
 // What moving things by hand shares: when a press becomes a drag, and the Alt key (Option on a Mac) that grabs a
 // window or the room from anywhere.
 import { useEffect, useState } from 'react';
+import { IS_MAC } from './platform.ts';
 import { writePreference } from './preferences.ts';
 
 /** a press that moved less than this is still a click */
@@ -58,4 +59,4 @@ export function markArranged() {
 }
 
 /** The Alt key as the keyboard shows it. */
-export const ALT_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌥' : 'Alt';
+export const ALT_KEY = IS_MAC ? '⌥' : 'Alt';

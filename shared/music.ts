@@ -21,6 +21,8 @@ export interface NowPlaying {
   volume: number;
   /** a data: image (Music) or an https address (Spotify's own covers) */
   artwork: string | null;
+  /** Missing on older/macOS bridges: all their existing controls remain available. */
+  controls?: { toggle: boolean; next: boolean; previous: boolean; volume: boolean; library: boolean };
 }
 
 export type MusicAction =

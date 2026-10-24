@@ -24,7 +24,8 @@ describe('the Playwright server of a session', () => {
   it('is npx @playwright/mcp when the user has none', () => {
     const [name, server] = serverOf(browserMcpConfig(ENDPOINT, { other: { command: 'x' } }));
     assert.equal(name, 'playwright');
-    assert.deepEqual(server.args, ['-y', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
+    assert.equal(server.command, process.platform === 'win32' ? 'cmd.exe' : 'npx');
+    assert.deepEqual(server.args, [...(process.platform === 'win32' ? ['/d', '/c', 'npx'] : []), '-y', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
   });
 
   it('reaches claude with --mcp-config, and the session is told its browser is shown', () => {

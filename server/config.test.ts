@@ -8,7 +8,7 @@ describe('loadConfig', () => {
     const config = loadConfig({}, '/home/max');
     assert.deepEqual(config.roots, []);
     assert.equal(config.rootsLocked, false);
-    assert.equal(config.dataDir, '/home/max/.open-space');
+    assert.equal(config.dataDir, path.resolve('/home/max/.open-space'));
     assert.equal(config.port, 4848);
     assert.equal(config.maxLive, 8);
     assert.equal(config.idleMs, 30 * 60_000);
@@ -16,8 +16,8 @@ describe('loadConfig', () => {
   });
 
   it('reads roots like PATH, expands ~, makes them absolute, keeps those that exist, and locks them', () => {
-    const config = loadConfig({ OFFICE_ROOTS: ['~/a', '/srv/b', '/gone', ' '].join(path.delimiter) }, '/home/max', (folder) => folder !== '/gone');
-    assert.deepEqual(config.roots, ['/home/max/a', '/srv/b']);
+    const config = loadConfig({ OFFICE_ROOTS: ['~/a', '/srv/b', '/gone', ' '].join(path.delimiter) }, '/home/max', (folder) => folder !== path.resolve('/gone'));
+    assert.deepEqual(config.roots, [path.resolve('/home/max/a'), path.resolve('/srv/b')]);
     assert.equal(config.rootsLocked, true);
   });
 

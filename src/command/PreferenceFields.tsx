@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
 import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
 import { furOf, petSprite } from '../room/pet.ts';
+import { isAbsolutePath } from '../../shared/paths.ts';
 import { homeRelative } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { PERMISSION_MODES, type Preferences, type RootSuggestion } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useReducedMotion } from '../lib/motion.ts';
 
 /**
  * The folders sessions may run in: the suggested ones and those already chosen, checked or not, plus any folder typed in
@@ -20,11 +22,22 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
   withDefault?: boolean;
 }) {
   const [other, setOther] = useState('');
+  const [pickFailed, setPickFailed] = useState(false);
+  const nativePicker = window.openSpaceDesktop;
+  const addFolder = (folder: string) => { if (!roots.includes(folder)) onRoots([...roots, folder]); };
+  const browse = async () => {
+    setPickFailed(false);
+    try {
+      const folder = await nativePicker?.pickFolder();
+      if (folder) addFolder(folder);
+    } catch { setPickFailed(true); }
+  };
   const toggle = (folder: string) => onRoots(roots.includes(folder) ? roots.filter((root) => root !== folder) : [...roots, folder]);
   const add = () => {
-    const folder = other.trim().replace(/\/+$/, '');
-    if (!folder.startsWith('/')) return;
-    if (!roots.includes(folder)) onRoots([...roots, folder]);
+    // a trailing separator would make the same folder twice; a drive root or "/" keeps its own
+    const folder = other.trim().replace(/(?<=[^\\/:])[\\/]+$/, '');
+    if (!isAbsolutePath(folder)) return;
+    addFolder(folder);
     setOther('');
   };
   const listed = [...(suggestions ?? []).map((folder) => folder.path), ...roots.filter((root) => !suggestions?.some((folder) => folder.path === root))];
@@ -41,7 +54,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
                 <li key={folder}>
                   <label>
                     <input type="checkbox" checked={roots.includes(folder)} onChange={() => toggle(folder)} />
-                    <span className="cp-onboarding__folder">{homeRelative(folder)}</span>
+                    <span className="cp-onboarding__folder" title={folder}>{homeRelative(folder)}</span>
                     <span className="cp-muted">{projects === undefined ? t.settings.folders.added : projects < 0 ? t.settings.folders.notLookedInto : t.settings.folders.projects(projects)}</span>
                   </label>
                 </li>
@@ -51,8 +64,10 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
           </ul>
           <div className="cp-onboarding__other">
             <input value={other} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
-            <button type="button" className="cp-button" disabled={!other.trim().startsWith('/')} onClick={add}>{t.settings.folders.add}</button>
+            {nativePicker && <button type="button" className="cp-button" onClick={() => { void browse(); }}>{t.settings.folders.browse}</button>}
+            <button type="button" className="cp-button" disabled={!isAbsolutePath(other.trim())} onClick={add}>{t.settings.folders.add}</button>
           </div>
+          {pickFailed && <p className="cp-detail__error" role="alert">{t.settings.folders.browseFailed}</p>}
         </>
       )}
       {withDefault && roots.length > 1 && (
@@ -72,6 +87,7 @@ type Habits = Pick<Preferences, 'model' | 'permissionMode' | 'notifications' | '
 
 /** A pet drawn at three screen pixels per art pixel: walking when it is the one picked, sitting otherwise. */
 function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>; moving: boolean }) {
+  const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const context = canvas.current!.getContext('2d')!;
@@ -84,10 +100,10 @@ function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>;
       frame = frame ? 0 : 1;
     };
     paint();
-    if (!moving || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!moving || still) return;
     const timer = window.setInterval(paint, 220);
     return () => window.clearInterval(timer);
-  }, [pet, moving]);
+  }, [pet, moving, still]);
   return <canvas ref={canvas} width={22 * 3} height={17 * 3} />;
 }
 

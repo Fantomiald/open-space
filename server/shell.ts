@@ -2,6 +2,7 @@
 // itself, in the session's folder, with the user's shell and the environment Claude Code gets, without the model.
 // Claude learns of it with the user's next message (see Session.shell), in the terminal's own format.
 import { spawn } from 'node:child_process';
+import { signalTree } from './process-tree.ts';
 
 /** `stopped`: by the user (the signal) or after TIMEOUT_MS (`timedOut`) */
 export interface ShellResult { code: number | null; stdout: string; stderr: string; ms: number; timedOut: boolean; stopped: boolean }
@@ -18,12 +19,16 @@ export function createShellRunner(environment: NodeJS.ProcessEnv): ShellRunner {
   return (command, cwd, signal) => new Promise((resolve) => {
     const started = Date.now();
     // its own process group, so a timeout stops what the command started too
-    const child = spawn(environment.SHELL || '/bin/zsh', ['-c', command], { cwd, env: environment, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const windows = process.platform === 'win32';
+    const file = windows ? environment.ComSpec || 'cmd.exe' : environment.SHELL || '/bin/sh';
+    const args = windows ? ['/d', '/s', '/c', `"${command}"`] : ['-c', command];
+    const child = spawn(file, args, { cwd, env: environment, stdio: ['ignore', 'pipe', 'pipe'], detached: !windows, windowsHide: true, windowsVerbatimArguments: windows });
     let stdout = '', stderr = '', timedOut = false, stopped = false;
     let killer: NodeJS.Timeout | undefined;
-    const signalGroup = (name: NodeJS.Signals) => { try { process.kill(-child.pid!, name); } catch { /* already gone */ } };
+    const signalGroup = (name: NodeJS.Signals) => signalTree(child.pid, name);
     // a command that ignores SIGTERM (a dev server, a watcher) is killed a moment later
     const stop = () => {
+      if (stopped) return;
       stopped = true;
       signalGroup('SIGTERM');
       killer = setTimeout(() => signalGroup('SIGKILL'), KILL_DELAY_MS);
@@ -36,9 +41,10 @@ export function createShellRunner(environment: NodeJS.ProcessEnv): ShellRunner {
       clearTimeout(timer);
       clearTimeout(killer);
       signal?.removeEventListener('abort', stop);
-      resolve({ code, stdout: stdout.replace(/\n$/, ''), stderr: stderr.replace(/\n$/, ''), ms: Date.now() - started, timedOut, stopped });
+      resolve({ code, stdout: stdout.replace(/\r?\n$/, ''), stderr: stderr.replace(/\r?\n$/, ''), ms: Date.now() - started, timedOut, stopped });
     };
     child.on('close', (code) => finish(code));
     child.on('error', (error) => { stderr += String(error); finish(null); });
+    if (signal?.aborted) stop();
   });
 }

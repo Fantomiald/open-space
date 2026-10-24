@@ -146,7 +146,7 @@ describe('creating sessions', () => {
     const session = await manager.create({ cwd: projectA(), text: '/kit:new', model: 'haiku' });
     assert.equal(processes.length, 1);
     assert.deepEqual(processes[0].launch, { cwd: projectA(), sessionId: session.id, resume: false, model: 'haiku', permissionMode: 'auto', name: session.name, addDirs: [path.join(processes[0].launch.addDirs?.[0] ?? '')] });
-    assert.match(processes[0].launch.addDirs?.[0] ?? '', /\/uploads$/, 'the uploaded files are readable');
+    assert.match(processes[0].launch.addDirs?.[0] ?? '', /[\\/]uploads$/, 'the uploaded files are readable');
     assert.deepEqual(processes[0].sent, ['/kit:new']);
     assert.equal(session.state, 'starting');
     await manager.shutdown();

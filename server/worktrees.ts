@@ -209,27 +209,29 @@ export async function includedEntries(mainRoot: string): Promise<string[]> {
   return entries.filter((entry) => !isInside(`/${entry.replace(/\/$/, '')}`, `/${WORKTREES_FOLDER}`) && !entry.startsWith('.git/'));
 }
 
-export interface CopyResult { copied: number; failed: number; skipped: boolean }
+export interface CopyResult { copied: number; failed: number }
 
 /**
- * Copies the included entries into the new worktree as APFS clones (`cp -c`: at once, without taking room). Elsewhere
- * than on a Mac, or when a clone fails (another file system), nothing is copied: the session installs what it needs.
+ * Copies the included entries into the new worktree: as APFS clones on a Mac (`cp -c`: at once, without taking room;
+ * when a clone fails, nothing is copied and the session installs what it needs), as plain copies elsewhere.
  */
-export async function copyIncluded(mainRoot: string, worktreeRoot: string, platform = process.platform): Promise<CopyResult> {
+export async function copyIncluded(mainRoot: string, worktreeRoot: string): Promise<CopyResult> {
   const entries = await includedEntries(mainRoot);
-  if (!entries.length) return { copied: 0, failed: 0, skipped: false };
-  if (platform !== 'darwin') return { copied: 0, failed: 0, skipped: true };
+  if (!entries.length) return { copied: 0, failed: 0 };
   let copied = 0, failed = 0;
   for (const entry of entries) {
     const relative = entry.replace(/\/$/, '');
     const target = path.join(worktreeRoot, relative);
     if (existsSync(target)) continue;
     await mkdir(path.dirname(target), { recursive: true });
-    const ok = await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', path.join(mainRoot, relative), target], { timeout: 120_000 }, (error) => resolve(!error)));
+    const source = path.join(mainRoot, relative);
+    const ok = process.platform === 'darwin'
+      ? await new Promise<boolean>((resolve) => execFile('/bin/cp', ['-c', '-R', source, target], { timeout: 120_000 }, (error) => resolve(!error)))
+      : await cp(source, target, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true }).then(() => true, () => false);
     if (ok) copied++;
     else { failed++; await rm(target, { recursive: true, force: true }); }
   }
-  return { copied, failed, skipped: false };
+  return { copied, failed };
 }
 
 /**
@@ -261,7 +263,7 @@ export async function branchStatus(worktreeRoot: string, base: string): Promise<
 /** True when an executable called `name` is on the PATH given. */
 function onPath(name: string, searchPath: string) {
   return searchPath.split(path.delimiter).filter((folder) => path.isAbsolute(folder)).some((folder) => {
-    try { accessSync(path.join(folder, name), constants.X_OK); return true; } catch { return false; }
+    try { accessSync(path.join(folder, process.platform === 'win32' ? `${name}.exe` : name), constants.X_OK); return true; } catch { return false; }
   });
 }
 

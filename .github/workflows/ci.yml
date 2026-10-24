@@ -4,9 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,4 +24,19 @@ jobs:
       - run: npm run check
       - run: npm run lint
       - run: npm test
+        # The Windows runner's temp folder is an 8.3 short path (RUNNER~1) that git prints in full: give the tests a long one.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
       - run: npm run build
+      - name: Build Windows installers
+        if: runner.os == 'Windows'
+        run: npm run app:build && npx electron-builder --win --x64 --arm64 --publish never
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: windows-installers
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml

@@ -55,4 +55,8 @@ export function worktreeNames(name: string, about: string, suffix = 1): { branch
 }
 
 /** True when `folder` is `root` or inside it (both real paths). */
-export const isInside = (folder: string, root: string) => folder === root || folder.startsWith(root.endsWith('/') ? root : `${root}/`);
+export const isInside = (folder: string, root: string) => {
+  const normalize = (value: string) => /^[a-z]:[\\/]|^\\\\/i.test(value) ? value.replace(/\\/g, '/').toLowerCase() : value;
+  const child = normalize(folder), parent = normalize(root);
+  return child === parent || child.startsWith(parent.endsWith('/') ? parent : `${parent}/`);
+};

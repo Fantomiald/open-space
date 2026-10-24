@@ -11,6 +11,8 @@ import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
+import { expandHomePath, isFullPath } from '../shared/paths.ts';
+import { TERMINALS, type TerminalKind } from '../shared/terminal.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
@@ -38,6 +40,7 @@ const MAX_FAVORITE_NOTES = 200;
 export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Preferences> {
   if (!isJson(raw)) return {};
   const found: Partial<Preferences> = {};
+  if (TERMINALS.includes(raw.terminal as TerminalKind)) found.terminal = raw.terminal as TerminalKind;
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
@@ -56,14 +59,14 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;
   if (isLanguage(raw.language)) found.language = raw.language;
-  if (typeof raw.journalFolder === 'string') {
-    const folder = raw.journalFolder.trim().replace(/^~(?=$|\/)/, () => home);
+  if (typeof raw.journalFolder === 'string' && isFullPath(raw.journalFolder.trim())) {
+    const folder = expandHomePath(raw.journalFolder.trim(), home);
     if (path.isAbsolute(folder) && folder.length <= 1000) found.journalFolder = path.resolve(folder);
   }
   if (Array.isArray(raw.favoriteNotes)) found.favoriteNotes = [...new Set(asArray(raw.favoriteNotes).filter((name): name is string => typeof name === 'string' && NOTE_NAME.test(name)))].slice(0, MAX_FAVORITE_NOTES);
   if (typeof raw.metricsFile === 'string' && isMetricsPath(raw.metricsFile)) {
-    const file = raw.metricsFile.trim();
-    found.metricsFile = file && path.resolve(file.replace(/^~(?=\/)/, () => home));
+    const file = expandHomePath(raw.metricsFile.trim(), home);
+    if (!file || path.isAbsolute(file)) found.metricsFile = file && path.resolve(file);
   }
   return found;
 }

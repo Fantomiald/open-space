@@ -49,7 +49,7 @@ describe('secret and cookie', () => {
     const file = path.join(folder, 'data', 'secret');
     const first = readOrCreateSecret(file);
     assert.equal(readOrCreateSecret(file), first);
-    assert.equal(statSync(file).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
     writeFileSync(file, 'short');
     const replaced = readOrCreateSecret(file);
     assert.notEqual(replaced, 'short');

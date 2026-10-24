@@ -4,6 +4,7 @@ import { findMentions } from '../../shared/mentions.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { locale, t } from '../i18n/index.ts';
 import { formatClock, formatDuration } from '../lib/format.ts';
+import { reducedMotion } from '../lib/motion.ts';
 import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
@@ -454,7 +455,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
     stuck.current = true;
     setAwayFrom(null);
     const el = scroller.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'auto' : 'smooth' });
   };
   return (
     <div className="cp-thread">
