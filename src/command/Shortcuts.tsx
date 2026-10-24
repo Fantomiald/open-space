@@ -1,7 +1,6 @@
-import { IS_MAC } from '../lib/platform.ts';
+import { IS_MAC, MODIFIER } from '../lib/platform.ts';
 import { t } from '../i18n/index.ts';
 
-const MODIFIER = IS_MAC ? '⌘' : 'Ctrl';
 const OPTION = IS_MAC ? '⌥' : 'Alt';
 
 /** The keyboard shortcuts, as App.tsx and the windows listen to them (read-only). */

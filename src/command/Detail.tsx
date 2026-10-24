@@ -1,6 +1,7 @@
 import { memo, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { MODIFIER } from '../lib/platform.ts';
 import { lanesOf } from '../../shared/browser.ts';
 import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed, publishedPages } from '../state/feed.ts';
@@ -53,7 +54,7 @@ function SessionMenu({ session, searchOpen, onSearch, onBrowser, onRest, onSwitc
       <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} title={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
       {open && (
         <div ref={menu} className="cp-detail__menu" popover="manual" role="menu" aria-label={words.more}>
-          <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">⌘F</kbd></button>
+          <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">{MODIFIER}+F</kbd></button>
           {!session.remote && (
             <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>
           )}
