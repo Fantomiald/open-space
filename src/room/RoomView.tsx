@@ -1,6 +1,8 @@
 // A room of the office, drawn on a canvas: the office itself (the default view), where the sessions work at their
 // desks, or the break room, where the sessions put to rest doze on sofas. People come and go through the door, what is
 // said rises in speech bubbles, and clicking someone (or their bubble) opens their session in the detail panel.
+import { inProject } from '../state/projects.ts';
+import { useProjects } from '../state/useProjects.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
@@ -117,6 +119,10 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => { selected.current = openIds; }, [openIds]);
+  // the people of the other projects, while one is picked in the header
+  const { project } = useProjects();
+  const ghosts = useRef<ReadonlySet<string>>(new Set());
+  ghosts.current = useMemo(() => new Set(list.filter((session) => !inProject(session, project)).map((session) => session.id)), [list, project]);
 
   // the people already there when the room opens are seated at once; later ones walk in
   useEffect(() => {
@@ -143,7 +149,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const lighting = themedLighting(lightingAt(hour));
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, openSessionIds: selected.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };

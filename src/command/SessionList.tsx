@@ -10,7 +10,9 @@ import { useNow } from '../lib/useNow.ts';
 import { roomSessions, sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
+import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useProjects } from '../state/useProjects.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
@@ -34,13 +36,14 @@ export function SessionList() {
     writePreference('listNarrow', !narrow);
     setNarrow(!narrow);
   };
+  const { project } = useProjects();
   const groups = useMemo(() => {
-    const all = Object.values(sessions);
+    const all = Object.values(sessions).filter((session) => inProject(session, project));
     const [waiting, working, ready] = roomSessions(all, seen, 'office');
     const [resting] = roomSessions(all, seen, 'lounge');
     const latestFirst = (list: SessionInfo[]) => [...list].sort((a, b) => b.stateSince - a.stateSince);
     return ([['waiting', waiting], ['working', working], ['ready', latestFirst(ready)], ['resting', latestFirst(resting)]] as const).filter(([, list]) => list.length > 0);
-  }, [sessions, seen]);
+  }, [sessions, seen, project]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);
   const words = t.session.list;
