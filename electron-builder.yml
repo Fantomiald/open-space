@@ -29,7 +29,8 @@ dmg:
 win:
   icon: desktop/build/icon.ico
   target:
-    - nsis
+    - target: nsis
+      arch: [x64]
   artifactName: Open Space-Setup-${version}-${arch}.${ext}
 nsis:
   oneClick: false

@@ -6,7 +6,7 @@ Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temp
 
 [![Dernière version](https://img.shields.io/github/v/release/Fantomiald/open-space)](https://github.com/Fantomiald/open-space/releases/latest)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-lightgrey)
-![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-blue)
+![Windows](https://img.shields.io/badge/Windows-x64-blue)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 **[Installer sur Mac ou Windows](#installer)** · [Lancer depuis le code](#lancer-depuis-le-code) · [Nouveautés](CHANGELOG.md)
@@ -93,9 +93,9 @@ Fermer la fenêtre laisse tourner tes sessions : l'icône du Dock la rouvre et l
 
 ### Sur Windows
 
-Télécharge l’installateur `.exe` de la [dernière version](https://github.com/Fantomiald/open-space/releases/latest) : `x64` pour un PC Intel/AMD, `arm64` pour Windows sur ARM. Lance `Open Space-Setup-<version>-<architecture>.exe` et suis l’assistant d’installation. Node.js n’est pas nécessaire pour utiliser l’app installée ; Claude Code doit être installé et connecté.
+Télécharge `Open Space-Setup-<version>-x64.exe` de la [dernière version](https://github.com/Fantomiald/open-space/releases/latest) et lance-le. L'app se met à jour toute seule. Claude Code doit être installé et connecté ; Node.js n'est pas nécessaire.
 
-Si l’installateur n’est pas signé, Windows peut afficher un avertissement SmartScreen.
+L'installateur n'est pas encore signé : si SmartScreen prévient, clique sur **Informations complémentaires** puis **Exécuter quand même**.
 
 Fermer la fenêtre laisse tourner tes sessions : l’icône dans la zone de notification permet de la rouvrir. Pour arrêter l’app, fais un clic droit sur cette icône puis choisis **Quitter Open Space**. Les sessions reprennent au prochain lancement.
 

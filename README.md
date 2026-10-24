@@ -6,7 +6,7 @@ A pixel-art office to run several Claude Code sessions at once.
 
 [![Latest release](https://img.shields.io/github/v/release/Fantomiald/open-space)](https://github.com/Fantomiald/open-space/releases/latest)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-lightgrey)
-![Windows](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-blue)
+![Windows](https://img.shields.io/badge/Windows-x64-blue)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 **[Install on Mac or Windows](#install)** · [Run from source](#run-from-source) · [What's new](CHANGELOG.md) (in French)
@@ -93,9 +93,9 @@ Closing the window keeps your sessions running: the Dock icon brings it back and
 
 ### On Windows
 
-Download the `.exe` installer from the [latest release](https://github.com/Fantomiald/open-space/releases/latest): `x64` for an Intel/AMD PC, `arm64` for Windows on ARM. Run `Open Space-Setup-<version>-<architecture>.exe` and follow the installation wizard. Node.js is not needed to use the installed app; Claude Code must be installed and signed in.
+Download `Open Space-Setup-<version>-x64.exe` from the [latest release](https://github.com/Fantomiald/open-space/releases/latest) and run it. It updates itself. Claude Code must be installed and signed in; Node.js is not needed.
 
-If the installer is unsigned, Windows may display a SmartScreen warning.
+The installer isn't signed yet: if SmartScreen warns, click **More info** then **Run anyway**.
 
 Closing the window keeps your sessions running: the notification-area icon brings it back. To stop the app, right-click that icon and choose **Quit Open Space**. Sessions resume at the next launch.
 
