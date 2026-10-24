@@ -82,6 +82,8 @@ export class SessionManager {
   private probes = new Map<string, Promise<void>>();
   private commands: SlashCommand[] = [];
   private quota: Quota | null = null;
+  /** an idle compaction failed (the session limit, most often): none is tried again until a turn ends well */
+  private idleCompactPaused = false;
   private saveTimer: NodeJS.Timeout | null = null;
   /** set by shutdown(): no new process may start after it */
   private stopping = false;
@@ -261,6 +263,7 @@ export class SessionManager {
       graceMs: this.deps.graceMs,
       runShell: this.deps.runShell,
       onTurnEnd: (session, how) => this.onTurnEnd(session.id, how),
+      onAutoCompactFailed: () => { this.idleCompactPaused = true; },
     });
   }
 
@@ -280,7 +283,7 @@ export class SessionManager {
    */
   compactIdle(minutes: number) {
     const sessions = [...this.sessions.values()];
-    if (!minutes || this.stopping || sessions.some((session) => session.autoCompacting)) return;
+    if (!minutes || this.stopping || this.idleCompactPaused || sessions.some((session) => session.autoCompacting)) return;
     const now = this.now();
     const due = sessions
       .filter((session) => {
@@ -600,6 +603,7 @@ export class SessionManager {
 
   /** A turn of an isolated session is over: the merge it was asked for is checked and done, or its branch looked at again. */
   private onTurnEnd(id: string, how: TurnEnd) {
+    if (how === 'done') this.idleCompactPaused = false;
     const session = this.sessions.get(id);
     const worktree = session?.snapshot().worktree;
     if (!session || !worktree) return;

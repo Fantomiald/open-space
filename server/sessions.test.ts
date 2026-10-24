@@ -489,6 +489,44 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
+  it('keeps a failed idle compaction out of the thread and does not try again until a turn ends well', async () => {
+    let clock = 1_000_000;
+    const { manager, processes, messages, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    const first = processes[0];
+    first.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    first.handlers.onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: 'Long answer' }], usage: { input_tokens: 120_000, output_tokens: 500 } } });
+    first.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Long answer', duration_ms: 9, modelUsage: { m: { contextWindow: 200_000 } } });
+    await manager.rest(id);
+    const says = () => messages.filter((m) => m.t === 'ev' && (m.ev.k === 'say' || m.ev.k === 'end')).length;
+    const saysBefore = says();
+    clock += 31 * 60_000;
+    manager.compactIdle(30);
+    const second = processes[1];
+    // woken up, Claude Code closes an empty turn, then the compaction's own one fails
+    second.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 1 });
+    assert.equal(find(id).compacting, 'auto', 'the empty turn is not the compaction');
+    const limit = "Error during compaction: You've hit your session limit";
+    second.handlers.onMessage({ type: 'assistant', message: { content: [{ type: 'text', text: limit }] } });
+    second.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: limit, duration_ms: 600 });
+    assert.equal(says(), saysBefore, 'nothing in the thread');
+    assert.equal(find(id).compacting, undefined);
+    assert.equal(find(id).resting, true, 'back to rest');
+    clock += 31 * 60_000;
+    manager.compactIdle(30);
+    assert.equal(processes.length, 2, 'not again while the limit may hold');
+    manager.send(id, 'back');
+    const third = processes[2];
+    third.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    third.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'Done', duration_ms: 9 });
+    await manager.rest(id);
+    clock += 31 * 60_000;
+    manager.compactIdle(30);
+    assert.equal(processes.length, 4, 'a turn ended well: compacting again');
+    await manager.shutdown();
+  });
+
   it('duplicates a session: same folder and settings, its conversation forked at the first message, the original left alone', async () => {
     const { manager, processes, find } = setup();
     await manager.init();

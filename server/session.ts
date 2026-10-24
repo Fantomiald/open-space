@@ -66,6 +66,8 @@ export interface SessionDeps {
    * what a merge under way waits for
    */
   onTurnEnd?: (session: SessionInfo, how: TurnEnd) => void;
+  /** a compaction asked by autoCompact ended without compacting (the session limit reached, most often) */
+  onAutoCompactFailed?: () => void;
 }
 
 export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
@@ -124,7 +126,7 @@ export class Session {
   /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
   private remote: RemoteControl | undefined;
   /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
-  private autoCompaction: { resting: boolean; hadProcess: boolean } | null = null;
+  private autoCompaction: { resting: boolean; hadProcess: boolean; compacted: boolean } | null = null;
   /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
   private preparing = false;
 
@@ -611,6 +613,7 @@ export class Session {
   }
 
   private onPartial(who: string, text: string) {
+    if (this.autoCompaction) return;
     this.partials.set(who, text);
     this.partialTimer ??= setTimeout(() => {
       this.partialTimer = null;
@@ -620,8 +623,10 @@ export class Session {
   }
 
   private onEvent(event: OfficeEvent) {
+    // what Claude says while Open Space compacts on its own (an error, the session limit) is not shown
+    if (event.k === 'say' && this.autoCompaction) return;
     const ev: OfficeEvent = event.k === 'compact' && this.autoCompaction ? { ...event, idle: true } : event;
-    if (ev.k === 'compact') { this.info.compacting = undefined; this.publish(); }
+    if (ev.k === 'compact') { this.info.compacting = undefined; if (this.autoCompaction) this.autoCompaction.compacted = true; this.publish(); }
     // the whole message is here: what was left of it to send is not needed any more
     if (ev.k === 'say') this.partials.delete(ev.who);
     // Claude Code's init (it opens every turn) is not something happening in it
@@ -669,7 +674,15 @@ export class Session {
   }
 
   private onResult(result: TurnResult) {
-    if (this.autoCompaction) { this.endAutoCompaction(); return; }
+    if (this.autoCompaction) {
+      if (this.emptyResult) { clearTimeout(this.emptyResult); this.emptyResult = null; }
+      // a process woken up for it closes an empty turn first: the compaction's own turn comes after
+      if (!this.autoCompaction.compacted && result.ok && !result.text.trim()) {
+        this.emptyResult = setTimeout(() => { this.emptyResult = null; this.endAutoCompaction(); }, this.deps.graceMs ?? GRACE_MS);
+        this.emptyResult.unref();
+      } else this.endAutoCompaction();
+      return;
+    }
     // Claude Code sometimes closes an empty turn of a few ms before the real one (waking a session up, after a
     // background sub-agent's hand-back): nothing happened, so nothing is told. If nothing follows, the session waits.
     if (this.cleared && !result.text.trim()) { this.cleared = false; this.endTurn(false); return; }
@@ -698,7 +711,7 @@ export class Session {
     if (!idle || this.busy || this.preparing || this.stopRequest || this.autoCompaction || !this.info.resumable || this.info.queued?.length || this.info.subagents.length || this.info.background) return false;
     const hadProcess = !!this.process?.alive;
     if (!hadProcess) this.startProcess();
-    this.autoCompaction = { resting: this.info.resting === true, hadProcess };
+    this.autoCompaction = { resting: this.info.resting === true, hadProcess, compacted: false };
     this.info.quietFrom ??= this.deps.log.lastSeq;
     this.info.compacting = 'auto';
     this.clearIdleTimer();
@@ -715,6 +728,7 @@ export class Session {
     this.autoCompaction = null;
     this.info.compacting = undefined;
     this.turnOutput = false;
+    if (before && !before.compacted) this.deps.onAutoCompactFailed?.();
     this.apply({ type: 'turn_result' });
     if (this.context.state !== 'wait' || !before) return;
     if (this.info.queued?.length) { this.sendQueued(); return; }
