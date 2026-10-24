@@ -24,6 +24,10 @@ jobs:
       - run: npm run check
       - run: npm run lint
       - run: npm test
+        # The Windows runner's temp folder is an 8.3 short path (RUNNER~1) that git prints in full: give the tests a long one.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
       - run: npm run build
       - name: Build Windows installers
         if: runner.os == 'Windows'
