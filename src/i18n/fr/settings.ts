@@ -75,7 +75,7 @@ export const settings = {
       about: 'La version d’Open Space et de Claude Code.',
     },
     groups: {
-      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
+      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', system: 'Système', life: 'Ambiance', crew: 'Équipe', files: 'Fichiers',
     },
     inherit: (value: string) => `Comme Claude Code (${value})`,
     inheritAction: 'Comme Claude Code',

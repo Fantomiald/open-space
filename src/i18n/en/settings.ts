@@ -72,7 +72,7 @@ export const settings: Dictionary['settings'] = {
     },
     groups: {
       appearance: 'Display', alerts: 'Alerts', text: 'Threads', reasoning: 'Thinking and answers', autonomy: 'Autonomy', workflows: 'Workflows', together: 'Between sessions',
-      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', life: 'Ambience', crew: 'Crew', files: 'Files',
+      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', system: 'System', life: 'Ambience', crew: 'Crew', files: 'Files',
     },
     inherit: (value: string) => `As in Claude Code (${value})`,
     inheritAction: 'As in Claude Code',

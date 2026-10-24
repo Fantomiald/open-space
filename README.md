@@ -52,7 +52,7 @@ Alt (Option on Mac) + drag moves the room; Alt + scroll or pinch zooms it. Sizes
 
 ## A branch per session
 
-Several sessions in one project no longer step on each other. When another session already works in the folder, the launcher offers **Isolate on a branch**, already checked: the new session starts on a branch of its own (`os/lina-apple-pay`), in a folder of its own (a git worktree in `.claude/worktrees/`), with the project's `.env` files and `node_modules` copied into the new folder (duration depends on their size and the file system).
+Several sessions in one project no longer step on each other. When another session already works in the folder, the launcher offers **Isolate on a branch**, already checked: the new session starts on a branch of its own (`os/lina-apple-pay`), in a folder of its own (a git worktree in `.claude/worktrees/`), with the project's `.env` files and `node_modules` copied in (instantly on a Mac).
 
 - **You never touch git.** When it is done, a "Ready to merge into main" card shows at the end of the thread. **Merge** asks the session to squash its work into one commit and catch up; Open Space checks, moves `main` on and removes the folder. The session goes on in the project, on `main`. **Open a PR** pushes the branch and opens the pull request with `gh`.
 - **Nothing is lost without you knowing.** Switching off a session whose branch has work asks what to do with it: merge then switch off, keep the branch (its work is committed, and it comes back if you resume the conversation), or throw it all away.
@@ -79,7 +79,7 @@ Six themes under **Settings > Office**: a space shuttle, a neon Tokyo street, a 
 
 The sky follows your clock: clouds by day, stars and a lit-up office at night. The rooms dress up for 14 occasions, from Christmas and Halloween to Songkran and each crew member's birthday. The calendar icon in the top bar lets you try them all.
 
-Around the office, click the screen on your desk to open a terminal, and the whiteboard to read and edit your notes (one tab per Markdown file in the notes folder (`~/Journal` on Mac, `%USERPROFILE%\Journal` on Windows, configurable in Settings), which your sessions can fill too). Point Settings at a file of numbers and a pile of banknotes shows up on your desk, with a red "!" when the file changed. The radio plays lo-fi, or drives Music/Apple Music or Spotify on macOS and Windows. On Windows, the player must be open and expose a media session: track information, play/pause and previous/next are available according to its capabilities; volume, artwork and the library are not available through this remote.
+Around the office, click the screen on your desk to open a terminal, and the whiteboard to read and edit your notes (one tab per Markdown file of `~/Journal`, which your sessions can fill too; the folder is set in Settings). Point Settings at a file of numbers and a pile of banknotes shows up on your desk, with a red "!" when the file changed. The radio plays lo-fi, or drives Music or Spotify (on Windows: play, pause and skip only, with the player open).
 
 ## Install
 
@@ -124,7 +124,7 @@ The first launch asks your first name and character, the folders sessions may wo
 
 ## Good to know
 
-- The desktop app supports macOS and Windows. The browser driven by agents requires an installed Chromium browser (such as Chrome or Edge); Firefox is not supported for this automation.
+- The desktop app supports macOS and Windows. The browser driven by agents needs a Chromium browser (Chrome, Edge, Arc).
 - Open Space relies on `claude -p` in stream-json mode, some of whose options are undocumented. A newer Claude Code may break a feature: please [open an issue](https://github.com/Fantomiald/open-space/issues) if it does.
 - The changelog, the code's comments and the internal docs ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) are partly in French.
 
@@ -168,7 +168,7 @@ npm ci
 npm run app:win
 ```
 
-The x64 installer is created in `release/`. For ARM64, use `npm run app:win:arm64`. Local installers are unsigned. Publishing Windows updates requires the installer and the corresponding update files in a GitHub release.
+The x64 installer is created in `release/`. For ARM64, use `npm run app:win:arm64`. Local installers are unsigned.
 
 How it works inside (server, protocol, office, and what was checked against a real Claude Code) is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The rules for changing the code are in [CLAUDE.md](CLAUDE.md).
 

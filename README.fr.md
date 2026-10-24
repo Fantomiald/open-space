@@ -52,7 +52,7 @@ Alt (Option sur Mac) + glisser déplace la salle ; Alt + molette ou le pincement
 
 ## Une branche par session
 
-Plusieurs sessions dans le même projet ne se marchent plus dessus. Quand une autre session travaille déjà dans le dossier, le lanceur propose **Isoler sur une branche**, déjà coché : la nouvelle session part sur sa propre branche (`os/lina-apple-pay`), dans son propre dossier (un worktree git dans `.claude/worktrees/`), avec les `.env` et les `node_modules` du projet copiés dans le nouveau dossier (la durée dépend de leur taille et du système de fichiers).
+Plusieurs sessions dans le même projet ne se marchent plus dessus. Quand une autre session travaille déjà dans le dossier, le lanceur propose **Isoler sur une branche**, déjà coché : la nouvelle session part sur sa propre branche (`os/lina-apple-pay`), dans son propre dossier (un worktree git dans `.claude/worktrees/`), avec les `.env` et les `node_modules` du projet copiés (en un instant sur Mac).
 
 - **Tu ne touches jamais à git.** Quand elle a fini, une carte « Prête à fusionner dans main » arrive à la fin du fil. **Fusionner** demande à la session de tout regrouper en un commit et de se remettre à jour ; Open Space vérifie, avance `main` et supprime le dossier. La session continue dans le projet, sur `main`. **Ouvrir une PR** pousse la branche et ouvre la pull request avec `gh`.
 - **Rien ne se perd sans que tu le saches.** Éteindre une session dont la branche a du travail demande quoi en faire : fusionner puis éteindre, garder la branche (son travail est commité, elle revient si tu reprends la conversation), ou tout jeter.
@@ -79,7 +79,7 @@ Six thèmes dans **Réglages > Bureau** : une navette spatiale, une rue de Tokyo
 
 Le ciel suit ton heure : nuages le jour, étoiles et bureau éclairé la nuit. Les salles se déguisent pour 14 occasions, de Noël et Halloween à Songkran et à l'anniversaire de chaque membre de l'équipe. L'icône calendrier du bandeau permet de toutes les essayer.
 
-Dans le bureau, clique sur l'écran de ton poste pour ouvrir un terminal, et sur le tableau blanc pour lire et modifier tes notes (un onglet par fichier Markdown du dossier des notes (`~/Journal` sur Mac, `%USERPROFILE%\Journal` sur Windows, modifiable dans les Réglages), que tes sessions peuvent aussi remplir). Indique un fichier de chiffres dans les Réglages et une pile de billets apparaît sur ton bureau, avec un « ! » rouge quand le fichier a changé. La radio joue du lo-fi, ou pilote Musique/Apple Music ou Spotify sur macOS et Windows. Sous Windows, le lecteur doit être ouvert et exposer une session média : informations du morceau, lecture/pause et précédent/suivant selon ses capacités ; volume, pochettes et bibliothèque ne sont pas disponibles via cette télécommande.
+Dans le bureau, clique sur l'écran de ton poste pour ouvrir un terminal, et sur le tableau blanc pour lire et modifier tes notes (un onglet par fichier Markdown de `~/Journal`, que tes sessions peuvent aussi remplir ; le dossier se change dans les Réglages). Indique un fichier de chiffres dans les Réglages et une pile de billets apparaît sur ton bureau, avec un « ! » rouge quand le fichier a changé. La radio joue du lo-fi, ou pilote Musique ou Spotify (sous Windows : lecture, pause et morceau suivant ou précédent seulement, le lecteur ouvert).
 
 ## Installer
 
@@ -124,7 +124,7 @@ Le premier lancement demande ton prénom et ton perso, les dossiers où les sess
 
 ## Bon à savoir
 
-- L’app de bureau prend en charge macOS et Windows. Le navigateur piloté par les agents nécessite un navigateur Chromium installé (par exemple Chrome ou Edge) ; Firefox n’est pas pris en charge pour ce pilotage.
+- L’app de bureau prend en charge macOS et Windows. Le navigateur piloté par les agents demande un navigateur Chromium (Chrome, Edge, Arc).
 - Open Space s'appuie sur `claude -p` en mode stream-json, dont certaines options ne sont pas documentées. Une version plus récente de Claude Code peut casser une fonction : [ouvre une issue](https://github.com/Fantomiald/open-space/issues) si ça t'arrive.
 - Les commentaires du code et la doc interne ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) sont en partie en français.
 
@@ -168,7 +168,7 @@ npm ci
 npm run app:win
 ```
 
-L’installateur x64 est créé dans `release/`. Pour ARM64, utilise `npm run app:win:arm64`. Les installateurs locaux ne sont pas signés. La publication des mises à jour Windows nécessite l’installateur et les fichiers de mise à jour correspondants dans une release GitHub.
+L’installateur x64 est créé dans `release/`. Pour ARM64, utilise `npm run app:win:arm64`. Les installateurs locaux ne sont pas signés.
 
 Le fonctionnement interne (serveur, protocole, bureau, et ce qui a été vérifié sur un vrai Claude Code) est décrit dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Les règles pour modifier le code sont dans [CLAUDE.md](CLAUDE.md).
 
