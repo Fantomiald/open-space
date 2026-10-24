@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { homeRelative } from '../lib/format.ts';
+import { folderName, homeRelative, splitPath } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -13,6 +13,9 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const box = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  // the folder's name alone at rest, its full path while typing
+  const [focused, setFocused] = useState(false);
   const close = useCallback(() => { setOpen(false); setActive(-1); }, []);
   useDismiss(open, box, close);
   const matches = useMemo(() => matchFolders(directories, value), [directories, value]);
@@ -35,23 +38,24 @@ export function FolderPicker({ directories, value, placeholder, onChange }: { di
   return (
     <div className="cp-chip cp-folder" data-folder title={t.composer.folderPicker.title} ref={box}>
       <input
+        ref={input} title={value || placeholder}
         aria-label={t.composer.folderPicker.label} role="combobox" aria-expanded={shown} aria-controls="folder-picker" aria-autocomplete="list" autoComplete="off" spellCheck={false}
         aria-activedescendant={shown && active >= 0 ? `folder-option-${active}` : undefined}
-        value={value} placeholder={placeholder} onFocus={() => setOpen(true)} onKeyDown={onKeyDown}
+        value={focused ? value : folderName(value)} placeholder={focused ? placeholder : folderName(placeholder)}
+        onFocus={() => { setFocused(true); setOpen(true); requestAnimationFrame(() => { if (document.activeElement === input.current) input.current?.select(); }); }} onBlur={() => { setFocused(false); close(); }} onKeyDown={onKeyDown}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
       />
       {shown && (
         <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
           {matches.map((directory, index) => {
-            const shownPath = homeRelative(directory);
-            const cut = shownPath.lastIndexOf('/') + 1;
+            const { folder, name } = splitPath(homeRelative(directory));
             return (
               <li
                 key={directory} id={`folder-option-${index}`} role="option" aria-selected={index === active} className="cp-folder__option"
                 onPointerDown={(e) => e.preventDefault()} onClick={() => pick(directory)} onPointerEnter={() => setActive(index)}
               >
-                <span className="cp-folder__name">{shownPath.slice(cut)}</span>
-                <span className="cp-folder__parent">{shownPath.slice(0, cut)}</span>
+                <span className="cp-folder__name">{name}</span>
+                <span className="cp-folder__parent">{folder}</span>
               </li>
             );
           })}

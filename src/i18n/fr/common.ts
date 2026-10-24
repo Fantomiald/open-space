@@ -1,3 +1,4 @@
+import { shortcut } from '../../lib/platform.ts';
 export const common = {
   duration: {
     seconds: (seconds: number) => `${seconds} s`,
@@ -94,7 +95,7 @@ export const common = {
     stats: { description: 'Le récap de la semaine : temps, sessions, projets' },
     status: { description: 'Versions, compte Claude et connexion (Réglages, À propos)' },
     theme: { description: 'Change le thème du bureau' },
-    help: { description: 'Toutes les commandes et la recherche (⌘K)' },
+    help: { description: `Toutes les commandes et la recherche (${shortcut('K')})` },
     'release-notes': { description: 'Les nouveautés de Claude Code' },
     login: { description: 'Se connecter à Claude Code ou changer de compte (ton navigateur s’ouvre)' },
     logout: { description: 'Se déconnecter de Claude Code, après confirmation dans les réglages' },
@@ -120,6 +121,8 @@ export const common = {
     previousTrack: 'Morceau précédent',
     nextTrack: 'Morceau suivant',
     closed: (app: string) => `${app} est fermé`,
+    closedWindows: (app: string) => `Ouvre ${app} et lance un morceau pour le piloter ici`,
+    deniedWindows: (app: string) => `Windows ou ${app} n’a pas accepté le contrôle de lecture. Ouvre l’application et réessaie.`,
     nothing: 'Rien en lecture',
     paused: 'En pause',
     denied: 'Accès refusé',

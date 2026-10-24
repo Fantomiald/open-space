@@ -1,6 +1,7 @@
-// macOS notifications when a session needs the user and no tab of Open Space is in front: shown by the macOS
-// app when the bridge runs inside it (desktop/main.ts) or when the applet runs (scripts/macos-app.py), so they carry
-// its name and icon and a click opens that session; otherwise by osascript itself. Nothing elsewhere than macOS.
+// Notifications when a session needs the user and no tab of Open Space is in front: shown by the desktop app when
+// the bridge runs inside it (desktop/main.ts), on macOS and Windows, or on macOS when the applet runs
+// (scripts/macos-app.py), so they carry its name and icon and a click opens that session; otherwise on macOS by
+// osascript itself. Elsewhere, only through the app.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
@@ -37,9 +38,9 @@ const VIA_APP = [
 const PLAIN = ['on run argv', '  display notification (item 2 of argv) with title (item 1 of argv)', 'end run'];
 
 export function notify(session: SessionInfo, kind: AttentionKind, log: (message: string, error?: unknown) => void) {
-  if (process.platform !== 'darwin') return;
   const { title, body } = notificationText(session, kind);
   if (appPort) { appPort.postMessage({ t: 'notify', title, body, sessionId: session.id }); return; }
+  if (process.platform !== 'darwin') return;
   const script = existsSync(APP) ? VIA_APP : PLAIN;
   execFile('/usr/bin/osascript', [...script.flatMap((line) => ['-e', line]), title, body, session.id], { timeout: 10_000 }, (error) => {
     if (error) log('notification failed', error);

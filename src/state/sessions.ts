@@ -9,6 +9,7 @@ import { setClockFormat } from '../lib/format.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
+import type { TerminalChoice } from '../../shared/terminal.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
@@ -185,6 +186,7 @@ interface CommandPostState {
   appUpdate: AppUpdate | null;
   /** folders offered at the onboarding, once asked for */
   rootSuggestions: RootSuggestion[] | null;
+  terminals: TerminalChoice[];
   /** changes some of the settings (the server keeps them and tells every tab) */
   setPreferences: (changes: Partial<Preferences>) => boolean;
   /** a ding when a session finishes or needs the user */
@@ -397,6 +399,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   claudeAccount: null,
   appUpdate: null,
   rootSuggestions: null,
+  terminals: [],
   sound: readPreference('sound', true),
   paletteOpen: false,
   paletteQuery: '',
@@ -465,6 +468,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       }
       case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded, claudeDefaults: message.claudeDefaults }); break;
       case 'rootSuggestions': set({ rootSuggestions: message.suggestions }); break;
+      case 'terminals': set({ terminals: message.choices }); break;
       case 'trustNeeded': if (lastCreate) set({ trustRequest: { cwd: message.cwd, code: message.code, options: lastCreate } }); break;
       case 'forgotten': {
         const { [message.sessionId]: _removed, ...sessions } = s.sessions;

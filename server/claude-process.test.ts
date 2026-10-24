@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { describe, it } from 'node:test';
-import { buildClaudeArgs, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote } from './claude-process.ts';
+import { buildClaudeArgs, claudeCommand, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote } from './claude-process.ts';
 import { setServerLanguage } from './i18n/index.ts';
+
+it('passes npm Claude arguments directly to Node without shell interpretation on Windows', () => {
+  const args = ['--settings', JSON.stringify({ text: 'spaces & %PATH% "quotes"' })];
+  const file = path.resolve('test prefix', 'claude.cmd');
+  const [command, passed] = claudeCommand(file, args);
+  if (process.platform !== 'win32') { assert.deepEqual([command, passed], [file, args]); return; }
+  assert.equal(command, 'node.exe');
+  assert.deepEqual(passed, [path.join(path.dirname(file), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'), ...args]);
+});
 
 describe('buildClaudeArgs', () => {
   const base = { sessionId: '11111111-2222-3333-4444-555555555555', resume: false, model: '', permissionMode: 'auto' as const, name: 'Iris' };

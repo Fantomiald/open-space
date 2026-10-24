@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
+import { isFullPath } from '../../shared/paths.ts';
+import type { TerminalKind } from '../../shared/terminal.ts';
+import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
 import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
@@ -37,7 +40,7 @@ const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
@@ -139,6 +142,7 @@ function SettingsEditor() {
   const section = useSessions((s) => s.settingsSection);
   const flashRow = useSessions((s) => s.settingsRow);
   const language = useSessions((s) => s.language);
+  const terminals = useSessions((s) => s.terminals);
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
@@ -146,6 +150,7 @@ function SettingsEditor() {
   const [draft, setDraft] = useState<Preferences>(() => ({
     ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), metricsFile: homeRelative(preferences.metricsFile),
   }));
+  const terminal = draft.terminal ?? 'cmd';
   const change = (changes: Partial<Preferences>) => setDraft((current) => ({ ...current, ...changes }));
 
   useEffect(() => { store().send({ t: 'suggestRoots' }); }, [store]);
@@ -154,7 +159,7 @@ function SettingsEditor() {
   const words = t.settings.prefs;
   const { status } = useAutosave(draft, (next) => {
     if (!next.roots.length) return t.settings.dialog.noFolder;
-    if (!/^(\/|~(\/|$))/.test(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
+    if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });
@@ -192,6 +197,14 @@ function SettingsEditor() {
       );
     }
     switch (id) {
+      case 'terminal': return !IS_WINDOWS ? null : (
+        <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.terminal.title} hint={rows.terminal.hint}>
+          <select aria-labelledby={`setting-${id}-title`} title={terminals.find((choice) => choice.id === terminal)?.path} value={terminal} disabled={!terminals.length} onChange={(e) => change({ terminal: e.target.value as TerminalKind })}>
+            {!terminals.some((choice) => choice.id === terminal) && <option value={terminal} disabled>{rows.terminal.unavailable}</option>}
+            {terminals.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+          </select>
+        </Row>
+      );
       case 'language': return (
         <Row key={id} id={id} flash={flash} icon={<LanguageIcon />} title={rows.language.title} hint={rows.language.hint}>
           <select aria-labelledby={`setting-${id}-title`} value={draft.language ?? language} onChange={(e) => change({ language: e.target.value as Language })}>
@@ -368,12 +381,12 @@ function SettingsEditor() {
       );
       case 'journalFolder': return (
         <Row key={id} id={id} flash={flash} wide icon={<NotesIcon />} title={rows.journalFolder.title} hint={rows.journalFolder.hint}>
-          <input aria-labelledby={`setting-${id}-title`} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />
+          <input aria-labelledby={`setting-${id}-title`} title={preferences.journalFolder} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />
         </Row>
       );
       case 'metricsFile': return (
         <Row key={id} id={id} flash={flash} wide icon={<ChartIcon />} title={rows.metricsFile.title} hint={rows.metricsFile.hint}>
-          <input aria-labelledby={`setting-${id}-title`} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
+          <input aria-labelledby={`setting-${id}-title`} title={preferences.metricsFile || undefined} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
         </Row>
       );
       case 'version': return (
@@ -411,7 +424,7 @@ function SettingsEditor() {
           </span>
         </Row>
       );
-      case 'dockApp': return IN_APP ? null : (
+      case 'dockApp': return IN_APP || !IS_MAC ? null : (
         <Row key={id} id={id} flash={flash} icon={<DeskIcon />} title={rows.dockApp.title} hint={rows.dockApp.hint}>{null}</Row>
       );
     }

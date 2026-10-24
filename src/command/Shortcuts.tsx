@@ -1,14 +1,13 @@
+import { IS_MAC, MODIFIER } from '../lib/platform.ts';
 import { t } from '../i18n/index.ts';
 
-const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-const MODIFIER = MAC ? '⌘' : 'Ctrl';
-const OPTION = MAC ? '⌥' : 'Alt';
+const OPTION = IS_MAC ? '⌥' : 'Alt';
 
 /** The keyboard shortcuts, as App.tsx and the windows listen to them (read-only). */
 export function Shortcuts() {
   const words = t.settings.prefs.shortcuts;
   const groups: readonly (readonly [string, readonly (readonly [string, readonly string[]])[]])[] = [
-    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.terminal, MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
+    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.terminal, IS_MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
     [words.groups.sessions, [
       [words.newSession, ['N']], [words.quickSession, ['⇧', 'N']], [words.command, ['/']], [words.threadSearch, [MODIFIER, 'F']],
       [words.interrupt, ['esc']], [words.hide, ['tab']],

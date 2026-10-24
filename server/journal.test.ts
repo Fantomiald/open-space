@@ -85,8 +85,8 @@ describe('the whiteboard notes', () => {
   });
 
   it('keeps the journal folder of the settings absolute, "~" being the home', () => {
-    assert.deepEqual(parsePreferences({ journalFolder: '~/Journal' }, '/home/someone'), { journalFolder: '/home/someone/Journal' });
-    assert.deepEqual(parsePreferences({ journalFolder: '/notes/' }, '/home/someone'), { journalFolder: '/notes' });
+    assert.deepEqual(parsePreferences({ journalFolder: '~/Journal' }, '/home/someone'), { journalFolder: path.resolve('/home/someone/Journal') });
+    assert.deepEqual(parsePreferences({ journalFolder: '/notes/' }, '/home/someone'), { journalFolder: path.resolve('/notes') });
     assert.deepEqual(parsePreferences({ journalFolder: 'Journal' }, '/home/someone'), {});
     assert.deepEqual(parsePreferences({ journalFolder: '~other/Journal' }, '/home/someone'), {});
   });

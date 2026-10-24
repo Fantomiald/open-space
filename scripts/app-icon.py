@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Draws desktop/build/icon.png, the icon of the macOS app as Finder and the .dmg show it: the default look's bust
 (scripts/icon-head.png) on the squircle of scripts/macos-app.py. Once the app runs, the Dock shows the user's own bust
-instead (desktop/main.ts). Run it again after changing icon-head.png; it needs Pillow.
+instead (desktop/main.ts). Also writes desktop/build/icon.ico, the Windows app's. Run it again after changing
+icon-head.png; it needs Pillow.
 
     python3 scripts/app-icon.py
 """
@@ -17,3 +18,9 @@ macos_app.HEAD = os.path.join(PROJECT, 'scripts', 'icon-head.png')
 
 with open(os.path.join(PROJECT, 'desktop', 'build', 'icon.png'), 'wb') as file:
     file.write(macos_app.png(macos_app.draw(), 1024))
+
+from PIL import Image
+
+with Image.open(os.path.join(PROJECT, 'desktop', 'build', 'icon.png')) as image:
+    image.save(os.path.join(PROJECT, 'desktop', 'build', 'icon.ico'), format='ICO',
+               sizes=[(size, size) for size in (16, 20, 24, 32, 40, 48, 64, 128, 256)])

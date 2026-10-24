@@ -1,3 +1,4 @@
+import { shortcut } from '../../lib/platform.ts';
 import type { Dictionary } from '../index.ts';
 
 export const common: Dictionary['common'] = {
@@ -95,7 +96,7 @@ export const common: Dictionary['common'] = {
     stats: { description: 'The week in review: time, sessions, projects' },
     status: { description: 'Versions, Claude account and connection (Settings, About)' },
     theme: { description: 'Changes the office theme' },
-    help: { description: 'Every command, and the search (⌘K)' },
+    help: { description: `Every command, and the search (${shortcut('K')})` },
     'release-notes': { description: 'What is new in Claude Code' },
     login: { description: 'Log in to Claude Code or switch accounts (your browser opens)' },
     logout: { description: 'Log out of Claude Code, after confirming in the settings' },
@@ -121,6 +122,8 @@ export const common: Dictionary['common'] = {
     previousTrack: 'Previous track',
     nextTrack: 'Next track',
     closed: (app) => `${app} is closed`,
+    closedWindows: (app) => `Open ${app} and play a track to control it here`,
+    deniedWindows: (app) => `Windows or ${app} did not accept playback control. Open the app and try again.`,
     nothing: 'Nothing playing',
     paused: 'Paused',
     denied: 'Access denied',

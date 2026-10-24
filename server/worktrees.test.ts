@@ -24,6 +24,7 @@ function repository(): string {
   const root = path.join(scratch, `repo-${++count}`);
   mkdirSync(root);
   sh(root, 'init', '-q', '-b', 'main');
+  sh(root, 'config', 'core.autocrlf', 'false');
   write(path.join(root, '.gitignore'), 'node_modules/\n.env*\nPods/\n');
   write(path.join(root, 'app.ts'), 'export const a = 1;\n');
   write(path.join(root, 'mobile', 'index.ts'), 'export const b = 2;\n');
@@ -71,17 +72,21 @@ test('what is copied: .env files and node_modules / Pods folders, or what .workt
   write(path.join(root, 'mobile', 'ios', 'Pods', 'p.h'), 'p\n');
   write(path.join(root, 'scratch.log'), 'not this\n');
   assert.deepEqual((await includedEntries(root)).sort(), ['.env', 'mobile/.env.local', 'mobile/ios/Pods/', 'mobile/node_modules/', 'node_modules/']);
-  // the copy clones with the Mac's cp -c, which the Linux CI does not have
-  if (process.platform === 'darwin') {
+  // Files and dependency folders are independent copies on Windows/Linux, APFS clones on Mac.
+  {
     const made = await createWorktree({ mainRoot: root, name: 'Tom', about: 'dark mode', base: 'main', note: {} });
-    const copied = await copyIncluded(root, made.root, 'darwin');
+    const copied = await copyIncluded(root, made.root);
     assert.equal(copied.failed, 0);
+    assert.equal(copied.copied, 5);
     assert.equal(readFileSync(path.join(made.root, '.env'), 'utf8'), 'SECRET=1\n');
     assert.ok(existsSync(path.join(made.root, 'mobile/node_modules/y.js')));
     assert.equal(sh(made.root, 'status', '--porcelain'), '');
+    write(path.join(made.root, '.env'), 'SECRET=2\n');
+    write(path.join(made.root, 'mobile/node_modules/y.js'), 'modified\n');
+    assert.equal(readFileSync(path.join(root, '.env'), 'utf8'), 'SECRET=1\n');
+    assert.equal(readFileSync(path.join(root, 'mobile/node_modules/y.js'), 'utf8'), 'y\n');
+    assert.deepEqual(await copyIncluded(root, made.root), { copied: 0, failed: 0 }, 'existing files are never overwritten');
   }
-  // elsewhere than on a Mac: nothing (the session installs what it needs)
-  assert.deepEqual(await copyIncluded(root, path.join(scratch, 'nowhere'), 'linux'), { copied: 0, failed: 0, skipped: true });
   // a .worktreeinclude says what to take, among what git ignores (a tracked file or one git does not ignore goes with the branch)
   write(path.join(root, '.worktreeinclude'), '.env\nscratch.log\napp.ts\nmobile/node_modules/\n');
   assert.deepEqual((await includedEntries(root)).sort(), ['.env', 'mobile/node_modules/', 'node_modules/x/.env']);
