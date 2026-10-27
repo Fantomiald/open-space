@@ -31,7 +31,7 @@ export const fr = {
     /** sent by Open Space itself to a conversation left alone (Preferences.idleCompact) */
     idleCompact: '/compact Garde ce qu’il faut pour continuer sans rien réexpliquer : où on en est (branche, fichiers non commités), chaque décision et pourquoi, ce que l’utilisateur a demandé ou refusé avec ses mots, ce qui reste à faire, les fichiers clés et les pièges déjà rencontrés.',
     /** another session named by "@" in the user's message */
-    mention: (name: string, folder: string) => `@${name} : la session « ${name} » de l’Open Space (dossier ${folder}). Pour lui écrire : SendMessage avec to: "${name}".`,
+    mention: (mention: string, name: string, folder: string) => `@${mention} : la session « ${name} » de l’Open Space${mention === name ? '' : `, taguée « ${mention} »`} (dossier ${folder}). Pour lui écrire : SendMessage avec to: "${name}".`,
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Fichier joint : ${paths[0]}` : `Fichiers joints :\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +

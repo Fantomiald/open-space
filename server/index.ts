@@ -15,6 +15,7 @@ import { defaultFolder } from '../shared/folders.ts';
 import type { AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
 import { createAsideRunner } from './aside.ts';
+import { createTagger } from './auto-tag.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
 import { Crew } from './crew.ts';
@@ -141,6 +142,8 @@ const sessions = new SessionManager({
   spawnProcess: claude ? createProcessFactory(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   probeCatalog: claude ? createCatalogProbe(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
+  tagger: claude ? createTagger(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
+  autoTag: () => settings.preferences.autoTag,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,

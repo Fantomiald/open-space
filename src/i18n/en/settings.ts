@@ -129,6 +129,7 @@ export const settings: Dictionary['settings'] = {
       model: { title: 'Default model', hint: 'For new sessions. Each session can change it.' },
       permissions: { title: 'Default permissions', hint: 'What Claude may do without asking you.' },
       agentNote: { title: 'A note for all your agents', hint: 'Added to the instructions of every new conversation.' },
+      autoTag: { title: 'Automatic tag', hint: 'A new session gets a tag of one or two words from its first message (Haiku, less than a cent).' },
       isolate: {
         title: 'Isolate sessions',
         hint: 'A new session on a branch and in a folder of its own (a git worktree), away from the others’ files. Open Space merges when you ask.',

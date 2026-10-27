@@ -1,4 +1,5 @@
-// "@Name" in a message: another session named, which the page shows as such and the server introduces to Claude.
+// "@Name" in a message: another session named, by its name or its tag, which the page shows as such and the server
+// introduces to Claude.
 
 export interface Mention { start: number; end: number; name: string }
 
@@ -21,6 +22,17 @@ export function findMentions(text: string, names: readonly string[]): Mention[] 
     if (name) { found.push({ start: at, end: at + 1 + name.length, name }); at += name.length; }
   }
   return found;
+}
+
+/** What "@" can name a session by: its name, and its tag when it has one. */
+export function mentionNames(sessions: Iterable<{ name: string; tag?: string }>): string[] {
+  return [...sessions].flatMap((session) => (session.tag ? [session.name, session.tag] : [session.name]));
+}
+
+/** Whether a mention found by findMentions names this session, by its name or its tag. */
+export function isNamedBy(mention: string, session: { name: string; tag?: string }): boolean {
+  const wanted = mention.toLowerCase();
+  return session.name.toLowerCase() === wanted || session.tag?.toLowerCase() === wanted;
 }
 
 /** The "@" being typed where the caret is ("va voir @Li"): where it starts and what follows it, else null. */

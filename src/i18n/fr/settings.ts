@@ -132,6 +132,7 @@ export const settings = {
       model: { title: 'Modèle par défaut', hint: 'Celui des nouvelles sessions. Chaque session peut en changer.' },
       permissions: { title: 'Autorisations par défaut', hint: 'Ce que Claude peut faire sans te demander.' },
       agentNote: { title: 'Un mot pour tous tes agents', hint: 'Ajouté aux consignes de chaque nouvelle conversation.' },
+      autoTag: { title: 'Tag automatique', hint: 'Une nouvelle session reçoit un tag d’un ou deux mots tiré de son premier message (Haiku, moins d’un centime).' },
       isolate: {
         title: 'Isoler les sessions',
         hint: 'Une nouvelle session sur une branche et dans un dossier à elle (un worktree git), pour ne pas toucher aux fichiers des autres. Open Space fusionne quand tu le demandes.',

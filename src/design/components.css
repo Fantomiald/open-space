@@ -933,6 +933,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 /* a session named with "@": its face on the left of its name and folder */
 .cp-composer__commands li[data-face='true'] { grid-template-columns: auto 1fr; column-gap: var(--space-3); align-items: center; }
 .cp-composer__commands li[data-face='true'] .cp-face { grid-row: span 2; width: 2rem; height: 2rem; }
+/* its tag after its name, readable on the active line too */
+.cp-composer__aside { font-weight: 400; opacity: 0.75; }
 .cp-composer__actions { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .cp-composer__actions > [type='submit'] { flex: none; white-space: nowrap; }
 /* a small window: the tools and a one-line field side by side, the tools' panels still opening upward */

@@ -10,7 +10,7 @@ import { asJson } from './json.ts';
 import { projectFolder } from './conversations.ts';
 import { ATTACHMENT_NAME } from './attachments.ts';
 import { saveUpload } from './uploads.ts';
-import { SessionManager } from './sessions.ts';
+import { SessionManager, type SessionManagerDeps } from './sessions.ts';
 
 /** A scripted stand-in for the claude process: the tests feed it captured lines and watch what the session writes back. */
 class FakeProcess implements ProcessHandle {
@@ -80,7 +80,7 @@ before(() => {
 });
 after(() => rmSync(base, { recursive: true, force: true }));
 
-function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-${++counter}`), now?: () => number, home?: string, probeCatalog?: CatalogProbe) {
+function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-${++counter}`), now?: () => number, home?: string, probeCatalog?: CatalogProbe, deps: Partial<SessionManagerDeps> = {}) {
   const processes: FakeProcess[] = [];
   const messages: ServerMessage[] = [];
   const spawnProcess: ProcessFactory = (launch, handlers) => {
@@ -95,7 +95,7 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
     // "wait": runs until it is stopped
     if (command === 'wait') signal?.addEventListener('abort', () => resolve({ ...result, code: null, stopped: true }));
     else resolve(result);
-  }), onAttention: (kind, session) => attention.push([kind, session.id]) });
+  }), onAttention: (kind, session) => attention.push([kind, session.id]), ...deps });
   const states = (id: string) => messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id && m.ev.k === 'state' ? [m.ev.state] : []));
   const find = (id: string): SessionInfo => {
     const session = manager.list().find((s) => s.id === id);
@@ -194,6 +194,52 @@ describe('names', () => {
     manager.send(id, 'merci');
     assert.equal(processes[0].sent.at(-1), 'merci');
     await manager.shutdown();
+  });
+});
+
+describe('automatic tags', () => {
+  const tagging = (enabled: boolean) => {
+    const asked: string[] = [];
+    let answer = (_tag: string | null) => {};
+    const tagger = (message: string) => { asked.push(message); return new Promise<string | null>((resolve) => { answer = resolve; }); };
+    return { asked, answer: (tag: string | null) => answer(tag), deps: { tagger, autoTag: () => enabled } };
+  };
+
+  it('tags a new session from its first message only, when the setting is on', async () => {
+    const tags = tagging(true);
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, tags.deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'refais le paywall' });
+    assert.deepEqual(tags.asked, ['refais le paywall']);
+    tags.answer('paywall');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(find(id).tag, 'paywall');
+    processes[0].feed('simple-turn');
+    manager.send(id, 'et le bouton aussi');
+    assert.equal(tags.asked.length, 1);
+    await manager.shutdown();
+  });
+
+  it('keeps a tag the user put meanwhile, waits for a message with words, and asks nothing when off', async () => {
+    const tags = tagging(true);
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, tags.deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/model' });
+    assert.deepEqual(tags.asked, []);
+    processes[0].feed('simple-turn');
+    manager.send(id, 'la page de vente');
+    manager.tag(id, 'vente');
+    tags.answer('landing');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(find(id).tag, 'vente');
+    await manager.shutdown();
+
+    const off = tagging(false);
+    const second = setup({}, undefined, undefined, undefined, undefined, off.deps);
+    await second.manager.init();
+    await second.manager.create({ cwd: projectA(), text: 'refais le paywall' });
+    assert.deepEqual(off.asked, []);
+    await second.manager.shutdown();
   });
 });
 
@@ -309,6 +355,17 @@ describe('mentions', () => {
     const asking = processes.find((process) => process.sent.some((text) => text.startsWith('va demander')));
     assert.match(asking!.sent[0], /^va demander à @pl comment elle a fait\n\n@PL : la session « PL »[\s\S]*to: "PL"/);
     assert.equal(processes.filter((process) => process.alive).length, 2, 'PL started again, waiting for the message');
+    await manager.shutdown();
+  });
+
+  it('finds a session by its tag, and gives Claude its name to write to it', async () => {
+    const { manager, processes } = setup();
+    await manager.init();
+    const pl = await manager.create({ cwd: projectA(), name: 'PL', text: 'hi' });
+    manager.tag(pl.id, 'paywall');
+    await manager.create({ cwd: projectA(), name: 'Iris', text: 'demande à @Paywall où il en est' });
+    const asking = processes.find((process) => process.sent.some((text) => text.startsWith('demande')));
+    assert.match(asking!.sent[0], /\n\n@paywall : la session « PL » de l’Open Space, taguée « paywall »[\s\S]*to: "PL"/);
     await manager.shutdown();
   });
 });

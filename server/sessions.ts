@@ -12,9 +12,10 @@ import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAtt
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import type { ShellRunner } from './shell.ts';
-import { findMentions } from '../shared/mentions.ts';
+import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
 import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
+import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, lastName, listConversations } from './conversations.ts';
@@ -59,6 +60,9 @@ export interface SessionManagerDeps {
   claudeSettings?: SessionDeps['claudeSettings'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
+  /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
+  tagger?: Tagger | null;
+  autoTag?: () => boolean;
   /** runs a command typed with "!" (see shell.ts) */
   runShell?: ShellRunner;
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
@@ -93,6 +97,8 @@ export class SessionManager {
   private trusted: TrustedFolders;
   /** the side question of each session that has one, and how to withdraw it while it is asked */
   private asides = new Map<string, { aside: Aside; stop: () => void }>();
+  /** new conversations started here that have not sent a message with words yet: that message gives their tag */
+  private awaitingTag = new Set<string>();
 
   constructor(deps: SessionManagerDeps) {
     this.deps = deps;
@@ -220,15 +226,18 @@ export class SessionManager {
   }
 
   /**
-   * The other sessions a message of `sessionId` names with "@": each woken up (a released process cannot be reached)
+   * The other sessions a message of `sessionId` names with "@", by name or tag: each woken up (a released process cannot be reached)
    * and introduced to Claude, with how to write to it ('' : none named).
    */
   private introduceMentioned(sessionId: string, text: string): string {
     const others = [...this.sessions.values()].map((session) => ({ session, info: session.snapshot() })).filter(({ info }) => info.id !== sessionId);
-    const named = new Set(findMentions(text, others.map(({ info }) => info.name)).map((mention) => mention.name));
-    const found = others.filter(({ info }) => named.has(info.name));
+    const mentions = findMentions(text, mentionNames(others.map(({ info }) => info)));
+    const found = others.flatMap(({ session, info }) => {
+      const mention = mentions.find((each) => isNamedBy(each.name, info));
+      return mention ? [{ session, info, mention: mention.name }] : [];
+    });
     for (const { session } of found) session.wake();
-    return found.map(({ info }) => st.prompt.mention(info.name, info.cwd.replace(os.homedir(), '~'))).join('\n');
+    return found.map(({ info, mention }) => st.prompt.mention(mention, info.name, info.cwd.replace(os.homedir(), '~'))).join('\n');
   }
 
   private createSession(info: StoredInfo, log: SessionLog): Session {
@@ -492,6 +501,7 @@ export class SessionManager {
     const session = this.createSession(info, log);
     this.logs.set(info.id, log);
     this.sessions.set(info.id, session);
+    if (!options.resumeId) this.awaitingTag.add(info.id);
     this.deps.broadcast({ t: 'session', session: session.snapshot() });
     this.save();
     if (!this.folderCommands.has(cwd)) void this.probeFolder(cwd, !!info.untrusted);
@@ -507,6 +517,7 @@ export class SessionManager {
     if (options.text?.trim() || options.images?.length || options.files?.length) {
       try {
         session.send(options.text ?? '', options.images, options.files);
+        this.tagFromFirstMessage(session, options.text ?? '');
       } catch (error) {
         await this.forget(info.id);
         throw error;
@@ -838,6 +849,24 @@ export class SessionManager {
     const worktree = session.snapshot().worktree;
     if (worktree?.merge?.step === 'failed') session.setWorktree({ ...worktree, merge: undefined });
     session.send(text, images, files);
+    this.tagFromFirstMessage(session, text);
+  }
+
+  /** A new conversation without a tag gets one from its first message, a little later, unless the user put one meanwhile. */
+  private tagFromFirstMessage(session: Session, text: string) {
+    const info = session.snapshot();
+    const tagger = this.deps.tagger;
+    if (!this.awaitingTag.has(info.id)) return;
+    // a slash command or a message without words says nothing of the subject: the next one may
+    if (!text.trim() || text.trimStart().startsWith('/')) return;
+    this.awaitingTag.delete(info.id);
+    if (!tagger || !this.deps.autoTag?.() || info.tag) return;
+    void tagger(text).then((tag) => {
+      const current = this.sessions.get(info.id);
+      if (!tag || !current || current.snapshot().tag) return;
+      current.setTag(tag);
+      this.save();
+    });
   }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }

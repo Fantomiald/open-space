@@ -28,6 +28,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   turnDuration: true,
   reduceMotion: false,
   idleCompact: 0,
+  autoTag: false,
   // a settings file from before worktrees has none: it gets this one
   isolate: 'busy',
 };
@@ -44,7 +45,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
-  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'reduceMotion'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
+  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'reduceMotion', 'autoTag'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
   if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
   if (IDLE_COMPACT_MINUTES.some((minutes) => minutes === raw.idleCompact)) found.idleCompact = raw.idleCompact as number;
   if (TIME_FORMATS.some((format) => format === raw.timeFormat)) found.timeFormat = raw.timeFormat as Preferences['timeFormat'];

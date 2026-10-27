@@ -438,6 +438,8 @@ export interface Preferences {
   festivals: boolean;
   /** the crew without a session drops by the office now and then (src/room/visitors.ts) */
   officeLife: boolean;
+  /** a new session gets a tag of one or two words from its first message (server/auto-tag.ts) */
+  autoTag: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
   /** the place both rooms are dressed as (shared/room-themes.ts) */
