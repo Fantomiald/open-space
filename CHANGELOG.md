@@ -1,5 +1,9 @@
 # Versions
 
+## 1.19.3
+
+- Un long texte collé (un log, un document) part enfin : la limite passe de 20 000 à 500 000 caractères. Au-delà, un message le dit et le texte reste dans le champ, au lieu de disparaître sans rien envoyer (merci JbPons).
+
 ## 1.19.2
 
 - Reprendre une session : un champ de recherche, juste au-dessus de la zone d'écriture, retrouve une conversation par un mot ou une phrase (un ticket, un nom de fichier…) dans tous ses messages, avec l'extrait trouvé surligné. Un indicateur tourne pendant la recherche.
