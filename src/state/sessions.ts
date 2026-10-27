@@ -298,7 +298,8 @@ interface CommandPostState {
   closeLauncher: () => void;
   toast: (kind: Toast['kind'], text: string) => void;
 
-  createSession: (options: SessionOptions) => void;
+  /** false when the message could not leave (too long, not connected): the Launcher then keeps what was typed */
+  createSession: (options: SessionOptions) => boolean;
   /** a new session going on from this one's conversation; it opens like a new one */
   duplicateSession: (sessionId: string) => void;
   /** opens a terminal on the computer, in the folder of the session (the server finds it); without one, in the default folder */
@@ -825,7 +826,12 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   openTerminal: (sessionId) => get().send(sessionId ? { t: 'openTerminal', sessionId } : { t: 'openTerminal' }),
   duplicateSession: (sessionId) => { set({ awaitingNew: true }); get().send({ t: 'duplicate', sessionId }); },
-  createSession: (options) => { set({ awaitingNew: true }); lastCreate = options; get().send({ t: 'create', options }); },
+  createSession: (options) => {
+    if (!get().send({ t: 'create', options })) return false;
+    set({ awaitingNew: true });
+    lastCreate = options;
+    return true;
+  },
   answerTrust: (choice) => {
     const request = get().trustRequest;
     set({ trustRequest: null });

@@ -70,7 +70,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
     // "/model sonnet", "/effort high": the same as the buttons below the field, so the session keeps it
     const tune = attachments.items.length ? null : tuning(text);
     if (tune) { if (send({ t: 'tune', sessionId: session.id, ...tune })) setText(''); return; }
-    // the text and the pictures stay when they could not leave (not connected), so nothing is lost
+    // the text and the pictures stay when they could not leave (too long, not connected), so nothing is lost
     if (sendText(session.id, text.trim(), attachments.uploads, attachments.files)) { setText(''); attachments.clear(); }
   };
 
