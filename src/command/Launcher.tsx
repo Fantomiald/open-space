@@ -114,7 +114,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     const images = attachments.uploads;
     const files = attachments.files;
     const isolate = isolated ? { isolate: startBase && startBase !== repo?.branch ? { base: startBase } : {} } : {};
-    createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}), ...isolate });
+    // the text and the pictures stay when they could not leave (too long, not connected)
+    if (!createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}), ...isolate })) return;
     setText('');
     attachments.clear();
     setResumeId(null);
