@@ -1,5 +1,9 @@
 # Versions
 
+## 1.19.1
+
+- Échap ferme d'abord le panneau d'une question /btw, puis une vue latérale (Navigateur, Changements, MCP, Contexte, Usage), avant d'interrompre la session.
+
 ## 1.19.0
 
 - Dans la salle, un appui long sur un agent le soulève : il agite bras et jambes et tu peux le poser sur un fauteuil libre. Lâché sur quelqu'un d'autre, ils échangent leurs places. Les places sont gardées après un rechargement.

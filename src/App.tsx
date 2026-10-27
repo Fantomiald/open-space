@@ -124,6 +124,9 @@ export function App() {
         // the launcher open beside the sessions (focus mode) closes first
         if (state.launcherOpen) { e.preventDefault(); state.closeLauncher(); return; }
         const session = state.selectedId ? state.sessions[state.selectedId] : undefined;
+        // the side question (/btw), then a side view (changes, browser...), close before the session is interrupted
+        if (session && state.asides[session.id]) { e.preventDefault(); state.send({ t: 'asideClose', sessionId: session.id }); return; }
+        if (session && state.panelView !== 'thread') { e.preventDefault(); state.showPanel('thread'); return; }
         const shells = session ? runningShells(state.logs[session.id] ?? []) : [];
         const working = session && isRunning(session) && session.state !== 'starting';
         if (session && (working || shells.length)) {
