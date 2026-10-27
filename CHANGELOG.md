@@ -1,5 +1,10 @@
 # Versions
 
+## 1.19.2
+
+- Reprendre une session : un champ de recherche, juste au-dessus de la zone d'écriture, retrouve une conversation par un mot ou une phrase (un ticket, un nom de fichier…) dans tous ses messages, avec l'extrait trouvé surligné. Un indicateur tourne pendant la recherche.
+- Les noms au-dessus des agents dans la salle passent en Fredoka, plus lisible.
+
 ## 1.19.1
 
 - Échap ferme d'abord le panneau d'une question /btw, puis une vue latérale (Navigateur, Changements, MCP, Contexte, Usage), avant d'interrompre la session.

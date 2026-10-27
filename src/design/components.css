@@ -195,7 +195,7 @@ h1, h2, p { margin: 0; }
   .cp-main .cp-launcher__intro { display: none; }
   .cp-main .cp-launcher__head { padding: var(--space-2) var(--space-2) 0; border-bottom: 0; }
   .cp-main .cp-launcher__body { flex: none; max-height: 34vh; padding: var(--space-2) var(--space-2) 0; }
-  .cp-main .cp-launcher__body:not(:has(.cp-resume__list, p)) { display: none; }
+  .cp-main .cp-launcher__body:not(:has(.cp-resume, p)) { display: none; }
   .cp-main .cp-launcher__composer { padding: var(--space-2); }
   .cp-main .cp-launcher__box textarea { min-height: 2.75rem; }
   .cp-app .cp-room { padding: 0 var(--gutter); }
@@ -1296,6 +1296,13 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 
 /* ── Resuming a Claude Code conversation: the folder's conversations, the most recent first ── */
 .cp-resume { display: grid; gap: var(--space-2); }
+.cp-resume__loading { display: grid; justify-items: center; gap: var(--space-3); padding: var(--space-6) 0; text-align: center; }
+.cp-resume__spinner {
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  border: 2.5px solid color-mix(in srgb, var(--color-accent) 20%, transparent); border-top-color: var(--color-accent);
+  animation: cp-spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .cp-resume__spinner { animation-duration: 2.4s; } }
 .cp-resume__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); max-height: 16rem; overflow-y: auto; }
 .cp-resume__item {
   width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--space-3); padding: var(--space-2) var(--space-3);
@@ -1307,6 +1314,12 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-resume__title { font-size: var(--text-sm); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-resume__when { font-size: var(--text-xs); color: var(--color-text-muted); display: inline-block; max-width: 100%; vertical-align: 1px; }
 .cp-resume__preview { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-resume__preview mark { padding: 0 1px; border-radius: 3px; background: var(--mark); color: var(--mark-text); }
+.cp-resume__search {
+  height: var(--control-height); padding: 0 var(--space-3); border-radius: var(--radius-md); border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm);
+}
+.cp-resume__search:focus-visible { outline: none; border-color: var(--color-accent); }
 .cp-form > .cp-segmented { justify-self: start; }
 
 /* ── The launcher: the right column while no session is open ── */

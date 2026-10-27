@@ -14,6 +14,7 @@ import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
 import { BranchIcon, CleanIcon, CloseIcon, SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
+import { Snippet } from './Snippet.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 import { TuneMenu } from './TuneMenu.tsx';
 
@@ -52,13 +53,16 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   useEffect(() => { setModel(preferences.model); setEffort(preferences.effort || undefined); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.effort, preferences.permissionMode]);
   const [text, setText] = useState('');
   const [resumeId, setResumeId] = useState<string | null>(null);
+  // words to find in the folder's conversations (their messages, not only their titles)
+  const [query, setQuery] = useState('');
+  const wanted = query.trim();
   const field = useRef<HTMLTextAreaElement>(null);
   const attachments = useAttachments();
   // a project picked in the header is where a new session goes, while it is one the sessions may work in
   const { project } = useProjects();
   const startFolder = defaultFolder(roots, project || preferences.defaultFolder);
   const cwd = folder.trim() || startFolder;
-  const conversations = found && found.cwd === cwd ? found.list : null;
+  const conversations = found && found.cwd === cwd && found.query === wanted ? found.list : null;
 
   // the folder's repository, asked for once the user stops typing it: whether to offer a branch of its own
   const repo = useSessions((s) => s.folderRepos[cwd]);
@@ -92,13 +96,13 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     openNewSession(null);
   }, [draft, openNewSession]);
 
-  // the folder's conversations, asked for once the user stops typing it
+  // the folder's conversations, asked for once the user stops typing it or the words to find
   useEffect(() => {
     if (!resuming || !cwd || !live) return;
     setResumeId(null);
-    const timer = window.setTimeout(() => send({ t: 'conversations', cwd }), 250);
+    const timer = window.setTimeout(() => send({ t: 'conversations', cwd, ...(wanted ? { query: wanted } : {}) }), 250);
     return () => window.clearTimeout(timer);
-  }, [resuming, cwd, live, send]);
+  }, [resuming, cwd, wanted, live, send]);
 
   const tune = (change: TuneChange) => {
     if (change.model !== undefined) setModel(change.model);
@@ -149,21 +153,36 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
               <li><kbd className="cp-kbd">/</kbd> {words.commandKey}</li>
             </ul>
           </div>
-        ) : !conversations ? <p className="cp-muted">{words.searching(homeRelative(cwd))}</p>
-          : conversations.length === 0 ? <p className="cp-muted">{words.noConversation(homeRelative(cwd))}</p>
-            : (
-              <ul className="cp-resume__list" aria-label={words.conversationsOf(homeRelative(cwd))}>
-                {conversations.map((conversation) => (
-                  <li key={conversation.id}>
-                    <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); if (conversation.name) setAsked(conversation.name); field.current?.focus(); }}>
-                      <span className="cp-resume__title">{conversation.title}</span>
-                      <span className="cp-resume__when">{formatAgo(Date.now() - conversation.updatedAt)}</span>
-                      {conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+        ) : (
+          <div className="cp-resume">
+            {!conversations ? (
+              <div className="cp-resume__loading" role="status">
+                <span className="cp-resume__spinner" aria-hidden="true" />
+                <p className="cp-muted">{wanted ? words.searchingWords(homeRelative(cwd)) : words.searching(homeRelative(cwd))}</p>
+              </div>
+            )
+              : conversations.length === 0 ? <p className="cp-muted">{wanted ? words.noMatch(wanted, homeRelative(cwd)) : words.noConversation(homeRelative(cwd))}</p>
+                : (
+                  <ul className="cp-resume__list" aria-label={words.conversationsOf(homeRelative(cwd))}>
+                    {conversations.map((conversation) => (
+                      <li key={conversation.id}>
+                        <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); if (conversation.name) setAsked(conversation.name); field.current?.focus(); }}>
+                          <span className="cp-resume__title">{conversation.title}</span>
+                          <span className="cp-resume__when">{formatAgo(Date.now() - conversation.updatedAt)}</span>
+                          {conversation.match ? <span className="cp-resume__preview"><Snippet {...conversation.match} /></span>
+                            : conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            {/* last, so it sits right above the composer whatever the list's height */}
+            <input
+              className="cp-resume__search" type="search" value={query} placeholder={words.searchConversations} aria-label={words.searchConversations}
+              autoComplete="off" spellCheck={false} onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <form className="cp-launcher__composer" onSubmit={(e) => { e.preventDefault(); start(); }}>

@@ -177,7 +177,7 @@ Le fonctionnement interne (serveur, protocole, bureau, et ce qui a été vérifi
 ## Crédits
 
 - Parti de [bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) (MIT). Le serveur, le protocole et l'interface ont été réécrits ; le copyright d'origine reste dans [LICENSE](LICENSE).
-- Polices [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) et [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icônes [Lucide](https://lucide.dev) (ISC).
+- Polices [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans), [Fredoka](https://fonts.google.com/specimen/Fredoka) et [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icônes [Lucide](https://lucide.dev) (ISC).
 - Les tenues d'anime sont un clin d'œil de fan à *Naruto* et *One Piece*, sans lien avec leurs auteurs ni leurs éditeurs. Rocky vient du roman d'Andy Weir *Projet Dernière Chance*, même esprit.
 - Clawd est la mascotte de Claude Code, dessinée ici en clin d'œil de fan. Open Space n'est pas un produit d'Anthropic. Claude et Claude Code sont des marques d'Anthropic.
 

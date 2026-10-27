@@ -273,7 +273,8 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'conversations': {
       const cwd = boundedString(raw.cwd, 4096);
-      return cwd ? { t: 'conversations', cwd } : null;
+      const query = boundedString(raw.query, 200);
+      return cwd ? { t: 'conversations', cwd, ...(query ? { query } : {}) } : null;
     }
     case 'saveMember': {
       const name = boundedString(raw.name, MAX_NAME);

@@ -18,7 +18,7 @@ import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
 import type { Config } from './config.ts';
-import { lastContextUse, lastExchanges, lastName, listConversations } from './conversations.ts';
+import { lastContextUse, lastExchanges, lastName, listConversations, searchConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME, MAX_TAG } from './messages.ts';
@@ -357,11 +357,12 @@ export class SessionManager {
     return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home, worktree?.base);
   }
 
-  /** The Claude Code conversations of an allowed folder that are not open here yet. */
-  async conversations(directory: string): Promise<Conversation[]> {
+  /** The Claude Code conversations of an allowed folder that are not open here yet; with `query`, those that contain its words. */
+  async conversations(directory: string, query?: string): Promise<Conversation[]> {
     const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
     if (!cwd) throw new Error(st.sessions.outsideRoots);
-    return listConversations(cwd, new Set([...this.sessions.values()].map((session) => session.conversationId)), this.deps.home);
+    const open = new Set([...this.sessions.values()].map((session) => session.conversationId));
+    return query ? searchConversations(cwd, query, open, this.deps.home) : listConversations(cwd, open, this.deps.home);
   }
 
   private session(id: string): Session {

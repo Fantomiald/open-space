@@ -27,8 +27,7 @@ import { stackLabels } from './labels.ts';
 
 /** How long a visitor at a birthday party wishes it, in ms. */
 const WISH_MS = 4000;
-/** Pixelify Sans only draws clean glyphs at some sizes; 11 room pixels is the smallest crisp one. */
-export const TAG_FONT = '500 11px "Pixelify Sans", monospace';
+export const TAG_FONT = '500 9.5px "Fredoka", sans-serif';
 const TAG_HEIGHT = 13;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;

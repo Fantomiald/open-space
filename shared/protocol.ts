@@ -412,8 +412,8 @@ export interface SessionOptions {
 }
 
 /** A Claude Code conversation found on disk for a folder, that a new session can go on with. updatedAt: ms. */
-/** `name`: what Open Space called its session, when it ran there (its custom title) */
-export interface Conversation { id: string; title: string; preview: string; updatedAt: number; name?: string }
+/** `name`: what Open Space called its session, when it ran there (its custom title); `match`: for a search, its latest message with the words, where they are in it */
+export interface Conversation { id: string; title: string; preview: string; updatedAt: number; name?: string; match?: { text: string; start: number; length: number } }
 
 /** Someone of the user's crew: sessions named like them wear their look; `self` is the user's own avatar. Null: the default look. */
 /** `birthday`: "MM-DD", the day the rooms throw them a party. `jobs`: what they do, to send them the requests that fit (shared/jobs.ts). */
@@ -501,8 +501,8 @@ export interface RootSuggestion { path: string; projects: number }
 
 export type ClientMessage =
   | { t: 'create'; options: SessionOptions }
-  /** the Claude Code conversations of a folder, to resume one */
-  | { t: 'conversations'; cwd: string }
+  /** the Claude Code conversations of a folder, to resume one; with `query`, those whose messages contain its words */
+  | { t: 'conversations'; cwd: string; query?: string }
   | { t: 'send'; sessionId: string; text: string; images?: ImageUpload[]; files?: string[] }
   | { t: 'answer'; sessionId: string; requestId: string; decision: PermissionDecision }
   /** answers to an AskUserQuestion call: question text -> chosen label(s) or the user's own text */
@@ -619,7 +619,7 @@ export type ServerMessage =
   | { t: 'rootSuggestions'; suggestions: RootSuggestion[] }
   | { t: 'terminals'; choices: TerminalChoice[] }
   | { t: 'crew'; crew: CrewMember[] }
-  | { t: 'conversations'; cwd: string; conversations: Conversation[] }
+  | { t: 'conversations'; cwd: string; query?: string; conversations: Conversation[] }
   /** `repo` null: not in a git repository */
   | { t: 'folderInfo'; cwd: string; repo: FolderRepo | null }
   /** the branches of a repository (`root`, its main checkout), for the folder asked; `failed`: what went wrong while cleaning */

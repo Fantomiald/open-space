@@ -3,11 +3,12 @@
 // ~/.claude/projects/<the folder, every character but letters and digits turned into "-">/<session id>.jsonl.
 // That format is Claude Code's own and undocumented: only a few fields are read, from the start of a file (its title
 // and first message) and from its end (the last exchanges), and anything unexpected is skipped.
-import { readFileSync } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { open, readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Conversation } from '../shared/protocol.ts';
+import { foldQuery, matchesAll, snippetOf } from '../shared/search.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import type { AgentLaunch } from './normalizer.ts';
 
@@ -61,44 +62,114 @@ function records(text: string): Record<string, unknown>[] {
 }
 
 /** What the user typed in a record, or null for anything else (tool results, commands, notes Claude Code adds). */
-function userText(record: Record<string, unknown>): string | null {
+function userText(record: Record<string, unknown>, max = TEXT_MAX): string | null {
   if (record.type !== 'user' || record.isMeta === true || !isJson(record.message)) return null;
   const content = record.message.content;
   const text = typeof content === 'string' ? content
     : asArray(content).flatMap((part) => (isJson(part) && part.type === 'text' ? [asString(part.text)] : [])).join('\n');
   const clean = text.trim();
-  return clean && !clean.startsWith('<') ? clean.slice(0, TEXT_MAX) : null;
+  return clean && !clean.startsWith('<') ? clean.slice(0, max) : null;
 }
 
-function assistantText(record: Record<string, unknown>): string | null {
+function assistantText(record: Record<string, unknown>, max = TEXT_MAX): string | null {
   if (record.type !== 'assistant' || !isJson(record.message)) return null;
   const text = asArray(record.message.content).flatMap((part) => (isJson(part) && part.type === 'text' ? [asString(part.text)] : [])).join('\n').trim();
-  return text ? text.slice(0, TEXT_MAX) : null;
+  return text ? text.slice(0, max) : null;
 }
 
-/** The folder's conversations, most recent first, without those already open here (`exclude`) and without empty ones. */
-export async function listConversations(cwd: string, exclude: ReadonlySet<string>, home = os.homedir()): Promise<Conversation[]> {
+/** The folder's conversation files, most recent first, without those already open here (`exclude`). */
+async function conversationFiles(cwd: string, exclude: ReadonlySet<string>, home: string) {
   const folder = projectFolder(cwd, home);
   let names: string[];
   try { names = await readdir(folder); } catch { return []; }
   const files = await Promise.all(names
     .filter((name) => name.endsWith('.jsonl') && CONVERSATION_ID.test(name.slice(0, -6)) && !exclude.has(name.slice(0, -6)))
     .map(async (name) => ({ id: name.slice(0, -6), file: path.join(folder, name), updatedAt: (await stat(path.join(folder, name))).mtimeMs })));
-  files.sort((a, b) => b.updatedAt - a.updatedAt);
+  return files.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** A conversation's title and first message, from the start of its file; null for an empty one. */
+async function describe(id: string, file: string, updatedAt: number): Promise<Conversation | null> {
+  let aiTitle = '', customTitle = '', preview = '';
+  for (const record of records(await readSlice(file, false, HEAD_BYTES))) {
+    if (record.type === 'ai-title') aiTitle = asString(record.aiTitle);
+    if (record.type === 'custom-title') customTitle = asString(record.customTitle);
+    preview ||= userText(record) ?? '';
+  }
+  if (!preview && !aiTitle && !customTitle) return null;
+  // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
+  // "Margot · what it was asked"
+  const about = aiTitle || preview.slice(0, 80);
+  return { id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt, ...(customTitle ? { name: customTitle } : {}) };
+}
+
+/** The folder's conversations, most recent first, without those already open here (`exclude`) and without empty ones. */
+export async function listConversations(cwd: string, exclude: ReadonlySet<string>, home = os.homedir()): Promise<Conversation[]> {
   const conversations: Conversation[] = [];
-  for (const { id, file, updatedAt } of files.slice(0, LIST_LIMIT)) {
+  for (const { id, file, updatedAt } of (await conversationFiles(cwd, exclude, home)).slice(0, LIST_LIMIT)) {
     try {
-      let aiTitle = '', customTitle = '', preview = '';
-      for (const record of records(await readSlice(file, false, HEAD_BYTES))) {
-        if (record.type === 'ai-title') aiTitle = asString(record.aiTitle);
-        if (record.type === 'custom-title') customTitle = asString(record.customTitle);
-        preview ||= userText(record) ?? '';
+      const conversation = await describe(id, file, updatedAt);
+      if (conversation) conversations.push(conversation);
+    } catch { /* unreadable: skipped */ }
+  }
+  return conversations;
+}
+
+const ACCENTED: Record<string, string> = { a: 'àâäáãå', c: 'ç', e: 'éèêë', i: 'îïíì', n: 'ñ', o: 'ôöóòõ', u: 'ùûüú' };
+const asBytes = (text: string) => Buffer.from(text, 'utf8').toString('latin1').replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/**
+ * A regular expression for each word of the query, to run on a file read as latin1: three times faster than decoding
+ * it as UTF-8, so a character beyond ASCII is matched by its UTF-8 bytes. Any case, and a plain letter also matches its
+ * accented forms ("deploiement" finds "Déploiement"). It can match a little more than the words: what it finds is checked again.
+ */
+function bytePatterns(query: string): RegExp[] {
+  return foldQuery(query).split(/\s+/).filter(Boolean).map((word) => new RegExp([...word].map((character) => {
+    const accented = ACCENTED[character];
+    if (!accented) return asBytes(character);
+    // every accented form is two bytes starting with 0xC3: one class for the second byte, faster than an alternation
+    const seconds = [...accented, ...accented.toUpperCase()].map((form) => Buffer.from(form, 'utf8').toString('latin1')[1]).join('');
+    return `(?:${character}|\xC3[${seconds}])`;
+  }).join(''), 'i'));
+}
+
+/**
+ * The lines of a file that match every pattern, read in pieces: a file can be larger than the longest string Node
+ * allows (550 MB seen), and a piece without the first word is passed over without being split.
+ */
+async function matchingLines(file: string, patterns: RegExp[]): Promise<string[]> {
+  const lines: string[] = [];
+  let rest = '';
+  for await (const piece of createReadStream(file, { encoding: 'latin1', highWaterMark: 16 * 1024 * 1024 })) {
+    const text = rest + piece;
+    const cut = text.lastIndexOf('\n');
+    rest = text.slice(cut + 1);
+    const whole = text.slice(0, cut + 1);
+    if (patterns[0].test(whole)) lines.push(...whole.split('\n').filter((line) => patterns.every((pattern) => pattern.test(line))));
+  }
+  if (patterns.every((pattern) => pattern.test(rest))) lines.push(rest);
+  return lines.map((line) => Buffer.from(line, 'latin1').toString('utf8'));
+}
+
+/**
+ * The folder's conversations with a message (the user's or Claude's) that holds every word of `query`, most recent
+ * first, each with its latest such message.
+ */
+export async function searchConversations(cwd: string, query: string, exclude: ReadonlySet<string>, home = os.homedir()): Promise<Conversation[]> {
+  const patterns = bytePatterns(query);
+  if (!patterns.length) return [];
+  const conversations: Conversation[] = [];
+  for (const { id, file, updatedAt } of await conversationFiles(cwd, exclude, home)) {
+    if (conversations.length >= LIST_LIMIT) break;
+    try {
+      let found = '';
+      for (const record of records((await matchingLines(file, patterns)).join('\n'))) {
+        const said = userText(record, Infinity) ?? assistantText(record, Infinity);
+        if (said && matchesAll(said, query)) found = said;
       }
-      if (!preview && !aiTitle && !customTitle) continue;
-      // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
-      // "Margot · what it was asked"
-      const about = aiTitle || preview.slice(0, 80);
-      conversations.push({ id, title: customTitle && about ? `${customTitle} · ${about}` : customTitle || about, preview: preview.slice(0, 200), updatedAt, ...(customTitle ? { name: customTitle } : {}) });
+      const match = found && snippetOf(found, query);
+      const conversation = match && await describe(id, file, updatedAt);
+      if (conversation) conversations.push({ ...conversation, match });
     } catch { /* unreadable: skipped */ }
   }
   return conversations;
