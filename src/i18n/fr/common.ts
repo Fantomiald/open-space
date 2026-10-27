@@ -62,6 +62,7 @@ export const common = {
     unpaired: 'Ce navigateur n’est pas encore autorisé : ouvre le lien « Autoriser un navigateur » affiché dans le terminal (npm start l’ouvre tout seul quand aucun onglet n’est connecté).',
     claudeMissing: 'Claude Code est introuvable sur cet ordinateur : impossible de lancer des sessions.',
     notConnected: 'Pas connecté au serveur : réessaie dans un instant.',
+    tooLong: (max: number) => `Trop long pour partir : ${max.toLocaleString('fr')} caractères au plus. Ton texte est resté dans le champ.`,
     waitingForYou: (name: string) => `${name} attend ta réponse`,
   },
   commandField: {

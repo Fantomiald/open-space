@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { MAX_NAME, MAX_TEXT, parseClientMessage } from './messages.ts';
+import { MAX_TEXT } from '../shared/protocol.ts';
+import { MAX_NAME, parseClientMessage } from './messages.ts';
 
 describe('parseClientMessage', () => {
   it('reads openTerminal with or without a session, and nothing else', () => {
@@ -56,6 +57,11 @@ describe('parseClientMessage', () => {
 
   it('drops anything that is not an object with a known type', () => {
     for (const raw of [null, undefined, 'send', 42, [], {}, { t: 1 }, { t: 'nope' }, { t: 'send' }]) assert.equal(parseClientMessage(raw), null);
+  });
+
+  it('takes a long pasted text (a log, a document)', () => {
+    const text = 'x'.repeat(100_000);
+    assert.equal(parseClientMessage({ t: 'send', sessionId: 's1', text })?.t, 'send');
   });
 
   it('refuses malformed fields', () => {

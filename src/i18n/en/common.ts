@@ -64,6 +64,7 @@ export const common: Dictionary['common'] = {
     unpaired: 'This browser isn’t authorized yet: open the browser authorization link shown in the terminal (npm start opens it by itself when no tab is connected).',
     claudeMissing: 'Claude Code can’t be found on this computer: sessions can’t be started.',
     notConnected: 'Not connected to the server: try again in a moment.',
+    tooLong: (max) => `Too long to send: ${max.toLocaleString('en')} characters at most. Your text is still in the field.`,
     waitingForYou: (name) => `${name} is waiting for your answer`,
   },
   commandField: {

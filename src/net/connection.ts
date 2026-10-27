@@ -1,7 +1,7 @@
 // The WebSocket to the bridge. The browser authenticates with the session cookie (set once by the /pair link),
 // so the page itself carries no secret. It reconnects on its own and tells apart a stopped server from a browser
 // that is not authorised, and lets the store resynchronise after each (re)connection.
-import type { ClientMessage, ServerMessage } from '../../shared/protocol.ts';
+import { MAX_TEXT, type ClientMessage, type ServerMessage } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 
@@ -12,7 +12,16 @@ let socket: WebSocket | null = null;
 let attempts = 0;
 let build = '';
 
+/** The text the user typed or pasted in a message, which the server bounds (MAX_TEXT). */
+const typedText = (message: ClientMessage): string =>
+  message.t === 'send' ? message.text : message.t === 'create' ? message.options.text ?? '' : message.t === 'aside' ? message.question : '';
+
 function send(message: ClientMessage): boolean {
+  // longer, the server would drop it without a word: say so here, and the text stays in the field
+  if (typedText(message).length > MAX_TEXT) {
+    useSessions.getState().toast('error', t.common.notices.tooLong(MAX_TEXT));
+    return false;
+  }
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(message));
     return true;
