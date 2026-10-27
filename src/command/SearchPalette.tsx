@@ -14,6 +14,7 @@ import {
 import { Modal } from './Modal.tsx';
 import { runOwnCommand } from './ownCommands.ts';
 import { SessionFace } from './SessionFace.tsx';
+import { Snippet } from './Snippet.tsx';
 import { StateBadge } from './StateBadge.tsx';
 
 /** How long the field waits after a key before it searches the threads again. */
@@ -42,10 +43,6 @@ function when(at: number, now: Date) {
   return date.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 }
 
-/** The snippet with the words found in it marked. */
-function Snippet({ text, start, length }: { text: string; start: number; length: number }) {
-  return <>{text.slice(0, start)}<mark>{text.slice(start, start + length)}</mark>{text.slice(start + length)}</>;
-}
 
 function PaletteContent() {
   const sessions = useSessions((s) => s.sessions);

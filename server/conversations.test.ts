@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { agentLaunch, lastContextUse, lastExchanges, listConversations, projectFolder } from './conversations.ts';
+import { agentLaunch, lastContextUse, lastExchanges, listConversations, projectFolder, searchConversations } from './conversations.ts';
 
 const home = mkdtempSync(path.join(os.tmpdir(), 'office-conversations-'));
 after(() => rmSync(home, { recursive: true, force: true }));
@@ -37,6 +37,25 @@ describe('Claude Code conversations on disk', () => {
       [{ id: A, title: 'Atlas business flows comparison', preview: 'Compare les deux flows Atlas' }]);
     assert.deepEqual(await listConversations(cwd, new Set([A]), home), []);
     assert.deepEqual(await listConversations('/nowhere', new Set(), home), []);
+  });
+
+  it('finds the conversations whose messages hold every word, whatever their case and accents, with the latest such message', async () => {
+    const searched = '/Users/me/code/searched';
+    mkdirSync(projectFolder(searched, home), { recursive: true });
+    writeFileSync(path.join(projectFolder(searched, home), `${A}.jsonl`), [
+      line({ type: 'custom-title', customTitle: 'PL' }),
+      line({ type: 'user', message: { role: 'user', content: 'Est-ce que EX-1539 est faisable ?' } }),
+      line({ type: 'user', message: { role: 'user', content: 'et EX-1569 avis ?' } }),
+      line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Le Déploiement de EX-1569 attend la variable.' }] } }),
+      line({ type: 'user', message: { content: [{ type: 'tool_result', content: 'déploiement ex-1539 dans un outil' }] } }),
+    ].join('\n'));
+    const found = (query: string) => searchConversations(searched, query, new Set(), home);
+    const [hit] = await found('ex-1569 deploiement');
+    assert.equal(hit.title, 'PL · Est-ce que EX-1539 est faisable ?');
+    assert.equal(hit.match?.text.slice(hit.match.start, hit.match.start + hit.match.length), 'EX-1569', 'the first word, when the words are not side by side');
+    assert.equal((await found('EX-1569'))[0].match?.text, 'Le Déploiement de EX-1569 attend la variable.');
+    assert.deepEqual(await found('ex-1539 déploiement'), [], 'only a tool result holds both words');
+    assert.deepEqual(await searchConversations(searched, 'EX-1569', new Set([A]), home), []);
   });
 
   it('puts the name of an Open Space session (its custom title) before what it was asked', async () => {

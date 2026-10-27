@@ -387,7 +387,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'restartApp': if (appUpdate?.state === 'ready') appPort?.postMessage({ t: 'restart' }); break;
     case 'checkApp': if (appUpdate?.state !== 'downloading' && appUpdate?.state !== 'ready') appPort?.postMessage({ t: 'check' }); break;
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
-    case 'conversations': send({ t: 'conversations', cwd: message.cwd, conversations: await sessions.conversations(message.cwd) }); break;
+    case 'conversations': send({ t: 'conversations', cwd: message.cwd, ...(message.query ? { query: message.query } : {}), conversations: await sessions.conversations(message.cwd, message.query) }); break;
     case 'saveMember':
       await crew.save(message.previousName, message.name, message.look, message.birthday, message.jobs);
       broadcast({ t: 'crew', crew: crew.list() });

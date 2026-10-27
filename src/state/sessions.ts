@@ -120,8 +120,8 @@ interface CommandPostState {
   inspections: Record<string, Inspections>;
   /** what the open session's panel shows (back to the conversation when another session opens) */
   panelView: PanelView;
-  /** the Claude Code conversations found for a folder, to resume one (the last folder asked for) */
-  conversations: { cwd: string; list: Conversation[] } | null;
+  /** the Claude Code conversations found for a folder, to resume one (the last folder and search asked for) */
+  conversations: { cwd: string; query: string; list: Conversation[] } | null;
   /** what each folder asked for by the launcher is in git (null: not in a repository) */
   folderRepos: Record<string, FolderRepo | null>;
   /** the branches panel: the folder whose repository it shows (null: closed), and the branches of each folder asked for */
@@ -554,7 +554,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         set({ inspections: { ...s.inspections, [message.sessionId]: { ...s.inspections[message.sessionId], ...answer } } });
         break;
       }
-      case 'conversations': set({ conversations: { cwd: message.cwd, list: message.conversations } }); break;
+      case 'conversations': set({ conversations: { cwd: message.cwd, query: message.query ?? '', list: message.conversations } }); break;
       case 'folderInfo': set({ folderRepos: { ...s.folderRepos, [message.cwd]: message.repo } }); break;
       case 'branches': set({ branchLists: { ...s.branchLists, [message.cwd]: { root: message.root, rows: message.branches, ...(message.failed ? { failed: message.failed } : {}) } } }); break;
       case 'crew': set({ crew: message.crew }); break;

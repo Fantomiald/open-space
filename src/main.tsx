@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import '@fontsource/pixelify-sans/500.css';
 import '@fontsource/pixelify-sans/700.css';
+import '@fontsource/fredoka/500.css';
 import '@fontsource-variable/plus-jakarta-sans';
 import './design/tokens.css';
 import './design/components.css';

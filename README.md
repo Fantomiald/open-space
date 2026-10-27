@@ -177,7 +177,7 @@ How it works inside (server, protocol, office, and what was checked against a re
 ## Credits
 
 - Started from [bureau-des-agents](https://github.com/devlikemasta/bureau-des-agents) (MIT). The server, protocol and interface were rewritten; the original copyright stays in [LICENSE](LICENSE).
-- Fonts [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) and [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icons [Lucide](https://lucide.dev) (ISC).
+- Fonts [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans), [Fredoka](https://fonts.google.com/specimen/Fredoka) and [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (OFL), icons [Lucide](https://lucide.dev) (ISC).
 - The anime outfits are a fan's nod to *Naruto* and *One Piece*, with no connection to their authors or publishers. Rocky comes from Andy Weir's novel *Project Hail Mary*, same spirit.
 - Clawd is Claude Code's mascot, drawn here as a fan's nod. Open Space isn't an Anthropic product. Claude and Claude Code are trademarks of Anthropic.
 
