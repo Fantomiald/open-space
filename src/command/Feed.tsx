@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
-import { findMentions } from '../../shared/mentions.ts';
+import { findMentions, mentionNames } from '../../shared/mentions.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { locale, t } from '../i18n/index.ts';
 import { formatClock, formatDuration } from '../lib/format.ts';
@@ -211,7 +211,7 @@ function Stamp({ at }: { at: number }) {
 /** A sent message, the sessions it names with "@" in color as in the field. */
 function Mentioned({ text }: { text: string }) {
   const sessions = useSessions((s) => s.sessions);
-  const marks = useMemo(() => findMentions(text, Object.values(sessions).map((session) => session.name)), [text, sessions]);
+  const marks = useMemo(() => findMentions(text, mentionNames(Object.values(sessions))), [text, sessions]);
   if (!marks.length) return text;
   return (
     <>

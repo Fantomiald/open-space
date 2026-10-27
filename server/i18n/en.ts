@@ -29,7 +29,7 @@ export const en: ServerDictionary = {
     },
     idleCompact: '/compact Keep what is needed to go on without explaining anything again: where things stand (branch, uncommitted files), each decision and why, what the user asked for or refused in their own words, what is left to do, the key files and the pitfalls already met.',
     /** another session named by "@" in the user's message */
-    mention: (name: string, folder: string) => `@${name}: the Open Space session "${name}" (folder ${folder}). To write to it: SendMessage with to: "${name}".`,
+    mention: (mention: string, name: string, folder: string) => `@${mention}: the Open Space session "${name}"${mention === name ? '' : `, tagged "${mention}"`} (folder ${folder}). To write to it: SendMessage with to: "${name}".`,
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +

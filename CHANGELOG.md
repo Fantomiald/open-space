@@ -1,5 +1,11 @@
 # Versions
 
+## 1.19.0
+
+- Dans la salle, un appui long sur un agent le soulève : il agite bras et jambes et tu peux le poser sur un fauteuil libre. Lâché sur quelqu'un d'autre, ils échangent leurs places. Les places sont gardées après un rechargement.
+- Tag automatique, dans Réglages > Sessions : une nouvelle session reçoit un tag d'un ou deux mots tiré de son premier message (Haiku, moins d'un centime). Désactivé par défaut, et un tag mis à la main n'est jamais remplacé.
+- On peut mentionner une session par son tag : `@paywall` vise la session taguée « paywall », et l'agent reçoit son nom pour lui écrire. L'autocomplétion montre le nom et le tag de chaque session, avec le dossier en dessous.
+
 ## 1.18.0
 
 - Un filtre par projet dans l'en-tête, dès que des sessions travaillent dans au moins deux dossiers : un clic sur un projet ne garde que ses sessions dans la liste Focus et le panneau État, les autres restent dans la salle en gris, sans nom. Un projet où une session t'attend a son compteur en orange.

@@ -6,7 +6,7 @@ import { t } from '../i18n/index.ts';
 import type { Person, RoomPlan } from './cast.ts';
 import { createPet, cuddle, stepPet, type Pet } from './pet.ts';
 import type { Floor } from './floor.ts';
-import { depthOf, facingVector, onFigure, tileCenter, toScreen, type Point } from './geometry.ts';
+import { depthOf, distance, facingVector, onFigure, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
 import { blinkOffsetOf, type Direction } from './sprites.ts';
 import { Visits } from './visitors.ts';
@@ -20,7 +20,12 @@ const WALK_SPEED = 4.2;
 
 export interface Walker { position: Point; heading: Point; path: Point[]; blinkOffset: number }
 
-export type Phase = 'entering' | 'seated' | 'leaving';
+export type Phase = 'entering' | 'seated' | 'leaving' | 'carried';
+
+/** How far below the pointer the feet of someone carried hang, in canvas pixels: the pointer holds them by the chest. */
+const CARRY_HANG = 22;
+/** How near a seat (canvas pixels) the feet of someone carried must be for it to take them when let go. */
+const DROP_REACH = 30;
 
 export interface Character extends Walker { person: Person; seat: number; phase: Phase }
 
@@ -66,6 +71,9 @@ export class Scene {
     this.visits = withVisitors ? new Visits(floor) : null;
   }
 
+  /** The session the user holds up to move it to another seat, or null. */
+  carried: Character | null = null;
+
   /** The first name of whoever a person id is: a session's, or a visitor's. */
   nameOf(personId: string): string {
     return this.characters.get(personId)?.person.name ?? this.visits?.visitors.get(personId)?.name ?? '';
@@ -99,6 +107,7 @@ export class Scene {
         continue;
       }
       character.person = person;
+      if (character.phase === 'carried') continue;
       if (character.phase === 'leaving' || character.seat !== seat) {
         character.seat = seat;
         character.path = this.floor.pathToSeat(character.position, seat);
@@ -108,6 +117,7 @@ export class Scene {
     const planned = new Set(plan.people.map((person) => person.id));
     for (const character of this.characters.values()) {
       if (planned.has(character.person.id) || character.phase === 'leaving') continue;
+      if (character === this.carried) this.carried = null;
       character.phase = 'leaving';
       character.path = this.floor.pathToDoor(character.position);
     }
@@ -127,6 +137,69 @@ export class Scene {
       else if (this.goingOut) { this.goingOut = false; this.playerWentOut = true; }
     }
     if (this.pet) stepPet(this.pet, ms, this.floor);
+  }
+
+  /** Picks someone up (a long press on them): they follow the pointer until dropped. False: they are walking out. */
+  pickUp(character: Character): boolean {
+    if (character.phase === 'leaving') return false;
+    character.phase = 'carried';
+    character.path = [];
+    character.heading = { x: 1, y: 0 };
+    this.carried = character;
+    return true;
+  }
+
+  /** Moves whoever is carried under the canvas point of the pointer. */
+  carryTo(point: Point) {
+    if (this.carried) this.carried.position = toTile({ x: point.x, y: point.y + CARRY_HANG });
+  }
+
+  /** The seats someone carried can be put on: their own, and those nobody else (the user included) has or walks to. */
+  freeSeats(): number[] {
+    const taken = this.playerSeats();
+    for (const character of this.characters.values()) if (character !== this.carried && character.phase !== 'leaving') taken.add(character.seat);
+    return this.floor.layout.seats.map((_, seat) => seat).filter((seat) => !taken.has(seat));
+  }
+
+  /** Where a seat's sitter has their feet on the canvas. */
+  seatScreenPosition(seat: number): Point {
+    const feet = toScreen(this.floor.seatPosition(seat));
+    return { x: feet.x, y: feet.y - this.floor.seatLift(seat) };
+  }
+
+  /** The seat the carried person would land on if let go now (someone else's means a swap), or null (back to theirs). */
+  dropSeat(): number | null {
+    if (!this.carried) return null;
+    const feet = toScreen(this.carried.position);
+    const player = this.playerSeats();
+    const near = this.floor.layout.seats.map((_, seat) => seat).filter((seat) => !player.has(seat))
+      .map((seat) => ({ seat, gap: distance(this.seatScreenPosition(seat), feet) }))
+      .filter(({ gap }) => gap <= DROP_REACH)
+      .sort((a, b) => a.gap - b.gap);
+    return near[0]?.seat ?? null;
+  }
+
+  /**
+   * Lets the carried person go: on the seat under them, or back on their own. Whoever sat there walks to the seat
+   * the carried person left. True when seats changed.
+   */
+  drop(): boolean {
+    const character = this.carried;
+    if (!character) return false;
+    const seat = this.dropSeat() ?? character.seat;
+    const moved = seat !== character.seat;
+    this.carried = null;
+    const sitter = [...this.characters.values()].find((other) => other !== character && other.phase !== 'leaving' && other.seat === seat);
+    if (sitter) {
+      sitter.seat = character.seat;
+      sitter.path = this.floor.pathToSeat(sitter.position, sitter.seat);
+      sitter.phase = 'entering';
+    }
+    character.seat = seat;
+    character.position = this.floor.seatPosition(seat);
+    character.heading = this.floor.seatFacing(seat);
+    character.phase = 'seated';
+    return moved;
   }
 
   /** A canvas point on someone, their sprite's box above their feet, raised as high as they sit. */

@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
-import { findMentions, mentionAt } from '../../shared/mentions.ts';
+import { findMentions, mentionAt, mentionNames } from '../../shared/mentions.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
@@ -12,15 +12,24 @@ const MAX_SUGGESTIONS = 8;
 /** A session the field can name with "@", and a word on it (its folder, at rest). */
 export interface Mentionable { name: string; detail: string; session: SessionInfo }
 
-/** A line of the suggestions: a command or a session. `insert` replaces what is typed; typed as `whole`, Enter sends. */
-interface Suggestion { label: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }
+/** A line of the suggestions: a command or a session (`aside`: its tag, after its name). `insert` replaces what is typed; typed as `whole`, Enter sends. */
+interface Suggestion { label: string; aside?: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }
 
-/** The sessions whose name starts with what follows the "@", then those whose name holds it, accents and case aside. */
+/**
+ * The sessions whose name or tag starts with what follows the "@", then those whose name or tag holds it, accents and
+ * case aside: one line each, its name then its tag. Completing writes the one typed: the tag when only the tag fits.
+ */
 function mentionSuggestions(people: readonly Mentionable[], typed: string): Suggestion[] {
   const word = foldQuery(typed);
-  const named = (person: Mentionable) => foldQuery(person.name);
-  const found = [...people.filter((person) => named(person).startsWith(word)), ...people.filter((person) => !named(person).startsWith(word) && named(person).includes(word))];
-  return found.map((person) => ({ label: `@${person.name}`, description: person.detail, insert: `@${person.name} `, whole: `@${person.name}`, face: person.session }));
+  const line = (person: Mentionable, test: (folded: string) => boolean): Suggestion | null => {
+    const { name, session: { tag } } = person;
+    const written = test(foldQuery(name)) ? name : tag && test(foldQuery(tag)) ? tag : null;
+    if (!written) return null;
+    return { label: `@${name}`, aside: tag, description: person.detail, insert: `@${written} `, whole: `@${written}`, face: person.session };
+  };
+  const starting = people.map((person) => line(person, (folded) => folded.startsWith(word)));
+  const holding = people.map((person, index) => (starting[index] ? null : line(person, (folded) => folded.includes(word))));
+  return [...starting, ...holding].filter((suggestion): suggestion is Suggestion => !!suggestion);
 }
 
 interface Props {
@@ -78,7 +87,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
     });
   }, [commands, people, typed, dismissed, focused]);
   const current = suggestions[Math.min(active, suggestions.length - 1)];
-  const marks = useMemo(() => (shellMode || !people?.length ? [] : findMentions(value, people.map((person) => person.name))), [value, people, shellMode]);
+  const marks = useMemo(() => (shellMode || !people?.length ? [] : findMentions(value, mentionNames(people.map((person) => person.session)))), [value, people, shellMode]);
   const overlay = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { if (overlay.current && area.current) overlay.current.scrollTop = area.current.scrollTop; });
   const listId = `${id}-commands`;
@@ -128,7 +137,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
               onMouseDown={(e) => e.preventDefault()} onClick={() => complete(suggestion)}
             >
               {suggestion.face && <SessionFace session={suggestion.face} resting={suggestion.face.resting} />}
-              <strong>{suggestion.label.startsWith('@') ? <><span className="cp-at">@</span>{suggestion.label.slice(1)}</> : suggestion.label}</strong>
+              <strong>{suggestion.label.startsWith('@') ? <><span className="cp-at">@</span>{suggestion.label.slice(1)}</> : suggestion.label}{suggestion.aside && <span className="cp-composer__aside"> - {suggestion.aside}</span>}</strong>
               {suggestion.hint && <span className="cp-muted"> {suggestion.hint}</span>}
               {suggestion.description && <span className="cp-palette__description">{suggestion.description}</span>}
             </li>

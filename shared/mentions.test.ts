@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { findMentions, mentionAt } from './mentions.ts';
+import { findMentions, isNamedBy, mentionAt, mentionNames } from './mentions.ts';
 
 describe('mentions', () => {
   const names = ['PL', 'Ana', 'Ana Lou', 'Zoé'];
@@ -19,5 +19,14 @@ describe('mentions', () => {
     assert.deepEqual(mentionAt('@', 1), { start: 0, typed: '' });
     assert.equal(mentionAt('pl@exa', 6), null);
     assert.equal(mentionAt('@Li puis', 8), null);
+  });
+
+  it('names a session by its tag too', () => {
+    const names = mentionNames([{ name: 'Iris', tag: 'dark mode' }, { name: 'PL' }]);
+    assert.deepEqual(names, ['Iris', 'dark mode', 'PL']);
+    assert.deepEqual(findMentions('demande à @dark mode et @pl', names).map((mention) => mention.name), ['dark mode', 'PL']);
+    assert.ok(isNamedBy('Dark Mode', { name: 'Iris', tag: 'dark mode' }));
+    assert.ok(isNamedBy('iris', { name: 'Iris', tag: 'dark mode' }));
+    assert.ok(!isNamedBy('PL', { name: 'Iris', tag: 'dark mode' }));
   });
 });

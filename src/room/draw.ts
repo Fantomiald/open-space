@@ -346,6 +346,8 @@ function poseOf(walker: Walker, seated: boolean, smiling: boolean, gesture: Gest
 
 /** Seated, someone types while their session works and raises an arm when it waits for a permission or an answer. */
 function characterPose(character: Character, options: FrameOptions): Pose {
+  // held up by the user: legs and arms going, fast
+  if (character.phase === 'carried') return { ...poseOf(character, false, false, 'none', options), posture: 'walk', step: !options.reducedMotion && Math.floor(options.time / 90) % 2 === 1 ? 1 : 0 };
   const { status } = character.person;
   const seated = character.phase === 'seated';
   const gesture: Gesture = !seated || options.dozing ? 'none' : status === 'working' ? 'typing' : status === 'permission' || status === 'question' ? 'raising' : 'none';
@@ -361,9 +363,9 @@ function visitorPose(visitor: Visitor, options: FrameOptions): { pose: Pose; lif
 }
 
 /** `lift`: drawn this many room pixels above the floor (someone sitting on the sofa). */
-function paintPerson(context: Context, sprites: SpriteSource, id: string, walker: Walker, pose: Pose, selected: boolean, lift = 0) {
+function paintPerson(context: Context, sprites: SpriteSource, id: string, walker: Walker, pose: Pose, selected: boolean, lift = 0, grounded = true) {
   const feet = raise(toScreen(walker.position), lift);
-  if (pose.posture !== 'sit') {
+  if (pose.posture !== 'sit' && grounded) {
     context.fillStyle = P.shadow;
     context.beginPath();
     context.ellipse(feet.x, feet.y, 11, 4, 0, 0, Math.PI * 2);
@@ -377,6 +379,44 @@ function paintPerson(context: Context, sprites: SpriteSource, id: string, walker
     context.stroke();
   }
   sprites.draw(context, id, pose, feet.x, feet.y);
+}
+
+/** On each free seat while someone is carried, a ring and an arrow above the chair; both stronger on the one they would land on, taken or not. */
+function paintDropSeats(context: Context, scene: Scene, time: number) {
+  const target = scene.dropSeat();
+  const bob = Math.round(Math.sin(time / 160) * 1.5);
+  context.strokeStyle = P.selection;
+  context.fillStyle = P.selection;
+  context.lineWidth = 1.5;
+  // someone else's seat only shows while aimed at: dropping there swaps the two
+  const seats = target === null || scene.freeSeats().includes(target) ? scene.freeSeats() : [...scene.freeSeats(), target];
+  for (const seat of seats) {
+    const aimed = seat === target;
+    const feet = scene.seatScreenPosition(seat);
+    context.globalAlpha = aimed ? 1 : 0.7;
+    context.beginPath();
+    context.ellipse(feet.x, feet.y, 13, 5.5, 0, 0, Math.PI * 2);
+    context.stroke();
+    const tip = feet.y - 36 + (aimed ? bob : 0), half = aimed ? 5 : 3.5;
+    context.beginPath();
+    context.moveTo(feet.x - half, tip - half * 1.4);
+    context.lineTo(feet.x + half, tip - half * 1.4);
+    context.lineTo(feet.x, tip);
+    context.closePath();
+    context.fill();
+    context.strokeStyle = P.outline;
+    context.lineWidth = 1;
+    context.stroke();
+    context.strokeStyle = P.selection;
+    context.lineWidth = 1.5;
+    if (aimed) {
+      context.globalAlpha = 0.35;
+      context.beginPath();
+      context.ellipse(feet.x, feet.y, 13, 5.5, 0, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  context.globalAlpha = 1;
 }
 
 /**
@@ -622,6 +662,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const bossAtDesk = scene.playerSpot?.atDesk === true;
   for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: (on) => furniture.draw(on, piece) });
   for (const character of characters) {
+    if (character === scene.carried) continue;
     const pose = characterPose(character, options);
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
     layers.push({ depth: depthOf(character.position), paint: ghostly(character, (on) => paintPerson(on, sprites, character.person.id, character, pose, isSelected(character), lift)) });
@@ -650,6 +691,12 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const playerLift = scene.playerSpot?.lift ?? 0;
   layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
   for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint(context);
+  // someone carried goes over everything, above the free seats they can be put on
+  const carried = scene.carried;
+  if (carried) {
+    paintDropSeats(context, scene, options.reducedMotion ? 0 : options.time);
+    paintPerson(context, sprites, carried.person.id, carried, characterPose(carried, options), isSelected(carried), 0, false);
+  }
 
   paintLight(context, lighting, lightsOf(layout, occupied, bossAtDesk, lighting, options));
   const time = options.reducedMotion ? 0 : options.time;

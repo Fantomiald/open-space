@@ -273,6 +273,52 @@ describe('scene', () => {
     assert.equal(scene.characters.has('b'), false);
   });
 
+  it('lets the user carry someone to a free seat or swap seats, and back to theirs when let go elsewhere', () => {
+    const scene = officeScene();
+    scene.sync(planOffice([session('a', 'wait'), session('b', 'wait')], {}, scene.seats()), true);
+    const a = scene.characters.get('a')!, b = scene.characters.get('b')!;
+    const before = a.seat;
+    assert.ok(scene.pickUp(a));
+    assert.ok(scene.freeSeats().includes(before));
+    assert.ok(!scene.freeSeats().includes(b.seat));
+    const free = scene.freeSeats().find((seat) => seat !== before)!;
+    const target = scene.seatScreenPosition(free);
+    scene.carryTo({ x: target.x, y: target.y - 22 });
+    assert.equal(scene.dropSeat(), free);
+    assert.equal(scene.drop(), true);
+    assert.equal(a.phase, 'seated');
+    assert.equal(a.seat, free);
+    assert.ok(close(a.position, OFFICE_FLOOR.seatPosition(free)));
+    // the plan made from the scene keeps the new seat: no walking back
+    scene.sync(planOffice([session('a', 'wait'), session('b', 'wait')], {}, scene.seats()), false);
+    assert.equal(a.phase, 'seated');
+    // onto someone else's seat: they swap, the other one walking over
+    const theirs = b.seat;
+    scene.pickUp(a);
+    const taken = scene.seatScreenPosition(theirs);
+    scene.carryTo({ x: taken.x, y: taken.y - 22 });
+    assert.equal(scene.drop(), true);
+    assert.equal(a.seat, theirs);
+    assert.equal(b.seat, free);
+    assert.equal(b.phase, 'entering');
+    walkFor(scene, 15_000);
+    assert.equal(b.phase, 'seated');
+    // let go away from any seat: back to their own
+    scene.pickUp(a);
+    scene.carryTo({ x: 5, y: 5 });
+    assert.equal(scene.drop(), false);
+    assert.equal(a.seat, theirs);
+  });
+
+  it('lets go of someone carried whose session left', () => {
+    const scene = officeScene();
+    scene.sync(planOffice([session('a', 'wait')], {}, scene.seats()), true);
+    scene.pickUp(scene.characters.get('a')!);
+    scene.sync(planOffice([], {}, scene.seats()), false);
+    assert.equal(scene.carried, null);
+    assert.equal(scene.characters.get('a')!.phase, 'leaving');
+  });
+
   it('finds who is under a click', () => {
     const scene = officeScene();
     scene.sync(planOffice([session('a', 'wait')], {}, scene.seats()), true);
