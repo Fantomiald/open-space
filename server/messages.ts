@@ -1,6 +1,6 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
@@ -13,7 +13,6 @@ import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
 import { CONVERSATION_ID } from './conversations.ts';
 import { asJson, asNumber, isJson } from './json.ts';
 
-export const MAX_TEXT = 20_000;
 export const MAX_NAME = 40;
 /** Session tags are short labels. */
 export const MAX_TAG = 24;

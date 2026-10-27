@@ -12,6 +12,12 @@ import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 import type { TerminalChoice, TerminalKind } from './terminal.ts';
 import type { CostReport } from './usage.ts';
 
+/**
+ * The longest text a message may carry (the server drops a longer one; the page refuses it first and keeps it in the
+ * field). Room for a pasted log or document: about 125k tokens.
+ */
+export const MAX_TEXT = 500_000;
+
 export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'completed' }
 
 /**
