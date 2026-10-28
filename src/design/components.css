@@ -450,8 +450,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-changes-chip:hover, .cp-changes-chip[aria-pressed='true'], .cp-changes-chip[aria-expanded='true'] { border-color: var(--color-accent); color: var(--color-text); }
 .cp-changes-chip .cp-icon { width: 0.75rem; height: 0.75rem; }
 /* ── A session's browser: a chip in its header (lit while its agent drives), a view in place of the thread (BrowserView.tsx) ── */
-.cp-browser-chip[data-live='true'] { border-color: var(--tone-work); color: var(--color-text); }
-.cp-browser-chip[data-live='true'] .cp-icon { color: var(--tone-work); animation: cp-pulse 1.4s ease-in-out infinite; }
+/* its agent is at work in its browser */
+.cp-tabs__list [data-live='true'] .cp-icon { color: var(--tone-work); animation: cp-pulse 1.4s ease-in-out infinite; }
 .cp-browser__bar { gap: var(--space-1); padding-inline: var(--space-2); }
 .cp-browser__nav { display: flex; flex: none; }
 .cp-browser__address { flex: 1 1 auto; min-width: 6rem; display: flex; }

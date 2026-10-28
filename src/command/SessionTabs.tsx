@@ -13,7 +13,7 @@ const LEAVE_DELAY_MS = 200;
  * The views of a session's window, in tabs: its conversation, its files, its browser; then its sub-agents behind one
  * button, with how many are at work, whose menu opens on hover (a click on a touch screen) and opens one's thread.
  */
-export function SessionTabs({ sessionId, view, agents, agent, setAgent }: { sessionId: string; view: PanelView; agents: readonly Subagent[]; agent: string | null; setAgent: (agentId: string | null) => void }) {
+export function SessionTabs({ sessionId, view, driving, agents, agent, setAgent }: { sessionId: string; view: PanelView; driving: boolean; agents: readonly Subagent[]; agent: string | null; setAgent: (agentId: string | null) => void }) {
   const showPanel = useSessions((s) => s.showPanel);
   const browserAvailable = useSessions((s) => s.browserAvailable);
   const words = t.session.feed;
@@ -24,7 +24,7 @@ export function SessionTabs({ sessionId, view, agents, agent, setAgent }: { sess
       <div className="cp-tabs__list" role="tablist" aria-label={words.tabs}>
         <button type="button" role="tab" aria-selected={view === 'thread' && !shownAgent} aria-label={words.conversation} title={words.conversation} onClick={() => show('thread')}><MessageIcon /><span>{words.conversation}</span></button>
         <button type="button" role="tab" aria-selected={view === 'files'} aria-label={words.filesTab} title={words.filesTab} onClick={() => show('files')}><FolderIcon /><span>{words.filesTab}</span></button>
-        {browserAvailable && <button type="button" role="tab" aria-selected={view === 'browser'} aria-label={words.browserTab} title={words.browserTab} onClick={() => show('browser')}><GlobeIcon /><span>{words.browserTab}</span></button>}
+        {browserAvailable && <button type="button" role="tab" aria-selected={view === 'browser'} data-live={driving} aria-label={words.browserTab} title={driving ? words.browserLive : words.browserTab} onClick={() => show('browser')}><GlobeIcon /><span>{words.browserTab}</span></button>}
       </div>
       {agents.length > 0 && <AgentsMenu sessionId={sessionId} agents={agents} shown={shownAgent} onOpen={(agentId) => { showPanel('thread'); setAgent(agentId); }} />}
     </div>

@@ -102,6 +102,7 @@ export const session = {
     conversation: 'Conversation',
     filesTab: 'Fichiers',
     browserTab: 'Navigateur',
+    browserLive: 'Navigateur : son agent y travaille en ce moment',
     region: 'Fil de la session',
     loading: 'Chargement…',
     empty: 'Rien pour l\'instant. Envoie un premier message.',
@@ -200,8 +201,6 @@ export const session = {
   panel: { back: 'Conversation', refresh: 'Actualiser', askAgain: 'Redemander à Claude Code (la vue se met aussi à jour à chaque fin de tour)' },
   browser: {
     label: 'Navigateur',
-    chip: 'Navigateur',
-    chipTitle: 'Son navigateur, en direct : tu vois ce que font ses outils Playwright et tu peux cliquer dedans',
     address: 'Adresse',
     addressPlaceholder: 'localhost:5173, une adresse ou une recherche',
     back: 'Page précédente',

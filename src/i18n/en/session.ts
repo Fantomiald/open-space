@@ -98,6 +98,7 @@ export const session: Dictionary['session'] = {
     conversation: 'Conversation',
     filesTab: 'Files',
     browserTab: 'Browser',
+    browserLive: 'Browser: its agent is at work in it',
     region: 'Session thread',
     loading: 'Loading…',
     empty: 'Nothing yet. Send a first message.',
@@ -190,8 +191,6 @@ export const session: Dictionary['session'] = {
   panel: { back: 'Conversation', refresh: 'Refresh', askAgain: 'Ask Claude Code again (the view also updates at the end of each turn)' },
   browser: {
     label: 'Browser',
-    chip: 'Browser',
-    chipTitle: 'Its browser, live: see what its Playwright tools do and click in it',
     address: 'Address',
     addressPlaceholder: 'localhost:5173, an address or a search',
     back: 'Back',

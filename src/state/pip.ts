@@ -50,11 +50,14 @@ export function fitPip(previous: Box | null, format: BrowserFormat, surface: Siz
   return placePip({ left: right ? previous.left + previous.width - size.width : previous.left, top: bottom ? previous.top + previous.height - size.height : previous.top, ...size }, surface);
 }
 
+const shownUrl = (state: BrowserState | null | undefined) => state?.tabs.find((tab) => tab.id === state.active)?.url;
+
+/** A browser shows a page, not a blank one: worth floating in sight. */
+export const showsPage = (state: BrowserState | null | undefined) => { const url = shownUrl(state); return !!url && url !== 'about:blank'; };
+
 /** A browser just went to a page (not a blank one): its agent or a tester is at work in it, worth floating in sight. */
 export function wentToPage(previous: BrowserState | undefined, next: BrowserState | null): boolean {
-  const url = (state: BrowserState | null | undefined) => state?.tabs.find((tab) => tab.id === state.active)?.url;
-  const now = url(next);
-  return !!now && now !== 'about:blank' && now !== url(previous);
+  return showsPage(next) && shownUrl(next) !== shownUrl(previous);
 }
 
 /** `start` pulled by `edge` by dx, dy, its picture keeping the format's proportions; the opposite side or corner stays. */

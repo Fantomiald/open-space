@@ -2,7 +2,6 @@ import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 're
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { shortcut } from '../lib/platform.ts';
-import { lanesOf } from '../../shared/browser.ts';
 import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed, publishedPages } from '../state/feed.ts';
 import { backgroundWork, isRunning } from '../state/labels.ts';
@@ -18,7 +17,7 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, GlobeIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
@@ -91,7 +90,6 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const feed = useMemo(() => buildFeed(events), [events]);
   const pages = useMemo(() => publishedPages(feed.items), [feed]);
   const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed]);
-  const browser = useSessions((s) => lanesOf(Object.keys(s.browsers), sessionId).length > 0);
   // its agent is at work in its browser: the chip says so, and the view shows who drives
   const running = !!session && isRunning(session);
   const driving = useMemo(() => running && drivesBrowser(feed.items), [feed, running]);
@@ -195,12 +193,6 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <span>{t.session.files(changes.files.length)}</span>
             </button>
           )}
-          {(browser || driving) && (
-            <button
-              type="button" className="cp-changes-chip cp-browser-chip" data-live={driving} aria-pressed={panelView === 'browser'} aria-label={t.session.browser.chip} title={t.session.browser.chipTitle}
-              onClick={() => showPanel(panelView === 'browser' ? 'thread' : 'browser')}
-            ><GlobeIcon /></button>
-          )}
           {pages.length > 0 && <PublishedPages pages={pages} />}
           {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         </div>
@@ -235,7 +227,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           <ul>{feed.plan.map((item) => <li key={item.text} data-status={item.status}>{item.text}</li>)}</ul>
         </details>
       )}
-      <SessionTabs sessionId={session.id} view={panelView} agents={agents} agent={agent} setAgent={setAgent} />
+      <SessionTabs sessionId={session.id} view={panelView} driving={driving} agents={agents} agent={agent} setAgent={setAgent} />
       {panelView === 'browser' ? <BrowserView session={session} driving={driving} />
         : panelView === 'files' ? <FilesView session={session} />
         : panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
