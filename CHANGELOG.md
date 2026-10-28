@@ -7,6 +7,7 @@
 - Les images, PDF, vidéos et sons s'ouvrent en aperçu, un SVG bascule entre aperçu et code, et les autres fichiers ont un bouton « Montrer dans le Finder ». Le fil d'Ariane au-dessus du fichier ramène au dossier dans l'arbre.
 - « Terminés » devient « Agents », à droite des onglets : une pastille verte compte ceux qui travaillent, la liste s'ouvre au survol, un clic ouvre le fil d'un agent.
 - Le champ de message se cache dans Fichiers et Navigateur.
+- Le globe à côté du contexte disparaît : c'est l'onglet Navigateur qui pulse quand l'agent y travaille. En quittant l'onglet Navigateur, la mini-fenêtre ne s'ouvre plus si le navigateur n'a aucune page.
 
 ## 1.19.3
 

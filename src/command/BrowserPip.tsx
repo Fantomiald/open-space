@@ -6,7 +6,7 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed } from '../state/feed.ts';
 import { isRunning } from '../state/labels.ts';
-import { fitPip, placePip, resizePip } from '../state/pip.ts';
+import { fitPip, placePip, resizePip, showsPage } from '../state/pip.ts';
 import type { Box } from '../state/room-frame.ts';
 import { showsBrowser, useSessions } from '../state/sessions.ts';
 import type { Edge } from '../state/windows.ts';
@@ -39,7 +39,8 @@ export function BrowserPip() {
   useEffect(() => useSessions.subscribe((s, before) => {
     const left = before.panelView === 'browser' ? before.selectedId : null;
     if (!s.preferences.autoPip || !left || showsBrowser(s, left) || s.pip?.sessionId === left) return;
-    const lanes = lanesOf(Object.keys(s.browsers), left);
+    // a browser on a blank page has nothing to show
+    const lanes = lanesOf(Object.keys(s.browsers), left).filter((lane) => showsPage(s.browsers[browserId(left, lane)]));
     if (!lanes.length) return;
     const chosen = s.browserLanes[left] ?? 0;
     s.openPip({ sessionId: left, lane: lanes.includes(chosen) ? chosen : lanes[0] });
