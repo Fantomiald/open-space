@@ -162,6 +162,13 @@ export const fr = {
   trust: {
     entry: (name: string, what: string) => `${name} : ${what}`,
   },
+  files: {
+    missing: (name: string) => `${name || 'Ce dossier'} n’est plus là.`,
+    badName: (name: string) => `« ${name} » ne peut pas être un nom de fichier.`,
+    taken: (name: string) => `${name} existe déjà ici.`,
+    tooBig: 'Ce fichier est trop long pour l’éditeur (2 Mo au plus).',
+    outside: 'Le dossier de cette session n’est plus dans les dossiers autorisés.',
+  },
   journal: {
     missing: (name: string) => `La note ${name} n’est plus dans le dossier du tableau.`,
     badName: (name: string) => `« ${name} » ne peut pas être une note du tableau.`,

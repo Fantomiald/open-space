@@ -152,6 +152,13 @@ export const en: ServerDictionary = {
   trust: {
     entry: (name: string, what: string) => `${name}: ${what}`,
   },
+  files: {
+    missing: (name: string) => `${name || 'This folder'} is not there any more.`,
+    badName: (name: string) => `“${name}” cannot be a file name.`,
+    taken: (name: string) => `${name} already exists here.`,
+    tooBig: 'This file is too long for the editor (2 MB at most).',
+    outside: 'This session’s folder is no longer among the allowed folders.',
+  },
   journal: {
     missing: (name: string) => `The note ${name} is no longer in the whiteboard’s folder.`,
     badName: (name: string) => `"${name}" can’t be a whiteboard note.`,

@@ -31,6 +31,9 @@ export const formatAgo = (ms: number) => (ms < 60_000 ? t.common.justNow : t.com
 export const since = (from: number, now: number) => t.common.since(formatDuration(now - from));
 
 /** The last folder of a path: the project name. */
+/** A file's size, in kilobytes or megabytes. */
+export const formatSize = (size: number) => new Intl.NumberFormat(locale(), { style: 'unit', unit: size >= 1_000_000 ? 'megabyte' : 'kilobyte', maximumFractionDigits: 1 }).format(size >= 1_000_000 ? size / 1_000_000 : Math.max(0.1, size / 1000));
+
 export const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 /** "~/code/" and "app.ts": a path cut after its last / or \\. */

@@ -1,10 +1,11 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_SESSION_FILE, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type FileAction, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
 import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
+import { isEntryName } from './files.ts';
 import { parseJobs } from '../shared/jobs.ts';
 import { parseLook } from '../shared/look.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
@@ -30,6 +31,33 @@ const MCP_ACTIONS: ReadonlySet<McpAction> = new Set(['reconnect', 'enable', 'dis
 const identifier = (value: unknown): string | null => (typeof value === 'string' && /^[\w-]{1,100}$/.test(value) ? value : null);
 const MAX_NOTE_QUERY = 200;
 const noteName = (value: unknown): string | null => (typeof value === 'string' && NOTE_NAME.test(value) ? value : null);
+
+/** A path from a session's folder, as the explorer sends it ("/" between names, '' for the folder itself): no ".." nor absolute path. */
+export function relativePath(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 1024 || value.includes('\0') || value.includes('\\') || value.startsWith('/')) return null;
+  return value.split('/').every((name) => name !== '..' && name !== '.') ? value.replace(/\/+$/, '') : null;
+}
+
+function parseFileAction(raw: unknown): FileAction | null {
+  if (!isJson(raw)) return null;
+  const name = typeof raw.name === 'string' && isEntryName(raw.name) ? raw.name : null;
+  switch (raw.kind) {
+    case 'newFile':
+    case 'newFolder': {
+      const folder = relativePath(raw.folder);
+      return folder !== null && name ? { kind: raw.kind, folder, name } : null;
+    }
+    case 'rename': {
+      const at = relativePath(raw.path);
+      return at && name ? { kind: 'rename', path: at, name } : null;
+    }
+    case 'delete': {
+      const at = relativePath(raw.path);
+      return at ? { kind: 'delete', path: at } : null;
+    }
+    default: return null;
+  }
+}
 
 /** The upload ids of the files sent with a message (see uploads.ts): undefined when none, null when malformed. */
 function parseFiles(raw: unknown): string[] | undefined | null {
@@ -242,6 +270,25 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'restartApp': return { t: 'restartApp' };
     case 'checkApp': return { t: 'checkApp' };
     case 'changes': return sessionId ? { t: 'changes', sessionId } : null;
+    case 'listFolder': {
+      const folder = relativePath(raw.folder);
+      return sessionId && folder !== null ? { t: 'listFolder', sessionId, folder } : null;
+    }
+    case 'readFile':
+    case 'revealFile': {
+      const at = relativePath(raw.path);
+      return sessionId && at ? { t: raw.t, sessionId, path: at } : null;
+    }
+    case 'writeFile': {
+      const at = relativePath(raw.path);
+      const text = boundedString(raw.text, MAX_SESSION_FILE);
+      const version = typeof raw.version === 'string' && /^[0-9a-f]{16}$/.test(raw.version) ? raw.version : null;
+      return sessionId && at && text !== null && version ? { t: 'writeFile', sessionId, path: at, text, version } : null;
+    }
+    case 'fileAction': {
+      const action = parseFileAction(raw.action);
+      return sessionId && action ? { t: 'fileAction', sessionId, action } : null;
+    }
     case 'tune': {
       if (!sessionId) return null;
       const model = raw.model === undefined || (typeof raw.model === 'string' && (raw.model === '' || MODEL_PATTERN.test(raw.model))) ? raw.model as string | undefined : null;

@@ -2,7 +2,7 @@
 // The rest of the page uses these names, so an icon is changed here only.
 import {
   AppWindow, Archive, Eraser, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
-  Clock, Folder, Copy, Languages, PartyPopper, Activity, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, PictureInPicture2, type LucideIcon,
+  Clock, Folder, FolderOpen, FolderPlus, FilePlus, Save, FileCode, FileBraces, FileImage, FileCog, FileLock, FileArchive, FilePlay, FileMusic, FileSpreadsheet, Copy, Languages, PartyPopper, Activity, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, PictureInPicture2, CodeXml, Eye, FolderSearch, type LucideIcon,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -89,6 +89,23 @@ export const MessageIcon = icon(MessageSquareText);
 export const ChartIcon = icon(ChartColumn);
 export const ClockIcon = icon(Clock);
 export const FolderIcon = icon(Folder);
+export const FolderOpenIcon = icon(FolderOpen);
+export const NewFolderIcon = icon(FolderPlus);
+export const NewFileIcon = icon(FilePlus);
+export const SaveIcon = icon(Save);
+export const CodeIcon = icon(CodeXml);
+export const PreviewIcon = icon(Eye);
+export const RevealIcon = icon(FolderSearch);
+/** A file of the explorer, by kind (see fileKind in src/state/files.ts). */
+export const FileCodeIcon = icon(FileCode);
+export const FileDataIcon = icon(FileBraces);
+export const FileImageIcon = icon(FileImage);
+export const FileConfigIcon = icon(FileCog);
+export const FileLockIcon = icon(FileLock);
+export const FileArchiveIcon = icon(FileArchive);
+export const FileVideoIcon = icon(FilePlay);
+export const FileAudioIcon = icon(FileMusic);
+export const FileTableIcon = icon(FileSpreadsheet);
 export const CopyIcon = icon(Copy);
 export const LanguageIcon = icon(Languages);
 export const FestivalIcon = icon(PartyPopper);

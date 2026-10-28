@@ -126,7 +126,8 @@ export function App() {
         const session = state.selectedId ? state.sessions[state.selectedId] : undefined;
         // the side question (/btw), then a side view (changes, browser...), close before the session is interrupted
         if (session && state.asides[session.id]) { e.preventDefault(); state.send({ t: 'asideClose', sessionId: session.id }); return; }
-        if (session && state.panelView !== 'thread') { e.preventDefault(); state.showPanel('thread'); return; }
+        // in the files, Escape belongs to the editor (its search) and the tree's fields
+        if (session && state.panelView !== 'thread' && !(e.target instanceof Element && e.target.closest('.cp-files'))) { e.preventDefault(); state.showPanel('thread'); return; }
         const shells = session ? runningShells(state.logs[session.id] ?? []) : [];
         const working = session && isRunning(session) && session.state !== 'starting';
         if (session && (working || shells.length)) {

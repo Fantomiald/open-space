@@ -8,7 +8,7 @@ import { buildFeed } from '../state/feed.ts';
 import { isRunning } from '../state/labels.ts';
 import { fitPip, placePip, resizePip } from '../state/pip.ts';
 import type { Box } from '../state/room-frame.ts';
-import { useSessions } from '../state/sessions.ts';
+import { showsBrowser, useSessions } from '../state/sessions.ts';
 import type { Edge } from '../state/windows.ts';
 import { BrowserScreen, FormatSwitch, LanePicker, useLanes } from './BrowserView.tsx';
 import { boxVariables } from './boxes.ts';
@@ -33,12 +33,12 @@ export function BrowserPip() {
   const session = useSessions((s) => (s.pip ? s.sessions[s.pip.sessionId] : undefined));
   const closePip = useSessions((s) => s.closePip);
   // its session's window shows its browsers already
-  const inView = useSessions((s) => !!s.pip && s.selectedId === s.pip.sessionId && s.panelView === 'browser');
+  const inView = useSessions((s) => !!s.pip && showsBrowser(s, s.pip.sessionId));
   useEffect(() => { if (pip && !session && useSessions.getState().connection === 'live') closePip(); }, [pip, session, closePip]);
   // leaving a session's browser view (for its conversation, another view or another session), its browser floats on
   useEffect(() => useSessions.subscribe((s, before) => {
     const left = before.panelView === 'browser' ? before.selectedId : null;
-    if (!s.preferences.autoPip || !left || (s.panelView === 'browser' && s.selectedId === left) || s.pip?.sessionId === left) return;
+    if (!s.preferences.autoPip || !left || showsBrowser(s, left) || s.pip?.sessionId === left) return;
     const lanes = lanesOf(Object.keys(s.browsers), left);
     if (!lanes.length) return;
     const chosen = s.browserLanes[left] ?? 0;

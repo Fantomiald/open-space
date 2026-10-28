@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { resolveInside } from './paths.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -54,6 +55,7 @@ before(async () => {
   writeFileSync(path.join(distDir, 'index.html'), '<!doctype html><title>shell</title>');
   writeFileSync(path.join(base, 'secret.txt'), 'top secret');
   symlinkSync(path.join(base, 'secret.txt'), path.join(distDir, 'leak.txt'));
+  writeFileSync(path.join(distDir, 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   const soundsDir = path.join(base, 'sounds');
   mkdirSync(soundsDir);
   writeFileSync(path.join(soundsDir, 'error.wav'), 'RIFF');
@@ -70,6 +72,7 @@ before(async () => {
   server = createWebServer({
     policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
+    sessionFile: (sessionId, relative) => (sessionId === 's1' ? resolveInside(distDir, relative) : null),
   }).server;
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
 });
@@ -113,6 +116,16 @@ describe('HTTP requests', () => {
     assert.equal(sound.headers.get('content-type'), 'audio/wav');
     assert.equal((await fetch(`http://127.0.0.1:${port}/sounds/missing.wav`)).status, 404);
     assert.equal((await fetch(`http://127.0.0.1:${port}/sounds/leak.wav`)).status, 404);
+  });
+
+  it('serves the pictures, PDFs, videos and sounds of a session’s folder to its explorer, and nothing else', async () => {
+    const file = (at: string) => fetch(`http://127.0.0.1:${port}/files/${at}`, { headers: { Cookie: COOKIE } });
+    assert.equal((await fetch(`http://127.0.0.1:${port}/files/s1/logo.svg`)).status, 401);
+    const res = await file('s1/logo.svg');
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+    assert.match(res.headers.get('content-security-policy') ?? '', /sandbox/);
+    for (const refused of ['s1/index.html', 's2/logo.svg', 's1/..%2Fsecret.txt', 's1/leak.txt', 's1/%E0%A4%A']) assert.equal((await file(refused)).status, 404, refused);
   });
 
   it('serves the pictures sent with messages to a paired browser only, by their exact name', async () => {

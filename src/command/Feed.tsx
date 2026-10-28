@@ -1,75 +1,31 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
 import { findMentions, mentionNames } from '../../shared/mentions.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
-import { locale, t } from '../i18n/index.ts';
-import { formatClock, formatDuration } from '../lib/format.ts';
+import { t } from '../i18n/index.ts';
+import { formatClock, formatDuration, formatSize } from '../lib/format.ts';
 import { reducedMotion } from '../lib/motion.ts';
 import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
-import { BackIcon, ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
+import { ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
-import { useDismiss } from './useDismiss.ts';
 import { Prose } from './Prose.tsx';
 import { currentTurn, threadOf, toolSummary, turnPhase, turnWord, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
 import { FeedSearch } from './FeedSearch.tsx';
 import { BranchCardView, BranchNewsItem } from './BranchCard.tsx';
 
-type Subagent = FeedItem & { kind: 'subagent' };
+export type Subagent = FeedItem & { kind: 'subagent' };
 
 /** A sub-agent's face, the one it has in the room (next to its session's name), with how it is doing. */
-function AgentFace({ sessionId, agent }: { sessionId: string; agent: Subagent }) {
+export function AgentFace({ sessionId, agent }: { sessionId: string; agent: Subagent }) {
   const head = useMemo(() => chibiHead(lookOfStranger(`${sessionId}/${agent.agentId}`)), [sessionId, agent.agentId]);
   return (
     <span className="cp-agent-face" data-status={agent.status}>
       <img src={head} alt="" width={22} height={22} />
       <span className="cp-feed__agent-dot" aria-hidden="true" />
     </span>
-  );
-}
-
-/**
- * A small window has no room for the thread's tabs: while a sub-agent's thread is shown, its face sits in the head,
- * and a click goes back to the conversation (the sub-agents stay one click away on their lines in it).
- */
-export function AgentBack({ sessionId, items, agent, setAgent }: { sessionId: string; items: readonly FeedItem[]; agent: string | null; setAgent: (agentId: string | null) => void }) {
-  const shown = items.find((item): item is Subagent => item.kind === 'subagent' && item.agentId === agent);
-  if (!shown) return null;
-  return (
-    <button type="button" className="cp-detail__agent-back" aria-label={t.session.feed.backFrom(shown.name)} title={t.session.feed.backFrom(shown.name)} onClick={() => setAgent(null)}>
-      <BackIcon /><AgentFace sessionId={sessionId} agent={shown} />
-    </button>
-  );
-}
-
-/** The sub-agents done with their work, out of the tabs: in a menu at their end, the last one first. */
-function FinishedAgents({ sessionId, agents, shown, onOpen }: { sessionId: string; agents: readonly Subagent[]; shown: string | null; onOpen: (agentId: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useDismiss(open, box, close);
-  return (
-    <div className="cp-thread__finished" ref={box}>
-      <button type="button" aria-expanded={open} aria-controls="finished-agents" onClick={() => setOpen(!open)}>
-        {t.session.feed.finished(agents.length)}<ChevronDownIcon />
-      </button>
-      {open && (
-        <ul className="cp-thread__finished-list" id="finished-agents" aria-label={t.session.feed.finishedList}>
-          {[...agents].reverse().map((agent) => (
-            <li key={agent.agentId}>
-              <button type="button" aria-current={shown === agent.agentId} onClick={() => { onOpen(agent.agentId); close(); }}>
-                <AgentFace sessionId={sessionId} agent={agent} />
-                <span className="cp-feed__agent-name">{agent.name}</span>
-                <span className="cp-feed__agent-task">{agent.task}</span>
-                <span className="cp-feed__agent-status">{t.session.feed.subagentStatus[agent.status]}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 
@@ -133,13 +89,13 @@ function SentFileView({ file, onView, caption }: { file: SentFile; onView: (imag
     const download = `${src}?name=${encodeURIComponent(file.title)}`;
     return (
       <button type="button" className="cp-file" title={words.read} onClick={() => onView({ src, alt: file.title, caption: caption || file.title, kind, link: { href: download, label: words.download, download: file.title } })}>
-        <FileTextIcon />{file.title}<span className="cp-file__size">{bytes(file.size)}</span>
+        <FileTextIcon />{file.title}<span className="cp-file__size">{formatSize(file.size)}</span>
       </button>
     );
   }
   return (
     <a className="cp-file" href={`${src}?name=${encodeURIComponent(file.title)}`} download={file.title} title={words.download}>
-      <DownloadIcon />{file.title}<span className="cp-file__size">{bytes(file.size)}</span>
+      <DownloadIcon />{file.title}<span className="cp-file__size">{formatSize(file.size)}</span>
     </a>
   );
 }
@@ -193,14 +149,12 @@ function SentVideo({ src, title, size, caption, onView }: { src: string; title: 
       )}
       <p className="cp-artifact__bar">
         <span className="cp-artifact__title">{title}</span>
-        <span className="cp-file__size">{bytes(size)}</span>
+        <span className="cp-file__size">{formatSize(size)}</span>
         <a className="cp-icon-button" href={download} download={title} aria-label={words.download} title={words.download}><DownloadIcon /></a>
       </p>
     </div>
   );
 }
-
-const bytes = (size: number) => new Intl.NumberFormat(locale(), { style: 'unit', unit: size >= 1_000_000 ? 'megabyte' : 'kilobyte', maximumFractionDigits: 1 }).format(size >= 1_000_000 ? size / 1_000_000 : Math.max(0.1, size / 1000));
 
 /** The time a message was written, when the settings show it (Preferences.timestamps). */
 function Stamp({ at }: { at: number }) {
@@ -246,7 +200,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
           )}
           {item.files.length > 0 && (
             <div className="cp-feed__files">
-              {item.files.map((file) => <span key={file.id} className="cp-file" title={file.name}><FileIcon />{file.name}<span className="cp-file__size">{bytes(file.size)}</span></span>)}
+              {item.files.map((file) => <span key={file.id} className="cp-file" title={file.name}><FileIcon />{file.name}<span className="cp-file__size">{formatSize(file.size)}</span></span>)}
             </div>
           )}
           {item.text && <div className="cp-feed__text"><Mentioned text={item.text} /></div>}
@@ -386,8 +340,8 @@ function Working({ items, speaker, sessionId }: { items: readonly FeedItem[]; sp
 }
 
 /**
- * The thread, in tabs: the conversation (the user, the session's own agent, every question and permission, one line
- * per sub-agent), then one tab per sub-agent with what it said and did. It sticks to the bottom while the user has not
+ * The thread: the conversation (the user, the session's own agent, every question and permission, one line per
+ * sub-agent), or one sub-agent's, with what it said and did (picked in SessionTabs). It sticks to the bottom while the user has not
  * scrolled up.
  */
 /**
@@ -401,9 +355,6 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   // a picture, a page, a video or a text of the thread opened in large
   const [viewing, setViewing] = useState<Viewed | null>(null);
   const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed.items]);
-  // the tabs: those at work, and one done while it is open; the others wait in the menu
-  const finished = agents.filter((item) => item.status !== 'working');
-  const tabs = agents.filter((item) => item.status === 'working' || item.agentId === agent);
   const shownAgent = agents.find((candidate) => candidate.agentId === agent);
   const entries = useMemo(() => threadOf(feed.items, shownAgent ? shownAgent.agentId : null), [feed.items, shownAgent]);
   const scroller = useRef<HTMLDivElement>(null);
@@ -460,19 +411,6 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   return (
     <div className="cp-thread">
       {searching && <FeedSearch key={searchSeed} thread={scroller} version={entries} />}
-      {agents.length > 0 && (
-        <div className="cp-thread__bar">
-          <div className="cp-thread__tabs" role="tablist" aria-label={t.session.feed.tabs}>
-            <button type="button" role="tab" aria-selected={!shownAgent} onClick={() => setAgent(null)}>{t.session.feed.conversation}</button>
-            {tabs.map((item) => (
-              <button key={item.agentId} type="button" role="tab" aria-selected={shownAgent === item} onClick={() => setAgent(item.agentId)}>
-                <AgentFace sessionId={sessionId} agent={item} />{item.name}
-              </button>
-            ))}
-          </div>
-          {finished.length > 0 && <FinishedAgents sessionId={sessionId} agents={finished} shown={agent} onOpen={setAgent} />}
-        </div>
-      )}
       <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onScroll={(e) => onScroll(e.currentTarget)} onWheel={onGesture} onTouchMove={onGesture} onKeyDown={onGesture} onPointerDown={onGesture} tabIndex={0} role="region" aria-label={t.session.feed.region}>
         {loading ? <p className="cp-muted">{t.session.feed.loading}</p> : entries.length === 0 && !shownAgent ? <p className="cp-muted">{t.session.feed.empty}</p> : (
           <ul>

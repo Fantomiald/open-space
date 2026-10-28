@@ -118,7 +118,8 @@ function showWindow() {
     width: 1440, height: 900, ...readBounds(), minWidth: 380, minHeight: 520,
     title: 'Open Space', backgroundColor: BACKGROUND, show: false,
     ...(process.platform === 'win32' ? { icon: avatarIcon ?? path.join(OUT, 'desktop', 'icon.png') } : {}),
-    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
+    // plugins: Chromium's PDF viewer, for the PDFs the files explorer shows (the only plugin left)
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, plugins: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
   });
   const current = window;
   current.once('ready-to-show', () => current.show());
