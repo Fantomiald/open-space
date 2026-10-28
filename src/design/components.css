@@ -120,13 +120,22 @@ h1, h2, p { margin: 0; }
 @media (max-width: 80rem) {
   .cp-header__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+/* a narrow screen: the rooms and the tools share the first row, always; the projects, then the radio, get a row each */
+@media (max-width: 60rem) {
+  .cp-header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-2); }
+  .cp-header__tools { grid-row: 1; grid-column: 2; justify-self: end; flex-wrap: nowrap; }
+  .cp-header .cp-header__projects { order: 1; grid-column: 1 / -1; max-width: none; }
+  .cp-header .cp-radio { order: 1; grid-column: 1 / -1; }
+  .cp-header .cp-radio__now { flex: 1 1 0; min-width: 0; }
+}
 @media (max-width: 40rem) {
-  /* first row: the rooms and the tools; the projects, then the radio, get a row each */
-  .cp-header { gap: var(--space-2); }
-  .cp-header .cp-header__projects { order: 1; flex: 1 1 100%; max-width: none; }
-  .cp-header .cp-radio { order: 1; flex: 1 1 100%; }
+  .cp-header__tools { gap: 2px; }
+  .cp-header__tools :is(.cp-button, .cp-quota__trigger) { padding-inline: var(--space-2); }
   .cp-header__tools .cp-meter, .cp-quota__label { display: none; }
-  .cp-quota__details { left: 0; right: auto; width: min(18rem, calc(100vw - 2 * var(--space-4))); }
+  /* the details hang from the tools' pill, not from the meter, so they stay on screen */
+  .cp-header__tools { position: relative; }
+  .cp-quota { position: static; }
+  .cp-quota__details { right: 0; width: min(18rem, calc(100vw - 2 * var(--gutter))); }
   .cp-kbd { display: none; }
 }
 /* the right column always holds something: the open session, or the launcher to start one */
@@ -163,19 +172,23 @@ h1, h2, p { margin: 0; }
   .cp-main[data-view='focus'] .cp-launcher { justify-content: center; }
   .cp-main[data-view='focus'] .cp-launcher > * { width: min(100%, 44rem); margin-inline: auto; }
   .cp-main[data-view='focus'] .cp-launcher__head { display: flex; justify-content: center; border-bottom: 0; }
+  /* the head sits in the middle with the rest: the close button stays in the window's corner */
+  .cp-main[data-view='focus'] .cp-launcher__head { position: static; }
+  .cp-main[data-view='focus'] .cp-launcher__close { top: var(--space-2); translate: none; }
   .cp-main[data-view='focus'] .cp-launcher__body { flex: 0 1 auto; }
   .cp-main[data-view='focus'] .cp-launcher__intro { justify-items: center; text-align: center; }
   .cp-main[data-view='focus'] .cp-launcher__intro p { max-width: 46ch; }
   .cp-main[data-view='focus'] .cp-launcher__keys { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2) var(--space-5); }
+  .cp-main[data-view='focus'] .cp-launcher__keys li { text-align: start; }
 }
 @media (max-width: 60rem) {
   .cp-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .cp-main[data-detail='true'] .cp-main__content { display: none; }
   /* a session open fills the screen, inside the gutter; the status card would sit on its thread and its message field */
   .cp-main[data-detail='true'] > .cp-stack { margin: var(--gutter); }
-  /* one session at a time on a small screen: the one last used */
-  .cp-stack { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .cp-stack__slot { grid-area: 1 / 1; }
+  /* one session at a time on a small screen: the one last used (more specific than the grid's rows and places below) */
+  .cp-main > .cp-stack { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .cp-main > .cp-stack > .cp-stack__slot { grid-area: 1 / 1; }
   .cp-stack__slot:not(:has(> [data-active='true'])) { display: none; }
   .cp-main[data-detail='true'] ~ .cp-status { display: none; }
   /*
@@ -212,6 +225,8 @@ h1, h2, p { margin: 0; }
   .cp-detail .cp-detail__title > .cp-badge { grid-row: 2; justify-self: start; }
   .cp-detail__title .cp-detail__controls { grid-row: 1; grid-column: 2; gap: 2px; }
   .cp-detail__title .cp-detail__controls .cp-icon-button { width: var(--control-height); height: var(--control-height); }
+  /* reduced to its dot, the state fits beside the name */
+  .cp-stack__slot[data-compact='true'] .cp-detail .cp-detail__title { display: flex; }
 }
 
 /* ── Controls ── */
@@ -729,7 +744,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-tabs__count {
   display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border-radius: 999px;
   background: var(--tone-reply-soft); color: var(--tone-reply); font: var(--weight-bold) 0.6875rem / 1 var(--font-mono);
-  box-shadow: 0 0 0 1px var(--tone-reply); animation: cp-tabs-breathe 2.4s ease-in-out infinite;
+  margin-inline: var(--space-1); box-shadow: 0 0 0 1px var(--tone-reply); animation: cp-tabs-breathe 2.4s ease-in-out infinite;
 }
 @keyframes cp-tabs-breathe { 50% { box-shadow: 0 0 0 3px var(--tone-reply-soft), 0 0 0 1px var(--tone-reply); } }
 .cp-tabs__menu { min-width: 17rem; max-width: min(26rem, calc(100vw - 2 * var(--space-2))); max-height: min(24rem, calc(100vh - 2 * var(--space-2))); margin: 0; list-style: none; }
@@ -1523,7 +1538,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-launcher__intro p { color: var(--color-text-muted); font-size: var(--text-sm); max-width: 34ch; }
 .cp-launcher__keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
 .cp-launcher__keys li { display: flex; align-items: center; gap: var(--space-2); }
-.cp-launcher__keys .cp-kbd { min-width: 2.6em; text-align: center; }
+.cp-launcher__keys .cp-kbd { flex: none; min-width: 2.6em; text-align: center; white-space: nowrap; }
 .cp-launcher .cp-resume__list { max-height: none; }
 .cp-launcher__composer { position: relative; flex: none; padding: var(--space-3) var(--space-4) var(--space-4); }
 /* one frame for the message and its settings, like a chat field; the frame lights up while the message is typed */

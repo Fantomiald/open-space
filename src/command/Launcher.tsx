@@ -140,7 +140,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
           <button type="button" aria-pressed={!resuming} onClick={() => setResuming(false)}>{words.newConversation}</button>
           <button type="button" aria-pressed={resuming} onClick={() => setResuming(true)}>{words.resume}</button>
         </div>
-        {onClose && <button type="button" className="cp-icon-button cp-launcher__close" aria-label={words.close} title={words.close} onClick={onClose}><CloseIcon /></button>}
+        {onClose && <button type="button" className="cp-icon-button cp-launcher__close" data-variant="outlined" aria-label={words.close} title={words.close} onClick={onClose}><CloseIcon /></button>}
       </div>
 
       <div className="cp-launcher__body">

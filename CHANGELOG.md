@@ -1,5 +1,13 @@
 # Versions
 
+## 1.21.0
+
+- Le bouton Agents n'affiche plus que le robot, avec plus d'air avant la pastille verte.
+- Petit écran : la fenêtre ouverte prend toute la hauteur même avec plusieurs sessions ouvertes, au lieu de la moitié ou du tiers.
+- Petit écran : l'en-tête se range en deux lignes nettes, les salles et les outils en haut, la radio dessous. Le détail de l'usage reste dans l'écran et la page ne défile plus de côté.
+- L'état d'une session réduit à sa pastille reste à côté de son nom.
+- Mode Focus : la croix du lanceur passe dans le coin de la fenêtre, ronde comme celle des sessions, et « Maj N » ne se coupe plus en deux.
+
 ## 1.20.0
 
 - Chaque fenêtre de session a des onglets en icônes : Conversation, Fichiers, Navigateur. Le nom ne s'affiche que sur l'onglet ouvert, et chaque fenêtre garde son onglet quand tu passes sur une autre.
