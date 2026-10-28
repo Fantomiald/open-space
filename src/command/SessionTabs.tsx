@@ -56,11 +56,11 @@ function AgentsMenu({ sessionId, agents, shown, onOpen }: { sessionId: string; a
   return (
     <div className="cp-tabs__agents" ref={box} onPointerEnter={(e) => hover(true, e.pointerType)} onPointerLeave={(e) => hover(false, e.pointerType)}>
       <button
-        type="button" aria-expanded={open} aria-haspopup="menu" data-current={!!shown} title={words.agentsTitle(working.length, agents.length)}
+        type="button" aria-expanded={open} aria-haspopup="menu" data-current={!!shown} aria-label={shown ? undefined : words.agents} title={words.agentsTitle(working.length, agents.length)}
         onPointerDown={(e) => { pressedWith.current = e.pointerType; }}
         onClick={() => { setOpen(pressedWith.current === 'mouse' || !open); pressedWith.current = ''; }}
       >
-        {shown ? <><AgentFace sessionId={sessionId} agent={shown} /><span>{shown.name}</span></> : <><AgentIcon /><span>{words.agents}</span></>}
+        {shown ? <><AgentFace sessionId={sessionId} agent={shown} /><span>{shown.name}</span></> : <AgentIcon />}
         {working.length > 0 && <span className="cp-tabs__count" aria-hidden="true">{working.length}</span>}
         <ChevronDownIcon />
       </button>
