@@ -3,6 +3,7 @@
 // that is not authorised, and lets the store resynchronise after each (re)connection.
 import { MAX_TEXT, type ClientMessage, type ServerMessage } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { useFiles } from '../state/files.ts';
 import { useSessions } from '../state/sessions.ts';
 
 /** Short on purpose: `npm start` only opens a new tab when no open one came back within ~3 s. */
@@ -60,7 +61,8 @@ export function connect() {
         if (build && build !== message.build) { location.reload(); return; }
         build = message.build;
       }
-      useSessions.getState().receive(message);
+      if (message.t === 'folder' || message.t === 'file') useFiles.getState().receive(message);
+      else useSessions.getState().receive(message);
     };
     ws.onclose = async () => {
       attempts++;

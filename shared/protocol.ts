@@ -496,6 +496,27 @@ export interface SearchHit { sessionId: string; seq: number; at: number; who: 'u
 export interface NoteFile { name: string; mtime: number }
 /** A note's text, and its version (a hash of the text): a save carries the version it was made from, and is refused when the file changed since. */
 export interface Note extends NoteFile { text: string; version: string }
+/** One line of a session's file explorer: a folder or a file directly inside the folder listed. */
+export interface FileEntry { name: string; folder: boolean }
+/** The largest file the explorer opens to edit (bytes). */
+export const MAX_SESSION_FILE = 2_000_000;
+/**
+ * A file of a session's folder, opened in its explorer: `path` from the session's folder, with "/". `text` is null for a
+ * file the editor cannot show (`unreadable`); `version` (a hash of the text) works as for a note.
+ */
+export interface SessionFile { path: string; text: string | null; unreadable?: 'binary' | 'tooBig' | 'missing'; version: string; /** bytes, for a file not shown as text */ size?: number }
+/** The files the explorer previews instead of opening them as text, by extension, with their type (served under /files/, see http.ts). */
+export const PREVIEW_TYPES: Readonly<Record<string, string>> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', ico: 'image/x-icon', bmp: 'image/bmp', svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', flac: 'audio/flac',
+};
+/** What the explorer does to a file or a folder of the session's folder; `folder` and `path` are from the session's folder. */
+export type FileAction =
+  | { kind: 'newFile' | 'newFolder'; folder: string; name: string }
+  | { kind: 'rename'; path: string; name: string }
+  | { kind: 'delete'; path: string };
 /** A note the whiteboard's search found: by its name or its text (how many times, and the first line it is on) */
 export interface NoteMatch { name: string; count: number; excerpt: string }
 
@@ -572,6 +593,13 @@ export type ClientMessage =
   | { t: 'checkApp' }
   /** what a session changed in its files */
   | { t: 'changes'; sessionId: string }
+  /** the explorer of a session's folder: a folder listed ('' : the session's folder), a file read or saved, a file or a folder made, renamed or deleted */
+  | { t: 'listFolder'; sessionId: string; folder: string }
+  | { t: 'readFile'; sessionId: string; path: string }
+  | { t: 'writeFile'; sessionId: string; path: string; text: string; version: string }
+  | { t: 'fileAction'; sessionId: string; action: FileAction }
+  /** shows a file of the session's folder in the Finder (the Explorer on Windows) */
+  | { t: 'revealFile'; sessionId: string; path: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
   /** changes the model, the effort, ultracode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
   | ({ t: 'tune'; sessionId: string } & TuneChange)
@@ -651,6 +679,10 @@ export type ServerMessage =
   /** where the Mac app is with a new Open Space (only when the bridge runs inside it) */
   | { t: 'appUpdate'; update: AppUpdate }
   | { t: 'changes'; sessionId: string; changes: SessionChanges }
+  /** a folder of a session's explorer; `entries` null: it is not there any more */
+  | { t: 'folder'; sessionId: string; folder: string; entries: FileEntry[] | null }
+  /** a file of a session's explorer: read, saved, or not saved because it changed on the disk since (as it is now) */
+  | { t: 'file'; sessionId: string; file: SessionFile; outcome: 'read' | 'saved' | 'conflict' }
   | { t: 'inspection'; sessionId: string; inspection: Inspection }
   | { t: 'quota'; quota: Quota }
   /** the journal folder and its notes, by name */

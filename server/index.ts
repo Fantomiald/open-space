@@ -25,7 +25,8 @@ import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
-import { suggestRoots } from './paths.ts';
+import { resolveAllowedDirectory, suggestRoots } from './paths.ts';
+import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { windowsKnownFolders } from './system-folders.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { UsageLedger } from './usage.ts';
@@ -217,6 +218,7 @@ let claudeDefaults = await readClaudeDefaults(os.homedir());
 const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded, claudeDefaults });
 prepareSounds(config.dataDir, log);
 const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+  sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId) },
 });
 
@@ -258,6 +260,15 @@ function onConnection(socket: WebSocket) {
     if (message.t === 'presence') { presence.set(socket, message.active); return; }
     handle(message, send).catch((error: unknown) => send({ t: 'toast', kind: 'error', text: error instanceof Error ? error.message : String(error) }));
   });
+}
+
+/** The real folder a session's explorer works in: its own, as long as it stays among the allowed ones. */
+function filesRoot(sessionId: string): string {
+  const cwd = sessions.folderOf(sessionId);
+  if (!cwd) throw new Error(st.sessions.notFound);
+  const root = resolveAllowedDirectory(cwd, config.roots);
+  if (!root) throw new Error(st.files.outside);
+  return root;
 }
 
 async function handle(message: ClientMessage, send: (message: ServerMessage) => void) {
@@ -387,6 +398,22 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'restartApp': if (appUpdate?.state === 'ready') appPort?.postMessage({ t: 'restart' }); break;
     case 'checkApp': if (appUpdate?.state !== 'downloading' && appUpdate?.state !== 'ready') appPort?.postMessage({ t: 'check' }); break;
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
+    case 'listFolder': send({ t: 'folder', sessionId: message.sessionId, folder: message.folder, entries: await listFolder(filesRoot(message.sessionId), message.folder) }); break;
+    case 'revealFile': revealFile(filesRoot(message.sessionId), message.path); break;
+    case 'readFile': send({ t: 'file', sessionId: message.sessionId, file: await readSessionFile(filesRoot(message.sessionId), message.path), outcome: 'read' }); break;
+    case 'writeFile': {
+      const { saved, file } = await writeSessionFile(filesRoot(message.sessionId), message.path, message.text, message.version);
+      send({ t: 'file', sessionId: message.sessionId, file, outcome: saved ? 'saved' : 'conflict' });
+      break;
+    }
+    case 'fileAction': {
+      const root = filesRoot(message.sessionId);
+      const { action } = message;
+      for (const folder of await changeFiles(root, action)) send({ t: 'folder', sessionId: message.sessionId, folder, entries: await listFolder(root, folder) });
+      // the page opens a new file at once: it is read here, once made (a read of its own could arrive first)
+      if (action.kind === 'newFile') send({ t: 'file', sessionId: message.sessionId, file: await readSessionFile(root, action.folder ? `${action.folder}/${action.name}` : action.name), outcome: 'read' });
+      break;
+    }
     case 'conversations': send({ t: 'conversations', cwd: message.cwd, ...(message.query ? { query: message.query } : {}), conversations: await sessions.conversations(message.cwd, message.query) }); break;
     case 'saveMember':
       await crew.save(message.previousName, message.name, message.look, message.birthday, message.jobs);

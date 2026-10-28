@@ -3,15 +3,14 @@
 // paths: a symlink or a sub-folder never leads outside the folder. A save carries the version of the note it was made
 // from, and is refused (with the note as it is now) when the file changed since, so a session's write is never lost.
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
-import { copyFile, link, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
+import { link, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { findInNote, MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import type { Note, NoteFile, NoteMatch } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { resolveInside } from './paths.ts';
-import { recycleFile } from './windows.ts';
+import { moveToTrash } from './trash.ts';
 
 export const versionOf = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
@@ -96,26 +95,11 @@ export async function renameNote(folder: string, name: string, newName: string):
   await unlink(from.file);
 }
 
-/**
- * Puts a note's file in the user's Trash (macOS) under a free name, or in the Recycle Bin (Windows); deletes it where
- * there is neither. `trash`, given by the tests, is the Trash folder, on every platform.
- */
+/** Puts a note's file in the Trash (see trash.ts). `trash`, given by the tests, is the Trash folder. */
 export async function deleteNote(folder: string, name: string, trash?: string): Promise<void> {
   const found = locateNote(folder, name);
   if (!found?.exists) throw new Error(st.journal.missing(name));
-  if (trash === undefined && process.platform === 'win32') { await recycleFile(found.file); return; }
-  trash ??= path.join(os.homedir(), '.Trash');
-  if (!existsSync(trash)) { await unlink(found.file); return; }
-  let target = path.join(trash, name);
-  for (let copy = 2; existsSync(target); copy++) target = path.join(trash, name.replace(/\.md$/, ` ${copy}.md`));
-  try {
-    await rename(found.file, target);
-  } catch (error) {
-    // the Trash on another disk than the folder: copied there, then removed here
-    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
-    await copyFile(found.file, target);
-    await unlink(found.file);
-  }
+  await moveToTrash(found.file, false, trash);
 }
 
 const MAX_MATCHES = 50;

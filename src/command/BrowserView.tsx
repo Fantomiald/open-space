@@ -5,7 +5,7 @@ import { t } from '../i18n/index.ts';
 import { IS_WINDOWS } from '../lib/platform.ts';
 import { modifiersOf, pictureFraction, testersAtWork } from '../state/browser.ts';
 import { useSessions } from '../state/sessions.ts';
-import { BackIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
 
 const BUTTONS = ['left', 'middle', 'right'] as const;
 /** pointer moves sent at most this often: enough for hovers, without flooding the socket */
@@ -52,14 +52,14 @@ export function FormatSwitch({ session, lane, format }: { session: SessionInfo; 
  * The session's browsers in place of its thread: its own, and one per tester it launched (a sub-agent with a browser of
  * its own), picked above the page. Its own is shown unless the user picks another.
  */
-export function BrowserView({ session, driving, onBack }: { session: SessionInfo; driving: boolean; onBack: () => void }) {
+export function BrowserView({ session, driving }: { session: SessionInfo; driving: boolean }) {
   const lanes = useLanes(session);
   const chosen = useSessions((s) => s.browserLanes[session.id] ?? 0);
   const showLane = useSessions((s) => s.showBrowserLane);
   const running = lanes.filter((each) => each.running).map((each) => each.lane);
   const lane = running.includes(chosen) ? chosen : running.includes(0) || !running.length ? 0 : running[0];
   return (
-    <BrowserPane key={lane} session={session} lane={lane} driving={driving && lane === 0} onBack={onBack}>
+    <BrowserPane key={lane} session={session} lane={lane} driving={driving && lane === 0}>
       {lanes.length > 1 && (
         <div className="cp-browser__lanes" role="tablist" aria-label={t.session.browser.lanes}>
           <LanePicker lanes={lanes} shown={lane} onPick={(each) => showLane(session.id, each)} />
@@ -70,7 +70,7 @@ export function BrowserView({ session, driving, onBack }: { session: SessionInfo
 }
 
 /** One browser of the session with its address bar, its tabs and the page. */
-function BrowserPane({ session, lane, driving, onBack, children }: { session: SessionInfo; lane: number; driving: boolean; onBack: () => void; children: ReactNode }) {
+function BrowserPane({ session, lane, driving, children }: { session: SessionInfo; lane: number; driving: boolean; children: ReactNode }) {
   const send = useSessions((s) => s.send);
   const browser = useSessions((s) => s.browsers[browserId(session.id, lane)]);
   const available = useSessions((s) => s.browserAvailable);
@@ -85,7 +85,6 @@ function BrowserPane({ session, lane, driving, onBack, children }: { session: Se
   return (
     <section className="cp-panel-view cp-browser" aria-label={words.label}>
       <header className="cp-panel-view__head cp-browser__bar">
-        <button type="button" className="cp-button" data-variant="quiet" onClick={onBack}><BackIcon />{t.session.panel.back}</button>
         <div className="cp-browser__nav">
           <button type="button" className="cp-icon-button" data-size="small" aria-label={words.back} title={words.back} disabled={!browser} onClick={() => act({ kind: 'back' })}><ChevronLeftIcon /></button>
           <button type="button" className="cp-icon-button" data-size="small" aria-label={words.forward} title={words.forward} disabled={!browser} onClick={() => act({ kind: 'forward' })}><ChevronRightIcon /></button>

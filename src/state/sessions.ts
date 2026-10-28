@@ -61,7 +61,14 @@ export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 export interface NewSessionDraft { command?: string; person?: string; resumeIn?: string }
 
 /** What the session panel shows under its header: the conversation, what the session changed, its browser, or one of the views of Claude Code. */
-export type PanelView = 'thread' | 'changes' | 'browser' | InspectView;
+export type PanelView = 'thread' | 'changes' | 'browser' | 'files' | InspectView;
+/** The views a window keeps when another one takes the focus; the others go back to its conversation. */
+export type KeptView = 'files' | 'browser';
+const isKept = (view: PanelView): view is KeptView => view === 'files' || view === 'browser';
+
+/** Whether a session's window shows its browser, focused or not. */
+export const showsBrowser = (s: { selectedId: string | null; panelView: PanelView; openIds: string[]; keptViews: Record<string, KeptView> }, sessionId: string) =>
+  s.selectedId === sessionId ? s.panelView === 'browser' : s.openIds.includes(sessionId) && s.keptViews[sessionId] === 'browser';
 /** A browser of a session (its own: lane 0, or one of its testers'), shown in the floating window over the office. */
 export interface PipTarget { sessionId: string; lane: number }
 /** The answers to the views of Claude Code of a session, as last asked for. */
@@ -118,8 +125,10 @@ interface CommandPostState {
   pipDismissed: string[];
   /** the views of Claude Code answered so far, by session */
   inspections: Record<string, Inspections>;
-  /** what the open session's panel shows (back to the conversation when another session opens) */
+  /** what the focused session's panel shows */
   panelView: PanelView;
+  /** the tab each other open window was left on when it lost the focus: its files or its browser stay shown */
+  keptViews: Record<string, KeptView>;
   /** the Claude Code conversations found for a folder, to resume one (the last folder and search asked for) */
   conversations: { cwd: string; query: string; list: Conversation[] } | null;
   /** what each folder asked for by the launcher is in git (null: not in a repository) */
@@ -366,6 +375,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   pipDismissed: [],
   inspections: {},
   panelView: 'thread',
+  keptViews: {},
   conversations: null,
   folderRepos: {},
   branchesFor: null,
@@ -543,7 +553,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const session = s.sessions[message.sessionId];
         const testing = message.lane > 0;
         const dismissed = s.pipDismissed.includes(message.sessionId) && session && isRunning(session);
-        const inView = s.selectedId === message.sessionId && s.panelView === 'browser';
+        const inView = showsBrowser(s, message.sessionId);
         if (s.preferences.autoPip && testing && !s.pip && !dismissed && !inView && session && wentToPage(s.browsers[id], message.browser)) get().openPip({ sessionId: message.sessionId, lane: message.lane });
         // its browser closed: nothing left to float
         if (!message.browser && s.pip && browserId(s.pip.sessionId, s.pip.lane) === id) get().closePip();
@@ -613,7 +623,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   focus: (sessionId) => {
     const s = get();
-    if (sessionId !== s.selectedId) set({ selectedId: sessionId, searchOpen: false, panelView: 'thread' });
+    if (sessionId !== s.selectedId) {
+      const { [sessionId]: kept, ...others } = s.keptViews;
+      const keptViews = s.selectedId && isKept(s.panelView) ? { ...others, [s.selectedId]: s.panelView } : others;
+      set({ selectedId: sessionId, searchOpen: false, panelView: kept ?? 'thread', keptViews });
+    }
     s.markSeen(sessionId);
     writeLayout(get().columns, sessionId);
     if (!s.logs[sessionId]) {
@@ -628,6 +642,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     s.arrange(removeFrom(s.columns, sessionId, tilingOf(s.view)));
     if (next) s.focus(next);
     else s.select(null);
+    const { [sessionId]: _closed, ...keptViews } = get().keptViews;
+    set({ keptViews });
   },
 
   arrange: (columns) => {
@@ -706,14 +722,15 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   showPanel: (view) => {
     const s = get();
     set({ panelView: view });
-    if (s.selectedId && view !== 'thread' && view !== 'changes' && view !== 'browser') s.send({ t: 'inspect', sessionId: s.selectedId, view });
+    if (s.selectedId && view !== 'thread' && view !== 'changes' && view !== 'browser' && view !== 'files') s.send({ t: 'inspect', sessionId: s.selectedId, view });
   },
 
   showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
 
   openPip: (target) => {
     const s = get();
-    set({ pip: target, pipDismissed: s.pipDismissed.filter((id) => id !== target.sessionId), ...(s.selectedId === target.sessionId && s.panelView === 'browser' ? { panelView: 'thread' } : {}) });
+    const { [target.sessionId]: _floated, ...keptViews } = s.keptViews;
+    set({ pip: target, pipDismissed: s.pipDismissed.filter((id) => id !== target.sessionId), keptViews, ...(s.selectedId === target.sessionId && s.panelView === 'browser' ? { panelView: 'thread' } : {}) });
     writePreference('pip', target);
   },
 

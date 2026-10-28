@@ -1,5 +1,13 @@
 # Versions
 
+## 1.20.0
+
+- Chaque fenêtre de session a des onglets en icônes : Conversation, Fichiers, Navigateur. Le nom ne s'affiche que sur l'onglet ouvert, et chaque fenêtre garde son onglet quand tu passes sur une autre.
+- Fichiers : l'arborescence du dossier de la session à côté d'un éditeur (coloration, recherche ⌘F, enregistrement ⌘S). On crée, renomme et met à la corbeille fichiers et dossiers, à la souris ou au clavier (flèches, F2, Suppr). Si la session a changé le fichier pendant que tu l'éditais, un bandeau te laisse garder ta version ou prendre la sienne.
+- Les images, PDF, vidéos et sons s'ouvrent en aperçu, un SVG bascule entre aperçu et code, et les autres fichiers ont un bouton « Montrer dans le Finder ». Le fil d'Ariane au-dessus du fichier ramène au dossier dans l'arbre.
+- « Terminés » devient « Agents », à droite des onglets : une pastille verte compte ceux qui travaillent, la liste s'ouvre au survol, un clic ouvre le fil d'un agent.
+- Le champ de message se cache dans Fichiers et Navigateur.
+
 ## 1.19.3
 
 - Un long texte collé (un log, un document) part enfin : la limite passe de 20 000 à 500 000 caractères. Au-delà, un message le dit et le texte reste dans le champ, au lieu de disparaître sans rien envoyer (merci JbPons).

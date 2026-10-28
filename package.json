@@ -1,6 +1,6 @@
 {
   "name": "open-space",
-  "version": "1.19.3",
+  "version": "1.20.0",
   "private": true,
   "description": "Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis le navigateur.",
   "author": "Fantomiald",
@@ -40,10 +40,18 @@
     "app:win:arm64": "npm run app:build && electron-builder --win --arm64"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@fontsource/fredoka": "^5.3.0",
     "@fontsource/kalam": "^5.3.0",
     "@fontsource/pixelify-sans": "^5.3.0",
+    "@lezer/highlight": "^1.2.5",
     "lucide-react": "1.50.0",
     "marked": "^18.1.1",
     "react": "^19.3.0",

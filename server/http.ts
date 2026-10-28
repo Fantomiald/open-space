@@ -6,8 +6,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { ATTACHMENT_NAME, readBundle, SHOWN_EXTENSIONS, VIDEO_EXTENSIONS } from './attachments.ts';
-import { TEXT_EXTENSIONS } from '../shared/protocol.ts';
+import { PREVIEW_TYPES, TEXT_EXTENSIONS } from '../shared/protocol.ts';
 import { SPOTIFY_ARTWORK } from '../shared/music.ts';
+import { relativePath } from './messages.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
@@ -35,6 +36,8 @@ export interface WebServerOptions {
   dev: boolean;
   devPort: number;
   onConnection: (socket: WebSocket) => void;
+  /** the real path of a file of a session's folder (see files.ts), previewed by its explorer under /files/ */
+  sessionFile?: (sessionId: string, relative: string) => string | null;
   log: (message: string, error?: unknown) => void;
   /** the sessions' browsers (see browser.ts) */
   browser?: {
@@ -73,9 +76,9 @@ export function createWebServer(options: WebServerOptions) {
   ].join('; ');
 
   /** A file sent whole, or the one range asked for ("bytes=start-end", "bytes=start-", "bytes=-suffix"). */
-  function serveRanges(file: string, req: http.IncomingMessage, res: http.ServerResponse) {
+  function serveRanges(file: string, req: http.IncomingMessage, res: http.ServerResponse, more: http.OutgoingHttpHeaders = {}) {
     const size = statSync(file).size;
-    const headers = { 'Content-Type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=31536000, immutable' };
+    const headers = { 'Content-Type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=31536000, immutable', ...more };
     const asked = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
     if (!asked || (!asked[1] && !asked[2])) {
       res.writeHead(200, { ...headers, 'Content-Length': size });
@@ -216,6 +219,22 @@ export function createWebServer(options: WebServerOptions) {
         ...(extension === 'svg' ? { 'Content-Security-Policy': SVG_CSP } : {}),
         ...(shown ? {} : { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${title}"` }),
       });
+      return;
+    }
+    if (url.pathname.startsWith('/files/')) {
+      // a picture, a PDF, a video or a sound of a session's folder, previewed by its explorer: /files/<session>/<path>
+      if (!hasSessionCookie(policy, req)) { res.writeHead(401).end(); return; }
+      let relative: string | null = null, sessionId = '';
+      try {
+        const [id = '', ...names] = url.pathname.slice('/files/'.length).split('/').map(decodeURIComponent);
+        sessionId = id;
+        relative = relativePath(names.join('/'));
+      } catch { /* a bad escape: not found */ }
+      const type = relative ? PREVIEW_TYPES[path.extname(relative).slice(1).toLowerCase()] : undefined;
+      const file = relative && type ? options.sessionFile?.(sessionId, relative) : null;
+      if (!file || !type) { res.writeHead(404).end(); return; }
+      // the file changes as the session works: asked again each time; an SVG never runs anything (see SVG_CSP)
+      serveRanges(file, req, res, { 'Content-Type': type, 'Cache-Control': 'no-cache', ...(type === 'image/svg+xml' ? { 'Content-Security-Policy': SVG_CSP } : {}) });
       return;
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }

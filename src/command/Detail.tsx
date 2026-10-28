@@ -1,4 +1,4 @@
-import { memo, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { shortcut } from '../lib/platform.ts';
@@ -15,7 +15,9 @@ import { ChangesView, LineCounts } from './Changes.tsx';
 import { ContextChip, ContextView, McpView, UsageView } from './ClaudeViews.tsx';
 import { Composer, RemoteButton } from './Composer.tsx';
 import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
-import { AgentBack, Feed } from './Feed.tsx';
+import { Feed, type Subagent } from './Feed.tsx';
+import { FilesView } from './FilesView.tsx';
+import { SessionTabs } from './SessionTabs.tsx';
 import { BranchIcon, CloseIcon, DuplicateIcon, GlobeIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
@@ -26,27 +28,19 @@ import { SwitchOffDialog } from './SwitchOffDialog.tsx';
 import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
 import { useAttachments } from './useAttachments.ts';
 import { useDismiss } from './useDismiss.ts';
+import { useMenuBelow } from './useMenuBelow.ts';
 
 const NO_EVENTS: never[] = [];
 
 /** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
-function SessionMenu({ session, searchOpen, onSearch, onBrowser, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onBrowser: () => void; onRest: () => void; onSwitchOff: () => void }) {
+function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onRest: () => void; onSwitchOff: () => void }) {
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(open, box, close);
-  // the window clips what overflows it: the menu opens in the top layer, under the button or over it when it would not fit
-  useLayoutEffect(() => {
-    const element = menu.current, button = box.current;
-    if (!open || !element || !button) return;
-    element.showPopover();
-    const anchor = button.getBoundingClientRect(), height = element.offsetHeight, gap = 4;
-    const fitsBelow = anchor.bottom + gap + height <= window.innerHeight;
-    element.style.setProperty('--menu-right', `${Math.round(window.innerWidth - anchor.right)}px`);
-    element.style.setProperty('--menu-top', `${Math.round(fitsBelow ? anchor.bottom + gap : Math.max(gap, anchor.top - gap - height))}px`);
-  }, [open]);
+  useMenuBelow(open, box, menu);
   const words = t.session.detail;
   const pick = (action: () => void) => () => { action(); close(); };
   return (
@@ -61,7 +55,6 @@ function SessionMenu({ session, searchOpen, onSearch, onBrowser, onRest, onSwitc
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
           )}
-          <button type="button" role="menuitem" title={t.session.browser.openTitle} onClick={pick(onBrowser)}><GlobeIcon />{t.session.browser.open}</button>
           <button type="button" role="menuitem" title={words.terminalHereTitle} onClick={pick(() => useSessions.getState().openTerminal(session.id))}><TerminalIcon />{words.terminalHere}</button>
           {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(onRest)}><RestIcon />{words.rest}</button>}
           <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
@@ -97,13 +90,14 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const seen = useSessions((s) => s.seen);
   const feed = useMemo(() => buildFeed(events), [events]);
   const pages = useMemo(() => publishedPages(feed.items), [feed]);
+  const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed]);
   const browser = useSessions((s) => lanesOf(Object.keys(s.browsers), sessionId).length > 0);
   // its agent is at work in its browser: the chip says so, and the view shows who drives
   const running = !!session && isRunning(session);
   const driving = useMemo(() => running && drivesBrowser(feed.items), [feed, running]);
   const changes = useSessions((s) => s.changes[sessionId]);
   const live = useSessions((s) => s.connection === 'live');
-  const panelView = useSessions((s) => (active ? s.panelView : 'thread'));
+  const panelView = useSessions((s) => (active ? s.panelView : (s.keptViews[sessionId] ?? 'thread')));
   const showPanel = useSessions((s) => s.showPanel);
   // what it changed, asked again at the end of each of its turns and when a sub-agent comes or goes
   const turns = session?.turns, helpers = session?.subagents.length, isolated = !!session?.worktree;
@@ -146,7 +140,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
 
   return (
     <aside
-      className="cp-detail" data-active={active} data-attention={attentionKind(session, seen) ?? undefined} aria-label={t.session.detail.label(session.name)} {...attachments.dropTarget}
+      className="cp-detail" data-active={active} data-view={panelView} data-attention={attentionKind(session, seen) ?? undefined} aria-label={t.session.detail.label(session.name)} {...attachments.dropTarget}
       onPointerDownCapture={() => focus(session.id)} onFocusCapture={() => focus(session.id)}
     >
       <DropOverlay attachments={attachments} />
@@ -166,7 +160,6 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             </h2>
           )}
           <StateBadge session={session} kind={attentionKind(session, seen)} />
-          <AgentBack sessionId={session.id} items={feed.items} agent={agent} setAgent={setAgent} />
           <div className="cp-detail__controls">
             {several && (
               <button
@@ -179,7 +172,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onBrowser={() => showPanel('browser')} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -242,7 +235,9 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           <ul>{feed.plan.map((item) => <li key={item.text} data-status={item.status}>{item.text}</li>)}</ul>
         </details>
       )}
-      {panelView === 'browser' ? <BrowserView session={session} driving={driving} onBack={back} />
+      <SessionTabs sessionId={session.id} view={panelView} agents={agents} agent={agent} setAgent={setAgent} />
+      {panelView === 'browser' ? <BrowserView session={session} driving={driving} />
+        : panelView === 'files' ? <FilesView session={session} />
         : panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
         : panelView === 'mcp' ? <McpView sessionId={session.id} cwd={session.cwd} onBack={back} />
           : panelView === 'context' ? <ContextView sessionId={session.id} onBack={back} />
