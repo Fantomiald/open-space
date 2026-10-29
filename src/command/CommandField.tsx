@@ -3,6 +3,7 @@ import { findMentions, mentionAt, mentionNames } from '../../shared/mentions.ts'
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
+import { folderName } from '../lib/format.ts';
 import { commandAt, commandSuggestions, typedName, withOwnCommands } from '../state/commands.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
 import { SessionFace } from './SessionFace.tsx';
@@ -11,6 +12,13 @@ const MAX_SUGGESTIONS = 8;
 
 /** A session the field can name with "@", and a word on it (its folder, at rest). */
 export interface Mentionable { name: string; detail: string; session: SessionInfo }
+
+/** The sessions to name with "@" (the server introduces them to Claude, see Sessions.introduceMentioned), but `exceptId`. */
+export function useMentionable(exceptId?: string): Mentionable[] {
+  const sessions = useSessions((s) => s.sessions);
+  return useMemo(() => Object.values(sessions).filter((other) => other.id !== exceptId)
+    .map((other) => ({ name: other.name, session: other, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, exceptId]);
+}
 
 /** A line of the suggestions: a command or a session (`aside`: its tag, after its name). `insert` replaces what is typed; typed as `whole`, Enter sends. */
 interface Suggestion { label: string; aside?: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }

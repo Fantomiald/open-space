@@ -9,7 +9,7 @@ import { branchPreview, isolationOffer, occupants } from '../state/worktrees.ts'
 import { BranchName } from './BranchCard.tsx';
 import { Switch } from './Switch.tsx';
 import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
-import { CommandField } from './CommandField.tsx';
+import { CommandField, useMentionable } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
 import { BranchIcon, CleanIcon, CloseIcon, SendIcon } from './Icons.tsx';
@@ -38,6 +38,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const crew = useSessions((s) => s.crew);
   const sessions = useSessions((s) => s.sessions);
   const people = useMemo(() => availability(crew, Object.values(sessions)), [crew, sessions]);
+  const mentionable = useMentionable();
   // someone asked for who got a session meanwhile is not asked for any more
   const [asked, setAsked] = useState<string | null>(null);
   const person = stillFree(asked, people);
@@ -221,7 +222,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         <AttachmentStrip attachments={attachments} />
         <CommandField
           ref={field} id="launcher-field" label={words.fieldLabel} value={text} onChange={setText} onSubmit={() => { if (text.trim() || attachments.items.length) start(); }}
-          onPaste={attachments.onPaste}
+          onPaste={attachments.onPaste} people={mentionable}
           placeholder={resuming ? (resumeId ? words.placeholderResume : words.placeholderPickFirst) : words.placeholder}
         />
         <div className="cp-launcher__options">
