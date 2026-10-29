@@ -144,7 +144,9 @@ function showWindow() {
     openOutside(url);
     return { action: 'deny' };
   });
+  offerImageMenu(current.webContents);
   current.webContents.on('did-create-window', (opened) => {
+    offerImageMenu(opened.webContents);
     opened.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
     // the window's own first load goes through will-navigate too: stopping it sent the file to the browser
     opened.webContents.on('will-navigate', (event, url) => {
@@ -159,6 +161,19 @@ function showWindow() {
     openOutside(url);
   });
   if (page) void current.loadURL(page);
+}
+
+/** A right click on a picture (one shown large, a sent file opened in its window) offers to save or copy it, as a browser does. */
+function offerImageMenu(contents: Electron.WebContents) {
+  contents.on('context-menu', (_event, params) => {
+    if (params.mediaType !== 'image' || !params.srcURL) return;
+    let english = false;
+    try { english = JSON.parse(readFileSync(path.join(config.dataDir, 'settings.json'), 'utf8')).language === 'en'; } catch { /* French by default */ }
+    Menu.buildFromTemplate([
+      { label: english ? 'Save Image As…' : 'Enregistrer l’image sous…', click: () => contents.downloadURL(params.srcURL) },
+      { label: english ? 'Copy Image' : 'Copier l’image', click: () => contents.copyImageAt(params.x, params.y) },
+    ]).popup();
+  });
 }
 
 function openOutside(url: string) {

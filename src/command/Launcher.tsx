@@ -226,8 +226,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
+          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} compact />
           <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(startFolder)} />
-          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} />
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
           <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>
         </div>
