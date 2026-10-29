@@ -22,6 +22,14 @@ export function Viewer({ viewed, onClose }: { viewed: Viewed; onClose: () => voi
     if (element && !element.open) element.showModal();
     return () => element?.close();
   }, []);
+  // Escape pressed in a page shown here stays in its frame: the page passes it on (ESCAPE_RELAY in server/http.ts)
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data === 'open-space:escape' && event.source === dialog.current?.querySelector('iframe')?.contentWindow) onClose();
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [onClose]);
   const words = t.session.feed.viewer;
   return (
     <dialog ref={dialog} className="cp-viewer" aria-label={viewed.caption || viewed.alt} onClose={onClose} onClick={(e) => { if (e.target === dialog.current) onClose(); }}>

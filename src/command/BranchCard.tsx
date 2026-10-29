@@ -104,8 +104,8 @@ export function BranchCardView({ sessionId }: { sessionId: string }) {
     <div className="cp-branch-card__confirm" role="alert">
       <p><b>{words.discardQuestion(worktree.branch)}</b> {words.discardText(session.name, folderName(worktree.home))}</p>
       <div className="cp-branch-card__actions">
-        <button type="button" className="cp-button" data-size="small" autoFocus onClick={() => setConfirming(false)}>{words.cancel}</button>
-        <button type="button" className="cp-button" data-size="small" data-variant="danger" disabled={pending} onClick={() => act('discard')}><RemoveIcon />{words.discardConfirm}</button>
+        <button type="button" className="cp-button" data-size="small" onClick={() => setConfirming(false)}>{words.cancel}</button>
+        <button type="button" className="cp-button" data-size="small" data-variant="danger" disabled={pending} autoFocus onClick={() => act('discard')}><RemoveIcon />{words.discardConfirm}</button>
       </div>
     </div>
   ) : null;

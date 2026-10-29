@@ -151,7 +151,7 @@ describe('HTTP requests', () => {
     assert.match(csp, /^sandbox allow-scripts /);
     assert.doesNotMatch(csp, /allow-same-origin/);
     assert.match(csp, /frame-ancestors 'self'/);
-    assert.match(await res.text(), /^<!doctype html>.*<script>alert\(1\)<\/script>$/s, 'wrapped like claude.ai does');
+    assert.match(await res.text(), /^<!doctype html>.*<script>alert\(1\)<\/script><script>addEventListener\('keydown'.*'open-space:escape'.*<\/script>$/s, 'wrapped like claude.ai does, Escape passed on to Open Space');
   });
 
   it('serves a published page with its files under its bundle, without the cookie its sandbox cannot send', async () => {
@@ -161,7 +161,7 @@ describe('HTTP requests', () => {
     const csp = res.headers.get('content-security-policy') ?? '';
     assert.match(csp, /^sandbox allow-scripts /);
     assert.match(csp, new RegExp(`default-src ${site} https:`), 'it may load its own files, nothing else of Open Space');
-    assert.match(await res.text(), new RegExp(`<img src="/pages/${'9'.repeat(64)}/_blob/0a1b"><img src="img/cover.png">$`), 'an asset is found under the bundle');
+    assert.match(await res.text(), new RegExp(`<img src="/pages/${'9'.repeat(64)}/_blob/0a1b"><img src="img/cover.png"><script>.*open-space:escape.*</script>$`), 'an asset is found under the bundle');
     for (const file of ['_blob/0a1b', 'img/cover.png']) assert.equal(await (await fetch(`${site}${file}`)).text(), 'PNG');
     assert.equal((await fetch(`${site}away.txt`)).status, 404, 'only a stored file');
     assert.equal((await fetch(`${site}missing.png`)).status, 404);

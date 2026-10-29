@@ -67,6 +67,12 @@ const SVG_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src
 const PAGE_SKELETON = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
   + '<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>';
 
+/**
+ * Added to every page: Escape pressed in it never reaches Open Space's page around its frame, so the page tells it (the
+ * viewer closes on it, Viewer.tsx).
+ */
+const ESCAPE_RELAY = "<script>addEventListener('keydown',function(e){if(e.key==='Escape')parent.postMessage('open-space:escape','*')})</script>";
+
 export function createWebServer(options: WebServerOptions) {
   const { policy, port, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
   const csp = [
@@ -137,7 +143,7 @@ export function createWebServer(options: WebServerOptions) {
       'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=31536000, immutable',
       'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer',
     });
-    res.end(/^\s*<!doctype/i.test(page) ? page : `${PAGE_SKELETON}${page}`);
+    res.end(`${/^\s*<!doctype/i.test(page) ? page : `${PAGE_SKELETON}${page}`}${ESCAPE_RELAY}`);
   }
 
   /**

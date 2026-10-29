@@ -30,7 +30,7 @@ export function SwitchOffDialog({ session, onClose }: { session: SessionInfo; on
       <p className="cp-muted">{words.branch} <BranchName name={worktree.branch} />{words.has(status?.ahead ?? 0, status?.dirty ?? 0)}</p>
       {busy.length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(busy.join(', '))}</p>}
       <div className="cp-choices">
-        <button type="button" className="cp-choice" data-variant="primary" autoFocus onClick={() => switchOff('merge')}>
+        <button type="button" className="cp-choice" data-variant="primary" data-autofocus onClick={() => switchOff('merge')}>
           <MergeIcon /><strong>{words.merge}</strong><span>{words.mergeText(session.name, worktree.base)}</span>
         </button>
         <button type="button" className="cp-choice" onClick={() => switchOff('keep')}>

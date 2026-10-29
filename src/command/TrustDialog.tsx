@@ -44,7 +44,7 @@ export function TrustDialog() {
         <div className="cp-form__actions">
           <button type="button" className="cp-button" onClick={() => answerTrust(null)}>{words.cancel}</button>
           <button type="button" className="cp-button" onClick={() => answerTrust('folder')}>{words.trustFolder}</button>
-          <button type="button" className="cp-button" data-variant="primary" autoFocus onClick={() => answerTrust('restricted')}>{words.startRestricted}</button>
+          <button type="button" className="cp-button" data-variant="primary" data-autofocus onClick={() => answerTrust('restricted')}>{words.startRestricted}</button>
         </div>
       </div>
     </Modal>

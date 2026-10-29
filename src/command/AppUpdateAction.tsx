@@ -40,8 +40,8 @@ export function AppUpdateAction() {
           <Modal title={words.restartQuestion} onClose={() => setWarned(false)}>
             <p className="cp-muted">{words.restartBusy(busy.length, names)}</p>
             <div className="cp-form__actions">
-              <button type="button" className="cp-button" autoFocus onClick={() => setWarned(false)}>{words.cancel}</button>
-              <button type="button" className="cp-button" data-variant="primary" onClick={restart}>{words.restartAnyway}</button>
+              <button type="button" className="cp-button" onClick={() => setWarned(false)}>{words.cancel}</button>
+              <button type="button" className="cp-button" data-variant="primary" data-autofocus onClick={restart}>{words.restartAnyway}</button>
             </div>
           </Modal>,
           document.body,

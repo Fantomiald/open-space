@@ -35,8 +35,8 @@ export function AccountAction() {
         <Modal title={words.logoutQuestion} onClose={() => setWarned(false)}>
           <p className="cp-muted">{words.logoutWarning}</p>
           <div className="cp-form__actions">
-            <button type="button" className="cp-button" autoFocus onClick={() => setWarned(false)}>{t.settings.prefs.update.cancel}</button>
-            <button type="button" className="cp-button" data-variant="primary" onClick={logout}>{words.logout}</button>
+            <button type="button" className="cp-button" onClick={() => setWarned(false)}>{t.settings.prefs.update.cancel}</button>
+            <button type="button" className="cp-button" data-variant="primary" data-autofocus onClick={logout}>{words.logout}</button>
           </div>
         </Modal>,
         document.body,
