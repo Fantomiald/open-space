@@ -1590,6 +1590,12 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   transition: filter var(--duration) var(--easing), opacity var(--duration) var(--easing);
 }
 .cp-launcher__send:hover:not(:disabled) { filter: brightness(1.08); }
+/* in a narrow launcher (a small window), the start button is a round arrow, so the row stays on one line */
+.cp-launcher__box { container: launcher / inline-size; }
+@container launcher (max-width: 30rem) {
+  .cp-launcher__send { width: 2rem; padding: 0; justify-content: center; }
+  .cp-launcher__send-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 /* who takes the session: a face in a chip, the crew in a panel above it (the launcher sits at the bottom) */
 .cp-person { position: relative; flex: none; }
 .cp-person__trigger {

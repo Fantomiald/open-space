@@ -1,5 +1,9 @@
 # Versions
 
+## 1.22.3
+
+- Dans un lanceur étroit, le bouton Lancer n'est plus qu'une flèche ronde : tout tient sur une ligne.
+
 ## 1.22.2
 
 - Clic droit sur une image dans l'app : « Enregistrer l'image sous… » et « Copier l'image ». La visionneuse a aussi un bouton Télécharger pour les images et les vidéos.
