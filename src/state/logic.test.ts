@@ -469,6 +469,12 @@ describe('markdown', () => {
     assert.match(html, /^<div class="cp-code"><pre><code class="language-js">if \(a &lt; b\) run\(\);\n<\/code><\/pre><button type="button" class="cp-code__copy" data-copy/);
     assert.ok(!mdToHtml('un `mot`').includes('data-copy'), 'not inline code');
   });
+
+  it('shows the sessions named with "@" and the bare addresses as links', () => {
+    const html = mdToHtml('*ok* @Ana Lou voit https://a.com/x?y=1. mail ana@lou.fr', ['Ana', 'Ana Lou']);
+    assert.match(html, /<em>ok<\/em> <span class="cp-mention"><span class="cp-at">@<\/span>Ana Lou<\/span> voit <a href="https:\/\/a.com\/x\?y=1" target="_blank"/);
+    assert.ok(!html.includes('@</span>lou'), 'not an email');
+  });
 });
 
 describe('side questions', () => {

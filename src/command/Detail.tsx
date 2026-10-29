@@ -202,8 +202,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             <p className="cp-muted">{t.session.detail.switchOffText}</p>
             {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}
             <div className="cp-form__actions">
-              <button type="button" className="cp-button" autoFocus onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); closeOpen(session.id); }}>{t.session.detail.switchOff}</button>
+              <button type="button" className="cp-button" onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
+              <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); closeOpen(session.id); }}>{t.session.detail.switchOff}</button>
             </div>
           </Modal>
         )}
@@ -211,8 +211,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           <Modal title={t.session.detail.restQuestion(session.name)} onClose={() => setRestAsked(false)}>
             <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>
             <div className="cp-form__actions">
-              <button type="button" className="cp-button" autoFocus onClick={() => setRestAsked(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" onClick={() => { setRestAsked(false); rest(); }}>{t.session.detail.rest}</button>
+              <button type="button" className="cp-button" onClick={() => setRestAsked(false)}>{t.session.detail.cancel}</button>
+              <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { setRestAsked(false); rest(); }}>{t.session.detail.rest}</button>
             </div>
           </Modal>
         )}

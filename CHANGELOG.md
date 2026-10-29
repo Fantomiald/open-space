@@ -1,5 +1,11 @@
 # Versions
 
+## 1.22.0
+
+- Tes messages s'affichent comme ceux des agents : Markdown (gras, italique, code, listes), liens cliquables et sessions nommées par « @ » en couleur. Les « @ » sont aussi en couleur dans les messages des agents.
+- Entrée lance l'action des confirmations (éteindre, mettre au repos, supprimer, abandonner une branche, se déconnecter, redémarrer, faire confiance au dossier) au lieu d'Annuler. Échap annule toujours.
+- Échap ferme la visionneuse même après un clic dans une page ouverte, qui gardait la touche pour elle.
+
 ## 1.21.0
 
 - Le bouton Agents n'affiche plus que le robot, avec plus d'air avant la pastille verte.

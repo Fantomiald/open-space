@@ -1,6 +1,7 @@
-// Markdown displayed safely (assistant messages): raw HTML is escaped, only http(s)/mailto links (opened in a new tab),
+// Markdown displayed safely (every message): raw HTML is escaped, only http(s)/mailto links (opened in a new tab),
 // remote images are replaced by their alt text. Code blocks get a copy button (copyCodeOnClick copies them).
 import { Marked } from 'marked';
+import { findMentions } from '../../shared/mentions.ts';
 import { t } from '../i18n/index.ts';
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
@@ -13,8 +14,21 @@ const copyButton = () => `<button type="button" class="cp-code__copy" data-copy 
   + '<g class="cp-code__clipboard"><rect x="4.5" y="3" width="8" height="10.5" rx="1.5"/><path d="M6.5 3V2h4v1"/></g>'
   + '<path class="cp-code__done" d="M3.5 8.5l3 3 6-7"/></svg></button>';
 
+// the session names "@" can name, for the text being parsed (marked has no per-call option an extension can read)
+let names: readonly string[] = [];
+
 const marked = new Marked({ breaks: true, gfm: true });
 marked.use({
+  extensions: [{
+    name: 'mention',
+    level: 'inline',
+    start: (src) => findMentions(src, names)[0]?.start,
+    tokenizer(src) {
+      const mention = findMentions(src, names)[0];
+      if (mention?.start === 0) return { type: 'mention', raw: src.slice(0, mention.end) };
+    },
+    renderer: ({ raw }) => `<span class="cp-mention"><span class="cp-at">@</span>${escapeHtml(raw.slice(1))}</span>`,
+  }],
   renderer: {
     html: ({ text }) => escapeHtml(text ?? ''),
     link({ href, tokens }) {
@@ -31,6 +45,8 @@ marked.use({
   },
 });
 
-export function mdToHtml(text: string): string {
+/** `mentions`: the session names an "@" in the text can name, shown as in the field. */
+export function mdToHtml(text: string, mentions: readonly string[] = []): string {
+  names = mentions;
   return marked.parse(text, { async: false }) as string;
 }

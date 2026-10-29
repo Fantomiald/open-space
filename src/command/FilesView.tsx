@@ -181,8 +181,8 @@ function FileTree({ session, rows, listed, expanded, openPath, dirty, onOpened }
         <Modal title={words.removeQuestion(removing.name)} onClose={() => setRemoving(null)}>
           <p className="cp-muted">{removing.folder ? words.removeFolderText : words.removeText}</p>
           <div className="cp-form__actions">
-            <button type="button" className="cp-button" autoFocus onClick={() => setRemoving(null)}>{words.cancel}</button>
-            <button type="button" className="cp-button" data-variant="danger" onClick={() => { act(session.id, { kind: 'delete', path: removing.path }); setRemoving(null); }}>{words.removeConfirm}</button>
+            <button type="button" className="cp-button" onClick={() => setRemoving(null)}>{words.cancel}</button>
+            <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { act(session.id, { kind: 'delete', path: removing.path }); setRemoving(null); }}>{words.removeConfirm}</button>
           </div>
         </Modal>
       )}
