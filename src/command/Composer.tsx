@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
-import { folderName } from '../lib/format.ts';
 import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
 import { contextLevel } from '../state/labels.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
-import { CommandField } from './CommandField.tsx';
+import { CommandField, useMentionable } from './CommandField.tsx';
 import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
 import { runOwnCommand } from './ownCommands.ts';
 import { TuneMenu } from './TuneMenu.tsx';
@@ -33,10 +32,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const showPanel = useSessions((s) => s.showPanel);
   // a small window (several open, this one not zoomed): icons beside a one-line field
   const stacked = useSessions((s) => s.openIds.length > 1 && s.zoomedId !== session.id);
-  // the other sessions, to name with "@" (the server introduces them to Claude, see Sessions.introduceMentioned)
-  const sessions = useSessions((s) => s.sessions);
-  const people = useMemo(() => Object.values(sessions).filter((other) => other.id !== session.id)
-    .map((other) => ({ name: other.name, session: other, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, session.id]);
+  const people = useMentionable(session.id);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const queued = session.queued ?? [];
