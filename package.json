@@ -1,6 +1,6 @@
 {
   "name": "open-space",
-  "version": "1.22.1",
+  "version": "1.22.2",
   "private": true,
   "description": "Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temps, depuis le navigateur.",
   "author": "Fantomiald",

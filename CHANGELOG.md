@@ -1,5 +1,10 @@
 # Versions
 
+## 1.22.2
+
+- Clic droit sur une image dans l'app : « Enregistrer l'image sous… » et « Copier l'image ». La visionneuse a aussi un bouton Télécharger pour les images et les vidéos.
+- Dans le lanceur, le modèle et l'effort passent dans une icône de réglages, entre la personne et le dossier.
+
 ## 1.22.1
 
 - Avec beaucoup de dossiers, la barre du haut ne passe plus à la ligne sur grand écran : la pastille des projets rétrécit et défile, puis le titre de la musique, et les outils restent en place.

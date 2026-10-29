@@ -225,7 +225,7 @@ h1, h2, p { margin: 0; }
   .cp-main .cp-launcher__options { flex-wrap: nowrap; gap: var(--space-1); }
   .cp-main .cp-launcher__options :is(.cp-chip select, .cp-chip input, .cp-person__trigger) { height: 1.75rem; padding-left: var(--space-2); font-size: var(--text-xs); }
   .cp-main .cp-launcher__options .cp-chip[data-folder] { flex: 1 1 0; min-width: 3rem; }
-  .cp-main .cp-launcher__options .cp-icon-button { width: 1.75rem; height: 1.75rem; }
+  .cp-main .cp-launcher__options .cp-icon-button, .cp-main .cp-launcher__options .cp-tune > .cp-tune__chip.cp-icon-button { width: 1.75rem; height: 1.75rem; }
   .cp-main .cp-launcher__send { width: 2rem; padding: 0; justify-content: center; }
   .cp-main .cp-launcher__send-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* the session's name and its controls share the first line; its state goes under the name rather than push the close button out */
@@ -1566,7 +1566,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   transition: border-color var(--duration) var(--easing);
 }
 /* the folder takes the room left on the row, so the send button stays on it */
-.cp-chip[data-folder] { flex: 1 1 4rem; }
+.cp-chip[data-folder] { flex: 1 1 4rem; max-width: 16rem; }
 .cp-chip[data-folder] input { width: 100%; }
 /* a select drawn by hand: the browser's own arrow sits off its text, this chevron is as far from the text as the edge */
 .cp-chip select { appearance: none; padding-right: calc(var(--space-3) + 0.9rem); field-sizing: content; min-width: 0; cursor: pointer; }
@@ -1582,6 +1582,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 .cp-launcher__options .cp-tune > .cp-tune__chip:hover:not(:disabled) { background: var(--color-surface); border-color: var(--color-border-strong); }
 .cp-launcher__options .cp-tune { min-width: 0; }
+/* the launcher's tune button is an icon only: a round chip, without the text chip's side padding that pushed the icon off centre */
+.cp-launcher__options .cp-tune > .cp-tune__chip.cp-icon-button { width: 2rem; padding: 0; background: var(--color-surface); color: var(--color-text); line-height: 1; }
 .cp-launcher__send {
   margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: var(--space-2); height: 2rem; padding: 0 var(--space-3) 0 var(--space-4);
   border: 0; border-radius: 999px; background: var(--color-accent); color: var(--color-accent-text); font-size: var(--text-sm); font-weight: var(--weight-bold);

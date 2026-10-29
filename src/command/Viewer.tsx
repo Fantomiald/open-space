@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { copyCodeOnClick } from './copyCode.ts';
-import { CloseIcon } from './Icons.tsx';
+import { CloseIcon, DownloadIcon } from './Icons.tsx';
 import { Prose } from './Prose.tsx';
 
 /** What the viewer shows: a picture, a page, a video, or a text file (Markdown rendered, or as it is). */
@@ -37,6 +37,9 @@ export function Viewer({ viewed, onClose }: { viewed: Viewed; onClose: () => voi
         <Shown viewed={viewed} />
         <figcaption className="cp-viewer__bar">
           <span className="cp-viewer__caption">{viewed.caption}</span>
+          {(viewed.kind === 'image' || viewed.kind === 'video') && (
+            <a className="cp-icon-button" href={viewed.src} download={savedName(viewed)} aria-label={t.session.feed.files.download} title={t.session.feed.files.download}><DownloadIcon /></a>
+          )}
           <a className="cp-button" data-variant="quiet" href={viewed.link?.href ?? viewed.src} download={viewed.link?.download} target="_blank" rel="noopener noreferrer">{viewed.link?.label ?? words.original}</a>
         </figcaption>
       </figure>
@@ -44,6 +47,9 @@ export function Viewer({ viewed, onClose }: { viewed: Viewed; onClose: () => voi
     </dialog>
   );
 }
+
+/** The file's title when it has an extension ("cover.png"), else the stored name (a pasted screenshot's alt is just "Image"). */
+const savedName = (viewed: Viewed) => (/\.\w+$/.test(viewed.alt) ? viewed.alt : viewed.src.split('/').pop()?.split('?')[0]);
 
 function Shown({ viewed }: { viewed: Viewed }) {
   switch (viewed.kind) {
