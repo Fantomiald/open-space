@@ -1,5 +1,9 @@
 # Versions
 
+## 1.22.1
+
+- Avec beaucoup de dossiers, la barre du haut ne passe plus à la ligne sur grand écran : la pastille des projets rétrécit et défile, puis le titre de la musique, et les outils restent en place.
+
 ## 1.22.0
 
 - Tes messages s'affichent comme ceux des agents : Markdown (gras, italique, code, listes), liens cliquables et sessions nommées par « @ » en couleur. Les « @ » sont aussi en couleur dans les messages des agents.
