@@ -23,6 +23,16 @@ describe('buildClaudeArgs', () => {
     assert.match(identityPrompt('Iris'), /sois concis/);
     assert.match(identityPrompt('Iris', 'Max', 'tutoie-moi'), /Open Space de Max[\s\S]*Ce que Max demande à tous ses agents : tutoie-moi$/);
     assert.ok(!identityPrompt('Iris', 'Max').includes('demande à tous'));
+  });
+
+  it('tells a session with the shared browser what it is for, and only then', () => {
+    const withShared = identityPrompt('Iris', 'Max', '', undefined, true, true);
+    assert.match(withShared, /shared-browser/);
+    assert.match(withShared, /mot de passe/);
+    assert.doesNotMatch(identityPrompt('Iris', 'Max', '', undefined, true), /shared-browser/);
+    const config = JSON.stringify({ mcpServers: { playwright: { command: 'npx' }, 'shared-browser': { command: 'npx' } } });
+    const args = buildClaudeArgs({ sessionId: 's1', resume: false, model: '', permissionMode: 'auto', name: 'Iris', mcpConfig: config });
+    assert.match(args[args.indexOf('--append-system-prompt') + 1], /shared-browser/);
     const untrusted = buildClaudeArgs({ ...base, untrusted: true });
     assert.equal(untrusted[untrusted.indexOf('--setting-sources') + 1], 'user', 'a folder not trusted: its settings stay out');
     const reading = buildClaudeArgs({ ...base, addDirs: ['/data/uploads'] });

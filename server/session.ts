@@ -8,7 +8,7 @@ import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
-import { placeNote, renameNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { placeNote, renameNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
@@ -34,6 +34,8 @@ export interface SessionDeps {
   onAttention?: (kind: AttentionKind, session: SessionInfo) => void;
   /** a sub-agent is done, its task finished or stopped (`type`: its subagent_type) */
   onSubagentLeft?: (type: string) => void;
+  /** whether the session's process gets the shared browser (server/shared-browser.ts) */
+  sharedBrowser?: () => boolean;
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
   saveImage: (image: ImageUpload) => string;
   /** where a file the user uploaded is (see uploads.ts), or null */
@@ -346,7 +348,11 @@ export class Session {
     const spawning = !this.process?.alive;
     if (spawning) {
       // a new conversation gets the name in its system prompt (see buildClaudeArgs), and where it works
-      if (!this.info.resumable && !this.info.forkOf) { this.info.introducedAs = this.info.name; this.info.toldPlace = this.info.cwd; }
+      if (!this.info.resumable && !this.info.forkOf) {
+        this.info.introducedAs = this.info.name;
+        this.info.toldPlace = this.info.cwd;
+        if (this.deps.sharedBrowser?.()) this.info.toldSharedBrowser = true;
+      }
       this.startProcess();
       this.info.error = undefined;
     }
@@ -360,6 +366,11 @@ export class Session {
     if (this.info.toldPlace !== undefined && this.info.toldPlace !== this.info.cwd && !command) {
       outgoing = placeNote(this.info.cwd, this.info.worktree) + outgoing;
       this.info.toldPlace = this.info.cwd;
+    }
+    // the shared browser came after its conversation started: told what it is for, once
+    if (!this.info.toldSharedBrowser && !command && this.deps.sharedBrowser?.()) {
+      outgoing = sharedBrowserNote(this.deps.identity?.().user) + outgoing;
+      this.info.toldSharedBrowser = true;
     }
     if (this.shellNotes.length && !command) {
       outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
