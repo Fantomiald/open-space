@@ -8,6 +8,7 @@
 // (`about:blank#os-<nonce>`, echoed by Chrome before it answers Target.createTarget), and the popups they open.
 import { randomBytes } from 'node:crypto';
 import { sessionOfBrowser } from '../shared/browser.ts';
+import { asArray, asJson, asString } from './json.ts';
 
 /** The folder of the shared browser's profile under OFFICE_DIR/browsers: no session id starts with "_". */
 export const SHARED_PROFILE = '_shared';
@@ -96,5 +97,120 @@ export class SharedTabs {
     const hosts = [...(this.visited.get(owner) ?? [])].filter((host) => !isKept(host));
     this.visited.delete(owner);
     return { tabs, hosts };
+  }
+}
+
+export type CdpMessage = Record<string, unknown>;
+
+/** The ids of the filter's own calls to Chrome (letting go of a hidden target), far above Playwright's. */
+const OWN_CALLS = 1_000_000_000;
+/** What would reach every site's cookies at once: reading them would copy the login out, clearing them sign the user out. */
+const BLOCKED = new Set(['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin', 'Target.attachToBrowserTarget']);
+/** The browser-level calls aimed at one target, refused for a target of another owner. */
+const AIMED = new Set(['Target.attachToTarget', 'Target.closeTarget', 'Target.activateTarget', 'Target.getTargetInfo', 'Target.detachFromTarget', 'Target.exposeDevToolsProtocol']);
+const DISCOVERED = new Set(['Target.targetCreated', 'Target.targetInfoChanged']);
+const GONE = new Set(['Target.targetDestroyed', 'Target.targetCrashed']);
+
+const refusal = (id: unknown, message: string): CdpMessage => ({ id, error: { code: -32000, message } });
+const blank = (url: unknown) => url === undefined || url === '' || url === 'about:blank';
+
+/**
+ * The shared browser as one owner's Playwright sees it: the CDP traffic between them, with every target of another owner
+ * left out. Chrome attaches every client to every tab (Target.setAutoAttach), so the tabs of others are let go of here,
+ * resumed first when they wait for the debugger (they would stay paused for everyone otherwise).
+ */
+export class SharedCdpFilter {
+  private readonly owner: string;
+  private readonly tabs: SharedTabs;
+  /** the sessions of this owner's targets (its tabs, their frames and workers), the only ones it may send to */
+  private readonly held = new Set<string>();
+  /** the sessions of others' targets that Chrome attached this connection to, until they are let go of */
+  private readonly hidden = new Set<string>();
+  /** the targets this owner was shown, so that it hears when they go even once they are forgotten */
+  private readonly shown = new Set<string>();
+  private readonly listing = new Set<unknown>();
+  private readonly attaching = new Set<unknown>();
+  private next = OWN_CALLS;
+
+  constructor(owner: string, tabs: SharedTabs) {
+    this.owner = owner;
+    this.tabs = tabs;
+  }
+
+  /** A message of Playwright: passed on to Chrome, or answered here when it reaches beyond the owner. */
+  fromClient(message: CdpMessage): { upstream?: CdpMessage; client?: CdpMessage; close?: true } {
+    const { id, method } = message;
+    const params = asJson(message.params);
+    const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
+    if (typeof method !== 'string') return { client: refusal(id, 'Not a command') };
+    if (BLOCKED.has(method)) return { client: refusal(id, `${method} is not allowed in the shared browser`) };
+    if (session !== undefined) return this.held.has(session) ? { upstream: message } : { client: refusal(id, 'Session with given id not found.') };
+    if (method === 'Browser.close') return { client: { id, result: {} }, close: true };
+    if (method === 'Target.createTarget') {
+      if (!blank(params.url)) return { client: refusal(id, 'Only about:blank opens in the shared browser') };
+      return { upstream: { ...message, params: { ...params, url: this.tabs.expect(this.owner) } } };
+    }
+    if (AIMED.has(method)) {
+      if (typeof params.targetId === 'string' && this.tabs.ownerOf(params.targetId) !== this.owner) return { client: refusal(id, 'No target with given id found') };
+      if (typeof params.sessionId === 'string' && !this.held.has(params.sessionId)) return { client: refusal(id, 'Session with given id not found.') };
+    }
+    if (method === 'Target.getTargets') this.listing.add(id);
+    if (method === 'Target.attachToTarget') this.attaching.add(id);
+    return { upstream: message };
+  }
+
+  /** A message of Chrome: passed on to Playwright when it concerns this owner's targets. */
+  fromUpstream(message: CdpMessage): { client?: CdpMessage; upstream: CdpMessage[] } {
+    if (message.id !== undefined) return this.answer(message);
+    const method = asString(message.method);
+    const params = asJson(message.params);
+    const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
+    if (session !== undefined) {
+      if (!this.held.has(session)) return { upstream: [] };
+      // a frame or a worker of a held tab is held with it
+      if (method === 'Target.attachedToTarget') this.held.add(asString(params.sessionId));
+      if (method === 'Target.detachedFromTarget') this.held.delete(asString(params.sessionId));
+      return { client: message, upstream: [] };
+    }
+    if (method === 'Target.attachedToTarget') return this.attached(message, params);
+    if (method === 'Target.detachedFromTarget') {
+      const detached = asString(params.sessionId);
+      if (this.hidden.delete(detached) || !this.held.delete(detached)) return { upstream: [] };
+      return { client: message, upstream: [] };
+    }
+    if (DISCOVERED.has(method)) return this.mine(asJson(params.targetInfo)) ? { client: message, upstream: [] } : { upstream: [] };
+    if (GONE.has(method)) return this.shown.delete(asString(params.targetId)) ? { client: message, upstream: [] } : { upstream: [] };
+    return { client: message, upstream: [] };
+  }
+
+  private mine(info: Record<string, unknown>): boolean {
+    const target = asString(info.targetId);
+    const mine = this.tabs.claim({ targetId: target, type: typeof info.type === 'string' ? info.type : undefined, url: asString(info.url), openerId: typeof info.openerId === 'string' ? info.openerId : undefined }) === this.owner;
+    if (mine) this.shown.add(target);
+    return mine;
+  }
+
+  private attached(message: CdpMessage, params: Record<string, unknown>): { client?: CdpMessage; upstream: CdpMessage[] } {
+    const session = asString(params.sessionId);
+    if (this.mine(asJson(params.targetInfo))) {
+      this.held.add(session);
+      return { client: message, upstream: [] };
+    }
+    this.hidden.add(session);
+    const release: CdpMessage[] = [];
+    if (params.waitingForDebugger === true) release.push({ id: ++this.next, method: 'Runtime.runIfWaitingForDebugger', sessionId: session, params: {} });
+    release.push({ id: ++this.next, method: 'Target.detachFromTarget', params: { sessionId: session } });
+    return { upstream: release };
+  }
+
+  private answer(message: CdpMessage): { client?: CdpMessage; upstream: CdpMessage[] } {
+    if (typeof message.id === 'number' && message.id > OWN_CALLS) return { upstream: [] };
+    const result = asJson(message.result);
+    if (this.attaching.delete(message.id) && typeof result.sessionId === 'string') this.held.add(result.sessionId);
+    if (this.listing.delete(message.id)) {
+      const targetInfos = asArray(result.targetInfos).filter((info) => this.mine(asJson(info)));
+      return { client: { ...message, result: { ...result, targetInfos } }, upstream: [] };
+    }
+    return { client: message, upstream: [] };
   }
 }

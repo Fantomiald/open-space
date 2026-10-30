@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { cookiesToClear, isKept, SharedTabs } from './shared-browser.ts';
+import { asJson } from './json.ts';
+import { type CdpMessage, cookiesToClear, isKept, SharedCdpFilter, SharedTabs } from './shared-browser.ts';
 
 describe('the tabs of the shared browser', () => {
   it('gives a tab created through an owner to that owner', () => {
@@ -59,5 +60,98 @@ describe('the sites kept', () => {
     const cookies = [cookie('.kiin.ai'), cookie('staging.kiin.ai'), cookie('.google.com'), cookie('other.io')];
     assert.deepEqual(cookiesToClear(cookies, ['staging.kiin.ai']), [cookie('.kiin.ai'), cookie('staging.kiin.ai')]);
     assert.deepEqual(cookiesToClear(cookies), [cookie('.kiin.ai'), cookie('staging.kiin.ai'), cookie('other.io')]);
+  });
+});
+
+const attached = (sessionId: string, targetId: string, url: string, extra: Record<string, unknown> = {}): CdpMessage => ({
+  method: 'Target.attachedToTarget', params: { sessionId, targetInfo: { targetId, type: 'page', url, ...extra }, waitingForDebugger: true },
+});
+/** The address the filter gave a new tab of its owner (what Chrome then reports for that tab). */
+const created = (filter: SharedCdpFilter, id = 1) => String(asJson(filter.fromClient({ id, method: 'Target.createTarget', params: { url: 'about:blank' } }).upstream?.params).url);
+
+describe('the shared browser seen by one owner', () => {
+  it('rewrites a new tab so that it comes back to its owner', () => {
+    const filter = new SharedCdpFilter('s1', new SharedTabs());
+    const url = created(filter);
+    assert.match(url, /#os-/);
+    const event = attached('S', 't', url);
+    assert.deepEqual(filter.fromUpstream(event), { client: event, upstream: [] });
+  });
+
+  it('hides another owner’s tab and lets it go', () => {
+    const tabs = new SharedTabs();
+    const mine = new SharedCdpFilter('s1', tabs), theirs = new SharedCdpFilter('s2', tabs);
+    const result = mine.fromUpstream(attached('S', 't', created(theirs)));
+    assert.equal(result.client, undefined);
+    assert.deepEqual(result.upstream.map((message) => [message.method, message.sessionId ?? (message.params as CdpMessage).sessionId]), [
+      ['Runtime.runIfWaitingForDebugger', 'S'], ['Target.detachFromTarget', 'S'],
+    ]);
+    assert.ok(result.upstream.every((message) => Number(message.id) >= 1_000_000_000));
+    assert.deepEqual(mine.fromUpstream({ id: Number(result.upstream[0].id), result: {} }), { upstream: [] });
+    assert.equal(mine.fromUpstream({ method: 'Page.frameNavigated', sessionId: 'S', params: {} }).client, undefined);
+    assert.equal(mine.fromUpstream({ method: 'Target.detachedFromTarget', params: { sessionId: 'S' } }).client, undefined);
+  });
+
+  it('passes an owned tab to a new connection', () => {
+    const tabs = new SharedTabs();
+    const url = created(new SharedCdpFilter('s1', tabs));
+    tabs.claim({ targetId: 't', type: 'page', url });
+    const again = new SharedCdpFilter('s1', tabs);
+    assert.ok(again.fromUpstream({ ...attached('S2', 't', 'https://tagmanager.google.com/'), params: { sessionId: 'S2', targetInfo: { targetId: 't', type: 'page', url: 'https://tagmanager.google.com/' }, waitingForDebugger: false } }).client);
+  });
+
+  it('gives each of two owners creating at once only its own tab', () => {
+    const tabs = new SharedTabs();
+    const a = new SharedCdpFilter('s1', tabs), b = new SharedCdpFilter('s2', tabs);
+    const urlA = created(a), urlB = created(b);
+    for (const filter of [a, b]) {
+      const seen = [attached('SA', 'ta', urlA), attached('SB', 'tb', urlB)].filter((event) => filter.fromUpstream(event).client);
+      assert.deepEqual(seen.map((event) => ((event.params as CdpMessage).targetInfo as CdpMessage).targetId), [filter === a ? 'ta' : 'tb']);
+    }
+  });
+
+  it('keeps popups and frames with their tab', () => {
+    const filter = new SharedCdpFilter('s1', new SharedTabs());
+    filter.fromUpstream(attached('S', 't', created(filter)));
+    assert.ok(filter.fromUpstream(attached('P', 'popup', '', { openerId: 't' })).client);
+    const frame: CdpMessage = { method: 'Target.attachedToTarget', sessionId: 'S', params: { sessionId: 'F', targetInfo: { targetId: 'f', type: 'iframe', url: 'https://checkout.com/' } } };
+    assert.ok(filter.fromUpstream(frame).client);
+    assert.ok(filter.fromUpstream({ method: 'Runtime.consoleAPICalled', sessionId: 'F', params: {} }).client);
+    assert.ok(filter.fromClient({ id: 9, method: 'Runtime.evaluate', sessionId: 'F', params: {} }).upstream);
+  });
+
+  it('holds a session it attached to itself', () => {
+    const tabs = new SharedTabs();
+    const filter = new SharedCdpFilter('s1', tabs);
+    tabs.claim({ targetId: 't', type: 'page', url: created(filter) });
+    assert.ok(filter.fromClient({ id: 5, method: 'Target.attachToTarget', params: { targetId: 't', flatten: true } }).upstream);
+    filter.fromUpstream({ id: 5, result: { sessionId: 'X' } });
+    assert.ok(filter.fromClient({ id: 6, method: 'Page.enable', sessionId: 'X', params: {} }).upstream);
+  });
+
+  it('refuses what reaches beyond the owner', () => {
+    const filter = new SharedCdpFilter('s1', new SharedTabs());
+    const refused = (message: CdpMessage) => {
+      const result = filter.fromClient(message);
+      return !result.upstream && !!(result.client?.error as CdpMessage | undefined)?.message;
+    };
+    assert.ok(refused({ id: 1, method: 'Runtime.evaluate', sessionId: 'unknown', params: {} }));
+    assert.ok(refused({ id: 2, method: 'Target.closeTarget', params: { targetId: 'other' } }));
+    assert.ok(refused({ id: 3, method: 'Target.attachToTarget', params: { targetId: 'other', flatten: true } }));
+    assert.ok(refused({ id: 4, method: 'Target.createTarget', params: { url: 'https://example.com' } }));
+    assert.ok(refused({ id: 5, method: 'Target.attachToBrowserTarget', params: {} }));
+    for (const method of ['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin']) {
+      assert.ok(refused({ id: 6, method, params: {} }), method);
+    }
+    assert.deepEqual(filter.fromClient({ id: 7, method: 'Browser.close', params: {} }), { client: { id: 7, result: {} }, close: true });
+  });
+
+  it('lists only the owner’s targets', () => {
+    const tabs = new SharedTabs();
+    const filter = new SharedCdpFilter('s1', tabs);
+    const owned = { targetId: 't', type: 'page', url: created(filter) };
+    const other = { targetId: 'o', type: 'page', url: 'https://example.com/' };
+    assert.ok(filter.fromClient({ id: 7, method: 'Target.getTargets', params: {} }).upstream);
+    assert.deepEqual(filter.fromUpstream({ id: 7, result: { targetInfos: [owned, other] } }).client, { id: 7, result: { targetInfos: [owned] } });
   });
 });
