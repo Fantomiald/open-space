@@ -54,7 +54,9 @@ export function useAttachments() {
     if (pictures.length > pictureRoom) toast('error', words.tooMany(MAX_IMAGES));
     for (const file of pictures.slice(0, pictureRoom)) {
       const id = ++nextId;
-      settle(prepareImage(file).then((upload) => ({ id, kind: 'image', name: file.name || words.screenshotName, preview: URL.createObjectURL(file), upload })), file.name);
+      // a picture the browser can't decode (a camera RAW like .dng) still goes, as a file
+      const asFile = () => uploadFile(file).then((uploadId): Attachment => ({ id, kind: 'file', name: file.name, size: file.size, uploadId }));
+      settle(prepareImage(file).then((upload): Attachment => ({ id, kind: 'image', name: file.name || words.screenshotName, preview: URL.createObjectURL(file), upload }), asFile), file.name);
     }
     const fileRoom = Math.max(0, MAX_FILES - counts.current.files);
     if (others.length > fileRoom) toast('error', words.tooManyFiles(MAX_FILES));

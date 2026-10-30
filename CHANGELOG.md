@@ -1,5 +1,9 @@
 # Versions
 
+## 1.22.4
+
+- Les photos que le navigateur ne sait pas afficher (RAW .dng, HEIC d'iPhone, SVG, TIFF…) se joignent maintenant comme fichiers au lieu d'afficher « Impossible de joindre ».
+
 ## 1.22.3
 
 - Dans un lanceur étroit, le bouton Lancer n'est plus qu'une flèche ronde : tout tient sur une ligne.
