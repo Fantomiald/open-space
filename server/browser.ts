@@ -5,6 +5,10 @@
 // (browserMcpConfig): Playwright asks /browser/<session>/cdp/<key>/json/version/, which launches the browser if needed
 // and answers with its WebSocket. Open Space keeps a CDP connection of its own to the same browser: it follows the tabs,
 // streams the shown one as JPEG pictures (Page.startScreencast, only while a page watches) and passes on clicks and keys.
+//
+// One more Chrome is shared by every session: the one the user signs in to their own accounts (server/shared-browser.ts).
+// Each session sees its tabs there as the lane SHARED_LANE of its browsers, and its Playwright server `shared-browser`
+// reaches it through Open Space, which shows each owner its own tabs only.
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
