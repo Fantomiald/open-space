@@ -272,7 +272,8 @@ describe('the shared browser’s endpoints', () => {
   let sharedPort: number;
   let sharedServer: ReturnType<typeof createWebServer>['server'];
   const connected: { owner: string; upstream: string }[] = [];
-  const key = (sessionId: string) => `key-${sessionId}`;
+  const key = (sessionId: string) => `shared-${sessionId}`;
+  const ownKey = (sessionId: string) => `key-${sessionId}`;
 
   before(async () => {
     sharedPort = await freePort();
@@ -280,8 +281,9 @@ describe('the shared browser’s endpoints', () => {
       policy: loopbackPolicy([sharedPort], SECRET), port: sharedPort, distDir: path.join(base, 'dist'), soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
       onConnection: () => {}, log: () => {},
       browser: {
-        watch: async () => {}, version: async () => ({}), key, known: (sessionId) => sessionId === 's1',
+        watch: async () => {}, version: async () => ({}), key: ownKey, known: (sessionId) => sessionId === 's1',
         shared: {
+          key,
           version: async () => ({ Browser: 'Chrome', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/browser/x' }),
           socket: async () => 'ws://127.0.0.1:1/devtools/browser/x',
           connect: (client, upstream, owner) => { connected.push({ owner, upstream }); client.close(); },
@@ -305,6 +307,8 @@ describe('the shared browser’s endpoints', () => {
 
   it('answers nobody without the session’s key, nor a page', async () => {
     assert.equal((await version(key('s2'))).status, 404);
+    // the key of the session's own browser, which a restricted session has too, does not open the shared one
+    assert.equal((await version(ownKey('s1'))).status, 404);
     assert.equal((await version(key('s1'), { Origin: 'http://evil.example' })).status, 404);
   });
 
