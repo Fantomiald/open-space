@@ -1,5 +1,5 @@
 // The picture of a session's browser in its window (BrowserView): where the pointer is on the page shown. Pure functions.
-import { MODIFIERS } from '../../shared/browser.ts';
+import { MODIFIERS, SHARED_LANE } from '../../shared/browser.ts';
 import type { SubagentInfo } from '../../shared/protocol.ts';
 import type { FeedItem } from './feed.ts';
 
@@ -20,6 +20,24 @@ export function pictureFraction(box: Rect, picture: { width: number; height: num
 
 export const modifiersOf = (event: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
   (event.altKey ? MODIFIERS.alt : 0) | (event.ctrlKey ? MODIFIERS.ctrl : 0) | (event.metaKey ? MODIFIERS.meta : 0) | (event.shiftKey ? MODIFIERS.shift : 0);
+
+/** The lanes of a session's browsers to pick from: its own, its testers' running, then the shared browser (always offered with it). */
+export function browserLanes(running: readonly number[], shared: boolean): number[] {
+  const testers = running.filter((lane) => lane !== 0 && lane !== SHARED_LANE).sort((a, b) => a - b);
+  return [0, ...testers, ...(shared ? [SHARED_LANE] : [])];
+}
+
+/** The lane shown: the one picked while it runs (the shared browser even before: looking at it starts it), else the session's own, else the first running. */
+export function shownLane(chosen: number, running: readonly number[], shared: boolean): number {
+  if (running.includes(chosen) || (shared && chosen === SHARED_LANE)) return chosen;
+  return running.includes(0) || !running.length ? 0 : running[0];
+}
+
+/** Whether looking at a browser starts it: the session's own and the shared one, never a tester's (only its tester does). */
+export const launchedByLooking = (lane: number) => lane === 0 || lane === SHARED_LANE;
+
+/** Whether a browser taken to a page out of sight floats over the office: a tester's, not those the session's own agent drives. */
+export const floatsOutOfSight = (lane: number) => !launchedByLooking(lane);
 
 /** A tool of the session's Playwright server (any name the user gave it): the agent is using its browser. */
 export const isBrowserTool = (tool: string) => /^mcp__[^_].*__browser_/.test(tool);

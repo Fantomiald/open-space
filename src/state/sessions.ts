@@ -1,6 +1,7 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
 import { create } from 'zustand';
+import { floatsOutOfSight } from './browser.ts';
 import { browserId, type BrowserState } from '../../shared/browser.ts';
 import { isRunning } from './labels.ts';
 import { wentToPage } from './pip.ts';
@@ -551,7 +552,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         // a tester takes its browser to a page while it is out of sight: it floats over the office. A session's own agent
         // only lights its globe: it mostly checks the pages it writes, which is not worth a window.
         const session = s.sessions[message.sessionId];
-        const testing = message.lane > 0;
+        const testing = floatsOutOfSight(message.lane);
         const dismissed = s.pipDismissed.includes(message.sessionId) && session && isRunning(session);
         const inView = showsBrowser(s, message.sessionId);
         if (s.preferences.autoPip && testing && !s.pip && !dismissed && !inView && session && wentToPage(s.browsers[id], message.browser)) get().openPip({ sessionId: message.sessionId, lane: message.lane });

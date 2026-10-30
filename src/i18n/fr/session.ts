@@ -219,6 +219,8 @@ export const session = {
     driving: (name: string) => `${name} pilote`,
     lanes: 'Navigateurs',
     tester: (lane: number) => `Testeur ${lane}`,
+    shared: 'Partagé',
+    sharedTitle: 'Le navigateur partagé par toutes les sessions, connecté à tes propres comptes : connecte-toi ici une fois, toutes les sessions s’en servent ensuite',
     format: 'Écran',
     desktop: 'Ordinateur',
     desktopTitle: 'Écran d’ordinateur : la page en 1920 × 1080',

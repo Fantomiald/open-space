@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { browserId, lanesOf, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
+import { browserId, lanesOf, SHARED_LANE, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { IS_WINDOWS } from '../lib/platform.ts';
-import { modifiersOf, pictureFraction, testersAtWork } from '../state/browser.ts';
+import { browserLanes, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from '../state/browser.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
 
@@ -14,15 +14,21 @@ const MOVE_EVERY_MS = 40;
 /** each tester's first name by browserId, kept once it has finished (its browser stays to look at) */
 const testerNames = new Map<string, string>();
 
-/** The lanes of the session's browsers to pick from (its own always), each with its name and whether its tester is at work. */
+/** Whether the session gets the shared browser: not in a folder the user did not trust (see server/shared-browser.ts). */
+export const hasShared = (session: SessionInfo, available: boolean) => available && !session.untrusted;
+
+/** The lanes of the session's browsers to pick from (its own always, the shared one with it), each with its name and whether its tester is at work. */
 export function useLanes(session: SessionInfo) {
   const lanes = useSessions((s) => lanesOf(Object.keys(s.browsers), session.id).join(','));
+  const shared = hasShared(session, useSessions((s) => s.browserAvailable));
   const running = lanes ? lanes.split(',').map(Number) : [];
   const atWork = testersAtWork(session.subagents);
   for (const [lane, name] of Object.entries(atWork)) testerNames.set(browserId(session.id, Number(lane)), name);
-  return [...new Set([0, ...running])].map((lane) => ({
+  const words = t.session.browser;
+  return browserLanes(running, shared).map((lane) => ({
     lane,
-    name: lane ? (testerNames.get(browserId(session.id, lane)) ?? t.session.browser.tester(lane)) : session.name,
+    name: lane === SHARED_LANE ? words.shared : lane ? (testerNames.get(browserId(session.id, lane)) ?? words.tester(lane)) : session.name,
+    title: lane === SHARED_LANE ? words.sharedTitle : undefined,
     running: running.includes(lane),
     live: lane > 0 && lane in atWork,
   }));
@@ -31,7 +37,7 @@ export function useLanes(session: SessionInfo) {
 /** The session's browsers as buttons, the one shown pressed. */
 export function LanePicker({ lanes, shown, onPick }: { lanes: ReturnType<typeof useLanes>; shown: number | null; onPick: (lane: number) => void }) {
   return lanes.map((each) => (
-    <button key={each.lane} type="button" role="tab" aria-selected={each.lane === shown} data-off={!each.running} data-live={each.live} onClick={() => onPick(each.lane)}>{each.name}</button>
+    <button key={each.lane} type="button" role="tab" aria-selected={each.lane === shown} data-off={!each.running} data-live={each.live} title={each.title} onClick={() => onPick(each.lane)}>{each.name}</button>
   ));
 }
 
@@ -57,7 +63,7 @@ export function BrowserView({ session, driving }: { session: SessionInfo; drivin
   const chosen = useSessions((s) => s.browserLanes[session.id] ?? 0);
   const showLane = useSessions((s) => s.showBrowserLane);
   const running = lanes.filter((each) => each.running).map((each) => each.lane);
-  const lane = running.includes(chosen) ? chosen : running.includes(0) || !running.length ? 0 : running[0];
+  const lane = shownLane(chosen, running, lanes.some((each) => each.lane === SHARED_LANE));
   return (
     <BrowserPane key={lane} session={session} lane={lane} driving={driving && lane === 0}>
       {lanes.length > 1 && (
@@ -133,7 +139,7 @@ export function BrowserScreen({ session, lane, driving }: { session: SessionInfo
   const [generation, setGeneration] = useState(0);
   useEffect(() => { if (browser) setSeen(true); }, [browser]);
   // a tester's browser is only ever launched by the tester
-  const closed = (seen || lane > 0) && !browser;
+  const closed = (seen || !launchedByLooking(lane)) && !browser;
   const picture = useRef<HTMLImageElement>(null);
   const lastMove = useRef(0);
   const pressed = useRef<MouseButton>('none');

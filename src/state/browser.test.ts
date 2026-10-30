@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { drivesBrowser, isBrowserTool, modifiersOf, pictureFraction, testersAtWork } from './browser.ts';
+import { browserLanes, drivesBrowser, floatsOutOfSight, isBrowserTool, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from './browser.ts';
+import { SHARED_LANE } from '../../shared/browser.ts';
 
 describe('the picture of a session’s browser', () => {
   const box = { left: 100, top: 50, width: 800, height: 600 };
@@ -51,5 +52,35 @@ describe('the testers of a session', () => {
       { id: 'b', name: 'Tom', type: 'Explore' },
       { id: 'c', name: 'Léa', type: 'browser-tester-1' },
     ]), { 1: 'Léa', 2: 'Inès' });
+  });
+});
+
+describe('the browsers of a session to pick from', () => {
+  it('offers its own, its testers’ running, then the shared browser, always', () => {
+    assert.deepEqual(browserLanes([2, 0], true), [0, 2, SHARED_LANE]);
+    assert.deepEqual(browserLanes([SHARED_LANE, 1], true), [0, 1, SHARED_LANE]);
+    assert.deepEqual(browserLanes([2, 0], false), [0, 2]);
+  });
+
+  it('shows the shared browser when picked even before it runs, a tester’s only while it runs', () => {
+    assert.equal(shownLane(SHARED_LANE, [0], true), SHARED_LANE);
+    assert.equal(shownLane(SHARED_LANE, [0], false), 0);
+    assert.equal(shownLane(3, [0], true), 0);
+    assert.equal(shownLane(3, [0, 3], true), 3);
+    assert.equal(shownLane(0, [2], true), 2);
+  });
+
+  it('starts the session’s own browser and the shared one when looked at, never a tester’s', () => {
+    assert.equal(launchedByLooking(0), true);
+    assert.equal(launchedByLooking(SHARED_LANE), true);
+    assert.equal(launchedByLooking(2), false);
+  });
+});
+
+describe('a browser at work out of sight', () => {
+  it('floats over the office for a tester only, not for the session’s own nor the shared one', () => {
+    assert.equal(floatsOutOfSight(2), true);
+    assert.equal(floatsOutOfSight(0), false);
+    assert.equal(floatsOutOfSight(SHARED_LANE), false);
   });
 });
