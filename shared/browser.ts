@@ -5,6 +5,8 @@
  * sub-agent with a browser of its own (lane n). Used as the key of the browsers, in the server and in the page.
  */
 export const browserId = (sessionId: string, lane = 0) => (lane ? `${sessionId}.${lane}` : sessionId);
+/** The lane of a session's view of the shared browser (server/shared-browser.ts): the one signed in to the user's own accounts. */
+export const SHARED_LANE = 99;
 export const sessionOfBrowser = (id: string) => id.split('.')[0];
 export const laneOf = (id: string) => Number(id.split('.')[1] ?? 0);
 /** The lanes of a session's running browsers, its own first. */
