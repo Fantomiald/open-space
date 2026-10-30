@@ -49,6 +49,8 @@ export interface WebServerOptions {
     known: (sessionId: string) => boolean;
     /** the browser shared by every session (see shared-browser.ts), which each owner reaches through Open Space */
     shared?: {
+      /** a key of its own, given to the sessions that get the shared browser only (never to a restricted one) */
+      key: (sessionId: string) => string;
       version: (sessionId: string, lane: number) => Promise<Record<string, unknown>>;
       /** the shared Chrome's own WebSocket, launched if needed */
       socket: (sessionId: string, lane: number) => Promise<string>;
@@ -205,7 +207,7 @@ export function createWebServer(options: WebServerOptions) {
     const asked = rest.filter(Boolean).join('/');
     const lane = /^(?:lane\/([1-9]\d?)\/)?json\/version$/.exec(asked);
     if (kind === 'shared') {
-      if (!browser.shared || !lane || req.headers.origin !== undefined || !secretsMatch(browser.key(sessionId), key)) { res.writeHead(404).end(); return; }
+      if (!browser.shared || !lane || req.headers.origin !== undefined || !secretsMatch(browser.shared.key(sessionId), key)) { res.writeHead(404).end(); return; }
       const number = Number(lane[1] ?? 0);
       const version = await browser.shared.version(sessionId, number);
       const socket = `ws://${req.headers.host}/browser/${sessionId}/shared/${key}${number ? `/lane/${number}` : ''}/devtools`;
@@ -303,7 +305,7 @@ export function createWebServer(options: WebServerOptions) {
     const match = url && SHARED_SOCKET.exec(url.pathname);
     if (!shared || !match || req.headers.origin !== undefined || !hostAllowed(policy, req)) return null;
     const [, sessionId = '', key = '', lane] = match;
-    if (!options.browser?.known(sessionId) || !secretsMatch(options.browser.key(sessionId), key)) return null;
+    if (!options.browser?.known(sessionId) || !secretsMatch(shared.key(sessionId), key)) return null;
     return { shared, sessionId, lane: Number(lane ?? 0) };
   };
   server.on('upgrade', (req, socket, head) => {

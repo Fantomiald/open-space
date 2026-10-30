@@ -50,6 +50,29 @@ describe('the Playwright server of a session', () => {
     assert.ok(JSON.parse(args[args.indexOf('--agents') + 1])[testerAgent(4)]);
   });
 
+  it('adds the shared browser, under a name of its own', () => {
+    const shared = 'http://127.0.0.1:4848/browser/s1/shared/key';
+    const servers = JSON.parse(browserMcpConfig(ENDPOINT, { web: { command: 'npx', args: ['@playwright/mcp@latest', '--extension'] } }, shared)).mcpServers;
+    assert.deepEqual(Object.keys(servers), ['web', 'shared-browser']);
+    assert.deepEqual(servers['shared-browser'].args, ['@playwright/mcp@latest', '--cdp-endpoint', shared]);
+  });
+
+  it('gives each tester the shared browser on its own lane', () => {
+    const shared = 'http://127.0.0.1:4848/browser/s1/shared/key';
+    const agents = JSON.parse(testerAgents(ENDPOINT, { web: { command: 'npx', args: ['@playwright/mcp@latest'] } }, { description: 'd', prompt: 'use tester-browser and shared-browser' }, shared));
+    const second = agents[testerAgent(2)];
+    assert.deepEqual(second.mcpServers[1], { 'tester-shared-2': { command: 'npx', args: ['@playwright/mcp@latest', '--cdp-endpoint', `${shared}/lane/2`] } });
+    assert.equal(second.prompt, 'use tester-browser-2 and tester-shared-2');
+    assert.deepEqual(second.disallowedTools, ['mcp__web', 'mcp__shared-browser']);
+  });
+
+  it('leaves the shared browser out when not asked', () => {
+    assert.deepEqual(Object.keys(JSON.parse(browserMcpConfig(ENDPOINT, {})).mcpServers), ['playwright']);
+    const tester = JSON.parse(testerAgents(ENDPOINT, {}, { description: 'd', prompt: 'p' }))[testerAgent(1)];
+    assert.equal(tester.mcpServers.length, 1);
+    assert.deepEqual(tester.disallowedTools, ['mcp__playwright']);
+  });
+
   it('names each browser of a session by its lane', () => {
     assert.equal(browserId('s1'), 's1');
     assert.equal(browserId('s1', 2), 's1.2');

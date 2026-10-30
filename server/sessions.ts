@@ -68,7 +68,7 @@ export interface SessionManagerDeps {
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
   probeCatalog?: CatalogProbe | null;
   /** the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts) */
-  browserMcp?: (sessionId: string) => Pick<LaunchOptions, 'mcpConfig' | 'agents'>;
+  browserMcp?: (sessionId: string, untrusted: boolean) => Pick<LaunchOptions, 'mcpConfig' | 'agents'>;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -245,7 +245,7 @@ export class SessionManager {
       spawnProcess: (launch, handlers) => {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id) }, handlers);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id, !!info.untrusted) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,

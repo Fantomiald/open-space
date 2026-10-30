@@ -78,10 +78,17 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
   return { name: found?.[0] ?? 'playwright', server: { ...base, args: [...args, '--cdp-endpoint', endpoint] } };
 }
 
-/** The --mcp-config of a session: its Playwright server (same name as the user's, so it takes its place) on its browser. */
-export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>): string {
+/** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */
+export const SHARED_SERVER = 'shared-browser';
+
+/**
+ * The --mcp-config of a session: its Playwright server (same name as the user's, so it takes its place) on its browser,
+ * and with `sharedEndpoint` a second one on the shared browser.
+ */
+export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>, sharedEndpoint?: string): string {
   const { name, server } = playwrightServer(endpoint, userServers);
-  return JSON.stringify({ mcpServers: { [name]: server } });
+  const shared = sharedEndpoint ? { [SHARED_SERVER]: playwrightServer(sharedEndpoint, userServers).server } : {};
+  return JSON.stringify({ mcpServers: { [name]: server, ...shared } });
 }
 
 /** Testers a session can run at once, each with a browser of its own (lanes 1 to TESTERS, see shared/browser.ts). */
@@ -97,12 +104,20 @@ export const testerLane = (type: string) => Number(/^browser-tester-(\d+)$/.exec
  * Code runs a single server for every run of a same agent, which would have them share a tab. The server has a name
  * of its own, and the session's Playwright tools are kept from it.
  */
-export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string }): string {
+export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string }, sharedEndpoint?: string): string {
   return JSON.stringify(Object.fromEntries(Array.from({ length: TESTERS }, (_, at) => {
     const lane = at + 1;
     const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers);
     const own = `tester-browser-${lane}`;
-    return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`] }];
+    if (!sharedEndpoint) return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`] }];
+    // its tabs of the shared browser are its own too, apart from the session's
+    const shared = `tester-shared-${lane}`;
+    return [testerAgent(lane), {
+      description: words.description,
+      prompt: words.prompt.replaceAll('tester-browser', own).replaceAll(SHARED_SERVER, shared),
+      mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers).server }],
+      disallowedTools: [`mcp__${name}`, `mcp__${SHARED_SERVER}`],
+    }];
   })));
 }
 

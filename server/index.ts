@@ -128,11 +128,17 @@ const browsers = new Browsers({
   log,
 });
 const mcpServers = userMcpServers(path.join(os.homedir(), '.claude.json'));
-/** where a session's Playwright finds its browser: Open Space launches it on the first call (see server/browser.ts) */
-function browserMcp(sessionId: string) {
+/** the key to the shared browser (server/shared-browser.ts), apart from the session's own: a restricted session never gets it */
+const sharedKey = (sessionId: string) => browserKey(secret, `shared:${sessionId}`);
+/**
+ * where a session's Playwright finds its browser: Open Space launches it on the first call (see server/browser.ts), and
+ * the shared one, signed in to the user's own accounts, unless the session's folder was not trusted
+ */
+function browserMcp(sessionId: string, untrusted: boolean) {
   if (!browsers.available) return {};
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
-  return { mcpConfig: browserMcpConfig(endpoint, mcpServers()), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester) };
+  const shared = untrusted ? undefined : `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}`;
+  return { mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared) };
 }
 
 const crew = new Crew(path.join(config.dataDir, 'crew.json'));
@@ -219,7 +225,8 @@ const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences
 prepareSounds(config.dataDir, log);
 const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
-  browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId) },
+  browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
+    shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
 });
 
 function onConnection(socket: WebSocket) {
