@@ -7,6 +7,7 @@
 // may see of it is its own tabs only: those it created, which come back with the address Open Space gave them
 // (`about:blank#os-<nonce>`, echoed by Chrome before it answers Target.createTarget), and the popups they open.
 import { randomBytes } from 'node:crypto';
+import { WebSocket } from 'ws';
 import { sessionOfBrowser } from '../shared/browser.ts';
 import { asArray, asJson, asString } from './json.ts';
 
@@ -213,4 +214,52 @@ export class SharedCdpFilter {
     }
     return { client: message, upstream: [] };
   }
+}
+
+/**
+ * One owner's Playwright connected to the shared Chrome through Open Space (`client`, its WebSocket on Open Space's server),
+ * every message going through the owner's filter. Either side closing closes the other: a Playwright whose browser went
+ * away connects again at its next call.
+ */
+export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: string, tabs: SharedTabs) {
+  const filter = new SharedCdpFilter(owner, tabs);
+  const upstream = new WebSocket(upstreamUrl, { perMessageDeflate: false, maxPayload: 64_000_000 });
+  const waiting: string[] = [];
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    client.close();
+    if (upstream.readyState === WebSocket.CONNECTING) upstream.terminate();
+    else upstream.close();
+  };
+  const parse = (data: unknown): CdpMessage | null => {
+    try { return { ...asJson(JSON.parse(String(data))) }; } catch { return null; }
+  };
+  const toChrome = (message: CdpMessage) => {
+    const data = JSON.stringify(message);
+    if (upstream.readyState === WebSocket.OPEN) upstream.send(data);
+    else waiting.push(data);
+  };
+  const toPlaywright = (message: CdpMessage) => { if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); };
+  client.on('message', (data) => {
+    const message = parse(data);
+    if (!message) return;
+    const result = filter.fromClient(message);
+    if (result.upstream) toChrome(result.upstream);
+    if (result.client) toPlaywright(result.client);
+    if (result.close) end();
+  });
+  upstream.on('open', () => { for (const data of waiting.splice(0)) upstream.send(data); });
+  upstream.on('message', (data) => {
+    const message = parse(data);
+    if (!message) return;
+    const result = filter.fromUpstream(message);
+    for (const call of result.upstream) toChrome(call);
+    if (result.client) toPlaywright(result.client);
+  });
+  client.on('close', end);
+  upstream.on('close', end);
+  client.on('error', end);
+  upstream.on('error', end);
 }

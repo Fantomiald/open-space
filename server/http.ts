@@ -12,6 +12,7 @@ import { relativePath } from './messages.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
+import { browserId } from '../shared/browser.ts';
 
 /** The file types served: the compiled UI's, and what sessions send or publish. */
 const TYPES: Record<string, string> = {
@@ -46,8 +47,18 @@ export interface WebServerOptions {
     version: (sessionId: string, lane: number) => Promise<Record<string, unknown>>;
     key: (sessionId: string) => string;
     known: (sessionId: string) => boolean;
+    /** the browser shared by every session (see shared-browser.ts), which each owner reaches through Open Space */
+    shared?: {
+      version: (sessionId: string, lane: number) => Promise<Record<string, unknown>>;
+      /** the shared Chrome's own WebSocket, launched if needed */
+      socket: (sessionId: string, lane: number) => Promise<string>;
+      connect: (client: WebSocket, upstreamUrl: string, owner: string) => void;
+    };
   };
 }
+
+/** /browser/<session>/shared/<key>[/lane/<n>]/devtools: an owner's Playwright connecting to the shared browser. */
+const SHARED_SOCKET = /^\/browser\/([\w-]{1,100})\/shared\/([^/]+)(?:\/lane\/([1-9]\d?))?\/devtools$/;
 
 /**
  * A page a session published (its Artifact tool) or sent (SendUserFile) runs in a sandbox without allow-same-origin, even opened on its own: an
@@ -178,6 +189,8 @@ export function createWebServer(options: WebServerOptions) {
    * /browser/<session>/view?lane=n: the picture of a session's browser (lane: see browserId), to a page holding the session cookie.
    * /browser/<session>/cdp/<key>[/lane/<n>]/json/version/: asked by the session's Playwright before it connects (no
    * cookie: the key, given in its --mcp-config, is what lets it in), /lane/<n> by its nth tester's. Launches the browser.
+   * /browser/<session>/shared/<key>[/lane/<n>]/json/version/: the same for the shared browser, whose WebSocket is then
+   * Open Space's own (see SHARED_SOCKET), so that each owner sees its own tabs only.
    */
   async function serveBrowser(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
     const [sessionId = '', kind = '', key = '', ...rest] = url.pathname.slice('/browser/'.length).split('/');
@@ -191,6 +204,14 @@ export function createWebServer(options: WebServerOptions) {
     }
     const asked = rest.filter(Boolean).join('/');
     const lane = /^(?:lane\/([1-9]\d?)\/)?json\/version$/.exec(asked);
+    if (kind === 'shared') {
+      if (!browser.shared || !lane || req.headers.origin !== undefined || !secretsMatch(browser.key(sessionId), key)) { res.writeHead(404).end(); return; }
+      const number = Number(lane[1] ?? 0);
+      const version = await browser.shared.version(sessionId, number);
+      const socket = `ws://${req.headers.host}/browser/${sessionId}/shared/${key}${number ? `/lane/${number}` : ''}/devtools`;
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ ...version, webSocketDebuggerUrl: socket }));
+      return;
+    }
     if (kind !== 'cdp' || !lane || req.headers.origin !== undefined || !secretsMatch(browser.key(sessionId), key)) { res.writeHead(404).end(); return; }
     const version = await browser.version(sessionId, Number(lane[1] ?? 0));
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(version));
@@ -274,8 +295,28 @@ export function createWebServer(options: WebServerOptions) {
 
   // room for a message with its pictures (MAX_IMAGES, shrunk by the page before they are sent)
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32_000_000 });
+  // an owner's Playwright and the shared Chrome: CDP messages, a page's picture among them
+  const relays = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 64_000_000 });
+  /** The owner a shared-browser connection is for: a known session, its key, no page behind it (no Origin). */
+  const sharedOwner = (req: http.IncomingMessage, url: URL | null) => {
+    const shared = options.browser?.shared;
+    const match = url && SHARED_SOCKET.exec(url.pathname);
+    if (!shared || !match || req.headers.origin !== undefined || !hostAllowed(policy, req)) return null;
+    const [, sessionId = '', key = '', lane] = match;
+    if (!options.browser?.known(sessionId) || !secretsMatch(options.browser.key(sessionId), key)) return null;
+    return { shared, sessionId, lane: Number(lane ?? 0) };
+  };
   server.on('upgrade', (req, socket, head) => {
     const url = parseRequestUrl(req.url);
+    const owner = sharedOwner(req, url);
+    if (owner) {
+      relays.handleUpgrade(req, socket, head, (client) => {
+        owner.shared.socket(owner.sessionId, owner.lane)
+          .then((upstream) => owner.shared.connect(client, upstream, browserId(owner.sessionId, owner.lane)))
+          .catch((error: unknown) => { log('cannot reach the shared browser', error); client.close(); });
+      });
+      return;
+    }
     if (url?.pathname !== '/ws' || checkUpgrade(policy, req) !== 'ok') {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
