@@ -52,6 +52,20 @@ export function findChrome(env: NodeJS.ProcessEnv): string | null {
   return [...windows, ...CHROMES, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((file) => existsSync(file)) ?? null;
 }
 
+/**
+ * The arguments of a Chrome Open Space launches on `profile`. The shared one keeps every window drawn: each owner works
+ * in a window of its own, and Chrome stops drawing a window under another one after a few seconds otherwise (checked
+ * with Chrome 156), so its owner's Playwright could not click in it any more.
+ */
+export function chromeArgs(profile: string, shared: boolean): string[] {
+  return [
+    ...(process.platform === 'win32' ? ['--enable-automation'] : []),
+    '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${VIEWPORT.width},${VIEWPORT.height}`, `--force-device-scale-factor=${VIEWPORT.scale}`,
+    '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--hide-crash-restore-bubble',
+    ...(shared ? ['--disable-backgrounding-occluded-windows'] : []), 'about:blank',
+  ];
+}
+
 /** The key in the CDP endpoint given to a session: without it, another program of the machine cannot launch its browser. */
 export const browserKey = (secret: string, sessionId: string) => createHmac('sha256', secret).update(`browser:${sessionId}`).digest('hex').slice(0, 32);
 
@@ -401,11 +415,7 @@ export class Browsers {
     await this.freeProfile(profile);
     const portFile = path.join(profile, 'DevToolsActivePort');
     await rm(portFile, { force: true });
-    const child = spawn(chrome, [
-      ...(process.platform === 'win32' ? ['--enable-automation'] : []),
-      '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${VIEWPORT.width},${VIEWPORT.height}`, `--force-device-scale-factor=${VIEWPORT.scale}`,
-      '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--hide-crash-restore-bubble', 'about:blank',
-    ], { stdio: 'ignore' });
+    const child = spawn(chrome, chromeArgs(profile, name === SHARED_PROFILE), { stdio: 'ignore' });
     const exited = new Promise<never>((_, reject) => child.once('exit', (code) => reject(new Error(`Chrome stopped (${code})`))));
     exited.catch(() => {});
     const deadline = this.now() + START_TIMEOUT_MS;
@@ -622,7 +632,7 @@ export class Browsers {
       if (!live.viewers.size) live.idleSince = this.now();
       void this.cast(live).catch(() => {});
     });
-    if (!live.active) await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id) });
+    if (!live.active) await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id), ...(laneOf(id) === SHARED_LANE ? { newWindow: true } : {}) });
     else await this.attach(live).catch((error) => this.deps.log('cannot follow the browser tab', error));
   }
 
@@ -652,7 +662,7 @@ export class Browsers {
         else if (laneOf(id) !== SHARED_LANE) await live.chrome.cdp.send('Target.createTarget', { url });
         else {
           // a tab of the shared browser is created empty, to be known as the session's, then sent to the address
-          const { targetId } = await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id) });
+          const { targetId } = await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id), newWindow: true });
           const { sessionId } = await live.chrome.cdp.send('Target.attachToTarget', { targetId, flatten: true });
           await live.chrome.cdp.send('Page.navigate', { url }, String(sessionId)).finally(() => live.chrome.cdp.send('Target.detachFromTarget', { sessionId }).catch(() => {}));
         }
