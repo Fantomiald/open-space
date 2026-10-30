@@ -13,6 +13,7 @@ import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
+import { TESTERS } from './browser.ts';
 
 /** The file types served: the compiled UI's, and what sessions send or publish. */
 const TYPES: Record<string, string> = {
@@ -205,7 +206,9 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     const asked = rest.filter(Boolean).join('/');
-    const lane = /^(?:lane\/([1-9]\d?)\/)?json\/version$/.exec(asked);
+    const matched = /^(?:lane\/([1-9]\d?)\/)?json\/version$/.exec(asked);
+    // the lanes of testers that exist only: the view of the shared browser is a lane too, never reached with this key
+    const lane = matched && Number(matched[1] ?? 0) <= TESTERS ? matched : null;
     if (kind === 'shared') {
       if (!browser.shared || !lane || req.headers.origin !== undefined || !secretsMatch(browser.shared.key(sessionId), key)) { res.writeHead(404).end(); return; }
       const number = Number(lane[1] ?? 0);
@@ -305,7 +308,7 @@ export function createWebServer(options: WebServerOptions) {
     const match = url && SHARED_SOCKET.exec(url.pathname);
     if (!shared || !match || req.headers.origin !== undefined || !hostAllowed(policy, req)) return null;
     const [, sessionId = '', key = '', lane] = match;
-    if (!options.browser?.known(sessionId) || !secretsMatch(shared.key(sessionId), key)) return null;
+    if (Number(lane ?? 0) > TESTERS || !options.browser?.known(sessionId) || !secretsMatch(shared.key(sessionId), key)) return null;
     return { shared, sessionId, lane: Number(lane ?? 0) };
   };
   server.on('upgrade', (req, socket, head) => {

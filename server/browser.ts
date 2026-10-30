@@ -19,7 +19,7 @@ import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
 import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import { asArray, asJson, isJson } from './json.ts';
-import { cookiesToClear, relaySharedCdp, SHARED_PROFILE, SharedTabs } from './shared-browser.ts';
+import { cookiesToClear, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
 import { signalTree } from './process-tree.ts';
 
@@ -277,6 +277,9 @@ export class Browsers {
   readonly sharedTabs = new SharedTabs();
   private shared: Shared | null = null;
   private sharedStarting: Promise<Shared> | null = null;
+  /** the sites the shared browser's owners went to since it was launched: their site data goes at its next launch */
+  private readonly sites = new Set<string>();
+  private savingSites: Promise<void> = Promise.resolve();
   private readonly starting = new Map<string, Promise<Live>>();
   /** the format last picked for each browser, kept when it is closed and launched again */
   private readonly formats = new Map<string, BrowserFormat>();
@@ -317,6 +320,8 @@ export class Browsers {
 
   /** What Playwright asks for before connecting: the browser's own /json/version, with its WebSocket address. */
   async version(sessionId: string, lane: number): Promise<Record<string, unknown>> {
+    // the session's own browser or a tester's: the view of the shared one is reached through its filter only (sharedVersion)
+    if (lane < 0 || lane > TESTERS) throw new Error('no such browser');
     const live = await this.ensure(browserId(sessionId, lane));
     const answer = await fetch(`http://127.0.0.1:${live.chrome.port}/json/version`);
     return asJson(await answer.json());
@@ -345,24 +350,48 @@ export class Browsers {
 
   /** An owner is gone (a tester done, a session rested or forgotten): its tabs close, and what it left on other sites than the kept ones goes. */
   async releaseOwner(owner: string) {
-    const { tabs, hosts } = this.sharedTabs.release(owner);
+    const { tabs, origins } = this.sharedTabs.release(owner);
     const shared = this.shared;
     if (!shared) return;
     await Promise.all(tabs.map((targetId) => shared.chrome.cdp.send('Target.closeTarget', { targetId }).catch(() => {})));
-    if (hosts.length) await this.clearSites(shared.chrome, hosts).catch((error) => this.deps.log('cannot clear the shared browser', error));
+    if (origins.length) await this.clearSites(shared.chrome, origins).catch((error) => this.deps.log('cannot clear the shared browser', error));
   }
 
-  /** The cookies sent to `hosts` deleted (every one with no `hosts`), the kept sites' aside, and the hosts' site data. */
-  private async clearSites(chrome: Chrome, hosts?: string[]) {
+  private get sitesFile() { return path.join(this.deps.folder, SHARED_PROFILE, SITES_FILE); }
+
+  /** A site (origin) an owner's tab went to, kept on disk until the next launch clears it (Open Space may stop before its owner goes). */
+  private visited(origin: string | undefined) {
+    if (!origin || this.sites.has(origin)) return;
+    this.sites.add(origin);
+    const hosts = [...this.sites];
+    this.savingSites = this.savingSites.then(() => writeSites(this.sitesFile, hosts)).catch((error) => this.deps.log('cannot keep the shared browser’s sites', error));
+  }
+
+  /** The cookies sent to the `sites` (origins) deleted (every one with no `sites`), the kept sites' aside, and the data of the `sites` (or of `storage`). */
+  private async clearSites(chrome: Chrome, sites?: string[], storage: string[] = sites ?? []) {
     const { cookies } = await chrome.cdp.send('Storage.getCookies');
-    const gone = cookiesToClear(asArray(cookies).map((cookie): Record<string, unknown> & { domain: string } => ({ ...asJson(cookie), domain: String(asJson(cookie).domain ?? '') })), hosts);
+    const gone = cookiesToClear(asArray(cookies).map((cookie): Record<string, unknown> & { domain: string } => ({ ...asJson(cookie), domain: String(asJson(cookie).domain ?? '') })), sites);
     // a cookie set again already expired is deleted (Network.deleteCookies needs a page)
     if (gone.length) await chrome.cdp.send('Storage.setCookies', { cookies: gone.map((cookie) => ({
       name: cookie.name, value: '', domain: cookie.domain, path: cookie.path, secure: cookie.secure, httpOnly: cookie.httpOnly, expires: 1,
       ...(cookie.sameSite ? { sameSite: cookie.sameSite } : {}), ...(cookie.partitionKey ? { partitionKey: cookie.partitionKey } : {}),
     })) });
-    for (const host of hosts ?? []) {
-      for (const scheme of ['https', 'http']) await chrome.cdp.send('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }).catch(() => {});
+    await this.clearStorage(chrome, storage);
+  }
+
+  /** The data of `origins` (local storage, IndexedDB…), cleared through a tab's session: Chrome 156 answers "Internal error" at the browser level. */
+  private async clearStorage(chrome: Chrome, origins: string[]) {
+    if (!origins.length) return;
+    const { targetInfos } = await chrome.cdp.send('Target.getTargets');
+    const page = asArray(targetInfos).map(asJson).find((info) => info.type === 'page');
+    const targetId = page ? String(page.targetId) : String((await chrome.cdp.send('Target.createTarget', { url: 'about:blank' })).targetId);
+    const { sessionId } = await chrome.cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    try {
+      for (const origin of origins) {
+        await chrome.cdp.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' }, String(sessionId)).catch((error) => this.deps.log(`cannot clear ${origin} in the shared browser`, error));
+      }
+    } finally {
+      await chrome.cdp.send('Target.detachFromTarget', { sessionId }).catch(() => {});
     }
   }
 
@@ -447,8 +476,14 @@ export class Browsers {
     const shared: Shared = { chrome, tabs: new Map(), relays: 0, idleSince: this.now() };
     this.shared = shared;
     await chrome.cdp.send('Target.setDiscoverTargets', { discover: true });
-    // logins to apps left by an Open Space that stopped before their owner went: only the kept accounts last
-    await this.clearSites(chrome).catch((error) => this.deps.log('cannot clear the shared browser', error));
+    // logins to apps left by an Open Space that stopped, or a Chrome that idled out, before their owner went: only the
+    // kept accounts last (every other cookie, and the data of the sites visited, in local storage too)
+    for (const site of await readSites(this.sitesFile)) this.sites.add(site);
+    const left = [...this.sites];
+    await this.clearSites(chrome, undefined, left).catch((error) => this.deps.log('cannot clear the shared browser', error));
+    for (const site of left) this.sites.delete(site);
+    const kept = [...this.sites];
+    this.savingSites = this.savingSites.then(() => writeSites(this.sitesFile, kept)).catch((error) => this.deps.log('cannot keep the shared browser’s sites', error));
     return shared;
   }
 
@@ -485,7 +520,7 @@ export class Browsers {
       const owner = this.sharedTabs.claim({ targetId: target, type: String(info.type ?? ''), url: String(info.url ?? ''), openerId: typeof info.openerId === 'string' ? info.openerId : undefined });
       if (!owner) return;
       shared.tabs.set(target, { id: target, url: String(info.url ?? ''), title: String(info.title ?? '') });
-      this.sharedTabs.visit(target, String(info.url ?? ''));
+      this.visited(this.sharedTabs.visit(target, String(info.url ?? '')));
       const id = browserId(sessionOfBrowser(owner), SHARED_LANE);
       const live = this.live.get(id);
       // the session's first tab there: its view appears, with the tab in it

@@ -7,6 +7,7 @@
 // may see of it is its own tabs only: those it created, which come back with the address Open Space gave them
 // (`about:blank#os-<nonce>`, echoed by Chrome before it answers Target.createTarget), and the popups they open.
 import { randomBytes } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import { WebSocket } from 'ws';
 import { sessionOfBrowser } from '../shared/browser.ts';
 import { asArray, asJson, asString } from './json.ts';
@@ -17,6 +18,20 @@ export const SHARED_PROFILE = '_shared';
 export const KEPT_SITES: readonly string[] = ['google.com'];
 
 const NONCE = /#os-([0-9a-f]{16})$/;
+const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ''; } };
+/** A web page's origin (its storage is the origin's, port included), none for another scheme. */
+const originOf = (url: string) => { try { return /^https?:$/.test(new URL(url).protocol) ? new URL(url).origin : ''; } catch { return ''; } };
+
+/** The file, in the shared profile, of the sites visited and not cleared yet: Open Space stopping or the Chrome idling out loses none. */
+export const SITES_FILE = 'open-space-sites.json';
+
+export async function readSites(file: string): Promise<string[]> {
+  try { return asArray(JSON.parse(await readFile(file, 'utf8'))).filter((host): host is string => typeof host === 'string'); } catch { return []; }
+}
+
+export function writeSites(file: string, hosts: readonly string[]): Promise<void> {
+  return writeFile(file, JSON.stringify(hosts), { mode: 0o600 });
+}
 
 export interface TargetInfo { targetId: string; type?: string; url?: string; openerId?: string }
 
@@ -31,8 +46,9 @@ const under = (host: string, domain: string) => {
   return host === name || host.endsWith(`.${name}`);
 };
 
-/** The cookies to delete: those sent to one of `hosts`, or with no `hosts` every one, the kept sites' aside. */
-export function cookiesToClear<T extends { domain: string }>(cookies: T[], hosts?: readonly string[], kept: readonly string[] = KEPT_SITES): T[] {
+/** The cookies to delete: those sent to one of the `sites` (origins), or with no `sites` every one, the kept sites' aside. */
+export function cookiesToClear<T extends { domain: string }>(cookies: T[], sites?: readonly string[], kept: readonly string[] = KEPT_SITES): T[] {
+  const hosts = sites?.map(hostOf);
   return cookies.filter((cookie) => !isKept(cookie.domain, kept) && (!hosts || hosts.some((host) => under(host, cookie.domain))));
 }
 
@@ -66,19 +82,15 @@ export class SharedTabs {
     return this.owners.get(targetId);
   }
 
-  /** A page an owner's tab went to: its site is cleared when the owner goes. */
-  visit(targetId: string, url: string) {
+  /** A page an owner's tab went to: its site is cleared when the owner goes. Its origin, unless kept or not on the web. */
+  visit(targetId: string, url: string): string | undefined {
     const owner = this.owners.get(targetId);
-    if (!owner) return;
-    let host: string;
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
-      host = parsed.hostname;
-    } catch { return; }
-    const hosts = this.visited.get(owner) ?? new Set<string>();
-    hosts.add(host);
-    this.visited.set(owner, hosts);
+    const origin = originOf(url);
+    if (!owner || !origin || isKept(hostOf(origin))) return undefined;
+    const origins = this.visited.get(owner) ?? new Set<string>();
+    origins.add(origin);
+    this.visited.set(owner, origins);
+    return origin;
   }
 
   forget(targetId: string) {
@@ -90,14 +102,14 @@ export class SharedTabs {
     return [...this.owners].filter(([, owner]) => sessionOfBrowser(owner) === sessionId).map(([tab]) => tab);
   }
 
-  /** The owner is gone: its tabs to close and the sites to clear (the kept ones aside), forgotten here. */
-  release(owner: string): { tabs: string[]; hosts: string[] } {
+  /** The owner is gone: its tabs to close and the sites (origins) to clear, the kept ones aside, forgotten here. */
+  release(owner: string): { tabs: string[]; origins: string[] } {
     const tabs = [...this.owners].filter(([, each]) => each === owner).map(([tab]) => tab);
     for (const tab of tabs) this.owners.delete(tab);
     for (const [nonce, each] of this.expected) if (each === owner) this.expected.delete(nonce);
-    const hosts = [...(this.visited.get(owner) ?? [])].filter((host) => !isKept(host));
+    const origins = [...(this.visited.get(owner) ?? [])];
     this.visited.delete(owner);
-    return { tabs, hosts };
+    return { tabs, origins };
   }
 }
 
@@ -105,21 +117,42 @@ export type CdpMessage = Record<string, unknown>;
 
 /** The ids of the filter's own calls to Chrome (letting go of a hidden target), far above Playwright's. */
 const OWN_CALLS = 1_000_000_000;
-/** What would reach every site's cookies at once: reading them would copy the login out, clearing them sign the user out. */
-const BLOCKED = new Set(['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin']);
-/** The browser-level calls aimed at one target, refused for a target of another owner. */
+/**
+ * Refused on any session: what reads or clears the cookies of every site, or a kept one's (copying the login out would
+ * sign the user out, clearing it would too), and what makes the shared Chrome crash for everybody.
+ */
+const BLOCKED = new Set([
+  'Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.getCookies', 'Network.clearBrowserCookies',
+  'Storage.clearDataForOrigin', 'Storage.clearDataForStorageKey', 'Browser.crash', 'Browser.crashGpuProcess',
+]);
+/** The cookie writes, refused when they touch a kept site. */
+const COOKIE_WRITES = new Set(['Network.deleteCookies', 'Network.setCookie', 'Network.setCookies', 'Storage.setCookies']);
+/** The calls aimed at one target, refused for a target of another owner. */
 const AIMED = new Set(['Target.attachToTarget', 'Target.closeTarget', 'Target.activateTarget', 'Target.getTargetInfo', 'Target.detachFromTarget', 'Target.exposeDevToolsProtocol']);
 const DISCOVERED = new Set(['Target.targetCreated', 'Target.targetInfoChanged']);
 const GONE = new Set(['Target.targetDestroyed', 'Target.targetCrashed']);
+/** The targets inside a tab, held with it when they come through its session. */
+const INSIDE = new Set(['iframe', 'worker']);
 
 /** An answer of the filter itself, on the session it was asked on (Playwright would take it for another one's otherwise). */
 const refusal = (id: unknown, message: string, session?: string): CdpMessage => ({ id, error: { code: -32000, message }, ...(session !== undefined ? { sessionId: session } : {}) });
 const blank = (url: unknown) => url === undefined || url === '' || url === 'about:blank';
 
+/** Whether a cookie write sets or deletes a cookie of a kept site. */
+function touchesKept(method: string, params: Record<string, unknown>): boolean {
+  if (!COOKIE_WRITES.has(method)) return false;
+  const cookies = method === 'Network.setCookies' || method === 'Storage.setCookies' ? asArray(params.cookies).map(asJson) : [params];
+  return cookies.some((cookie) => {
+    const host = asString(cookie.domain) || hostOf(asString(cookie.url));
+    return host !== '' && isKept(host);
+  });
+}
+
 /**
  * The shared browser as one owner's Playwright sees it: the CDP traffic between them, with every target of another owner
  * left out. Chrome attaches every client to every tab (Target.setAutoAttach), so the tabs of others are let go of here,
- * resumed first when they wait for the debugger (they would stay paused for everyone otherwise).
+ * resumed first when they wait for the debugger (they would stay paused for everyone otherwise). The Target and Browser
+ * domains reach the whole browser from any session, a tab's own included, so their rules hold on every session.
  */
 export class SharedCdpFilter {
   private readonly owner: string;
@@ -128,13 +161,13 @@ export class SharedCdpFilter {
   private readonly held = new Set<string>();
   /** the sessions of others' targets that Chrome attached this connection to, until they are let go of */
   private readonly hidden = new Set<string>();
-  /** sessions on the browser itself (Target.attachToBrowserTarget, behind Playwright's newCDPSession): held to the browser's rules */
+  /** sessions on the browser itself (Target.attachToBrowserTarget, behind Playwright's newCDPSession) */
   private readonly browserSessions = new Set<string>();
-  private readonly opening = new Set<unknown>();
   /** the targets this owner was shown, so that it hears when they go even once they are forgotten */
   private readonly shown = new Set<string>();
   private readonly listing = new Set<unknown>();
   private readonly attaching = new Set<unknown>();
+  private readonly opening = new Set<unknown>();
   private next = OWN_CALLS;
 
   constructor(owner: string, tabs: SharedTabs) {
@@ -148,8 +181,8 @@ export class SharedCdpFilter {
     const params = asJson(message.params);
     const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
     if (typeof method !== 'string') return { client: refusal(id, 'Not a command', session) };
-    if (BLOCKED.has(method)) return { client: refusal(id, `${method} is not allowed in the shared browser`, session) };
-    if (session !== undefined && !this.browserSessions.has(session)) return this.held.has(session) ? { upstream: message } : { client: refusal(id, 'Session with given id not found.', session) };
+    if (BLOCKED.has(method) || touchesKept(method, params)) return { client: refusal(id, `${method} is not allowed in the shared browser`, session) };
+    if (session !== undefined && !this.held.has(session) && !this.browserSessions.has(session)) return { client: refusal(id, 'Session with given id not found.', session) };
     if (method === 'Browser.close') return { client: { id, result: {}, ...(session !== undefined ? { sessionId: session } : {}) }, close: true };
     if (method === 'Target.createTarget') {
       if (!blank(params.url)) return { client: refusal(id, 'Only about:blank opens in the shared browser', session) };
@@ -158,7 +191,7 @@ export class SharedCdpFilter {
     }
     if (AIMED.has(method)) {
       if (typeof params.targetId === 'string' && this.tabs.ownerOf(params.targetId) !== this.owner) return { client: refusal(id, 'No target with given id found', session) };
-      if (typeof params.sessionId === 'string' && !this.held.has(params.sessionId)) return { client: refusal(id, 'Session with given id not found.', session) };
+      if (typeof params.sessionId === 'string' && !this.held.has(params.sessionId) && !this.browserSessions.has(params.sessionId)) return { client: refusal(id, 'Session with given id not found.', session) };
     }
     if (method === 'Target.getTargets') this.listing.add(id);
     if (method === 'Target.attachToTarget') this.attaching.add(id);
@@ -172,20 +205,23 @@ export class SharedCdpFilter {
     const method = asString(message.method);
     const params = asJson(message.params);
     const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
-    if (session !== undefined && !this.browserSessions.has(session)) {
-      if (!this.held.has(session)) return { upstream: [] };
-      // a frame or a worker of a held tab is held with it
-      if (method === 'Target.attachedToTarget') this.held.add(asString(params.sessionId));
-      if (method === 'Target.detachedFromTarget') this.held.delete(asString(params.sessionId));
-      return { client: message, upstream: [] };
+    if (session !== undefined && !this.held.has(session) && !this.browserSessions.has(session)) return { upstream: [] };
+    if (!method.startsWith('Target.')) return { client: message, upstream: [] };
+    if (method === 'Target.attachedToTarget') {
+      const info = asJson(params.targetInfo);
+      if (session !== undefined && this.held.has(session) && INSIDE.has(asString(info.type))) {
+        this.held.add(asString(params.sessionId));
+        return { client: message, upstream: [] };
+      }
+      return this.attached(message, params, session);
     }
-    if (method === 'Target.attachedToTarget') return this.attached(message, params);
     if (method === 'Target.detachedFromTarget') {
       const detached = asString(params.sessionId);
       if (this.browserSessions.delete(detached)) return { client: message, upstream: [] };
       if (this.hidden.delete(detached) || !this.held.delete(detached)) return { upstream: [] };
       return { client: message, upstream: [] };
     }
+    if (method === 'Target.receivedMessageFromTarget' && !this.held.has(asString(params.sessionId))) return { upstream: [] };
     if (DISCOVERED.has(method)) return this.mine(asJson(params.targetInfo)) ? { client: message, upstream: [] } : { upstream: [] };
     if (GONE.has(method)) return this.shown.delete(asString(params.targetId)) ? { client: message, upstream: [] } : { upstream: [] };
     return { client: message, upstream: [] };
@@ -198,21 +234,23 @@ export class SharedCdpFilter {
     return mine;
   }
 
-  private attached(message: CdpMessage, params: Record<string, unknown>): { client?: CdpMessage; upstream: CdpMessage[] } {
-    const session = asString(params.sessionId);
+  /** A target Chrome attached this connection to, on `session` (none: the root): kept if it is the owner's, let go of there otherwise. */
+  private attached(message: CdpMessage, params: Record<string, unknown>, session: string | undefined): { client?: CdpMessage; upstream: CdpMessage[] } {
+    const child = asString(params.sessionId);
+    const info = asJson(params.targetInfo);
     // the browser itself is only ever attached to on this connection's request (Target.attachToBrowserTarget)
-    if (asJson(params.targetInfo).type === 'browser') {
-      this.browserSessions.add(session);
+    if (info.type === 'browser') {
+      this.browserSessions.add(child);
       return { client: message, upstream: [] };
     }
-    if (this.mine(asJson(params.targetInfo))) {
-      this.held.add(session);
+    if (this.mine(info)) {
+      this.held.add(child);
       return { client: message, upstream: [] };
     }
-    this.hidden.add(session);
+    this.hidden.add(child);
     const release: CdpMessage[] = [];
-    if (params.waitingForDebugger === true) release.push({ id: ++this.next, method: 'Runtime.runIfWaitingForDebugger', sessionId: session, params: {} });
-    release.push({ id: ++this.next, method: 'Target.detachFromTarget', params: { sessionId: session } });
+    if (params.waitingForDebugger === true) release.push({ id: ++this.next, method: 'Runtime.runIfWaitingForDebugger', sessionId: child, params: {} });
+    release.push({ id: ++this.next, method: 'Target.detachFromTarget', params: { sessionId: child }, ...(session !== undefined ? { sessionId: session } : {}) });
     return { upstream: release };
   }
 
