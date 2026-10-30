@@ -13,8 +13,9 @@ import type http from 'node:http';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
-import { addressOf, browserId, FORMATS, MODIFIERS, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
-import { asJson, isJson } from './json.ts';
+import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
+import { asArray, asJson, isJson } from './json.ts';
+import { cookiesToClear, relaySharedCdp, SHARED_PROFILE, SharedTabs } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
 import { signalTree } from './process-tree.ts';
 
@@ -186,10 +187,18 @@ class Cdp {
   close() { this.socket.close(); }
 }
 
-interface Live {
+/** A Chrome Open Space launched: a session's, a tester's, or the shared one (shown by a view per session). */
+interface Chrome {
   process: ChildProcess;
   port: number;
+  /** its own WebSocket, the one a session's Playwright connects to */
+  socket: string;
   cdp: Cdp;
+}
+
+/** A browser as the views show it: a session's or a tester's Chrome, or a session's tabs of the shared one. */
+interface Live {
+  chrome: Chrome;
   tabs: Map<string, BrowserTab>;
   active: string | null;
   /** Open Space's own CDP session on the shown tab, for its pictures and the user's input */
@@ -215,8 +224,20 @@ export interface BrowsersDeps {
   now?: () => number;
 }
 
+/** The shared Chrome (server/shared-browser.ts), its tabs whoever owns them, and how many Playwright are connected to it. */
+interface Shared {
+  chrome: Chrome;
+  tabs: Map<string, BrowserTab>;
+  relays: number;
+  idleSince: number;
+}
+
 export class Browsers {
   private readonly live = new Map<string, Live>();
+  /** who owns which tab of the shared browser */
+  readonly sharedTabs = new SharedTabs();
+  private shared: Shared | null = null;
+  private sharedStarting: Promise<Shared> | null = null;
   private readonly starting = new Map<string, Promise<Live>>();
   /** the format last picked for each browser, kept when it is closed and launched again */
   private readonly formats = new Map<string, BrowserFormat>();
@@ -246,6 +267,7 @@ export class Browsers {
   ensure(id: string): Promise<Live> {
     const live = this.live.get(id);
     if (live) return Promise.resolve(live);
+    if (laneOf(id) === SHARED_LANE) return this.sharedView(id);
     let starting = this.starting.get(id);
     if (!starting) {
       starting = this.launch(id).finally(() => this.starting.delete(id));
@@ -257,8 +279,52 @@ export class Browsers {
   /** What Playwright asks for before connecting: the browser's own /json/version, with its WebSocket address. */
   async version(sessionId: string, lane: number): Promise<Record<string, unknown>> {
     const live = await this.ensure(browserId(sessionId, lane));
-    const answer = await fetch(`http://127.0.0.1:${live.port}/json/version`);
+    const answer = await fetch(`http://127.0.0.1:${live.chrome.port}/json/version`);
     return asJson(await answer.json());
+  }
+
+  /** The shared Chrome's /json/version, launching it if needed (its WebSocket is replaced by Open Space's, see http.ts). */
+  async sharedVersion(): Promise<Record<string, unknown>> {
+    const shared = await this.ensureShared();
+    const answer = await fetch(`http://127.0.0.1:${shared.chrome.port}/json/version`);
+    return asJson(await answer.json());
+  }
+
+  /** The shared Chrome's own WebSocket, which an owner's Playwright reaches through `relay` only. */
+  async sharedSocket(): Promise<string> {
+    return (await this.ensureShared()).chrome.socket;
+  }
+
+  /** An owner's Playwright connected to the shared Chrome, each message through its filter. */
+  relay(client: WebSocket, upstreamUrl: string, owner: string) {
+    const shared = this.shared;
+    if (!shared) { client.close(); return; }
+    shared.relays++;
+    client.once('close', () => { shared.relays--; shared.idleSince = this.now(); });
+    relaySharedCdp(client, upstreamUrl, owner, this.sharedTabs);
+  }
+
+  /** An owner is gone (a tester done, a session rested or forgotten): its tabs close, and what it left on other sites than the kept ones goes. */
+  async releaseOwner(owner: string) {
+    const { tabs, hosts } = this.sharedTabs.release(owner);
+    const shared = this.shared;
+    if (!shared) return;
+    await Promise.all(tabs.map((targetId) => shared.chrome.cdp.send('Target.closeTarget', { targetId }).catch(() => {})));
+    if (hosts.length) await this.clearSites(shared.chrome, hosts).catch((error) => this.deps.log('cannot clear the shared browser', error));
+  }
+
+  /** The cookies sent to `hosts` deleted (every one with no `hosts`), the kept sites' aside, and the hosts' site data. */
+  private async clearSites(chrome: Chrome, hosts?: string[]) {
+    const { cookies } = await chrome.cdp.send('Storage.getCookies');
+    const gone = cookiesToClear(asArray(cookies).map((cookie): Record<string, unknown> & { domain: string } => ({ ...asJson(cookie), domain: String(asJson(cookie).domain ?? '') })), hosts);
+    // a cookie set again already expired is deleted (Network.deleteCookies needs a page)
+    if (gone.length) await chrome.cdp.send('Storage.setCookies', { cookies: gone.map((cookie) => ({
+      name: cookie.name, value: '', domain: cookie.domain, path: cookie.path, secure: cookie.secure, httpOnly: cookie.httpOnly, expires: 1,
+      ...(cookie.sameSite ? { sameSite: cookie.sameSite } : {}), ...(cookie.partitionKey ? { partitionKey: cookie.partitionKey } : {}),
+    })) });
+    for (const host of hosts ?? []) {
+      for (const scheme of ['https', 'http']) await chrome.cdp.send('Storage.clearDataForOrigin', { origin: `${scheme}://${host}`, storageTypes: 'all' }).catch(() => {});
+    }
   }
 
   /**
@@ -283,10 +349,29 @@ export class Browsers {
     await Promise.all(['SingletonLock', 'SingletonSocket', 'SingletonCookie'].map((name) => rm(path.join(profile, name), { force: true })));
   }
 
+  /** A view of `chrome`, showing nothing yet. */
+  private view(chrome: Chrome, id: string): Live {
+    return { chrome, tabs: new Map(), active: null, attached: null, casting: false, following: Promise.resolve(), frame: null, format: this.formats.get(id) ?? 'desktop', viewers: new Set(), idleSince: this.now() };
+  }
+
   private async launch(id: string): Promise<Live> {
+    // the events only come once Open Space asks for them, when `live` is set; a Chrome gone while it starts stops nothing
+    let started: Chrome | undefined;
+    const chrome = await this.startChrome(id, (method, params, session) => {
+      const live = this.live.get(id);
+      if (live && live.chrome === started) this.onEvent(id, live, method, params, session);
+    }, () => { if (started && this.live.get(id)?.chrome === started) void this.stop(id); });
+    started = chrome;
+    const live = this.view(chrome, id);
+    this.live.set(id, live);
+    await chrome.cdp.send('Target.setDiscoverTargets', { discover: true });
+    return live;
+  }
+
+  private async startChrome(name: string, onEvent: (method: string, params: Record<string, unknown>, session?: string) => void, onGone: () => void): Promise<Chrome> {
     const chrome = this.deps.chrome;
     if (!chrome) throw new Error('no Chrome installed');
-    const profile = path.join(this.deps.folder, id);
+    const profile = path.join(this.deps.folder, name);
     await mkdir(profile, { recursive: true, mode: 0o700 });
     await this.freeProfile(profile);
     const portFile = path.join(profile, 'DevToolsActivePort');
@@ -306,19 +391,85 @@ export class Browsers {
       lines = (await readFile(portFile, 'utf8').catch(() => '')).split('\n').filter(Boolean);
     }
     const port = Number(lines[0]);
-    // the events only come once connected, when `live` is set
-    const cdp = new Cdp(`ws://127.0.0.1:${port}${lines[1]}`, (method, params, session) => this.onEvent(id, live, method, params, session), () => this.stop(id));
-    const live: Live = { process: child, port, cdp, tabs: new Map(), active: null, attached: null, casting: false, following: Promise.resolve(), frame: null, format: this.formats.get(id) ?? 'desktop', viewers: new Set(), idleSince: this.now() };
+    const socket = `ws://127.0.0.1:${port}${lines[1]}`;
+    const cdp = new Cdp(socket, onEvent, onGone);
     try { await cdp.opened; } catch (error) { child.kill('SIGKILL'); throw error; }
-    child.once('exit', () => this.stop(id));
+    child.once('exit', onGone);
+    return { process: child, port, socket, cdp };
+  }
+
+  /** The shared Chrome, launched on its own profile if it is not running. */
+  private ensureShared(): Promise<Shared> {
+    if (this.shared) return Promise.resolve(this.shared);
+    this.sharedStarting ??= this.launchShared().finally(() => { this.sharedStarting = null; });
+    return this.sharedStarting;
+  }
+
+  private async launchShared(): Promise<Shared> {
+    let started: Chrome | undefined;
+    const chrome = await this.startChrome(SHARED_PROFILE, (method, params, session) => this.onSharedEvent(method, params, session), () => { void this.stopShared(started); });
+    started = chrome;
+    const shared: Shared = { chrome, tabs: new Map(), relays: 0, idleSince: this.now() };
+    this.shared = shared;
+    await chrome.cdp.send('Target.setDiscoverTargets', { discover: true });
+    // logins to apps left by an Open Space that stopped before their owner went: only the kept accounts last
+    await this.clearSites(chrome).catch((error) => this.deps.log('cannot clear the shared browser', error));
+    return shared;
+  }
+
+  /** A session's view of the shared browser: its tabs (its own lane's and its testers'), shown like a browser of its own. */
+  private async sharedView(id: string): Promise<Live> {
+    const shared = await this.ensureShared();
+    const existing = this.live.get(id);
+    if (existing) return existing;
+    const live = this.view(shared.chrome, id);
+    for (const tab of this.sharedTabs.tabsOfSession(sessionOfBrowser(id))) {
+      const known = shared.tabs.get(tab);
+      if (known) live.tabs.set(tab, known);
+    }
     this.live.set(id, live);
-    await live.cdp.send('Target.setDiscoverTargets', { discover: true });
+    this.show(id, live, [...live.tabs.keys()].at(-1) ?? null);
     return live;
+  }
+
+  /**
+   * An event of the shared Chrome, to the view of the session owning its tab: the tabs nobody owns (the one Chrome
+   * opens with) are in no view. Pictures and the cut of Open Space's own session go to the view following that tab.
+   */
+  private onSharedEvent(method: string, params: Record<string, unknown>, session?: string) {
+    const shared = this.shared;
+    if (!shared) return;
+    if (session !== undefined || method === 'Target.detachedFromTarget') {
+      const followed = session ?? params.sessionId;
+      for (const [id, live] of this.live) if (live.chrome === shared.chrome && live.attached?.session === followed) this.onEvent(id, live, method, params, session);
+      return;
+    }
+    const info = asJson(params.targetInfo);
+    const target = String(info.targetId ?? params.targetId ?? '');
+    if (method === 'Target.targetCreated' || method === 'Target.targetInfoChanged') {
+      const owner = this.sharedTabs.claim({ targetId: target, type: String(info.type ?? ''), url: String(info.url ?? ''), openerId: typeof info.openerId === 'string' ? info.openerId : undefined });
+      if (!owner) return;
+      shared.tabs.set(target, { id: target, url: String(info.url ?? ''), title: String(info.title ?? '') });
+      this.sharedTabs.visit(target, String(info.url ?? ''));
+      const id = browserId(sessionOfBrowser(owner), SHARED_LANE);
+      const live = this.live.get(id);
+      // the session's first tab there: its view appears, with the tab in it
+      if (!live) { void this.ensure(id).catch((error) => this.deps.log('cannot show the shared browser', error)); return; }
+      this.onEvent(id, live, live.tabs.has(target) || method === 'Target.targetCreated' ? method : 'Target.targetCreated', params);
+      return;
+    }
+    if (method === 'Target.targetDestroyed') {
+      shared.tabs.delete(target);
+      const owner = this.sharedTabs.ownerOf(target);
+      this.sharedTabs.forget(target);
+      const live = owner && this.live.get(browserId(sessionOfBrowser(owner), SHARED_LANE));
+      if (owner && live) this.onEvent(browserId(sessionOfBrowser(owner), SHARED_LANE), live, method, params);
+    }
   }
 
   private onEvent(id: string, live: Live, method: string, params: Record<string, unknown>, session?: string) {
     if (method === 'Page.screencastFrame' && session && session === live.attached?.session) {
-      void live.cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }, session).catch(() => {});
+      void live.chrome.cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }, session).catch(() => {});
       const meta = asJson(params.metadata);
       const width = Number(meta.deviceWidth) || VIEWPORT.width, height = Number(meta.deviceHeight) || VIEWPORT.height;
       const resized = live.frame?.width !== width || live.frame?.height !== height;
@@ -378,12 +529,12 @@ export class Browsers {
     const previous = live.attached;
     live.attached = null;
     live.casting = false;
-    if (previous) await live.cdp.send('Target.detachFromTarget', { sessionId: previous.session }).catch(() => {});
+    if (previous) await live.chrome.cdp.send('Target.detachFromTarget', { sessionId: previous.session }).catch(() => {});
     if (!tab) return;
-    const { sessionId: session } = await live.cdp.send('Target.attachToTarget', { targetId: tab, flatten: true });
-    if (live.active !== tab) { await live.cdp.send('Target.detachFromTarget', { sessionId: session }).catch(() => {}); return; }
+    const { sessionId: session } = await live.chrome.cdp.send('Target.attachToTarget', { targetId: tab, flatten: true });
+    if (live.active !== tab) { await live.chrome.cdp.send('Target.detachFromTarget', { sessionId: session }).catch(() => {}); return; }
     live.attached = { tab, session: String(session) };
-    await live.cdp.send('Page.enable', {}, live.attached.session);
+    await live.chrome.cdp.send('Page.enable', {}, live.attached.session);
     await this.fit(live);
     await this.cast(live);
   }
@@ -396,8 +547,8 @@ export class Browsers {
     const page = live.attached?.session;
     if (!page) return;
     const { width, height, scale, mobile } = FORMATS[live.format];
-    await live.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile }, page);
-    await live.cdp.send('Emulation.setTouchEmulationEnabled', mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false }, page);
+    await live.chrome.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile }, page);
+    await live.chrome.cdp.send('Emulation.setTouchEmulationEnabled', mobile ? { enabled: true, maxTouchPoints: 5 } : { enabled: false }, page);
   }
 
   /**
@@ -411,7 +562,7 @@ export class Browsers {
       if (!page) return;
       if (refit) await this.fit(live);
       if (!live.casting) return;
-      await live.cdp.send('Page.stopScreencast', {}, page).catch(() => {});
+      await live.chrome.cdp.send('Page.stopScreencast', {}, page).catch(() => {});
       live.casting = false;
       await this.cast(live);
     });
@@ -424,8 +575,8 @@ export class Browsers {
     const wanted = live.viewers.size > 0;
     if (!live.attached || wanted === live.casting) return;
     live.casting = wanted;
-    if (wanted) await live.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 75, maxWidth: PICTURE_MAX, maxHeight: PICTURE_MAX }, live.attached.session);
-    else await live.cdp.send('Page.stopScreencast', {}, live.attached.session).catch(() => {});
+    if (wanted) await live.chrome.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 75, maxWidth: PICTURE_MAX, maxHeight: PICTURE_MAX }, live.attached.session);
+    else await live.chrome.cdp.send('Page.stopScreencast', {}, live.attached.session).catch(() => {});
   }
 
   private sendFrame(viewer: http.ServerResponse, data: Buffer) {
@@ -446,8 +597,13 @@ export class Browsers {
       if (!live.viewers.size) live.idleSince = this.now();
       void this.cast(live).catch(() => {});
     });
-    if (!live.active) await live.cdp.send('Target.createTarget', { url: 'about:blank' });
+    if (!live.active) await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id) });
     else await this.attach(live).catch((error) => this.deps.log('cannot follow the browser tab', error));
+  }
+
+  /** The address of a new empty tab: in the shared browser, one the session owns (see SharedTabs.expect). */
+  private blank(id: string): string {
+    return laneOf(id) === SHARED_LANE ? this.sharedTabs.expect(browserId(sessionOfBrowser(id), 0)) : 'about:blank';
   }
 
   async act(id: string, action: BrowserAction) {
@@ -467,26 +623,32 @@ export class Browsers {
       case 'navigate': {
         const url = addressOf(action.url);
         if (!url) return;
-        if (page) await live.cdp.send('Page.navigate', { url }, page);
-        else await live.cdp.send('Target.createTarget', { url });
+        if (page) await live.chrome.cdp.send('Page.navigate', { url }, page);
+        else if (laneOf(id) !== SHARED_LANE) await live.chrome.cdp.send('Target.createTarget', { url });
+        else {
+          // a tab of the shared browser is created empty, to be known as the session's, then sent to the address
+          const { targetId } = await live.chrome.cdp.send('Target.createTarget', { url: this.blank(id) });
+          const { sessionId } = await live.chrome.cdp.send('Target.attachToTarget', { targetId, flatten: true });
+          await live.chrome.cdp.send('Page.navigate', { url }, String(sessionId)).finally(() => live.chrome.cdp.send('Target.detachFromTarget', { sessionId }).catch(() => {}));
+        }
         return;
       }
-      case 'reload': if (page) await live.cdp.send('Page.reload', {}, page); return;
+      case 'reload': if (page) await live.chrome.cdp.send('Page.reload', {}, page); return;
       case 'back':
       case 'forward': {
         if (!page) return;
-        const history = await live.cdp.send('Page.getNavigationHistory', {}, page);
+        const history = await live.chrome.cdp.send('Page.getNavigationHistory', {}, page);
         const entries = Array.isArray(history.entries) ? history.entries.map(asJson) : [];
         const entry = entries[Number(history.currentIndex) + (action.kind === 'back' ? -1 : 1)];
-        if (entry) await live.cdp.send('Page.navigateToHistoryEntry', { entryId: entry.id }, page);
+        if (entry) await live.chrome.cdp.send('Page.navigateToHistoryEntry', { entryId: entry.id }, page);
         return;
       }
       case 'tab':
         if (!live.tabs.has(action.id)) return;
-        await live.cdp.send('Target.activateTarget', { targetId: action.id });
+        await live.chrome.cdp.send('Target.activateTarget', { targetId: action.id });
         this.show(id, live, action.id);
         return;
-      case 'closeTab': if (live.tabs.has(action.id)) await live.cdp.send('Target.closeTarget', { targetId: action.id }); return;
+      case 'closeTab': if (live.tabs.has(action.id)) await live.chrome.cdp.send('Target.closeTarget', { targetId: action.id }); return;
     }
   }
 
@@ -497,46 +659,71 @@ export class Browsers {
     const { width, height } = live.frame ?? VIEWPORT;
     switch (input.kind) {
       case 'mouse':
-        await live.cdp.send('Input.dispatchMouseEvent', { type: input.type, x: input.x * width, y: input.y * height, button: input.button, clickCount: input.clicks, modifiers: input.modifiers }, page);
+        await live.chrome.cdp.send('Input.dispatchMouseEvent', { type: input.type, x: input.x * width, y: input.y * height, button: input.button, clickCount: input.clicks, modifiers: input.modifiers }, page);
         return;
       case 'wheel':
-        await live.cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: input.x * width, y: input.y * height, deltaX: input.dx, deltaY: input.dy }, page);
+        await live.chrome.cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: input.x * width, y: input.y * height, deltaX: input.dx, deltaY: input.dy }, page);
         return;
-      case 'key': await live.cdp.send('Input.dispatchKeyEvent', keyEvent(input), page); return;
-      case 'text': await live.cdp.send('Input.insertText', { text: input.text }, page); return;
+      case 'key': await live.chrome.cdp.send('Input.dispatchKeyEvent', keyEvent(input), page); return;
+      case 'text': await live.chrome.cdp.send('Input.insertText', { text: input.text }, page); return;
     }
   }
 
-  /** Resolves once Chrome has exited: it still writes to its profile while it shuts down. */
+  /** A browser or a view stopped: resolves once its Chrome has exited (it still writes to its profile while it shuts down), a view's at once. */
   stop(id: string): Promise<void> {
+    const lane = laneOf(id);
+    if (lane > 0 && lane <= TESTERS) void this.releaseOwner(id);
     const live = this.live.get(id);
     if (!live) return Promise.resolve();
     this.live.delete(id);
-    const exited = live.process.exitCode !== null || live.process.signalCode !== null
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => { live.process.once('exit', () => resolve()); });
-    for (const viewer of live.viewers) viewer.end();
-    if (process.platform === 'win32') {
-      // Let Chromium release its profile and stop its sandboxed subprocesses itself first.
-      void live.cdp.send('Browser.close').catch(() => {}).finally(() => live.cdp.close());
-    } else {
-      live.cdp.close();
-      live.process.kill('SIGTERM');
+    if (lane === SHARED_LANE) {
+      for (const viewer of live.viewers) viewer.end();
+      if (live.attached) void live.chrome.cdp.send('Target.detachFromTarget', { sessionId: live.attached.session }).catch(() => {});
+      this.deps.onState(id, null);
+      return Promise.resolve();
     }
-    setTimeout(() => {
-      if (live.process.exitCode !== null || live.process.signalCode !== null) return;
-      if (process.platform === 'win32') signalTree(live.process.pid, 'SIGKILL');
-      else live.process.kill('SIGKILL');
-    }, 3000).unref();
+    for (const viewer of live.viewers) viewer.end();
+    const exited = this.kill(live.chrome);
     // a tester starts from a clean profile each time its browser is launched
     if (id !== sessionOfBrowser(id)) void exited.then(() => rm(path.join(this.deps.folder, id), { recursive: true, force: true, maxRetries: 5 }));
     this.deps.onState(id, null);
     return exited;
   }
 
+  /** The shared Chrome stopped (idle, gone or Open Space closing), its views with it; its profile stays. */
+  private stopShared(chrome?: Chrome): Promise<void> {
+    const shared = this.shared;
+    if (!shared || (chrome && shared.chrome !== chrome)) return Promise.resolve();
+    this.shared = null;
+    for (const [id, live] of [...this.live]) if (live.chrome === shared.chrome) void this.stop(id);
+    return this.kill(shared.chrome);
+  }
+
+  /** Resolves once Chrome has exited: it still writes to its profile while it shuts down. */
+  private kill(chrome: Chrome): Promise<void> {
+    const exited = chrome.process.exitCode !== null || chrome.process.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => { chrome.process.once('exit', () => resolve()); });
+    if (process.platform === 'win32') {
+      // Let Chromium release its profile and stop its sandboxed subprocesses itself first.
+      void chrome.cdp.send('Browser.close').catch(() => {}).finally(() => chrome.cdp.close());
+    } else {
+      chrome.cdp.close();
+      chrome.process.kill('SIGTERM');
+    }
+    setTimeout(() => {
+      if (chrome.process.exitCode !== null || chrome.process.signalCode !== null) return;
+      if (process.platform === 'win32') signalTree(chrome.process.pid, 'SIGKILL');
+      else chrome.process.kill('SIGKILL');
+    }, 3000).unref();
+    return exited;
+  }
+
   /** The session's browser and its testers'. */
   async stopSession(sessionId: string) {
     await Promise.all([...this.live.keys()].filter((id) => sessionOfBrowser(id) === sessionId).map((id) => this.stop(id)));
+    // its tabs of the shared browser, its own lane's and its testers'
+    await Promise.all(Array.from({ length: TESTERS + 1 }, (_, lane) => this.releaseOwner(browserId(sessionId, lane))));
   }
 
   /** The session is gone: its browsers and its profile (cookies, history) with them. */
@@ -548,7 +735,7 @@ export class Browsers {
   /** The profiles of sessions that no longer exist (forgotten while Open Space was not running), and the testers' left behind. */
   async sweepProfiles(known: ReadonlySet<string>) {
     const names = await readdir(this.deps.folder).catch(() => []);
-    await Promise.all(names.filter((name) => !known.has(name)).map((name) => rm(path.join(this.deps.folder, name), { recursive: true, force: true })));
+    await Promise.all(names.filter((name) => !known.has(name) && name !== SHARED_PROFILE).map((name) => rm(path.join(this.deps.folder, name), { recursive: true, force: true })));
   }
 
   private closeIdle() {
@@ -556,10 +743,16 @@ export class Browsers {
       if (live.viewers.size || this.deps.sessionAlive(sessionOfBrowser(id))) { live.idleSince = this.now(); continue; }
       if (this.now() - live.idleSince > IDLE_MS) this.stop(id);
     }
+    // the shared Chrome goes when nobody watches it and no Playwright is connected to it
+    const shared = this.shared;
+    if (!shared) return;
+    if (shared.relays || [...this.live.values()].some((live) => live.chrome === shared.chrome && live.viewers.size)) shared.idleSince = this.now();
+    else if (this.now() - shared.idleSince > IDLE_MS) void this.stopShared();
   }
 
   shutdown() {
     clearInterval(this.sweep);
     for (const id of [...this.live.keys()]) this.stop(id);
+    void this.stopShared();
   }
 }
