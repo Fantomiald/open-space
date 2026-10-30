@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, shownFormat } from '../shared/browser.ts';
-import { browserKey, browserMcpConfig, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { browserKey, browserMcpConfig, Browsers, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -121,5 +124,15 @@ describe('the messages of the browser', () => {
     assert.deepEqual(parseClientMessage({ t: 'browser', sessionId: 's1', action: { kind: 'navigate', url: 'localhost:3000' } }), { t: 'browser', sessionId: 's1', lane: 0, action: { kind: 'navigate', url: 'localhost:3000' } });
     assert.equal(parseClientMessage({ t: 'browser', sessionId: 's1', action: { kind: 'eval' } }), null);
     assert.deepEqual(parseClientMessage({ t: 'browser', sessionId: 's1', lane: 3, action: { kind: 'reload' } }), { t: 'browser', sessionId: 's1', lane: 3, action: { kind: 'reload' } });
+  });
+});
+
+describe('the profiles swept', () => {
+  it('keeps the shared browser’s', async () => {
+    const folder = mkdtempSync(path.join(os.tmpdir(), 'open-space-profiles-'));
+    for (const name of ['_shared', 'gone', 's1']) mkdirSync(path.join(folder, name));
+    await new Browsers({ chrome: null, folder, sessionAlive: () => false, onState: () => {}, log: () => {} }).sweepProfiles(new Set(['s1']));
+    assert.deepEqual(['_shared', 'gone', 's1'].map((name) => existsSync(path.join(folder, name))), [true, false, true]);
+    rmSync(folder, { recursive: true, force: true });
   });
 });
