@@ -61,6 +61,13 @@ describe('the sites kept', () => {
     assert.equal(isKept('.google.com'), true);
     assert.equal(isKept('google.com.evil.io'), false);
     assert.equal(isKept('notgoogle.com'), false);
+    // a Google sign-in sets its cookies on YouTube and on the local Google too
+    assert.equal(isKept('.youtube.com'), true);
+    assert.equal(isKept('accounts.youtube.com'), true);
+    assert.equal(isKept('.google.fr'), true);
+    assert.equal(isKept('www.google.co.uk'), true);
+    assert.equal(isKept('google.fr.evil.io'), false);
+    assert.equal(isKept('notyoutube.com'), false);
   });
 
   it('clears the cookies of the sites visited, or every one but the kept at launch', () => {
@@ -214,6 +221,24 @@ describe('the shared browser seen by one owner', () => {
     assert.ok(!refused({ id: 7, method: 'Network.deleteCookies', sessionId: 'S', params: { name: 'qa', url: 'http://127.0.0.1:8766/' } }));
   });
 
+  it('keeps the owners apart where Chrome has one setting for all, and lets no tab crash the browser', () => {
+    const filter = new SharedCdpFilter('s1', new SharedTabs());
+    filter.fromUpstream(attached('S', 't', created(filter)));
+    const refused = (message: CdpMessage) => !filter.fromClient(message).upstream;
+    // a context of its own has none of the logins, and would be another owner's to dispose of
+    for (const method of ['Target.createBrowserContext', 'Target.disposeBrowserContext', 'Browser.grantPermissions', 'Browser.resetPermissions', 'Browser.setPermission']) {
+      assert.ok(refused({ id: 1, method, params: {} }), method);
+    }
+    assert.ok(refused({ id: 2, method: 'Page.crash', sessionId: 'S', params: {} }));
+    for (const url of ['chrome://inducebrowsercrashforrealz', 'chrome://settings', 'file:///etc/hosts', 'devtools://devtools/bundled/inspector.html']) {
+      assert.ok(refused({ id: 3, method: 'Page.navigate', sessionId: 'S', params: { url } }), url);
+    }
+    assert.ok(!refused({ id: 4, method: 'Page.navigate', sessionId: 'S', params: { url: 'https://tagmanager.google.com/' } }));
+    // every owner's Playwright sets the one download folder at connect: answered here, downloads stay refused
+    assert.deepEqual(filter.fromClient({ id: 5, method: 'Browser.setDownloadBehavior', params: { behavior: 'allowAndName', downloadPath: '/tmp/a', eventsEnabled: true } }), { client: { id: 5, result: {} } });
+    assert.deepEqual(filter.fromClient({ id: 6, method: 'Page.setDownloadBehavior', sessionId: 'S', params: { behavior: 'allow', downloadPath: '/tmp/a' } }), { client: { id: 6, result: {}, sessionId: 'S' } });
+  });
+
   it('lists only the owner’s targets', () => {
     const tabs = new SharedTabs();
     const filter = new SharedCdpFilter('s1', tabs);
@@ -254,6 +279,25 @@ describe('the relay to the shared browser', () => {
     assert.match(String(asJson(asJson(received[0].params).targetInfo).url), /#os-/);
     assert.deepEqual(received[1], { id: 1, result: { targetId: 't' } });
     stop();
+  });
+
+  it('relays nothing for a client gone while the shared Chrome started', async () => {
+    const chrome = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    await new Promise((resolve) => chrome.once('listening', resolve));
+    const relay = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    const accepted = new Promise<WebSocket>((resolve) => relay.once('connection', resolve));
+    await new Promise((resolve) => relay.once('listening', resolve));
+    const client = new WebSocket(`ws://127.0.0.1:${(relay.address() as AddressInfo).port}`);
+    const socket = await accepted;
+    await new Promise((resolve) => client.once('open', resolve));
+    const gone = new Promise((resolve) => socket.once('close', resolve));
+    client.close();
+    await gone;
+    assert.equal(relaySharedCdp(socket, `ws://127.0.0.1:${(chrome.address() as AddressInfo).port}`, 's1', new SharedTabs()), false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(chrome.clients.size, 0, 'no connection to Chrome left open');
+    relay.close();
+    chrome.close();
   });
 
   it('closes the client when Chrome goes', async () => {
