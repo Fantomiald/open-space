@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
 import { describe, it } from 'node:test';
+import { WebSocket, WebSocketServer } from 'ws';
 import { asJson } from './json.ts';
-import { type CdpMessage, cookiesToClear, isKept, SharedCdpFilter, SharedTabs } from './shared-browser.ts';
+import { type CdpMessage, cookiesToClear, isKept, relaySharedCdp, SharedCdpFilter, SharedTabs } from './shared-browser.ts';
 
 describe('the tabs of the shared browser', () => {
   it('gives a tab created through an owner to that owner', () => {
@@ -153,5 +155,47 @@ describe('the shared browser seen by one owner', () => {
     const other = { targetId: 'o', type: 'page', url: 'https://example.com/' };
     assert.ok(filter.fromClient({ id: 7, method: 'Target.getTargets', params: {} }).upstream);
     assert.deepEqual(filter.fromUpstream({ id: 7, result: { targetInfos: [owned, other] } }).client, { id: 7, result: { targetInfos: [owned] } });
+  });
+});
+
+/** A fake Chrome, and Open Space's end of a relay to it that a test client connects to. */
+async function relayed(onCommand: (chrome: WebSocket, message: CdpMessage) => void) {
+  const chrome = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+  chrome.on('connection', (socket) => socket.on('message', (data) => onCommand(socket, JSON.parse(String(data)))));
+  await new Promise((resolve) => chrome.once('listening', resolve));
+  const relay = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+  relay.on('connection', (socket) => relaySharedCdp(socket, `ws://127.0.0.1:${(chrome.address() as AddressInfo).port}`, 's1', new SharedTabs()));
+  await new Promise((resolve) => relay.once('listening', resolve));
+  const client = new WebSocket(`ws://127.0.0.1:${(relay.address() as AddressInfo).port}`);
+  const received: CdpMessage[] = [];
+  client.on('message', (data) => received.push(JSON.parse(String(data))));
+  await new Promise((resolve) => client.once('open', resolve));
+  const stop = () => { client.close(); relay.close(); chrome.close(); };
+  return { chrome, client, received, stop };
+}
+const until = async (check: () => boolean) => { for (let tries = 0; tries < 100 && !check(); tries++) await new Promise((resolve) => setTimeout(resolve, 10)); };
+
+describe('the relay to the shared browser', () => {
+  it('relays an owned tab', async () => {
+    const { client, received, stop } = await relayed((chrome, message) => {
+      if (message.method !== 'Target.createTarget') return;
+      const url = asJson(message.params).url;
+      chrome.send(JSON.stringify(attached('S', 't', String(url))));
+      chrome.send(JSON.stringify({ id: message.id, result: { targetId: 't' } }));
+    });
+    client.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: 'about:blank' } }));
+    await until(() => received.length === 2);
+    assert.match(String(asJson(asJson(received[0].params).targetInfo).url), /#os-/);
+    assert.deepEqual(received[1], { id: 1, result: { targetId: 't' } });
+    stop();
+  });
+
+  it('closes the client when Chrome goes', async () => {
+    const { chrome, client, stop } = await relayed(() => {});
+    const closed = new Promise((resolve) => client.once('close', resolve));
+    await until(() => chrome.clients.size === 1);
+    for (const socket of chrome.clients) socket.terminate();
+    await closed;
+    stop();
   });
 });

@@ -267,3 +267,56 @@ describe('WebSocket upgrade', () => {
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
   });
 });
+
+describe('the shared browser’s endpoints', () => {
+  let sharedPort: number;
+  let sharedServer: ReturnType<typeof createWebServer>['server'];
+  const connected: { owner: string; upstream: string }[] = [];
+  const key = (sessionId: string) => `key-${sessionId}`;
+
+  before(async () => {
+    sharedPort = await freePort();
+    sharedServer = createWebServer({
+      policy: loopbackPolicy([sharedPort], SECRET), port: sharedPort, distDir: path.join(base, 'dist'), soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
+      onConnection: () => {}, log: () => {},
+      browser: {
+        watch: async () => {}, version: async () => ({}), key, known: (sessionId) => sessionId === 's1',
+        shared: {
+          version: async () => ({ Browser: 'Chrome', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/browser/x' }),
+          socket: async () => 'ws://127.0.0.1:1/devtools/browser/x',
+          connect: (client, upstream, owner) => { connected.push({ owner, upstream }); client.close(); },
+        },
+      },
+    }).server;
+    await new Promise<void>((resolve) => sharedServer.listen(sharedPort, '127.0.0.1', resolve));
+  });
+
+  after(() => { sharedServer.close(); sharedServer.closeAllConnections(); });
+
+  const version = (at: string, headers: Record<string, string> = {}) => fetch(`http://127.0.0.1:${sharedPort}/browser/s1/shared/${at}/json/version`, { headers });
+
+  it('sends each owner’s Playwright to a WebSocket of Open Space', async () => {
+    const own = await (await version(key('s1'))).json() as Record<string, unknown>;
+    assert.equal(own.webSocketDebuggerUrl, `ws://127.0.0.1:${sharedPort}/browser/s1/shared/${key('s1')}/devtools`);
+    assert.equal(own.Browser, 'Chrome');
+    const tester = await (await version(`${key('s1')}/lane/2`)).json() as Record<string, unknown>;
+    assert.equal(tester.webSocketDebuggerUrl, `ws://127.0.0.1:${sharedPort}/browser/s1/shared/${key('s1')}/lane/2/devtools`);
+  });
+
+  it('answers nobody without the session’s key, nor a page', async () => {
+    assert.equal((await version(key('s2'))).status, 404);
+    assert.equal((await version(key('s1'), { Origin: 'http://evil.example' })).status, 404);
+  });
+
+  it('relays an owner with its key, and refuses one without', async () => {
+    const open = (at: string, origin?: string) => new Promise<'open' | 'rejected'>((resolve) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${sharedPort}/browser/s1/shared/${at}/devtools`, origin ? { origin } : {});
+      socket.on('open', () => resolve('open'));
+      socket.on('error', () => resolve('rejected'));
+    });
+    assert.equal(await open(`${key('s1')}/lane/2`), 'open');
+    assert.equal(await open('wrong'), 'rejected');
+    assert.equal(await open(key('s1'), 'http://evil.example'), 'rejected');
+    assert.deepEqual(connected, [{ owner: 's1.2', upstream: 'ws://127.0.0.1:1/devtools/browser/x' }]);
+  });
+});
