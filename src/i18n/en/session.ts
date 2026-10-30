@@ -209,6 +209,8 @@ export const session: Dictionary['session'] = {
     driving: (name) => `${name} is driving`,
     lanes: 'Browsers',
     tester: (lane) => `Tester ${lane}`,
+    shared: 'Shared',
+    sharedTitle: 'The browser shared by every session, signed in to your own accounts: sign in here once, every session then uses it',
     format: 'Screen',
     desktop: 'Computer',
     desktopTitle: 'Computer screen: the page at 1920 × 1080',
