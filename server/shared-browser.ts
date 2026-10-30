@@ -15,7 +15,9 @@ import { asArray, asJson, asString } from './json.ts';
 /** The folder of the shared browser's profile under OFFICE_DIR/browsers: no session id starts with "_". */
 export const SHARED_PROFILE = '_shared';
 /** The sites whose logins the shared browser keeps, with their subdomains: what an owner leaves on any other is cleared. */
-export const KEPT_SITES: readonly string[] = ['google.com'];
+export const KEPT_SITES: readonly string[] = ['google.com', 'youtube.com'];
+/** The local Googles (google.fr, google.co.uk…): a Google sign-in sets its cookies there and on YouTube too. */
+const LOCAL_GOOGLE = /(?:^|\.)google\.(?:com?\.)?[a-z]{2}$/;
 
 const NONCE = /#os-([0-9a-f]{16})$/;
 const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ''; } };
@@ -36,9 +38,9 @@ export function writeSites(file: string, hosts: readonly string[]): Promise<void
 export interface TargetInfo { targetId: string; type?: string; url?: string; openerId?: string }
 
 /** Whether `host` (or a cookie's domain, its leading dot aside) is one of the kept sites or under one. */
-export function isKept(host: string, kept: readonly string[] = KEPT_SITES): boolean {
+export function isKept(host: string): boolean {
   const name = host.replace(/^\./, '').toLowerCase();
-  return kept.some((site) => name === site || name.endsWith(`.${site}`));
+  return LOCAL_GOOGLE.test(name) || KEPT_SITES.some((site) => name === site || name.endsWith(`.${site}`));
 }
 
 const under = (host: string, domain: string) => {
@@ -47,9 +49,9 @@ const under = (host: string, domain: string) => {
 };
 
 /** The cookies to delete: those sent to one of the `sites` (origins), or with no `sites` every one, the kept sites' aside. */
-export function cookiesToClear<T extends { domain: string }>(cookies: T[], sites?: readonly string[], kept: readonly string[] = KEPT_SITES): T[] {
+export function cookiesToClear<T extends { domain: string }>(cookies: T[], sites?: readonly string[]): T[] {
   const hosts = sites?.map(hostOf);
-  return cookies.filter((cookie) => !isKept(cookie.domain, kept) && (!hosts || hosts.some((host) => under(host, cookie.domain))));
+  return cookies.filter((cookie) => !isKept(cookie.domain) && (!hosts || hosts.some((host) => under(host, cookie.domain))));
 }
 
 /** Who owns which tab of the shared browser, and the sites each owner's tabs went to. An owner is a browserId. */
@@ -119,12 +121,22 @@ export type CdpMessage = Record<string, unknown>;
 const OWN_CALLS = 1_000_000_000;
 /**
  * Refused on any session: what reads or clears the cookies of every site, or a kept one's (copying the login out would
- * sign the user out, clearing it would too), and what makes the shared Chrome crash for everybody.
+ * sign the user out, clearing it would too), what makes the shared Chrome crash for everybody, and what Chrome holds
+ * once for every owner: the permissions of its one profile, and contexts (one of its own has none of the logins, and
+ * would be another owner's to dispose of).
  */
 const BLOCKED = new Set([
   'Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.getCookies', 'Network.clearBrowserCookies',
-  'Storage.clearDataForOrigin', 'Storage.clearDataForStorageKey', 'Browser.crash', 'Browser.crashGpuProcess',
+  'Storage.clearDataForOrigin', 'Storage.clearDataForStorageKey', 'Browser.crash', 'Browser.crashGpuProcess', 'Page.crash',
+  'Browser.grantPermissions', 'Browser.resetPermissions', 'Browser.setPermission', 'Target.createBrowserContext', 'Target.disposeBrowserContext',
 ]);
+/**
+ * Answered here without reaching Chrome: closing the browser of everybody, and the one download folder that each owner's
+ * Playwright sets to its own when it connects (the last one would get every download). Downloads stay refused.
+ */
+const ANSWERED = new Set(['Browser.close', 'Browser.setDownloadBehavior', 'Page.setDownloadBehavior']);
+/** Where a tab may go: the web (chrome:// pages can crash the whole browser, file:// reads the disk). */
+const NAVIGABLE = /^(?:https?|about|data):/i;
 /** The cookie writes, refused when they touch a kept site. */
 const COOKIE_WRITES = new Set(['Network.deleteCookies', 'Network.setCookie', 'Network.setCookies', 'Storage.setCookies']);
 /** The calls aimed at one target, refused for a target of another owner. */
@@ -183,7 +195,8 @@ export class SharedCdpFilter {
     if (typeof method !== 'string') return { client: refusal(id, 'Not a command', session) };
     if (BLOCKED.has(method) || touchesKept(method, params)) return { client: refusal(id, `${method} is not allowed in the shared browser`, session) };
     if (session !== undefined && !this.held.has(session) && !this.browserSessions.has(session)) return { client: refusal(id, 'Session with given id not found.', session) };
-    if (method === 'Browser.close') return { client: { id, result: {}, ...(session !== undefined ? { sessionId: session } : {}) }, close: true };
+    if (ANSWERED.has(method)) return { client: { id, result: {}, ...(session !== undefined ? { sessionId: session } : {}) }, ...(method === 'Browser.close' ? { close: true as const } : {}) };
+    if (method === 'Page.navigate' && !NAVIGABLE.test(asString(params.url))) return { client: refusal(id, 'Only web pages open in the shared browser', session) };
     if (method === 'Target.createTarget') {
       if (!blank(params.url)) return { client: refusal(id, 'Only about:blank opens in the shared browser', session) };
       // in a window of its own: a background tab of a shared window gets no animation frame, so its owner could not click in it
@@ -270,9 +283,11 @@ export class SharedCdpFilter {
 /**
  * One owner's Playwright connected to the shared Chrome through Open Space (`client`, its WebSocket on Open Space's server),
  * every message going through the owner's filter. Either side closing closes the other: a Playwright whose browser went
- * away connects again at its next call.
+ * away connects again at its next call. False, and nothing relayed, for a client already gone.
  */
-export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: string, tabs: SharedTabs) {
+export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: string, tabs: SharedTabs): boolean {
+  // gone while the shared Chrome started (see Browsers.relay): its close already happened, nothing would end the relay
+  if (client.readyState !== WebSocket.OPEN) return false;
   const filter = new SharedCdpFilter(owner, tabs);
   const upstream = new WebSocket(upstreamUrl, { perMessageDeflate: false, maxPayload: 64_000_000 });
   const waiting: string[] = [];
@@ -313,4 +328,5 @@ export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: st
   upstream.on('close', end);
   client.on('error', end);
   upstream.on('error', end);
+  return true;
 }

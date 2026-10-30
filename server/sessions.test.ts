@@ -233,6 +233,28 @@ describe('the shared browser', () => {
     await second.manager.shutdown();
   });
 
+  it('a conversation /clear starts is told again, with its next plain message', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, shared);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    const turnOf = (conversation: string) => {
+      emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
+      emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    };
+    turnOf(id);
+    manager.send(id, 'encore');
+    assert.equal(processes[0].sent.at(-1), 'encore', 'the same conversation: its system prompt has the rules');
+    turnOf(id);
+    manager.send(id, '/clear');
+    turnOf('new-conversation');
+    assert.equal(find(id).toldSharedBrowser, undefined);
+    manager.send(id, 'tu vois GTM ?');
+    assert.match(processes[0].sent.at(-1)!, /navigateur partagé[\s\S]*tu vois GTM \?$/);
+    assert.equal(find(id).toldSharedBrowser, true);
+    await manager.shutdown();
+  });
+
   it('a session without it is never told', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { browserMcp: () => ({ mcpConfig: browserMcpConfig('http://h/cdp', {}) }) });
     await manager.init();

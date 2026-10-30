@@ -343,9 +343,10 @@ export class Browsers {
   relay(client: WebSocket, upstreamUrl: string, owner: string) {
     const shared = this.shared;
     if (!shared) { client.close(); return; }
+    // counted once relayed only: a client gone while the shared Chrome started would keep it from idling out
+    if (!relaySharedCdp(client, upstreamUrl, owner, this.sharedTabs)) return;
     shared.relays++;
     client.once('close', () => { shared.relays--; shared.idleSince = this.now(); });
-    relaySharedCdp(client, upstreamUrl, owner, this.sharedTabs);
   }
 
   /** An owner is gone (a tester done, a session rested or forgotten): its tabs close, and what it left on other sites than the kept ones goes. */
@@ -379,19 +380,20 @@ export class Browsers {
     await this.clearStorage(chrome, storage);
   }
 
-  /** The data of `origins` (local storage, IndexedDB…), cleared through a tab's session: Chrome 156 answers "Internal error" at the browser level. */
+  /**
+   * The data of `origins` (local storage, IndexedDB…), cleared through a tab's session: Chrome 156 answers "Internal error"
+   * at the browser level. A blank tab of its own, closed after: the owner's tabs are closing when it goes (releaseOwner).
+   */
   private async clearStorage(chrome: Chrome, origins: string[]) {
     if (!origins.length) return;
-    const { targetInfos } = await chrome.cdp.send('Target.getTargets');
-    const page = asArray(targetInfos).map(asJson).find((info) => info.type === 'page');
-    const targetId = page ? String(page.targetId) : String((await chrome.cdp.send('Target.createTarget', { url: 'about:blank' })).targetId);
-    const { sessionId } = await chrome.cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    const targetId = String((await chrome.cdp.send('Target.createTarget', { url: 'about:blank' })).targetId);
     try {
+      const { sessionId } = await chrome.cdp.send('Target.attachToTarget', { targetId, flatten: true });
       for (const origin of origins) {
         await chrome.cdp.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' }, String(sessionId)).catch((error) => this.deps.log(`cannot clear ${origin} in the shared browser`, error));
       }
     } finally {
-      await chrome.cdp.send('Target.detachFromTarget', { sessionId }).catch(() => {});
+      await chrome.cdp.send('Target.closeTarget', { targetId }).catch(() => {});
     }
   }
 
@@ -476,6 +478,8 @@ export class Browsers {
     const shared: Shared = { chrome, tabs: new Map(), relays: 0, idleSince: this.now() };
     this.shared = shared;
     await chrome.cdp.send('Target.setDiscoverTargets', { discover: true });
+    // one download folder for every owner: none, the shared browser is for reading (each owner's setting is answered by its filter)
+    await chrome.cdp.send('Browser.setDownloadBehavior', { behavior: 'deny' });
     // logins to apps left by an Open Space that stopped, or a Chrome that idled out, before their owner went: only the
     // kept accounts last (every other cookie, and the data of the sites visited, in local storage too)
     for (const site of await readSites(this.sitesFile)) this.sites.add(site);

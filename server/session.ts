@@ -351,7 +351,7 @@ export class Session {
       if (!this.info.resumable && !this.info.forkOf) {
         this.info.introducedAs = this.info.name;
         this.info.toldPlace = this.info.cwd;
-        if (this.deps.sharedBrowser?.()) this.info.toldSharedBrowser = true;
+        this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
       }
       this.startProcess();
       this.info.error = undefined;
@@ -464,6 +464,8 @@ export class Session {
     if (init.conversationId && init.conversationId !== this.conversationId) {
       this.info.conversationId = init.conversationId === this.info.id ? undefined : init.conversationId;
       this.info.context = undefined;
+      // the rules of the shared browser went with the old conversation when they were told in a message: told again
+      this.info.toldSharedBrowser = undefined;
       this.record({ k: 'cleared' });
       this.cleared = true;
     }
