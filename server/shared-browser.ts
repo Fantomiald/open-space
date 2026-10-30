@@ -106,13 +106,14 @@ export type CdpMessage = Record<string, unknown>;
 /** The ids of the filter's own calls to Chrome (letting go of a hidden target), far above Playwright's. */
 const OWN_CALLS = 1_000_000_000;
 /** What would reach every site's cookies at once: reading them would copy the login out, clearing them sign the user out. */
-const BLOCKED = new Set(['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin', 'Target.attachToBrowserTarget']);
+const BLOCKED = new Set(['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin']);
 /** The browser-level calls aimed at one target, refused for a target of another owner. */
 const AIMED = new Set(['Target.attachToTarget', 'Target.closeTarget', 'Target.activateTarget', 'Target.getTargetInfo', 'Target.detachFromTarget', 'Target.exposeDevToolsProtocol']);
 const DISCOVERED = new Set(['Target.targetCreated', 'Target.targetInfoChanged']);
 const GONE = new Set(['Target.targetDestroyed', 'Target.targetCrashed']);
 
-const refusal = (id: unknown, message: string): CdpMessage => ({ id, error: { code: -32000, message } });
+/** An answer of the filter itself, on the session it was asked on (Playwright would take it for another one's otherwise). */
+const refusal = (id: unknown, message: string, session?: string): CdpMessage => ({ id, error: { code: -32000, message }, ...(session !== undefined ? { sessionId: session } : {}) });
 const blank = (url: unknown) => url === undefined || url === '' || url === 'about:blank';
 
 /**
@@ -127,6 +128,9 @@ export class SharedCdpFilter {
   private readonly held = new Set<string>();
   /** the sessions of others' targets that Chrome attached this connection to, until they are let go of */
   private readonly hidden = new Set<string>();
+  /** sessions on the browser itself (Target.attachToBrowserTarget, behind Playwright's newCDPSession): held to the browser's rules */
+  private readonly browserSessions = new Set<string>();
+  private readonly opening = new Set<unknown>();
   /** the targets this owner was shown, so that it hears when they go even once they are forgotten */
   private readonly shown = new Set<string>();
   private readonly listing = new Set<unknown>();
@@ -143,20 +147,22 @@ export class SharedCdpFilter {
     const { id, method } = message;
     const params = asJson(message.params);
     const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
-    if (typeof method !== 'string') return { client: refusal(id, 'Not a command') };
-    if (BLOCKED.has(method)) return { client: refusal(id, `${method} is not allowed in the shared browser`) };
-    if (session !== undefined) return this.held.has(session) ? { upstream: message } : { client: refusal(id, 'Session with given id not found.') };
-    if (method === 'Browser.close') return { client: { id, result: {} }, close: true };
+    if (typeof method !== 'string') return { client: refusal(id, 'Not a command', session) };
+    if (BLOCKED.has(method)) return { client: refusal(id, `${method} is not allowed in the shared browser`, session) };
+    if (session !== undefined && !this.browserSessions.has(session)) return this.held.has(session) ? { upstream: message } : { client: refusal(id, 'Session with given id not found.', session) };
+    if (method === 'Browser.close') return { client: { id, result: {}, ...(session !== undefined ? { sessionId: session } : {}) }, close: true };
     if (method === 'Target.createTarget') {
-      if (!blank(params.url)) return { client: refusal(id, 'Only about:blank opens in the shared browser') };
-      return { upstream: { ...message, params: { ...params, url: this.tabs.expect(this.owner) } } };
+      if (!blank(params.url)) return { client: refusal(id, 'Only about:blank opens in the shared browser', session) };
+      // in a window of its own: a background tab of a shared window gets no animation frame, so its owner could not click in it
+      return { upstream: { ...message, params: { ...params, url: this.tabs.expect(this.owner), newWindow: true } } };
     }
     if (AIMED.has(method)) {
-      if (typeof params.targetId === 'string' && this.tabs.ownerOf(params.targetId) !== this.owner) return { client: refusal(id, 'No target with given id found') };
-      if (typeof params.sessionId === 'string' && !this.held.has(params.sessionId)) return { client: refusal(id, 'Session with given id not found.') };
+      if (typeof params.targetId === 'string' && this.tabs.ownerOf(params.targetId) !== this.owner) return { client: refusal(id, 'No target with given id found', session) };
+      if (typeof params.sessionId === 'string' && !this.held.has(params.sessionId)) return { client: refusal(id, 'Session with given id not found.', session) };
     }
     if (method === 'Target.getTargets') this.listing.add(id);
     if (method === 'Target.attachToTarget') this.attaching.add(id);
+    if (method === 'Target.attachToBrowserTarget') this.opening.add(id);
     return { upstream: message };
   }
 
@@ -166,7 +172,7 @@ export class SharedCdpFilter {
     const method = asString(message.method);
     const params = asJson(message.params);
     const session = typeof message.sessionId === 'string' ? message.sessionId : undefined;
-    if (session !== undefined) {
+    if (session !== undefined && !this.browserSessions.has(session)) {
       if (!this.held.has(session)) return { upstream: [] };
       // a frame or a worker of a held tab is held with it
       if (method === 'Target.attachedToTarget') this.held.add(asString(params.sessionId));
@@ -176,6 +182,7 @@ export class SharedCdpFilter {
     if (method === 'Target.attachedToTarget') return this.attached(message, params);
     if (method === 'Target.detachedFromTarget') {
       const detached = asString(params.sessionId);
+      if (this.browserSessions.delete(detached)) return { client: message, upstream: [] };
       if (this.hidden.delete(detached) || !this.held.delete(detached)) return { upstream: [] };
       return { client: message, upstream: [] };
     }
@@ -193,6 +200,11 @@ export class SharedCdpFilter {
 
   private attached(message: CdpMessage, params: Record<string, unknown>): { client?: CdpMessage; upstream: CdpMessage[] } {
     const session = asString(params.sessionId);
+    // the browser itself is only ever attached to on this connection's request (Target.attachToBrowserTarget)
+    if (asJson(params.targetInfo).type === 'browser') {
+      this.browserSessions.add(session);
+      return { client: message, upstream: [] };
+    }
     if (this.mine(asJson(params.targetInfo))) {
       this.held.add(session);
       return { client: message, upstream: [] };
@@ -208,6 +220,7 @@ export class SharedCdpFilter {
     if (typeof message.id === 'number' && message.id > OWN_CALLS) return { upstream: [] };
     const result = asJson(message.result);
     if (this.attaching.delete(message.id) && typeof result.sessionId === 'string') this.held.add(result.sessionId);
+    if (this.opening.delete(message.id) && typeof result.sessionId === 'string') this.browserSessions.add(result.sessionId);
     if (this.listing.delete(message.id)) {
       const targetInfos = asArray(result.targetInfos).filter((info) => this.mine(asJson(info)));
       return { client: { ...message, result: { ...result, targetInfos } }, upstream: [] };

@@ -76,6 +76,8 @@ describe('the shared browser seen by one owner', () => {
     const filter = new SharedCdpFilter('s1', new SharedTabs());
     const url = created(filter);
     assert.match(url, /#os-/);
+    // in a window of its own: a background tab of a shared window gets no animation frame, so Playwright could not click in it
+    assert.equal(asJson(filter.fromClient({ id: 2, method: 'Target.createTarget', params: { url: 'about:blank' } }).upstream?.params).newWindow, true);
     const event = attached('S', 't', url);
     assert.deepEqual(filter.fromUpstream(event), { client: event, upstream: [] });
   });
@@ -141,11 +143,30 @@ describe('the shared browser seen by one owner', () => {
     assert.ok(refused({ id: 2, method: 'Target.closeTarget', params: { targetId: 'other' } }));
     assert.ok(refused({ id: 3, method: 'Target.attachToTarget', params: { targetId: 'other', flatten: true } }));
     assert.ok(refused({ id: 4, method: 'Target.createTarget', params: { url: 'https://example.com' } }));
-    assert.ok(refused({ id: 5, method: 'Target.attachToBrowserTarget', params: {} }));
     for (const method of ['Storage.getCookies', 'Storage.clearCookies', 'Network.getAllCookies', 'Network.clearBrowserCookies', 'Storage.clearDataForOrigin']) {
       assert.ok(refused({ id: 6, method, params: {} }), method);
     }
     assert.deepEqual(filter.fromClient({ id: 7, method: 'Browser.close', params: {} }), { client: { id: 7, result: {} }, close: true });
+  });
+
+  it('holds a session on the browser itself to the same rules (Playwright’s newCDPSession)', () => {
+    const tabs = new SharedTabs();
+    const filter = new SharedCdpFilter('s1', tabs), other = new SharedCdpFilter('s2', tabs);
+    assert.ok(filter.fromClient({ id: 1, method: 'Target.attachToBrowserTarget', params: {} }).upstream);
+    // Chrome tells of the session before it answers, as a target of type "browser": it must not be let go of
+    const told: CdpMessage = { method: 'Target.attachedToTarget', params: { sessionId: 'B', targetInfo: { targetId: 'br', type: 'browser', url: '' }, waitingForDebugger: false } };
+    assert.deepEqual(filter.fromUpstream(told), { client: told, upstream: [] });
+    filter.fromUpstream({ id: 1, result: { sessionId: 'B' } });
+    const onBrowser = (message: CdpMessage) => filter.fromClient({ ...message, sessionId: 'B' });
+    // an answer goes back on the session it was asked on, or Playwright takes it for another
+    assert.equal(onBrowser({ id: 2, method: 'Target.closeTarget', params: { targetId: 'other' } }).client?.sessionId, 'B');
+    assert.ok(onBrowser({ id: 2, method: 'Target.closeTarget', params: { targetId: 'other' } }).client?.error);
+    assert.ok(onBrowser({ id: 3, method: 'Storage.getCookies', params: {} }).client?.error);
+    assert.match(String(asJson(onBrowser({ id: 4, method: 'Target.createTarget', params: { url: 'about:blank' } }).upstream?.params).url), /#os-/);
+    assert.deepEqual(onBrowser({ id: 5, method: 'Browser.close', params: {} }), { client: { id: 5, result: {}, sessionId: 'B' }, close: true });
+    const theirs = filter.fromUpstream({ ...attached('S', 't', created(other)), sessionId: 'B' });
+    assert.equal(theirs.client, undefined);
+    assert.equal(theirs.upstream.length, 2);
   });
 
   it('lists only the owner’s targets', () => {

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, shownFormat } from '../shared/browser.ts';
-import { browserKey, browserMcpConfig, Browsers, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -157,5 +157,14 @@ describe('the profiles swept', () => {
     await new Browsers({ chrome: null, folder, sessionAlive: () => false, onState: () => {}, log: () => {} }).sweepProfiles(new Set(['s1']));
     assert.deepEqual(['_shared', 'gone', 's1'].map((name) => existsSync(path.join(folder, name))), [true, false, true]);
     rmSync(folder, { recursive: true, force: true });
+  });
+});
+
+describe('the Chrome launched', () => {
+  it('keeps every window of the shared browser drawn: each owner works in a window of its own, side by side', () => {
+    assert.ok(chromeArgs('/p/_shared', true).includes('--disable-backgrounding-occluded-windows'));
+    assert.ok(!chromeArgs('/p/s1', false).includes('--disable-backgrounding-occluded-windows'));
+    assert.ok(chromeArgs('/p/s1', false).includes('--user-data-dir=/p/s1'));
+    assert.equal(chromeArgs('/p/s1', false).at(-1), 'about:blank');
   });
 });
