@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { addressOf, MODIFIERS, shownFormat } from '../shared/browser.ts';
+import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
 import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
@@ -166,5 +166,13 @@ describe('the Chrome launched', () => {
     assert.ok(!chromeArgs('/p/s1', false).includes('--disable-backgrounding-occluded-windows'));
     assert.ok(chromeArgs('/p/s1', false).includes('--user-data-dir=/p/s1'));
     assert.equal(chromeArgs('/p/s1', false).at(-1), 'about:blank');
+  });
+});
+
+describe('the browser a key opens', () => {
+  it('is never the shared one, nor a tester that does not exist', async () => {
+    const browsers = new Browsers({ chrome: null, folder: os.tmpdir(), sessionAlive: () => false, onState: () => {}, log: () => {} });
+    await assert.rejects(browsers.version('s1', SHARED_LANE), /no such browser/);
+    await assert.rejects(browsers.version('s1', TESTERS + 1), /no such browser/);
   });
 });

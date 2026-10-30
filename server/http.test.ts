@@ -312,6 +312,14 @@ describe('the shared browser’s endpoints', () => {
     assert.equal((await version(key('s1'), { Origin: 'http://evil.example' })).status, 404);
   });
 
+  it('opens the lanes of testers that exist only, so that no key reaches the shared Chrome past its filter', async () => {
+    const own = (lane: number) => fetch(`http://127.0.0.1:${sharedPort}/browser/s1/cdp/${ownKey('s1')}/lane/${lane}/json/version`);
+    assert.equal((await own(4)).status, 200);
+    assert.equal((await own(5)).status, 404);
+    assert.equal((await own(99)).status, 404);
+    assert.equal((await version(`${key('s1')}/lane/5`)).status, 404);
+  });
+
   it('relays an owner with its key, and refuses one without', async () => {
     const open = (at: string, origin?: string) => new Promise<'open' | 'rejected'>((resolve) => {
       const socket = new WebSocket(`ws://127.0.0.1:${sharedPort}/browser/s1/shared/${at}/devtools`, origin ? { origin } : {});
@@ -320,6 +328,7 @@ describe('the shared browser’s endpoints', () => {
     });
     assert.equal(await open(`${key('s1')}/lane/2`), 'open');
     assert.equal(await open('wrong'), 'rejected');
+    assert.equal(await open(`${key('s1')}/lane/99`), 'rejected');
     assert.equal(await open(key('s1'), 'http://evil.example'), 'rejected');
     assert.deepEqual(connected, [{ owner: 's1.2', upstream: 'ws://127.0.0.1:1/devtools/browser/x' }]);
   });
