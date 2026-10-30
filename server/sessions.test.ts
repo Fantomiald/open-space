@@ -11,6 +11,7 @@ import { projectFolder } from './conversations.ts';
 import { ATTACHMENT_NAME } from './attachments.ts';
 import { saveUpload } from './uploads.ts';
 import { SessionManager, type SessionManagerDeps } from './sessions.ts';
+import { browserMcpConfig } from './browser.ts';
 
 /** A scripted stand-in for the claude process: the tests feed it captured lines and watch what the session writes back. */
 class FakeProcess implements ProcessHandle {
@@ -193,6 +194,53 @@ describe('names', () => {
     turn();
     manager.send(id, 'merci');
     assert.equal(processes[0].sent.at(-1), 'merci');
+    await manager.shutdown();
+  });
+});
+
+describe('the shared browser', () => {
+  /** the --mcp-config Open Space gives: the shared browser too, unless the session is restricted */
+  const shared: Partial<SessionManagerDeps> = { browserMcp: (_id, untrusted) => ({ mcpConfig: browserMcpConfig('http://h/cdp', {}, untrusted ? undefined : 'http://h/shared') }) };
+  const turn = (process: { feed: (name: string) => void }) => process.feed('simple-turn');
+
+  it('a new conversation learns its rules from the system prompt, never from a note', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, shared);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    assert.match(String(processes[0].launch.mcpConfig), /shared-browser/);
+    assert.deepEqual(processes[0].sent, ['bonjour']);
+    assert.equal(find(id).toldSharedBrowser, true);
+    await manager.shutdown();
+  });
+
+  it('a conversation started before it is told once, with its next plain message', async () => {
+    const dataDir = path.join(base, `data-shared-${++counter}`);
+    const first = setup({}, dataDir);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(first.processes[0]);
+    await first.manager.shutdown();
+    const second = setup({}, dataDir, undefined, undefined, undefined, shared);
+    await second.manager.init();
+    second.manager.send(id, '/kit:status');
+    assert.equal(second.processes[0].sent.at(-1), '/kit:status');
+    turn(second.processes[0]);
+    second.manager.send(id, 'tu vois GTM ?');
+    assert.match(second.processes[0].sent.at(-1)!, /navigateur partagé[\s\S]*tu vois GTM \?$/);
+    turn(second.processes[0]);
+    second.manager.send(id, 'merci');
+    assert.equal(second.processes[0].sent.at(-1), 'merci');
+    await second.manager.shutdown();
+  });
+
+  it('a session without it is never told', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { browserMcp: () => ({ mcpConfig: browserMcpConfig('http://h/cdp', {}) }) });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0]);
+    manager.send(id, 'encore');
+    assert.equal(processes[0].sent.at(-1), 'encore');
+    assert.equal(find(id).toldSharedBrowser, undefined);
     await manager.shutdown();
   });
 });

@@ -336,6 +336,8 @@ export interface SessionInfo {
   worktree?: WorktreeInfo;
   /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
   toldPlace?: string;
+  /** its conversation knows the rules of the shared browser (system prompt or Session.sharedBrowserNote) */
+  toldSharedBrowser?: true;
 }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }

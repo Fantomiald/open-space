@@ -11,6 +11,7 @@ import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, 
 import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
+import { hasSharedBrowser } from './browser.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
 import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
@@ -262,6 +263,7 @@ export class SessionManager {
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
+      sharedBrowser: () => hasSharedBrowser(this.deps.browserMcp?.(info.id, !!info.untrusted).mcpConfig),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       peerName: (address) => this.peerName(address),
@@ -831,7 +833,7 @@ export class SessionManager {
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
-      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context,
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}),
       ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tag ? { tag: source.tag } : {}),
     });
     const log = await this.openLog(info.id);
@@ -1028,6 +1030,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     queued: parseQueue(raw.queued),
     worktree: parseWorktree(raw.worktree),
     toldPlace: asString(raw.toldPlace) || undefined,
+    toldSharedBrowser: raw.toldSharedBrowser === true || undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,

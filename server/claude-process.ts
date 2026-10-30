@@ -12,6 +12,7 @@ import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelC
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
+import { hasSharedBrowser } from './browser.ts';
 
 /** Runs what npm's Claude shim points to, keeping JSON arguments out of cmd.exe: the native claude.exe, or cli.js through Node for older versions. */
 export function claudeCommand(file: string, args: string[]): [string, string[]] {
@@ -171,7 +172,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.agents) args.push('--agents', options.agents);
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig)));
   return args;
 }
 
@@ -180,8 +181,8 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false): string {
-  const identity = st.prompt.identity(name, user.trim(), note.trim(), browser);
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false): string {
+  const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared);
   return worktree ? `${identity}\n\n${st.prompt.worktree(worktree)}` : identity;
 }
 
@@ -193,6 +194,9 @@ export const placeNote = (cwd: string, worktree: LaunchOptions['worktree'] | und
 
 /** Told in the next message when a session was renamed, or started before sessions had names. */
 export const renameNote = (name: string) => st.prompt.rename(name);
+
+/** Told once to a conversation started before it had the shared browser: what it may do with it (see identityPrompt). */
+export const sharedBrowserNote = (user = '') => st.prompt.sharedBrowserNote(user.trim());
 
 /** What Claude Code offers in a folder: its slash commands (the folder's own included) and the models. */
 export interface Catalog { commands: SlashCommand[]; models: ModelChoice[] }

@@ -15,8 +15,10 @@ export const en: ServerDictionary = {
     tester: {
       description: 'Tests a flow in a browser of its own, shown live in Open Space. Launch it with the flow, the address and what should happen. For several flows at once, a browser-tester of a different number per flow.',
       prompt: 'You test a web flow in your own browser (the tester-browser tools), which the user watches live. Go through the flow you are given as a real visitor would, without changing any code. Watch the console and what shows at each step, take a screenshot of the key steps. Report briefly: what works, then each problem with how to reproduce it.',
+      shared: " Your shared-browser tools drive the browser shared by every session, signed in to the user's own accounts: use them only for those accounts (for example to check Google Tag Manager or its preview), read and preview only, without publishing, saving or changing anything. On a sign-in page or a password or code prompt, stop and say so in your report; never type a password.",
     },
-    identity: (name: string, user: string, note: string, browser: boolean) => {
+    sharedBrowser: (who: string) => `The shared-browser tools drive a second browser, shared by every session, where ${who} signed in to their own accounts (Google Tag Manager, Google Analytics...). Use it only for those accounts, never to test your app or to sign in as a test user: that goes in your own browser. Read and preview only: never publish, save, submit, delete or change anything there unless ${who} asked for that change in this session. If it shows a sign-in page or asks for a password or a code, stop and ask ${who} to sign in from the shared browser in Open Space's browser panel; never type a password. Do not let other sub-agents use it, except browser-tester-1 to -4.`,
+    identity: (name: string, user: string, note: string, browser: boolean, shared = false) => {
       const who = user || 'the user';
       return `In ${user ? `${user}'s` : "the user's"} Open Space, you are the agent "${name}". If you are asked your name or who you are, answer "${name}" ` +
         `(you are still Claude, Anthropic's model). Several agents work in parallel, each under their own name. ` +
@@ -25,6 +27,7 @@ export const en: ServerDictionary = {
         `This instruction is about your messages, not about the quality or completeness of the work.` +
         ` Open Space shows in the thread the pictures you send with SendUserFile and the pages you publish with Artifact: when you change something visible (a page, a screen) and can take a screenshot of it, send it.` +
         (browser ? ` Your browser (the Playwright tools) is shown live in Open Space, and ${user || 'the user'} can click in it: use it to test what you build. To test several flows at once, launch the sub-agents browser-tester-1 to browser-tester-4 in parallel, a different number per flow: each has a browser of its own, shown too. When you are done with it, close your browser (browser_close): otherwise it stays on screen.` : '') +
+        (shared ? ` ${en.prompt.sharedBrowser(who)}` : '') +
         (note ? `\n\nWhat ${who} asks of all their agents: ${note}` : '');
     },
     idleCompact: '/compact Keep what is needed to go on without explaining anything again: where things stand (branch, uncommitted files), each decision and why, what the user asked for or refused in their own words, what is left to do, the key files and the pitfalls already met.',
@@ -32,6 +35,7 @@ export const en: ServerDictionary = {
     mention: (mention: string, name: string, folder: string) => `@${mention}: the Open Space session "${name}"${mention === name ? '' : `, tagged "${mention}"`} (folder ${folder}). To write to it: SendMessage with to: "${name}".`,
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
+    sharedBrowserNote: (user: string) => `(Note from Open Space: you now have a shared browser. ${en.prompt.sharedBrowser(user || 'the user')})\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
       'in the conversation, without using any tool. Your answer does not enter the main conversation.',
     worktree: (worktree: Place) => worktreeNote(worktree),

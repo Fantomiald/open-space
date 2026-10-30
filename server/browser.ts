@@ -81,6 +81,12 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
 /** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */
 export const SHARED_SERVER = 'shared-browser';
 
+/** Whether a session's --mcp-config gives it the shared browser. */
+export function hasSharedBrowser(mcpConfig: string | undefined): boolean {
+  if (!mcpConfig) return false;
+  try { return SHARED_SERVER in asJson(asJson(JSON.parse(mcpConfig)).mcpServers); } catch { return false; }
+}
+
 /**
  * The --mcp-config of a session: its Playwright server (same name as the user's, so it takes its place) on its browser,
  * and with `sharedEndpoint` a second one on the shared browser.
@@ -104,7 +110,7 @@ export const testerLane = (type: string) => Number(/^browser-tester-(\d+)$/.exec
  * Code runs a single server for every run of a same agent, which would have them share a tab. The server has a name
  * of its own, and the session's Playwright tools are kept from it.
  */
-export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string }, sharedEndpoint?: string): string {
+export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string): string {
   return JSON.stringify(Object.fromEntries(Array.from({ length: TESTERS }, (_, at) => {
     const lane = at + 1;
     const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers);
@@ -114,7 +120,7 @@ export function testerAgents(endpoint: string, userServers: Record<string, unkno
     const shared = `tester-shared-${lane}`;
     return [testerAgent(lane), {
       description: words.description,
-      prompt: words.prompt.replaceAll('tester-browser', own).replaceAll(SHARED_SERVER, shared),
+      prompt: `${words.prompt}${words.shared ?? ''}`.replaceAll('tester-browser', own).replaceAll(SHARED_SERVER, shared),
       mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers).server }],
       disallowedTools: [`mcp__${name}`, `mcp__${SHARED_SERVER}`],
     }];
