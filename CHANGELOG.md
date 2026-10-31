@@ -1,5 +1,11 @@
 # Versions
 
+## 1.24.0
+
+- Clés sans fuite : `/secret` (ou « Clés » dans le menu ⋯) ouvre une box où tu colles le nom et la valeur d'une clé. Un bloc `NOM=valeur` de plusieurs lignes remplit tout d'un coup. L'agent ne voit jamais la valeur, seulement le nom.
+- Quand un agent a besoin d'une clé, il la demande lui-même et la box s'ouvre comme une question. Il peut ensuite l'écrire dans un `.env`, lancer une commande avec (la valeur est masquée dans ce qu'elle affiche) ou la poser en cookie dans son navigateur pour un token de session.
+- Les clés restent en mémoire seulement : 12 h au plus, effacées quand la session s'éteint ou qu'Open Space s'arrête, jamais écrites dans le journal.
+
 ## 1.23.0
 
 - Navigateur partagé, grâce à JB : un onglet « Partagé » dans le navigateur de chaque session ouvre un Chrome commun où tu te connectes une fois à tes propres comptes (Google Tag Manager, Analytics…). La connexion tient après un redémarrage, et toutes les sessions et leurs testeurs s'en servent sans te redemander mot de passe ni 2FA.
