@@ -10,6 +10,7 @@ import { asJson } from './json.ts';
 import { projectFolder } from './conversations.ts';
 import { ATTACHMENT_NAME } from './attachments.ts';
 import { saveUpload } from './uploads.ts';
+import { SecretStore } from './secrets.ts';
 import { SessionManager, type SessionManagerDeps } from './sessions.ts';
 import { browserMcpConfig } from './browser.ts';
 
@@ -983,6 +984,52 @@ describe('AskUserQuestion', () => {
   it('refuses empty answers and a reply to a yes/no request', async () => {
     const { id, manager } = await toQuestion();
     assert.throws(() => manager.reply(id, 'q1', { 'Which colour?': '  ' }), /Choisis une réponse/);
+    await manager.shutdown();
+  });
+});
+
+describe('keys asked with os-secret', () => {
+  async function toAsk() {
+    const changed: string[] = [];
+    const store = new SecretStore((id) => { changed.push(id); });
+    const context = setup({}, undefined, undefined, undefined, undefined, { secrets: { store, env: (id) => ({ OPEN_SPACE_SECRETS: `http://x/secrets/${id}/k` }) } });
+    await context.manager.init();
+    const { id } = await context.manager.create({ cwd: projectA(), text: 'deploy' });
+    const fake = context.processes[0];
+    fake.feed('simple-turn', 0, 3);
+    return { ...context, id, fake, store, changed };
+  }
+
+  it('gives the session its address, waits for the user, then goes on with the names given only', async () => {
+    const { find, id, fake, manager, store, attention, messages } = await toAsk();
+    assert.equal(fake.launch.env?.OPEN_SPACE_SECRETS, `http://x/secrets/${id}/k`);
+    const asked = manager.askSecrets(id, ['GEMINI_KEY'], 'the Gemini API');
+    const prompt = find(id).permissions[0];
+    assert.equal(find(id).state, 'perm');
+    assert.deepEqual(prompt.secrets, ['GEMINI_KEY']);
+    assert.deepEqual(attention.at(-1), ['question', id]);
+    manager.giveSecrets(id, prompt.requestId, [{ name: 'GEMINI_KEY', value: 'gm-123' }]);
+    assert.deepEqual(await asked, ['GEMINI_KEY']);
+    assert.equal(find(id).state, 'work');
+    assert.deepEqual(find(id).secrets, ['GEMINI_KEY']);
+    assert.equal(store.get(id, 'GEMINI_KEY'), 'gm-123');
+    assert.ok(!JSON.stringify(messages).includes('gm-123'), 'the value never goes to the page nor the thread');
+    await manager.shutdown();
+  });
+
+  it('says no when refused or when the turn ends, refuses outside a turn, and forgets the keys with the session', async () => {
+    const { id, fake, manager, store, find } = await toAsk();
+    const refused = manager.askSecrets(id, ['A'], '');
+    manager.answer(id, find(id).permissions[0].requestId, 'deny');
+    assert.equal(await refused, null);
+    const cut = manager.askSecrets(id, ['B'], '');
+    fake.feed('simple-turn', 3);
+    assert.equal(await cut, null);
+    await assert.rejects(manager.askSecrets(id, ['C'], ''), /pendant un tour/);
+    manager.giveSecrets(id, undefined, [{ name: 'TOKEN', value: 't' }]);
+    assert.deepEqual(find(id).secrets, ['TOKEN']);
+    await manager.forget(id);
+    assert.deepEqual(store.names(id), []);
     await manager.shutdown();
   });
 });

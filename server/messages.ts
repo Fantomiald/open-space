@@ -7,6 +7,7 @@ import { parseBirthday } from '../shared/festivals.ts';
 import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import { isEntryName } from './files.ts';
 import { parseJobs } from '../shared/jobs.ts';
+import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
@@ -195,6 +196,18 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const requestId = identifier(raw.requestId);
       const answers = parseAnswers(raw.answers);
       return sessionId && requestId && answers ? { t: 'reply', sessionId, requestId, answers } : null;
+    }
+    case 'secrets': {
+      const requestId = raw.requestId === undefined ? undefined : identifier(raw.requestId);
+      const entries = Array.isArray(raw.entries) && raw.entries.length <= MAX_SECRETS ? raw.entries.map(parseSecret) : null;
+      if (!sessionId || requestId === null || !entries?.length || entries.some((entry) => !entry)) return null;
+      return { t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries: entries as SecretEntry[] };
+    }
+    case 'forgetSecrets': {
+      if (!sessionId) return null;
+      if (raw.names === undefined) return { t: 'forgetSecrets', sessionId };
+      const names = Array.isArray(raw.names) && raw.names.length <= MAX_SECRETS && raw.names.every((name) => typeof name === 'string' && isSecretName(name)) ? raw.names as string[] : null;
+      return names ? { t: 'forgetSecrets', sessionId, names } : null;
     }
     case 'interrupt': return sessionId ? { t: 'interrupt', sessionId } : null;
     case 'unqueue': {
@@ -441,4 +454,10 @@ function parseMusicAction(value: unknown): MusicAction | null {
     case 'track': return typeof value.id === 'string' && /^[0-9A-F]{16}$/.test(value.id) ? { kind: 'track', id: value.id } : null;
     default: return null;
   }
+}
+
+/** A key given in the box: a variable name and a value, never trimmed (a token is taken as pasted). */
+function parseSecret(raw: unknown): SecretEntry | null {
+  if (!isJson(raw) || typeof raw.name !== 'string' || typeof raw.value !== 'string') return null;
+  return isSecretName(raw.name) && raw.value && raw.value.length <= MAX_SECRET_LENGTH ? { name: raw.name, value: raw.value } : null;
 }

@@ -12,6 +12,8 @@ import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAtt
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import { hasSharedBrowser } from './browser.ts';
+import type { SecretStore } from './secrets.ts';
+import type { SecretEntry } from '../shared/secrets.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
 import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
@@ -70,6 +72,8 @@ export interface SessionManagerDeps {
   probeCatalog?: CatalogProbe | null;
   /** the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts) */
   browserMcp?: (sessionId: string, untrusted: boolean) => Pick<LaunchOptions, 'mcpConfig' | 'agents'>;
+  /** the keys the user gives the sessions, and the variables that let a session's os-secret reach them (server/secrets.ts) */
+  secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -246,7 +250,8 @@ export class SessionManager {
       spawnProcess: (launch, handlers) => {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id, !!info.untrusted) }, handlers);
+        const env = this.deps.secrets?.env(info.id);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id, !!info.untrusted), ...(env ? { env } : {}) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -264,6 +269,7 @@ export class SessionManager {
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
       sharedBrowser: () => hasSharedBrowser(this.deps.browserMcp?.(info.id, !!info.untrusted).mcpConfig),
+      ...(this.deps.secrets ? { secretNames: () => this.deps.secrets?.store.names(info.id) ?? [] } : {}),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       peerName: (address) => this.peerName(address),
@@ -833,7 +839,7 @@ export class SessionManager {
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
-      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}),
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
       ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tag ? { tag: source.tag } : {}),
     });
     const log = await this.openLog(info.id);
@@ -873,6 +879,23 @@ export class SessionManager {
   }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
+  askSecrets(id: string, names: string[], why: string) { return this.session(id).askSecrets(names, why); }
+
+  /** Keys the user gave a session, in the box of an `os-secret ask` (`requestId`) or on their own. */
+  giveSecrets(id: string, requestId: string | undefined, entries: readonly SecretEntry[]) {
+    const session = this.session(id);
+    if (!this.deps.secrets?.store.set(id, entries).length) throw new Error(st.sessions.noSecret);
+    if (requestId) session.secretsGiven(requestId);
+  }
+
+  forgetSecrets(id: string, names?: readonly string[]) {
+    this.session(id);
+    if (!names) this.deps.secrets?.store.drop(id);
+    else for (const name of names) this.deps.secrets?.store.drop(id, name);
+  }
+
+  /** The names of a session's keys changed: the page is told (an unknown session, switched off meanwhile, has none). */
+  secretsChanged(id: string) { this.sessions.get(id)?.secretsChanged(); }
   interrupt(id: string) { this.session(id).interrupt(); }
   unqueue(id: string, queueId: string) { this.session(id).unqueue(queueId); }
   sendNow(id: string) { this.session(id).sendNow(); }
@@ -901,6 +924,7 @@ export class SessionManager {
    */
   async forget(id: string, branch?: 'merge' | 'keep' | 'discard'): Promise<void> {
     const session = this.session(id);
+    this.deps.secrets?.store.drop(id);
     const worktree = session.snapshot().worktree;
     if (worktree && branch === 'merge') return this.mergeBranch(id, true);
     if (worktree) {
@@ -1031,6 +1055,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     worktree: parseWorktree(raw.worktree),
     toldPlace: asString(raw.toldPlace) || undefined,
     toldSharedBrowser: raw.toldSharedBrowser === true || undefined,
+    toldSecrets: raw.toldSecrets === true || undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,

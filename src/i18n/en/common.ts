@@ -95,6 +95,7 @@ export const common: Dictionary['common'] = {
     cost: { description: 'Your subscription usage (like /usage)' },
     fork: { description: 'Duplicates the session: a copy of the conversation that goes its own way' },
     'remote-control': { description: 'Turns control from your phone (claude.ai) on or off' },
+    secret: { description: 'Gives the session a key or a token without it seeing the value', argumentHint: '[NAME]' },
     stop: { description: 'Interrupts what the session is doing' },
     resume: { description: 'Resumes an earlier conversation of this folder' },
     focus: { description: 'Switches between focus mode and the office' },

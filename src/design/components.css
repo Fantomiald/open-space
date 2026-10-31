@@ -2440,3 +2440,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-files__stage audio { width: min(100%, 22rem); }
 .cp-files__meta { margin: 0; padding: var(--space-1) var(--space-3); border-top: var(--border-width) solid var(--color-border); font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; text-align: center; }
 .cp-files__empty .cp-files__meta { border: 0; padding: 0; }
+
+/* ── Keys given to a session (SecretPrompt.tsx) ── */
+.cp-secrets { display: grid; gap: var(--space-2); }
+.cp-secrets__why { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.cp-secrets__rows { display: grid; gap: var(--space-2); }
+.cp-secrets__row { display: grid; grid-template-columns: minmax(7rem, 2fr) minmax(8rem, 3fr) auto; gap: var(--space-2); align-items: center; }
+.cp-secrets__row .cp-secrets__name { font-family: var(--font-mono); font-size: var(--text-xs); }
+.cp-secrets__row .cp-secrets__name[readonly] { background: var(--color-surface-sunken); color: var(--color-text-muted); }
+.cp-secrets__row .cp-secrets__name[aria-invalid='true'] { border-color: var(--tone-error); }
+.cp-secrets__add { justify-self: start; }
+.cp-secrets__note { margin: 0; color: var(--color-text-muted); font-size: var(--text-xs); }
+.cp-secrets__held { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.cp-secrets__held li { display: flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-1) 2px var(--space-2); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-sunken); }
+.cp-secrets__held code { font: var(--text-xs) / 1.4 var(--font-mono); }
+@media (max-width: 480px) { .cp-secrets__row { grid-template-columns: 1fr auto; } .cp-secrets__row .cp-secrets__value { grid-column: 1; } }

@@ -132,6 +132,8 @@ export interface LaunchOptions {
   mcpConfig?: string;
   /** its sub-agents with a browser of their own (server/browser.ts testerAgents) */
   agents?: string;
+  /** variables of this session only, on top of the shared environment (os-secret's address: server/secrets.ts) */
+  env?: Record<string, string>;
   /** it works on a branch of its own, in a worktree: its conversation is told so when it starts */
   worktree?: Pick<WorktreeInfo, 'branch' | 'base' | 'root' | 'mainRoot'>;
 }
@@ -197,6 +199,9 @@ export const renameNote = (name: string) => st.prompt.rename(name);
 
 /** Told once to a conversation started before it had the shared browser: what it may do with it (see identityPrompt). */
 export const sharedBrowserNote = (user = '') => st.prompt.sharedBrowserNote(user.trim());
+
+/** Told once to a conversation started before Open Space had os-secret (see identityPrompt). */
+export const secretsNote = (user = '') => st.prompt.secretsNote(user.trim());
 
 /** What Claude Code offers in a folder: its slash commands (the folder's own included) and the models. */
 export interface Catalog { commands: SlashCommand[]; models: ModelChoice[] }
@@ -301,7 +306,7 @@ class ClaudeProcess implements ProcessHandle {
     // uploading them (checked with 2.1.302): Open Space shows them in the thread (see Normalizer and Session.onFiles)
     // auto-compact turned off in Claude Code's own /config is kept in ~/.claude.json, which wins over --settings: the
     // variable turns it off whatever that file says
-    const env = { ...environment, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
+    const env = { ...environment, ...launch.env, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
     const child = spawn(...claudeCommand(binary.path, buildClaudeArgs(launch)), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true });
     this.child = child;
     readline.createInterface({ input: child.stdout }).on('line', (line) => {

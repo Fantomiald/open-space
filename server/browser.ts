@@ -318,6 +318,15 @@ export class Browsers {
     return starting;
   }
 
+  /**
+   * A cookie of `os-secret cookie` (server/secrets.ts) in the session's own browser, launched if needed. A session cookie:
+   * it goes with the browser, nothing of the key stays in the profile.
+   */
+  async setCookie(sessionId: string, cookie: { name: string; value: string; url: string }) {
+    const live = await this.ensure(sessionId);
+    await live.chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
+  }
+
   /** What Playwright asks for before connecting: the browser's own /json/version, with its WebSocket address. */
   async version(sessionId: string, lane: number): Promise<Record<string, unknown>> {
     // the session's own browser or a tester's: the view of the shared one is reached through its filter only (sharedVersion)

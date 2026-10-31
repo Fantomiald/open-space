@@ -43,6 +43,7 @@ export function runOwnCommand(name: OwnName, argument: string, session: SessionI
     case 'fork': s.duplicateSession(id); return true;
     case 'remote-control': return s.send({ t: 'remoteControl', sessionId: id, enabled: !session.remote });
     case 'stop': return s.send({ t: 'interrupt', sessionId: id });
+    case 'secret': s.openSecrets(id, /^[A-Za-z_]\w*$/.test(argument) ? argument : ''); return true;
     case 'copy': {
       const answer = answerFromEnd(items(), Number.parseInt(argument, 10) || 1);
       if (answer === null) { say(t.composer.composer.nothingToCopy); return true; }

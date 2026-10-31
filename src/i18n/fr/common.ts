@@ -94,6 +94,7 @@ export const common = {
     cost: { description: 'Ton usage de l’abonnement (comme /usage)' },
     fork: { description: 'Duplique la session : une copie de la conversation, qui part de son côté' },
     'remote-control': { description: 'Active ou coupe le pilotage depuis le téléphone (claude.ai)' },
+    secret: { description: 'Donne une clé ou un token à la session sans qu’elle voie sa valeur', argumentHint: '[NOM]' },
     stop: { description: 'Interrompt ce que la session est en train de faire' },
     resume: { description: 'Reprend une ancienne conversation de ce dossier' },
     focus: { description: 'Passe du mode focus au bureau, et inversement' },

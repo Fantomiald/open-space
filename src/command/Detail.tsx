@@ -17,11 +17,12 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
+import { SecretPrompt, SecretsDialog } from './SecretPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { SwitchOffDialog } from './SwitchOffDialog.tsx';
 import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
@@ -32,7 +33,7 @@ import { useMenuBelow } from './useMenuBelow.ts';
 const NO_EVENTS: never[] = [];
 
 /** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
-function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onRest: () => void; onSwitchOff: () => void }) {
+function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onKeys: () => void; onRest: () => void; onSwitchOff: () => void }) {
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -54,6 +55,7 @@ function SessionMenu({ session, searchOpen, onSearch, onRest, onSwitchOff }: { s
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
           )}
+          <button type="button" role="menuitem" title={words.keysTitle} onClick={pick(onKeys)}><KeyIcon />{words.keys}</button>
           <button type="button" role="menuitem" title={words.terminalHereTitle} onClick={pick(() => useSessions.getState().openTerminal(session.id))}><TerminalIcon />{words.terminalHere}</button>
           {!session.resting && <button type="button" role="menuitem" title={words.restTitle} onClick={pick(onRest)}><RestIcon />{words.rest}</button>}
           <button type="button" role="menuitem" data-variant="danger" title={words.switchOffTitle} onClick={pick(onSwitchOff)}><PowerIcon />{words.switchOff}</button>
@@ -108,6 +110,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   const [restAsked, setRestAsked] = useState(false);
+  const secretsOpen = useSessions((s) => (s.secretsOpen?.sessionId === session.id ? s.secretsOpen : null));
+  const openSecrets = useSessions((s) => s.openSecrets);
   const rest = () => { send({ t: 'rest', sessionId }); closeOpen(sessionId); };
   // the sub-agent whose thread is shown, null for the conversation
   const [agent, setAgent] = useState<string | null>(null);
@@ -170,7 +174,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onKeys={() => openSecrets(session.id)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
             <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
           </div>
         </div>
@@ -182,6 +186,9 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             <button type="button" className="cp-branch-pill" title={t.branches.pill(session.worktree.branch, session.worktree.base)} onClick={() => openBranches(session.worktree?.home ?? session.cwd)}>
               <BranchIcon /><span className="cp-branch-pill__name">{session.worktree.branch}</span>
             </button>
+          )}
+          {session.secrets && (
+            <button type="button" className="cp-tag" title={t.session.detail.keysTitle} onClick={() => openSecrets(session.id)}><KeyIcon />{t.session.detail.keysHeld(session.secrets.length)}</button>
           )}
           {session.context && <ContextChip context={session.context} onOpen={() => showPanel('context')} />}
           {changes && changes.files.length > 0 && (
@@ -207,6 +214,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             </div>
           </Modal>
         )}
+        {secretsOpen && <SecretsDialog session={session} name={secretsOpen.name} onClose={() => openSecrets(null)} />}
         {restAsked && (
           <Modal title={t.session.detail.restQuestion(session.name)} onClose={() => setRestAsked(false)}>
             <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>
@@ -218,8 +226,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
         )}
         {session.error && <p className="cp-detail__error" role="alert">{session.error}</p>}
       </header>
-      {first && (first.questions
-        ? <QuestionPrompt key={first.requestId} sessionId={session.id} prompt={first} />
+      {first && (first.secrets ? <SecretPrompt key={first.requestId} sessionId={session.id} prompt={first} />
+        : first.questions ? <QuestionPrompt key={first.requestId} sessionId={session.id} prompt={first} />
         : <PermissionPrompt key={first.requestId} sessionId={session.id} prompt={first} more={others.length} />)}
       {feed.plan.length > 0 && (
         <details className="cp-plan">

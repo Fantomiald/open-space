@@ -42,6 +42,12 @@ export interface WebServerOptions {
   sessionFile?: (sessionId: string, relative: string) => string | null;
   log: (message: string, error?: unknown) => void;
   /** the sessions' browsers (see browser.ts) */
+  /** what a session's os-secret asks for (server/secrets.ts), behind its key */
+  secrets?: {
+    key: (sessionId: string) => string;
+    known: (sessionId: string) => boolean;
+    answer: (sessionId: string, action: string, form: URLSearchParams) => Promise<{ status: number; text: string }>;
+  };
   browser?: {
     watch: (sessionId: string, lane: number, res: http.ServerResponse) => Promise<void>;
     /** `lane`: the session's own browser (0) or one of its testers' (see shared/browser.ts browserId) */
@@ -61,6 +67,8 @@ export interface WebServerOptions {
 }
 
 /** /browser/<session>/shared/<key>[/lane/<n>]/devtools: an owner's Playwright connecting to the shared browser. */
+/** an os-secret request: a few names and a short text, or one key (shared/secrets.ts MAX_SECRET_LENGTH, url-encoded) */
+const MAX_SECRETS_FORM = 128 * 1024;
 const SHARED_SOCKET = /^\/browser\/([\w-]{1,100})\/shared\/([^/]+)(?:\/lane\/([1-9]\d?))?\/devtools$/;
 
 /**
@@ -222,6 +230,25 @@ export function createWebServer(options: WebServerOptions) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(version));
   }
 
+  /**
+   * POST /secrets/<session>/<key>/<action>, a form: what the session's os-secret asks for. No cookie: the key, in the
+   * session's environment only, lets it in; never a page's request (no Origin).
+   */
+  async function serveSecrets(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const [sessionId = '', key = '', action = '', ...rest] = url.pathname.slice('/secrets/'.length).split('/');
+    const secrets = options.secrets;
+    if (!secrets || req.method !== 'POST' || rest.length || req.headers.origin !== undefined || !/^[\w-]{1,100}$/.test(sessionId) || !secrets.known(sessionId) || !secretsMatch(secrets.key(sessionId), key)) { res.writeHead(404).end(); return; }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+      size += chunk.length;
+      if (size > MAX_SECRETS_FORM) { res.writeHead(413).end(); req.destroy(); return; }
+      chunks.push(chunk);
+    }
+    const reply = await secrets.answer(sessionId, action, new URLSearchParams(Buffer.concat(chunks).toString('utf8')));
+    res.writeHead(reply.status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end(reply.text);
+  }
+
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
     if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     const url = parseRequestUrl(req.url);
@@ -271,6 +298,7 @@ export function createWebServer(options: WebServerOptions) {
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }
     if (url.pathname.startsWith('/browser/')) { await serveBrowser(req, res, url); return; }
+    if (url.pathname.startsWith('/secrets/')) { await serveSecrets(req, res, url); return; }
     if (url.pathname.startsWith('/sounds/')) {
       const sound = resolveInside(soundsDir, `.${url.pathname.slice('/sounds'.length)}`);
       if (!sound || !statSync(sound).isFile()) { res.writeHead(404).end(); return; }
