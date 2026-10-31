@@ -1,5 +1,11 @@
 # Versions
 
+## 1.23.0
+
+- Navigateur partagé, grâce à JB : un onglet « Partagé » dans le navigateur de chaque session ouvre un Chrome commun où tu te connectes une fois à tes propres comptes (Google Tag Manager, Analytics…). La connexion tient après un redémarrage, et toutes les sessions et leurs testeurs s'en servent sans te redemander mot de passe ni 2FA.
+- Chaque session n'y voit que ses onglets. Quand elle s'arrête, ses onglets se ferment et ce qu'elle a laissé sur les autres sites que Google est effacé.
+- Les agents ne s'en servent que pour tes comptes, en lecture : jamais pour tester une app ni pour publier ou modifier quoi que ce soit sans ta demande. Les sessions d'un dossier non approuvé ne l'ont pas.
+
 ## 1.22.4
 
 - Les photos que le navigateur ne sait pas afficher (RAW .dng, HEIC d'iPhone, SVG, TIFF…) se joignent maintenant comme fichiers au lieu d'afficher « Impossible de joindre ».
