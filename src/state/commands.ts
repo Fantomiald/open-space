@@ -102,6 +102,7 @@ const OWN_COMMANDS = {
   fork: { argument: 'none', session: true, aliases: ['branch'] },
   'remote-control': { argument: 'none', session: true, aliases: ['rc'] },
   stop: { argument: 'none', session: true },
+  secret: { argument: 'optional', session: true, aliases: ['secrets', 'key', 'cle'] },
   resume: { argument: 'none', session: false },
   focus: { argument: 'none', session: false },
   stats: { argument: 'none', session: false },

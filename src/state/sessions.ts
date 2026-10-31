@@ -1,5 +1,6 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
+import type { SecretEntry } from '../../shared/secrets.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
 import { browserId, type BrowserState } from '../../shared/browser.ts';
@@ -128,6 +129,8 @@ interface CommandPostState {
   inspections: Record<string, Inspections>;
   /** what the focused session's panel shows */
   panelView: PanelView;
+  /** the Keys window of a session (SecretPrompt.tsx), with a name to give already typed (/secret NAME) */
+  secretsOpen: { sessionId: string; name: string } | null;
   /** the tab each other open window was left on when it lost the focus: its files or its browser stay shown */
   keptViews: Record<string, KeptView>;
   /** the Claude Code conversations found for a folder, to resume one (the last folder and search asked for) */
@@ -262,6 +265,7 @@ interface CommandPostState {
   fitOpen: () => void;
   /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
   showPanel: (view: PanelView) => void;
+  openSecrets: (sessionId: string | null, name?: string) => void;
   showBrowserLane: (sessionId: string, lane: number) => void;
   /** takes a browser out of its session's window, which goes back to the conversation */
   openPip: (target: PipTarget) => void;
@@ -320,6 +324,10 @@ interface CommandPostState {
   sendText: (sessionId: string, text: string, images?: ImageUpload[], files?: string[]) => boolean;
   answerPermission: (sessionId: string, requestId: string, decision: PermissionDecision) => boolean;
   answerQuestions: (sessionId: string, requestId: string, answers: Record<string, string>) => boolean;
+  /** keys for a session (`requestId`: the os-secret ask they answer); their values go to the server only */
+  giveSecrets: (sessionId: string, requestId: string | undefined, entries: SecretEntry[]) => boolean;
+  /** forgets some of a session's keys, or all of them */
+  forgetSecrets: (sessionId: string, names?: string[]) => void;
 }
 
 let toastId = 0;
@@ -376,6 +384,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   pipDismissed: [],
   inspections: {},
   panelView: 'thread',
+  secretsOpen: null,
   keptViews: {},
   conversations: null,
   folderRepos: {},
@@ -726,6 +735,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (s.selectedId && view !== 'thread' && view !== 'changes' && view !== 'browser' && view !== 'files') s.send({ t: 'inspect', sessionId: s.selectedId, view });
   },
 
+  openSecrets: (sessionId, name = '') => set({ secretsOpen: sessionId ? { sessionId, name } : null }),
+
   showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
 
   openPip: (target) => {
@@ -862,6 +873,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (sent) announceSpeech(answerSpeech(sessionId, decision));
     return sent;
   },
+  giveSecrets: (sessionId, requestId, entries) => get().send({ t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries }),
+  forgetSecrets: (sessionId, names) => { get().send({ t: 'forgetSecrets', sessionId, ...(names ? { names } : {}) }); },
   answerQuestions: (sessionId, requestId, answers) => {
     const sent = answerAllowed() && get().send({ t: 'reply', sessionId, requestId, answers });
     if (sent) announceSpeech(replySpeech(sessionId, answers));

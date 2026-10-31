@@ -20,6 +20,7 @@ export const fr = {
     },
     /** what a session with the shared browser may do with it (server/shared-browser.ts) */
     sharedBrowser: (who: string) => `Les outils shared-browser pilotent un second navigateur, partagé par toutes les sessions, où ${who} s’est connecté à ses propres comptes (Google Tag Manager, Google Analytics…). Ne t’en sers que pour ces comptes, jamais pour tester ton app ni pour te connecter avec un utilisateur de test : ça se fait dans ton propre navigateur. Lecture et aperçu seulement : ne publie, n’enregistre, n’envoie, ne supprime ni ne modifie rien là-bas, sauf si ${who} t’a demandé ce changement dans cette session. Si une page de connexion s’affiche ou qu’on te demande un mot de passe ou un code, arrête-toi et demande à ${who} de se connecter depuis le navigateur partagé, dans le panneau Navigateur d’Open Space ; ne tape jamais de mot de passe. Ne le laisse pas aux autres sous-agents, sauf à browser-tester-1 à -4.`,
+    secrets: (who: string) => `Clés et tokens : quand il te faut une clé d’API, un token ou un mot de passe d’app, ne le demande jamais dans la conversation et ne lis jamais un .env pour le trouver. Lance \`os-secret ask NOM --why "à quoi elle sert"\` (Bash, avec un timeout de 600000) : ${who} la colle dans une petite fenêtre d’Open Space, et toi tu n’en connais que le nom. Ensuite, \`os-secret env NOM [fichier] [--as VAR]\` l’écrit dans un .env (jamais dans le code : le code lit la variable d’environnement, et le .env doit être dans .gitignore) ; \`os-secret run NOM -- sh -c 'commande qui utilise "$NOM"'\` lance une commande avec la clé en variable d’environnement (des guillemets simples, pour que ce soit la commande qui lise $NOM) ; \`os-secret cookie NOM https://site --as nom_du_cookie\` la pose comme cookie dans ton navigateur ; \`os-secret list\` donne les noms des clés déjà là. N’affiche et ne lis jamais leur valeur.`,
     identity: (name: string, user: string, note: string, browser: boolean, shared = false) => {
       const who = user || 'l’utilisateur';
       return `Dans l'Open Space de ${who}, tu es l'agent « ${name} ». Si on te demande ton nom ou qui tu es, réponds « ${name} » ` +
@@ -30,6 +31,7 @@ export const fr = {
         ` Open Space affiche dans le fil les images que tu envoies avec SendUserFile et les pages que tu publies avec Artifact : quand tu changes quelque chose de visible (une page, un écran) et que tu peux en prendre une capture, envoie-la.` +
         (browser ? ` Ton navigateur (les outils Playwright) s’affiche en direct dans Open Space, et ${user || 'l’utilisateur'} peut cliquer dedans : sers-t’en pour tester ce que tu fais. Pour tester plusieurs parcours en même temps, lance en parallèle les sous-agents browser-tester-1 à browser-tester-4, un numéro différent par parcours : chacun a son propre navigateur, affiché lui aussi. Quand tu as fini de t’en servir, ferme ton navigateur (browser_close) : sinon il reste affiché à l’écran.` : '') +
         (shared ? ` ${fr.prompt.sharedBrowser(who)}` : '') +
+        ` ${fr.prompt.secrets(who)}` +
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
     /** the files the user sent with a message, as their paths: Claude opens them with its tools */
@@ -41,6 +43,8 @@ export const fr = {
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     /** told once to a conversation started before it had the shared browser */
     sharedBrowserNote: (user: string) => `(Note d'Open Space : tu as maintenant un navigateur partagé. ${fr.prompt.sharedBrowser(user || 'l’utilisateur')})\n\n`,
+    /** told once to a conversation started before os-secret */
+    secretsNote: (user: string) => `(Note d'Open Space : ${fr.prompt.secrets(user || 'l’utilisateur')})\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
       'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.',
     worktree: (worktree: Place) => worktreeNote(worktree),
@@ -88,6 +92,9 @@ export const fr = {
     outsideRoots: 'Ce dossier n’est pas dans les racines autorisées (OFFICE_ROOTS).',
     remoteFailed: (reason: string) => `Remote Control n’a pas démarré : ${reason}`,
     requestGone: 'Cette demande n’existe plus.',
+    noBrowser: 'Chrome est introuvable : Open Space n’a pas de navigateur pour cette session.',
+    noSecret: 'Donne au moins une clé, avec un nom de variable (GEMINI_API_KEY) et une valeur.',
+    secretsOutsideTurn: 'os-secret ask ne marche que pendant un tour de la session, depuis son Bash.',
     questionNotYesNo: 'Cette question attend une réponse, pas un oui ou un non.',
     requestYesNo: 'Cette demande attend un oui ou un non.',
     chooseAnswer: 'Choisis une réponse avant d’envoyer.',

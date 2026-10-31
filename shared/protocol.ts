@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { SecretEntry } from './secrets.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
 import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
@@ -40,7 +41,7 @@ export type OfficeEvent =
   /** a sub-agent finished its work */
   | { k: 'leave'; who: string; ok: boolean; tokens: number; tools: number; ms: number }
   /** questions = an AskUserQuestion call, answered with a reply instead of yes/no */
-  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[] }
+  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[] }
   | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean }
   /** a turn ended */
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean }
@@ -133,7 +134,8 @@ export interface Question { question: string; header: string; options: QuestionO
 
 /** A tool call waiting for the user's yes or no, or, when `questions` is set, for the answers to an AskUserQuestion call. */
 /** `always`: what "Toujours" would allow for the rest of the session, in words (one line per rule). */
-export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[] }
+/** `secrets`: the names of keys the agent asks for with `os-secret ask` (see shared/secrets.ts); `detail` is then what they are for. */
+export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[] }
 
 /** Claude Code permission modes offered per session (bypassPermissions and dontAsk are left out on purpose). */
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'manual', 'plan'] as const;
@@ -307,6 +309,8 @@ export interface SessionInfo {
   turns: number;
   /** tool calls waiting for an answer, oldest first */
   permissions: PermissionPrompt[];
+  /** the names of the keys the user gave it (shared/secrets.ts), never their values; absent when none */
+  secrets?: string[];
   /** sub-agents currently working, oldest first */
   subagents: SubagentInfo[];
   /** commands it left running in the background, oldest first; absent when none */
@@ -338,6 +342,8 @@ export interface SessionInfo {
   toldPlace?: string;
   /** its conversation knows the rules of the shared browser (system prompt or Session.sharedBrowserNote) */
   toldSharedBrowser?: true;
+  /** its conversation knows os-secret (server/secrets.ts): in the system prompt of a new one, else told once in a message */
+  toldSecrets?: true;
 }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
@@ -536,6 +542,9 @@ export type ClientMessage =
   | { t: 'answer'; sessionId: string; requestId: string; decision: PermissionDecision }
   /** answers to an AskUserQuestion call: question text -> chosen label(s) or the user's own text */
   | { t: 'reply'; sessionId: string; requestId: string; answers: Record<string, string> }
+  /** keys given to a session (`requestId`: the `os-secret ask` they answer), or forgotten (`forget`: their names, none = all) */
+  | { t: 'secrets'; sessionId: string; requestId?: string; entries: SecretEntry[] }
+  | { t: 'forgetSecrets'; sessionId: string; names?: string[] }
   | { t: 'interrupt'; sessionId: string }
   /** takes a queued message back */
   | { t: 'unqueue'; sessionId: string; queueId: string }

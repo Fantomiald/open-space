@@ -8,7 +8,7 @@ import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
-import { placeNote, renameNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
@@ -36,6 +36,8 @@ export interface SessionDeps {
   onSubagentLeft?: (type: string) => void;
   /** whether the session's process gets the shared browser (server/shared-browser.ts) */
   sharedBrowser?: () => boolean;
+  /** the names of the keys the user gave it (server/secrets.ts); absent without os-secret */
+  secretNames?: () => string[];
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
   saveImage: (image: ImageUpload) => string;
   /** where a file the user uploaded is (see uploads.ts), or null */
@@ -78,10 +80,11 @@ export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
 type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
 
 /** A request waiting for the user: what to send back, and what to show. */
-interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt }
+/** `given`: an `os-secret ask` (no tool call of Claude Code's), told the names given, or null when refused or cancelled */
+interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void }
 
 /** Session fields that are computed, not stored. */
-export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote'>;
+export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets'>;
 
 const LAST_MESSAGE_LENGTH = 400;
 const GRACE_MS = 3000;
@@ -143,7 +146,8 @@ export class Session {
   /** True when a SendMessage address ("uds:/tmp/…" or the path alone) is this session's live process. */
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}) };
+    const secrets = this.deps.secretNames?.() ?? [];
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(secrets.length ? { secrets } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -352,6 +356,7 @@ export class Session {
         this.info.introducedAs = this.info.name;
         this.info.toldPlace = this.info.cwd;
         this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
+        this.info.toldSecrets = this.deps.secretNames ? true : undefined;
       }
       this.startProcess();
       this.info.error = undefined;
@@ -371,6 +376,10 @@ export class Session {
     if (!this.info.toldSharedBrowser && !command && this.deps.sharedBrowser?.()) {
       outgoing = sharedBrowserNote(this.deps.identity?.().user) + outgoing;
       this.info.toldSharedBrowser = true;
+    }
+    if (!this.info.toldSecrets && !command && this.deps.secretNames) {
+      outgoing = secretsNote(this.deps.identity?.().user) + outgoing;
+      this.info.toldSecrets = true;
     }
     if (this.shellNotes.length && !command) {
       outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
@@ -466,6 +475,7 @@ export class Session {
       this.info.context = undefined;
       // the rules of the shared browser went with the old conversation when they were told in a message: told again
       this.info.toldSharedBrowser = undefined;
+      this.info.toldSecrets = undefined;
       this.record({ k: 'cleared' });
       this.cleared = true;
     }
@@ -682,9 +692,39 @@ export class Session {
 
   /** Requests nobody can answer any more (the turn ended, or the process is gone). The caller applies the next state. */
   private cancelRequests() {
-    for (const requestId of this.requests.keys()) this.record({ k: 'ask_done', requestId, allow: false, cancelled: true });
+    for (const [requestId, request] of this.requests) {
+      this.record({ k: 'ask_done', requestId, allow: false, cancelled: true });
+      request.given?.(null);
+    }
     this.requests.clear();
   }
+
+  /**
+   * `os-secret ask`, run by the agent's Bash during its turn: a box asks the user for the keys `names` (`why`: what they
+   * are for), as a permission would. Resolves with the names given, or null when the user refuses or the turn ends.
+   */
+  askSecrets(names: string[], why: string): Promise<string[] | null> {
+    if (!this.process?.alive || (this.context.state !== 'work' && this.context.state !== 'perm')) return Promise.reject(new Error(st.sessions.secretsOutsideTurn));
+    const requestId = `secrets-${randomUUID()}`;
+    const prompt: PermissionPrompt = { requestId, who: 'chef', tool: 'os-secret', detail: why, canAlways: false, secrets: names };
+    return new Promise((resolve) => {
+      this.requests.set(requestId, { input: {}, suggestions: [], prompt, given: resolve });
+      this.record({ k: 'ask', ...prompt });
+      this.apply({ type: 'permission_requested' });
+      this.deps.onAttention?.('question', this.snapshot());
+    });
+  }
+
+  /** The user gave keys in the box of an `os-secret ask` (already kept by the caller): the agent's command goes on. */
+  secretsGiven(requestId: string) {
+    const request = this.requests.get(requestId);
+    if (!request?.given) throw new Error(st.sessions.requestGone);
+    request.given(this.deps.secretNames?.() ?? []);
+    this.settle(requestId, { k: 'ask_done', requestId, allow: true });
+  }
+
+  /** The names of the keys changed (given, forgotten, expired): the page shows them. */
+  secretsChanged() { this.deps.broadcast({ t: 'session', session: this.snapshot() }); }
 
   private onResult(result: TurnResult) {
     if (this.autoCompaction) {
@@ -782,6 +822,12 @@ export class Session {
   answer(requestId: string, decision: PermissionDecision) {
     const request = this.pending(requestId);
     if (request.prompt.questions) throw new Error(st.sessions.questionNotYesNo);
+    // a box for keys is only refused this way: they are given with secretsGiven
+    if (request.given) {
+      request.given(null);
+      this.settle(requestId, { k: 'ask_done', requestId, allow: false });
+      return;
+    }
     if (decision === 'deny') this.process!.answerPermission(requestId, { allow: false });
     else {
       // "always" sends back the rules Claude Code suggested, scoped to this session only (nothing is written to settings files)

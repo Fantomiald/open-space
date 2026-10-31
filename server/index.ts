@@ -45,6 +45,7 @@ import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
 import { busySessions } from '../shared/app-update.ts';
 import { appPort } from './app-port.ts';
+import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
 import { Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
 
@@ -141,6 +142,18 @@ function browserMcp(sessionId: string, untrusted: boolean) {
   return { mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared) };
 }
 
+/** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */
+const secretStore = new SecretStore((sessionId) => sessions.secretsChanged(sessionId));
+setInterval(() => secretStore.sweep(), 60_000).unref();
+const secretsBin = installScript(config.dataDir);
+function secretsEnv(sessionId: string): Record<string, string> {
+  const searchPath = buildClaudeEnvironment(process.env, config.passthrough).PATH;
+  return {
+    OPEN_SPACE_SECRETS: `http://${HOST}:${config.port}/secrets/${sessionId}/${secretsKey(secret, sessionId)}`,
+    PATH: searchPath ? `${secretsBin}${path.delimiter}${searchPath}` : secretsBin,
+  };
+}
+
 const crew = new Crew(path.join(config.dataDir, 'crew.json'));
 await crew.load();
 
@@ -160,6 +173,7 @@ const sessions = new SessionManager({
     if (settings.notifications && ![...presence.values()].some(Boolean)) notify(session, kind, log);
   },
   browserMcp,
+  secrets: { store: secretStore, env: secretsEnv },
   // a tester is done (its report given, or stopped): its browser goes with it, rather than staying in the views
   onSubagentLeft: (sessionId, type) => {
     const lane = testerLane(type);
@@ -227,6 +241,18 @@ const { server } = createWebServer({ policy, port: config.port, distDir: DIST, s
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
+  secrets: {
+    key: (sessionId) => secretsKey(secret, sessionId),
+    known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
+    answer: (sessionId, action, form) => answerSecrets({ sessionId, action, form }, {
+      store: secretStore, roots: () => config.roots,
+      ask: (id, names, why) => sessions.askSecrets(id, names, why),
+      setCookie: (id, cookie) => {
+        if (!browsers.available) throw new Error(st.sessions.noBrowser);
+        return browsers.setCookie(id, cookie);
+      },
+    }),
+  },
 });
 
 function onConnection(socket: WebSocket) {
@@ -301,6 +327,8 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'send': sessions.send(message.sessionId, message.text, message.images, message.files); break;
     case 'answer': sessions.answer(message.sessionId, message.requestId, message.decision); break;
     case 'reply': sessions.reply(message.sessionId, message.requestId, message.answers); break;
+    case 'secrets': sessions.giveSecrets(message.sessionId, message.requestId, message.entries); break;
+    case 'forgetSecrets': sessions.forgetSecrets(message.sessionId, message.names); break;
     case 'interrupt': sessions.interrupt(message.sessionId); break;
     case 'unqueue': sessions.unqueue(message.sessionId, message.queueId); break;
     case 'sendNow': sessions.sendNow(message.sessionId); break;
