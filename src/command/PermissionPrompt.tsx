@@ -14,7 +14,7 @@ export function PermissionPrompt({ sessionId, prompt, more }: { sessionId: strin
     <div className="cp-permission" role="group" aria-label={words.label(prompt.tool)}>
       <div className="cp-permission__what">
         <strong>{prompt.tool}</strong>
-        {more ? <span className="cp-muted"> {words.morePending(more)}</span> : null}
+        {more ? <span className="cp-muted">{words.morePending(more)}</span> : null}
       </div>
       <pre className="cp-permission__detail">{prompt.detail}</pre>
       <div className="cp-permission__actions">
