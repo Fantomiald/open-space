@@ -117,7 +117,7 @@ describe('what os-secret asks for', () => {
     assert.equal(env.status, 200);
     assert.doesNotMatch(env.text, /tok-123456/);
     assert.equal(readFileSync(path.join(base, '.env.local'), 'utf8'), 'APP_TOKEN=tok-123456\n');
-    assert.equal(statSync(path.join(base, '.env.local')).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(path.join(base, '.env.local')).mode & 0o777, 0o600);
     const cookie = await answerSecrets({ sessionId: 's', action: 'cookie', form: form({ name: 'TOKEN', url: 'https://example.com', as: 'sid' }) }, api);
     assert.equal(cookie.status, 200);
     assert.deepEqual(cookies, [{ name: 'sid', value: 'tok-123456', url: 'https://example.com' }]);
