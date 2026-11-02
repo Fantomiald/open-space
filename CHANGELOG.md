@@ -1,5 +1,12 @@
 # Versions
 
+## 1.24.1
+
+- Les demandes d'un agent (clé, question, autorisation) s'affichent en bas de la conversation, juste au-dessus du champ, comme dans Claude Code. En petite fenêtre, les boutons de la demande de clé restent visibles.
+- Un clic sur une image jointe dans le champ de message l'ouvre en grand.
+- La copie à la sélection ne marche plus que dans les conversations et le champ de message, plus dans le reste de l'app.
+- La pastille « nouveau message » et la barre des questions ne laissent plus voir le texte qui défile dessous.
+
 ## 1.24.0
 
 - Clés sans fuite : `/secret` (ou « Clés » dans le menu ⋯) ouvre une box où tu colles le nom et la valeur d'une clé. Un bloc `NOM=valeur` de plusieurs lignes remplit tout d'un coup. L'agent ne voit jamais la valeur, seulement le nom.
