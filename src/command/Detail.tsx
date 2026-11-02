@@ -226,9 +226,6 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
         )}
         {session.error && <p className="cp-detail__error" role="alert">{session.error}</p>}
       </header>
-      {first && (first.secrets ? <SecretPrompt key={first.requestId} sessionId={session.id} prompt={first} />
-        : first.questions ? <QuestionPrompt key={first.requestId} sessionId={session.id} prompt={first} />
-        : <PermissionPrompt key={first.requestId} sessionId={session.id} prompt={first} more={others.length} />)}
       {feed.plan.length > 0 && (
         <details className="cp-plan">
           <summary>{t.session.detail.plan(feed.plan.filter((item) => item.status === 'completed').length, feed.plan.length)}</summary>
@@ -244,6 +241,10 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             : panelView === 'usage' ? <UsageView sessionId={session.id} onBack={back} />
               : <Feed feed={feed} sessionId={session.id} loading={!loaded} speaker={session.name} working={isRunning(session) && session.state !== 'perm'} drafts={drafts} agent={agent} setAgent={setAgent} />}
       <AsidePanel session={session} />
+      {/* at the bottom, by the field, as in Claude Code */}
+      {first && (first.secrets ? <SecretPrompt key={first.requestId} sessionId={session.id} prompt={first} />
+        : first.questions ? <QuestionPrompt key={first.requestId} sessionId={session.id} prompt={first} />
+        : <PermissionPrompt key={first.requestId} sessionId={session.id} prompt={first} more={others.length} />)}
       <Composer key={session.id} session={session} attachments={attachments} />
     </aside>
   );

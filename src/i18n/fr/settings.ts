@@ -106,7 +106,7 @@ export const settings = {
       language: { title: 'Langue', hint: 'Celle de la page, du serveur et des consignes des nouveaux agents.' },
       sound: { title: 'Son', hint: 'Un son quand une session a fini ou t’attend.' },
       notifications: { title: 'Notifications système', hint: 'Quand une session t’attend et qu’Open Space n’est pas devant toi.' },
-      copyOnSelect: { title: 'Copier à la sélection', hint: 'Le texte que tu sélectionnes est copié tout de suite, comme dans un terminal.' },
+      copyOnSelect: { title: 'Copier à la sélection', hint: 'Le texte que tu sélectionnes dans une conversation ou le champ de message est copié tout de suite, comme dans un terminal.' },
       timeFormat: { title: 'Format de l’heure', hint: 'Dans les fils et les relevés.', options: { auto: 'Selon la langue', '24h': '24 h (14:05)', '12h': '12 h (2:05 PM)' } },
       reduceMotion: { title: 'Réduire les animations', hint: 'Coupe les transitions et les animations de la page et fige la salle, même si le système les laisse.' },
       timestamps: { title: 'Heure des messages', hint: 'L’heure à côté de chaque message des fils.' },

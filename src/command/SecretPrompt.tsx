@@ -63,7 +63,7 @@ export function SecretPrompt({ sessionId, prompt }: { sessionId: string; prompt:
   const give = () => { if (valid(rows)) buttons.sent(giveSecrets(sessionId, prompt.requestId, filled(rows).map((row) => ({ name: row.name.trim(), value: row.value })))); };
   return (
     <form className="cp-permission cp-secrets" aria-label={words.askLabel} onSubmit={(e) => { e.preventDefault(); give(); }}>
-      <div className="cp-permission__what"><KeyIcon /> <strong>{words.asks(asked.length)}</strong></div>
+      <div className="cp-permission__what"><KeyIcon /><strong>{words.asks(asked.length)}</strong></div>
       {prompt.detail && <p className="cp-secrets__why">{prompt.detail}</p>}
       <SecretRows rows={rows} setRows={setRows} fixed={asked} />
       <p className="cp-secrets__note">{words.never}</p>

@@ -3,20 +3,21 @@ import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 
 const SHOWN_MS = 900;
-/** What the mouse selected: in a text field, its own selection (the page's does not see it); a password never. */
+/** As in Claude Code: only in a thread or in the message field; elsewhere in the app, selecting is not meant as copying. */
 function selectedText(target: EventTarget | null): string {
   const field = document.activeElement;
-  const inField = target instanceof Node && field?.contains(target);
-  if (inField && (field instanceof HTMLTextAreaElement || (field instanceof HTMLInputElement && field.type !== 'password'))) {
-    const { selectionStart, selectionEnd } = field;
-    return selectionStart === null || selectionEnd === null ? '' : field.value.slice(selectionStart, selectionEnd);
+  if (field instanceof HTMLTextAreaElement && field.matches('[data-composer]') && target instanceof Node && field.contains(target)) {
+    return field.value.slice(field.selectionStart, field.selectionEnd);
   }
-  return window.getSelection()?.toString() ?? '';
+  const selection = window.getSelection();
+  const inThread = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)?.closest('.cp-feed');
+  if (!selection || !inThread(selection.anchorNode) || !inThread(selection.focusNode)) return '';
+  return selection.toString();
 }
 
 /**
  * With the setting on, text selected with the mouse is copied at once, as in a terminal (and in Claude Code's own
- * prompt): in the threads and in the fields alike. A small "Copied" shows by the pointer, where the selection ended.
+ * prompt), in the threads and the message field only. A small "Copied" shows by the pointer, where the selection ended.
  */
 export function CopyOnSelect() {
   const enabled = useSessions((s) => s.preferences.copyOnSelect);

@@ -103,7 +103,7 @@ export const settings: Dictionary['settings'] = {
       language: { title: 'Language', hint: 'Of the page, the server and new agents’ instructions.' },
       sound: { title: 'Sound', hint: 'A sound when a session is done or waiting for you.' },
       notifications: { title: 'System notifications', hint: 'When a session waits for you and Open Space isn’t in front.' },
-      copyOnSelect: { title: 'Copy on select', hint: 'Text you select is copied at once, like in a terminal.' },
+      copyOnSelect: { title: 'Copy on select', hint: 'Text you select in a conversation or the message field is copied at once, like in a terminal.' },
       timeFormat: { title: 'Time format', hint: 'In the threads and the usage view.', options: { auto: 'From the language', '24h': '24-hour (14:05)', '12h': '12-hour (2:05 PM)' } },
       reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations and stills the room, even when the system keeps them.' },
       timestamps: { title: 'Message timestamps', hint: 'The time next to each message in the threads.' },

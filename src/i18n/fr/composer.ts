@@ -3,7 +3,7 @@ import { plural } from '../index.ts';
 export const composer = {
   composer: {
     placeholderStopped: 'Écris un message pour reprendre cette session…',
-    placeholderPermission: 'Une autorisation attend ta réponse ci-dessus (un message ici attendra la fin du tour)…',
+    placeholderPermission: 'Une demande attend ta réponse ci-dessus (un message ici attendra la fin du tour)…',
     placeholderBusy: (name: string) => `${name} travaille : ton message lui arrive sans l’interrompre…`,
     placeholder: 'Écris à cette session, ou / pour une commande (Entrée envoie, Maj+Entrée saute une ligne)',
     /** with several sessions open, one line */
