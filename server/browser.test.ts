@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -135,6 +135,24 @@ describe('the keys passed on to the page', () => {
     const selectAll = keyEvent({ kind: 'key', type: 'keyDown', key: 'a', code: 'KeyA', modifiers: MODIFIERS.meta });
     assert.equal(selectAll.type, 'rawKeyDown');
     assert.deepEqual(selectAll.commands, ['selectAll']);
+  });
+
+  it('types punctuation rather than the key sharing its character code (. is 46, Delete)', () => {
+    for (const key of ['.', "'", '(', '&', '%', '$', '#', '!', '"']) {
+      const down = keyEvent({ kind: 'key', type: 'keyDown', key, code: '', modifiers: 0 });
+      assert.equal(down.text, key);
+      assert.ok(![33, 34, 35, 36, 37, 38, 39, 40, 46].includes(Number(down.windowsVirtualKeyCode)), `${key} sent as key ${down.windowsVirtualKeyCode}`);
+    }
+    assert.equal(keyEvent({ kind: 'key', type: 'keyDown', key: '7', code: 'Digit7', modifiers: 0 }).windowsVirtualKeyCode, 55);
+  });
+});
+
+describe('the pictures of the page', () => {
+  it('follows each picture with the next part\'s headers, which is when Chrome shows it', () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const part = picturePart(jpeg);
+    assert.deepEqual(part.subarray(0, jpeg.length), jpeg);
+    assert.equal(part.subarray(jpeg.length).toString(), `\r\n${PICTURE_HEAD}`);
   });
 });
 

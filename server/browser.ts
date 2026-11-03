@@ -36,6 +36,16 @@ const IDLE_MS = 10 * 60_000;
 /** a page that does not read its pictures fast enough skips some rather than piling them up */
 const MAX_PENDING_BYTES = 2_000_000;
 const BOUNDARY = 'frame';
+/** The headers of a picture of the stream, written as soon as the one before ends (picturePart). */
+export const PICTURE_HEAD = `--${BOUNDARY}\r\nContent-Type: image/jpeg\r\n\r\n`;
+/**
+ * A picture as written to the stream: its bytes, then the next one's headers. Chrome shows a part of a multipart stream
+ * only once the next part's headers come (checked with Chrome 156), so a page that stood still showed the picture before
+ * its last one, until something moved again: a sign-in step whose address had changed but whose page stayed on the last.
+ */
+export function picturePart(data: Buffer): Buffer {
+  return Buffer.concat([data, Buffer.from(`\r\n${PICTURE_HEAD}`)]);
+}
 /** the largest picture asked for, either side: a computer's screen, or a phone's at its scale, whatever the agent resized it to */
 const PICTURE_MAX = 1920;
 
@@ -173,7 +183,10 @@ const MAC_COMMANDS: Record<string, string> = { a: 'selectAll', c: 'copy', x: 'cu
 export function keyEvent(input: Extract<BrowserInput, { kind: 'key' }>): Record<string, unknown> {
   const printable = [...input.key].length === 1;
   const shortcut = (input.modifiers & (MODIFIERS.ctrl | MODIFIERS.meta)) !== 0;
-  const code = KEY_CODES[input.key] ?? (printable ? input.key.toUpperCase().charCodeAt(0) : 0);
+  // a letter or a digit is sent with its own key's code; other characters with none, since their character code is the
+  // one of a key that types nothing (. is 46, Delete; ' and ( are 39 and 40, the arrows) and Chrome would run that key instead
+  // ponytail: 0 for punctuation, the US layout's codes (190 for .) if a page ever reads them
+  const code = KEY_CODES[input.key] ?? (/^[a-z0-9]$/i.test(input.key) ? input.key.toUpperCase().charCodeAt(0) : 0);
   const text = input.key === 'Enter' ? '\r' : printable && !shortcut ? input.key : undefined;
   const command = input.modifiers === MODIFIERS.meta ? MAC_COMMANDS[input.key.toLowerCase()] : undefined;
   return {
@@ -664,15 +677,14 @@ export class Browsers {
 
   private sendFrame(viewer: http.ServerResponse, data: Buffer) {
     if (viewer.writableLength > MAX_PENDING_BYTES) return;
-    viewer.write(`--${BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${data.length}\r\n\r\n`);
-    viewer.write(data);
-    viewer.write('\r\n');
+    viewer.write(picturePart(data));
   }
 
   /** The shown tab as a stream of JPEG pictures (multipart/x-mixed-replace, which an <img> plays), launching the browser if needed. */
   async watch(id: string, res: http.ServerResponse) {
     const live = await this.ensure(id);
     res.writeHead(200, { 'Content-Type': `multipart/x-mixed-replace; boundary=${BOUNDARY}`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.write(PICTURE_HEAD);
     live.viewers.add(res);
     if (live.frame) this.sendFrame(res, live.frame.data);
     res.on('close', () => {
