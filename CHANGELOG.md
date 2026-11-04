@@ -1,5 +1,10 @@
 # Versions
 
+## 1.24.3
+
+- Navigateur des sessions, grâce à JB : le point, l'apostrophe, les parenthèses, `&`, `%`, `$` et `#` se tapent enfin (le point effaçait le caractère suivant, les autres faisaient bouger le curseur).
+- La vue du navigateur montre chaque image dès qu'elle arrive : elle ne reste plus sur l'étape d'avant quand la page ne bouge plus (connexion Google par exemple).
+
 ## 1.24.2
 
 - Le tag automatique d'une nouvelle session n'affiche plus de bout de phrase comme « je n » quand Haiku répond une phrase au lieu d'un tag : la session reste sans tag.
