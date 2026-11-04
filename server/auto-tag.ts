@@ -14,13 +14,15 @@ const TIME_LIMIT_MS = 30_000;
 /** Enough of a long message to tell what it is about. */
 const MAX_MESSAGE = 2000;
 const MAX_TAG = 24;
+/** Past this many words the model wrote a sentence (« Je n'ai pas assez de contexte… »), not a tag. */
+const MAX_WORDS = 5;
 /** What the model answers for a message without a subject (a greeting). */
 const NO_TAG = '-';
 
 const SYSTEM_PROMPT = 'Give a short tag naming what a request is about, like a label on a folder. Answer only the tag: one word if it ' +
   'can be said in one, two at most, lowercase, no punctuation, in the request\'s language. Name the thing worked on, not the action: ' +
   '"refonte du paywall de Lilies" gives "paywall", "fix the login crash on Android" gives "login". If the request has no subject ' +
-  `yet (a greeting, "are you there?"), answer ${NO_TAG}`;
+  `yet (a greeting, "are you there?") or you are unsure, answer ${NO_TAG}. Never answer with a sentence`;
 
 export function buildTagArgs(message: string): string[] {
   return [
@@ -33,6 +35,7 @@ export function buildTagArgs(message: string): string[] {
 /** The model's answer as a tag: two words at most, without quotes or punctuation; null for none. */
 export function cleanTag(answer: string): string | null {
   const words = answer.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').split(/\s+/).filter((word) => word && word !== NO_TAG);
+  if (words.length > MAX_WORDS) return null;
   const tag = words.slice(0, 2).join(' ').slice(0, MAX_TAG).trim();
   return tag || null;
 }

@@ -10,6 +10,7 @@ describe('automatic tag', () => {
     assert.equal(cleanTag('auto-tag'), 'auto-tag');
     assert.equal(cleanTag('-'), null);
     assert.equal(cleanTag('  '), null);
+    assert.equal(cleanTag("Je n'ai pas assez de contexte pour donner un tag."), null);
   });
 
   it('reads the answer of claude -p, and nothing from an error', () => {
