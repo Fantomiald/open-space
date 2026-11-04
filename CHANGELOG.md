@@ -1,5 +1,9 @@
 # Versions
 
+## 1.24.2
+
+- Le tag automatique d'une nouvelle session n'affiche plus de bout de phrase comme « je n » quand Haiku répond une phrase au lieu d'un tag : la session reste sans tag.
+
 ## 1.24.1
 
 - Les demandes d'un agent (clé, question, autorisation) s'affichent en bas de la conversation, juste au-dessus du champ, comme dans Claude Code. En petite fenêtre, les boutons de la demande de clé restent visibles.
