@@ -18,6 +18,7 @@ import path from 'node:path';
 import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
 import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
+import type { AccountsBrowser } from '../shared/protocol.ts';
 import { asArray, asJson, isJson } from './json.ts';
 import { cookiesToClear, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
@@ -104,6 +105,14 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
     args.push(given[at]);
   }
   return { name: found?.[0] ?? 'playwright', server: { ...base, args: [...args, '--cdp-endpoint', endpoint] } };
+}
+
+/**
+ * The browser through which a session reaches the user's signed-in accounts, the one chosen in the settings
+ * (Preferences.accountsBrowser): none for a session whose folder was not trusted, since both reach those accounts.
+ */
+export function accountsBrowserOf(chosen: AccountsBrowser, untrusted: boolean): AccountsBrowser | null {
+  return untrusted ? null : chosen;
 }
 
 /** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */

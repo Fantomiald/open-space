@@ -45,7 +45,7 @@ import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
-import { Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
+import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -116,14 +116,17 @@ const mcpServers = userMcpServers(path.join(os.homedir(), '.claude.json'));
 /** the key to the shared browser (server/shared-browser.ts), apart from the session's own: a restricted session never gets it */
 const sharedKey = (sessionId: string) => browserKey(secret, `shared:${sessionId}`);
 /**
- * where a session's Playwright finds its browser: Open Space launches it on the first call (see server/browser.ts), and
- * the shared one, signed in to the user's own accounts, unless the session's folder was not trusted
+ * where a session's Playwright finds its browser: Open Space launches it on the first call (see server/browser.ts); and
+ * the browser of the user's own accounts chosen in the settings, the shared one or their Chrome through Claude in Chrome,
+ * unless the session's folder was not trusted
  */
 function browserMcp(sessionId: string, untrusted: boolean) {
-  if (!browsers.available) return {};
+  const accounts = accountsBrowserOf(settings.preferences.accountsBrowser, untrusted);
+  const chrome = accounts === 'chrome' ? { chrome: true } : {};
+  if (!browsers.available) return chrome;
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
-  const shared = untrusted ? undefined : `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}`;
-  return { mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared) };
+  const shared = accounts === 'shared' ? `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}` : undefined;
+  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared) };
 }
 
 /** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */

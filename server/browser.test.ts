@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -84,6 +84,15 @@ describe('the Playwright server of a session', () => {
     assert.equal(browserKey('secret', 's1'), browserKey('secret', 's1'));
     assert.notEqual(browserKey('secret', 's1'), browserKey('secret', 's2'));
     assert.notEqual(browserKey('secret', 's1'), browserKey('other', 's1'));
+  });
+});
+
+describe('the browser of the user’s accounts', () => {
+  it('is the one chosen in the settings, for a trusted folder only', () => {
+    assert.equal(accountsBrowserOf('shared', false), 'shared');
+    assert.equal(accountsBrowserOf('chrome', false), 'chrome');
+    assert.equal(accountsBrowserOf('chrome', true), null, 'a folder not trusted never reaches the user’s Chrome');
+    assert.equal(accountsBrowserOf('shared', true), null, 'nor the shared browser');
   });
 });
 

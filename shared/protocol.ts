@@ -342,6 +342,8 @@ export interface SessionInfo {
   toldPlace?: string;
   /** its conversation knows the rules of the shared browser (system prompt or Session.sharedBrowserNote) */
   toldSharedBrowser?: true;
+  /** its conversation knows the rules of the user's own Chrome (system prompt or Session.chromeNote); never with toldSharedBrowser */
+  toldChrome?: true;
   /** its conversation knows os-secret (server/secrets.ts): in the system prompt of a new one, else told once in a message */
   toldSecrets?: true;
 }
@@ -493,7 +495,16 @@ export interface Preferences {
   idleCompact: number;
   /** when the launcher offers to put a new session on a branch of its own (see IsolateMode) */
   isolate: IsolateMode;
+  /** where the sessions of trusted folders reach the user's signed-in accounts (see AccountsBrowser) */
+  accountsBrowser: AccountsBrowser;
 }
+
+/**
+ * Where the sessions reach the user's signed-in accounts: Open Space's shared browser (server/shared-browser.ts), or the
+ * user's own Chrome through the Claude in Chrome extension (`claude --chrome`), which reaches every account it is signed in to.
+ */
+export const ACCOUNTS_BROWSERS = ['shared', 'chrome'] as const;
+export type AccountsBrowser = (typeof ACCOUNTS_BROWSERS)[number];
 
 /** The range of Preferences.glassOpacity: under its minimum, text on a pane over a bright sky can no longer be read. */
 export const GLASS_OPACITY = { min: 40, max: 100, step: 5, initial: 70 } as const;

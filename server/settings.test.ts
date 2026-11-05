@@ -32,6 +32,8 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ remoteByDefault: true }), { remoteByDefault: true });
     assert.deepEqual(parsePreferences({ remoteByDefault: 'yes' }), {});
     assert.deepEqual(parsePreferences({ tagColors: true }), { tagColors: true });
+    assert.deepEqual(parsePreferences({ accountsBrowser: 'chrome' }), { accountsBrowser: 'chrome' });
+    assert.deepEqual(parsePreferences({ accountsBrowser: 'firefox' }), {}, 'an unknown browser is left out');
     assert.equal(parsePreferences({ glassOpacity: 45 }).glassOpacity, 45);
     assert.deepEqual(parsePreferences({ glassOpacity: 5 }), {}, 'too see-through to read is left out');
     assert.deepEqual(parsePreferences({ isolate: 'always' }), { isolate: 'always' });

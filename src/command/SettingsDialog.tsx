@@ -6,7 +6,7 @@ import type { TerminalKind } from '../../shared/terminal.ts';
 import { applyGlassOpacity } from '../design/glass.ts';
 import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
-import { EFFORTS, GLASS_OPACITY, WINDOW_STYLES, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, EFFORTS, GLASS_OPACITY, WINDOW_STYLES, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
@@ -16,7 +16,7 @@ import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection 
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
   ActivityIcon, AgentIcon, TagIcon, BellIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
-  CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
+  CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
 import { AccountAction } from './AccountAction.tsx';
@@ -42,7 +42,7 @@ type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
   general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['autoPip']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -356,6 +356,13 @@ function SettingsEditor() {
         <Row key={id} id={id} flash={flash} icon={<BranchIcon />} title={rows.isolate.title} hint={rows.isolate.hint}>
           <select aria-labelledby={`setting-${id}-title`} value={draft.isolate} onChange={(e) => change({ isolate: e.target.value as Preferences['isolate'] })}>
             {ISOLATE_MODES.map((mode) => <option key={mode} value={mode}>{rows.isolate.options[mode]}</option>)}
+          </select>
+        </Row>
+      );
+      case 'accountsBrowser': return (
+        <Row key={id} id={id} flash={flash} icon={<GlobeIcon />} title={rows.accountsBrowser.title} hint={rows.accountsBrowser.hint}>
+          <select aria-labelledby={`setting-${id}-title`} value={draft.accountsBrowser} onChange={(e) => change({ accountsBrowser: e.target.value as Preferences['accountsBrowser'] })}>
+            {ACCOUNTS_BROWSERS.map((browser) => <option key={browser} value={browser}>{rows.accountsBrowser.options[browser]}</option>)}
           </select>
         </Row>
       );

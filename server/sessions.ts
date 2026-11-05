@@ -20,6 +20,9 @@ import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectVi
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
+
+/** The browser options of a session's launch (SessionManagerDeps.browserMcp). */
+type BrowserLaunch = Pick<LaunchOptions, 'mcpConfig' | 'agents' | 'chrome'>;
 import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, lastName, listConversations, searchConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
@@ -74,8 +77,11 @@ export interface SessionManagerDeps {
   runShell?: ShellRunner;
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
   probeCatalog?: CatalogProbe | null;
-  /** the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts) */
-  browserMcp?: (sessionId: string, untrusted: boolean) => Pick<LaunchOptions, 'mcpConfig' | 'agents'>;
+  /**
+   * the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts),
+   * and --chrome when the user's own Chrome is the browser of their accounts (Preferences.accountsBrowser)
+   */
+  browserMcp?: (sessionId: string, untrusted: boolean) => BrowserLaunch;
   /** the keys the user gives the sessions, and the variables that let a session's os-secret reach them (server/secrets.ts) */
   secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
 }
@@ -108,6 +114,8 @@ export class SessionManager {
   private asides = new Map<string, { aside: Aside; stop: () => void }>();
   /** new conversations started here that have not sent a message with words yet: that message gives their tag */
   private awaitingTag = new Set<string>();
+  /** the browsers each session's last process was launched with: what its conversation is told about is what it has */
+  private launchedBrowsers = new Map<string, BrowserLaunch>();
 
   constructor(deps: SessionManagerDeps) {
     this.deps = deps;
@@ -255,7 +263,9 @@ export class SessionManager {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
         const env = this.deps.secrets?.env(info.id);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...this.deps.browserMcp?.(info.id, !!info.untrusted), ...(env ? { env } : {}) }, handlers);
+        const browsers = this.deps.browserMcp?.(info.id, !!info.untrusted) ?? {};
+        this.launchedBrowsers.set(info.id, browsers);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...browsers, ...(env ? { env } : {}) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -272,7 +282,8 @@ export class SessionManager {
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
-      sharedBrowser: () => hasSharedBrowser(this.deps.browserMcp?.(info.id, !!info.untrusted).mcpConfig),
+      sharedBrowser: () => hasSharedBrowser(this.launchedBrowsers.get(info.id)?.mcpConfig),
+      chrome: () => !!this.launchedBrowsers.get(info.id)?.chrome,
       ...(this.deps.secrets ? { secretNames: () => this.deps.secrets?.store.names(info.id) ?? [] } : {}),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
@@ -853,7 +864,7 @@ export class SessionManager {
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
-      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
       ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tag ? { tag: source.tag } : {}),
     });
     const log = await this.openLog(info.id);
@@ -957,6 +968,7 @@ export class SessionManager {
     }
     this.closeAside(id);
     this.sessions.delete(id);
+    this.launchedBrowsers.delete(id);
     const log = this.logs.get(id);
     this.logs.delete(id);
     await log?.close();
@@ -1070,6 +1082,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     worktree: parseWorktree(raw.worktree),
     toldPlace: asString(raw.toldPlace) || undefined,
     toldSharedBrowser: raw.toldSharedBrowser === true || undefined,
+    toldChrome: raw.toldChrome === true || undefined,
     toldSecrets: raw.toldSecrets === true || undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),

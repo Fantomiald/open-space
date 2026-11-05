@@ -8,7 +8,7 @@ import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
-import { placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
@@ -34,8 +34,10 @@ export interface SessionDeps {
   onAttention?: (kind: AttentionKind, session: SessionInfo) => void;
   /** a sub-agent is done, its task finished or stopped (`type`: its subagent_type) */
   onSubagentLeft?: (type: string) => void;
-  /** whether the session's process gets the shared browser (server/shared-browser.ts) */
+  /** whether the session's process was launched with the shared browser (server/shared-browser.ts) */
   sharedBrowser?: () => boolean;
+  /** whether the session's process was launched with the user's own Chrome (claude --chrome) */
+  chrome?: () => boolean;
   /** the names of the keys the user gave it (server/secrets.ts); absent without os-secret */
   secretNames?: () => string[];
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
@@ -351,14 +353,18 @@ export class Session {
     if (command === 'compact') this.info.compacting = 'manual';
     const spawning = !this.process?.alive;
     if (spawning) {
-      // a new conversation gets the name in its system prompt (see buildClaudeArgs), and where it works
-      if (!this.info.resumable && !this.info.forkOf) {
+      // a new conversation gets the name in its system prompt (see buildClaudeArgs), where it works, and the browsers its process was launched with
+      const fresh = !this.info.resumable && !this.info.forkOf;
+      if (fresh) {
         this.info.introducedAs = this.info.name;
         this.info.toldPlace = this.info.cwd;
-        this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
         this.info.toldSecrets = this.deps.secretNames ? true : undefined;
       }
       this.startProcess();
+      if (fresh) {
+        this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
+        this.info.toldChrome = this.deps.chrome?.() ? true : undefined;
+      }
       this.info.error = undefined;
     }
     let outgoing = clean;
@@ -372,10 +378,16 @@ export class Session {
       outgoing = placeNote(this.info.cwd, this.info.worktree) + outgoing;
       this.info.toldPlace = this.info.cwd;
     }
-    // the shared browser came after its conversation started: told what it is for, once
+    // the shared browser or the user's Chrome came after its conversation started, or replaced the other: told what it is for, once
     if (!this.info.toldSharedBrowser && !command && this.deps.sharedBrowser?.()) {
       outgoing = sharedBrowserNote(this.deps.identity?.().user) + outgoing;
       this.info.toldSharedBrowser = true;
+      this.info.toldChrome = undefined;
+    }
+    if (!this.info.toldChrome && !command && this.deps.chrome?.()) {
+      outgoing = chromeNote(this.deps.identity?.().user) + outgoing;
+      this.info.toldChrome = true;
+      this.info.toldSharedBrowser = undefined;
     }
     if (!this.info.toldSecrets && !command && this.deps.secretNames) {
       outgoing = secretsNote(this.deps.identity?.().user) + outgoing;
@@ -475,6 +487,7 @@ export class Session {
       this.info.context = undefined;
       // the rules of the shared browser went with the old conversation when they were told in a message: told again
       this.info.toldSharedBrowser = undefined;
+      this.info.toldChrome = undefined;
       this.info.toldSecrets = undefined;
       this.record({ k: 'cleared' });
       this.cleared = true;
