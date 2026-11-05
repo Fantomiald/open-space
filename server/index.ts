@@ -148,6 +148,7 @@ const sessions = new SessionManager({
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   tagger: claude ? createTagger(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   autoTag: () => settings.preferences.autoTag,
+  remoteByDefault: () => settings.preferences.remoteByDefault,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,

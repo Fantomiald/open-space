@@ -1,5 +1,13 @@
 # Versions
 
+## 1.25.0
+
+- Style des fenêtres (Général > Affichage) : l'habillage des fenêtres et du fil se choisit à part du thème du bureau. Classique, Terminal (le fil se lit comme Claude Code dans un terminal), Hacker, Tokyo néon, Donjon, Navette spatiale, Plage, Pirate, Forêt, ou Assorti au bureau, qui suit le thème. Seul l'habillage change, tous les boutons restent.
+- Opacité des fenêtres (Général > Affichage) : un curseur règle d'un coup tout le verre, en-tête, fenêtres et menus compris.
+- Nouveau thème de bureau : la cave de hackers, avec ses écrans, ses câbles et du code en fond.
+- Remote Control par défaut (Sessions > Par défaut) : chaque nouvelle conversation est joignable depuis ton téléphone et claude.ai. Elle garde son process actif : à 6 sessions actives sur 8, les suivantes démarrent sans, et leur bouton l'active quand même.
+- Couleur sur les tags (Général > Affichage, coupé par défaut) : chaque tag a sa couleur, tirée de son nom, donc la même partout, dans les fenêtres, les listes et la salle.
+
 ## 1.24.4
 
 - Open Space ne redémarre plus tout seul après avoir téléchargé une mise à jour, ce qui coupait les sessions en cours : elle s'installe quand tu redémarres depuis les réglages ou quand tu quittes l'app.

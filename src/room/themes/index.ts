@@ -3,6 +3,7 @@ import type { Lighting } from '../lighting.ts';
 import type { RoomTheme } from '../../../shared/room-themes.ts';
 import { roomTheme, type ThemeKit } from './kit.ts';
 import { BEACH } from './beach.ts';
+import { CELLAR } from './cellar.ts';
 import { DUNGEON } from './dungeon.ts';
 import { FOREST } from './forest.ts';
 import { PIRATE } from './pirate.ts';
@@ -10,7 +11,7 @@ import { SPACE } from './space.ts';
 import { TOKYO } from './tokyo.ts';
 
 /** The office is the room as it is: no kit, everything drawn as usual. */
-const KITS: Readonly<Record<RoomTheme, ThemeKit | null>> = { office: null, space: SPACE, tokyo: TOKYO, dungeon: DUNGEON, beach: BEACH, pirate: PIRATE, forest: FOREST };
+const KITS: Readonly<Record<RoomTheme, ThemeKit | null>> = { office: null, space: SPACE, tokyo: TOKYO, dungeon: DUNGEON, beach: BEACH, pirate: PIRATE, forest: FOREST, cellar: CELLAR };
 
 export const themeKit = (): ThemeKit | null => KITS[roomTheme()];
 /** The light of the hour as the theme sees it. */

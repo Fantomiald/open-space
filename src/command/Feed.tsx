@@ -189,7 +189,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
       );
     case 'assistant':
       return (
-        <li className="cp-feed__item" data-kind="assistant">
+        <li className="cp-feed__item" data-kind="assistant" data-named={item.author ? 'true' : undefined}>
           <span className="cp-feed__who">{item.author ?? speaker}<Stamp at={item.at} /></span>
           <Prose className="cp-feed__text" text={item.text} />
         </li>
@@ -408,7 +408,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
             ) : working && !shownAgent && <Working items={feed.items} speaker={speaker} sessionId={sessionId} />}
             {!shownAgent && !draft && <BranchCardView sessionId={sessionId} />}
             {shownAgent?.report && (
-              <li className="cp-feed__item" data-kind="assistant">
+              <li className="cp-feed__item" data-kind="assistant" data-named="true">
                 <span className="cp-feed__who">{t.session.feed.report}</span>
                 <Prose className="cp-feed__text" text={shownAgent.report} />
               </li>

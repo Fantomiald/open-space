@@ -17,6 +17,7 @@ import { ChevronDownIcon, ChevronUpIcon, CompactIcon } from './Icons.tsx';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { Marquee } from './Marquee.tsx';
+import { tagHue } from '../design/tag-colors.ts';
 
 const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
@@ -43,7 +44,7 @@ function RowName({ session, label }: { session: SessionInfo; label: string }) {
   return (
     <>
       <span className="cp-status__name">{label}</span>
-      {session.tag && <span className="cp-tag cp-status__tag">{session.tag}</span>}
+      {session.tag && <span className="cp-tag cp-status__tag" data-hue={tagHue(session.tag)}>{session.tag}</span>}
       {session.worktree && <BranchMark branch={session.worktree.branch} />}
     </>
   );

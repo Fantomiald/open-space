@@ -29,6 +29,7 @@ import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
 import { useAttachments } from './useAttachments.ts';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
+import { tagHue } from '../design/tag-colors.ts';
 
 const NO_EVENTS: never[] = [];
 
@@ -157,7 +158,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
               {/* shown only where the line under the title is hidden for room */}
               {session.tag
-                ? <button type="button" className="cp-tag cp-detail__title-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{session.tag}</span></button>
+                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={tagHue(session.tag)} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{session.tag}</span></button>
                 : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.tagShort}</button>}
             </h2>
           )}
@@ -180,7 +181,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
         </div>
         <div className="cp-detail__line">
           {editing === 'tag' ? field('tag') : session.tag
-            ? <button type="button" className="cp-tag" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
+            ? <button type="button" className="cp-tag" data-hue={tagHue(session.tag)} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
             : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
           {session.worktree && (
             <button type="button" className="cp-branch-pill" title={t.branches.pill(session.worktree.branch, session.worktree.base)} onClick={() => openBranches(session.worktree?.home ?? session.cwd)}>

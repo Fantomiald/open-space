@@ -9,7 +9,7 @@ import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
-import { DEFAULT_PERMISSION_MODE, EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, type Preferences } from '../shared/protocol.ts';
+import { DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 import { expandHomePath, isFullPath } from '../shared/paths.ts';
 import { TERMINALS, type TerminalKind } from '../shared/terminal.ts';
@@ -27,8 +27,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timestamps: false,
   turnDuration: true,
   reduceMotion: false,
+  glassOpacity: GLASS_OPACITY.initial,
+  windowStyle: 'classic',
+  tagColors: false,
   idleCompact: 0,
   autoTag: false,
+  remoteByDefault: false,
   // a settings file from before worktrees has none: it gets this one
   isolate: 'busy',
 };
@@ -45,9 +49,11 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
-  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'reduceMotion', 'autoTag'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
+  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'reduceMotion', 'autoTag', 'remoteByDefault', 'tagColors'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
   if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
+  if (typeof raw.glassOpacity === 'number' && raw.glassOpacity >= GLASS_OPACITY.min && raw.glassOpacity <= GLASS_OPACITY.max) found.glassOpacity = raw.glassOpacity;
   if (IDLE_COMPACT_MINUTES.some((minutes) => minutes === raw.idleCompact)) found.idleCompact = raw.idleCompact as number;
+  if (WINDOW_STYLES.some((style) => style === raw.windowStyle)) found.windowStyle = raw.windowStyle as Preferences['windowStyle'];
   if (TIME_FORMATS.some((format) => format === raw.timeFormat)) found.timeFormat = raw.timeFormat as Preferences['timeFormat'];
   if (ISOLATE_MODES.some((mode) => mode === raw.isolate)) found.isolate = raw.isolate as Preferences['isolate'];
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import type { Look } from '../../shared/look.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
-import type { Preferences } from '../../shared/protocol.ts';
+import { GLASS_OPACITY, type Preferences } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { chibiHead } from '../room/chibi.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -36,7 +36,7 @@ export function Onboarding() {
     journalFolder: '',
     favoriteNotes: [],
     metricsFile: '',
-    copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, idleCompact: 0,
+    copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, remoteByDefault: false, idleCompact: 0,
   });
 
   useEffect(() => { send({ t: 'suggestRoots' }); }, [send]);

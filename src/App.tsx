@@ -17,6 +17,9 @@ import { SessionList } from './command/SessionList.tsx';
 import { Sky, refreshFrost } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useFestival } from './room/useFestival.ts';
+import { applyGlassOpacity } from './design/glass.ts';
+import { shownWindowStyle } from './design/window-style.ts';
+import { applyTagColors } from './design/tag-colors.ts';
 import { setRoomTheme } from './room/themes/index.ts';
 import { Stack } from './command/Stack.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
@@ -47,9 +50,15 @@ export function App() {
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
   const reduceMotion = useSessions((s) => s.preferences.reduceMotion);
+  const glassOpacity = useSessions((s) => s.preferences.glassOpacity);
+  const windowStyle = useSessions((s) => s.preferences.windowStyle);
+  const tagColors = useSessions((s) => s.preferences.tagColors);
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
   useEffect(() => { document.documentElement.dataset.motion = reduceMotion ? 'reduced' : 'full'; }, [reduceMotion]);
+  useEffect(() => { applyGlassOpacity(glassOpacity); }, [glassOpacity]);
+  useEffect(() => { applyTagColors(tagColors); }, [tagColors]);
+  useEffect(() => { document.documentElement.dataset.windowStyle = shownWindowStyle(windowStyle, theme); }, [windowStyle, theme]);
   // the frost of the panes showed the room for up to a second after it went away (focus mode): drawn again at once
   useEffect(() => { const frame = requestAnimationFrame(refreshFrost); return () => cancelAnimationFrame(frame); }, [view]);
 

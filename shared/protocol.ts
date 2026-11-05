@@ -454,6 +454,8 @@ export interface Preferences {
   officeLife: boolean;
   /** a new session gets a tag of one or two words from its first message (server/auto-tag.ts) */
   autoTag: boolean;
+  /** Remote Control turned on for each new session, as long as live slots are left (server/sessions.ts) */
+  remoteByDefault: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
   /** the place both rooms are dressed as (shared/room-themes.ts) */
@@ -482,15 +484,26 @@ export interface Preferences {
   turnDuration: boolean;
   /** animations and transitions cut short, whatever the system says */
   reduceMotion: boolean;
+  /** how much of what is behind the glass panes their tint hides, in percent (see GLASS_OPACITY) */
+  glassOpacity: number;
+  windowStyle: WindowStyle;
+  /** each session tag in a colour of its own, from its name (src/design/tag-colors.ts) */
+  tagColors: boolean;
   /** minutes without a message after which a long conversation is compacted on its own (0 : never) */
   idleCompact: number;
   /** when the launcher offers to put a new session on a branch of its own (see IsolateMode) */
   isolate: IsolateMode;
 }
 
+/** The range of Preferences.glassOpacity: under its minimum, text on a pane over a bright sky can no longer be read. */
+export const GLASS_OPACITY = { min: 40, max: 100, step: 5, initial: 70 } as const;
+
 /** The choices of Preferences.idleCompact, in minutes. */
 export const IDLE_COMPACT_MINUTES = [0, 15, 30, 60, 120, 240] as const;
 
+/** How the windows and the thread are dressed, whatever the room's theme: only a skin, every control stays (tokens.css, components.css). */
+export const WINDOW_STYLES = ['classic', 'match', 'terminal', 'hacker', 'neon', 'dungeon', 'space', 'beach', 'pirate', 'forest'] as const;
+export type WindowStyle = (typeof WINDOW_STYLES)[number];
 export const TIME_FORMATS = ['auto', '24h', '12h'] as const;
 export type TimeFormat = (typeof TIME_FORMATS)[number];
 

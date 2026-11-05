@@ -27,6 +27,13 @@ describe('settings', () => {
     assert.equal(parsePreferences({ theme: 'moon' }).theme, undefined, 'an unknown theme is left out');
     assert.deepEqual(parsePreferences({ effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false, reduceMotion: 'yes' }), { effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false });
     assert.deepEqual(parsePreferences({ effort: 'ultra', timeFormat: 'swatch' }), {});
+    assert.deepEqual(parsePreferences({ windowStyle: 'terminal' }), { windowStyle: 'terminal' });
+    assert.deepEqual(parsePreferences({ windowStyle: 'matrix' }), {});
+    assert.deepEqual(parsePreferences({ remoteByDefault: true }), { remoteByDefault: true });
+    assert.deepEqual(parsePreferences({ remoteByDefault: 'yes' }), {});
+    assert.deepEqual(parsePreferences({ tagColors: true }), { tagColors: true });
+    assert.equal(parsePreferences({ glassOpacity: 45 }).glassOpacity, 45);
+    assert.deepEqual(parsePreferences({ glassOpacity: 5 }), {}, 'too see-through to read is left out');
     assert.deepEqual(parsePreferences({ isolate: 'always' }), { isolate: 'always' });
     assert.deepEqual(parsePreferences({ isolate: 'sometimes' }), {}, 'an unknown way to isolate is left out');
     assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {

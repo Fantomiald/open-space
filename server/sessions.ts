@@ -38,6 +38,8 @@ import {
 
 const STATES: ReadonlySet<string> = new Set(['starting', 'work', 'perm', 'wait', 'done', 'closed', 'error']);
 const SAVE_DELAY_MS = 500;
+/** A session in Remote Control keeps its process: those on by default leave this many live slots for the others to work in. */
+const REMOTE_FREE_SLOTS = 2;
 const MAX_COMMAND_DESCRIPTION = 200;
 /** a shorter conversation is not worth compacting while idle (Preferences.idleCompact): Claude Code alone starts near 45k */
 const IDLE_COMPACT_MIN_TOKENS = 100_000;
@@ -66,6 +68,8 @@ export interface SessionManagerDeps {
   /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
   tagger?: Tagger | null;
   autoTag?: () => boolean;
+  /** Preferences.remoteByDefault */
+  remoteByDefault?: () => boolean;
   /** runs a command typed with "!" (see shell.ts) */
   runShell?: ShellRunner;
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
@@ -532,9 +536,19 @@ export class SessionManager {
         throw error;
       }
     }
-    if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base);
-    else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '');
+    // Remote Control needs the process, which waits for the worktree
+    if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base).then(() => this.remoteByDefault(session));
+    else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '').then(() => this.remoteByDefault(session));
+    else this.remoteByDefault(session);
     return session.snapshot();
+  }
+
+  /** A new session in Remote Control when the settings say so; past the slots it keeps free, it stays off (its button still turns it on). */
+  private remoteByDefault(session: Session) {
+    if (!this.deps.remoteByDefault?.() || !this.sessions.has(session.snapshot().id)) return;
+    const others = [...this.sessions.values()].filter((other) => other !== session && other.alive).length;
+    if (others + 1 > this.deps.config.maxLive - REMOTE_FREE_SLOTS) return;
+    session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control on for ${session.snapshot().name}`, error));
   }
 
   // ── worktrees: a branch and a folder of its own per session (server/worktrees.ts) ──
@@ -849,6 +863,7 @@ export class SessionManager {
     this.deps.broadcast({ t: 'session', session: session.snapshot() });
     this.save();
     session.showHistory(st.sessions.duplicateOf(source.name), await lastExchanges(source.cwd, conversation, 8, this.deps.home));
+    this.remoteByDefault(session);
     return session.snapshot();
   }
 

@@ -24,6 +24,7 @@ import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
 import { Visits, type Visitor } from './visitors.ts';
 import { stackLabels } from './labels.ts';
+import { tagColor } from '../design/tag-colors.ts';
 
 /** How long a visitor at a birthday party wishes it, in ms. */
 const WISH_MS = 4000;
@@ -37,6 +38,8 @@ export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | null;
 export interface FrameOptions {
   time: number;
   reducedMotion: boolean;
+  /** Preferences.tagColors */
+  tagColors: boolean;
   /** the session open in the detail panel */
   /** the sessions open in the right column: their people are framed */
   openSessionIds: readonly string[];
@@ -427,6 +430,7 @@ interface NameTag {
   colour: string;
   status: Exclude<Status, null> | null;
   tag: string | null;
+  tagColor?: string | null;
   /** on a branch of its own: a little branch after the name */
   branch?: boolean;
   /** whose sub-agents they are, for their faces */
@@ -555,7 +559,7 @@ function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, lef
   }
   if (tag.tag) {
     x = separator(context, x, top);
-    context.fillStyle = P.sessionTag;
+    context.fillStyle = tag.tagColor ?? P.sessionTag;
     context.fillText(tag.tag, x, top + 10);
     x += textWidthOf(context, tag.tag);
   }
@@ -737,7 +741,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag, branch: character.person.branch,
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag, tagColor: options.tagColors && character.person.tag ? tagColor(character.person.tag) : null, branch: character.person.branch,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },
     });

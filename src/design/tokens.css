@@ -13,6 +13,7 @@
   --font-ui: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --font-pixel: 'Pixelify Sans', 'Plus Jakarta Sans Variable', ui-monospace, monospace;
+  --font-round: 'Fredoka', 'Plus Jakarta Sans Variable', system-ui, sans-serif;
   /* the whiteboard's note titles, as written with a marker (Kalam, OFL, bundled from @fontsource/kalam) */
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
@@ -77,11 +78,15 @@
    * Chromium drops a live blur for a frame whenever the page repaints (typing, scrolling, a bubble), and panes blink.
    * What opens over the panes (menus, popovers, dialogs) is a denser tint alone.
    */
-  --glass: rgb(16 20 36 / 0.70);
+  --glass-opacity: 0.70; /* Preferences.glassOpacity, set by src/design/glass.ts */
+  --glass-rgb: 16 20 36;
+  --glass-dense-rgb: 16 19 34;
+  --glass: rgb(var(--glass-rgb) / var(--glass-opacity));
   --glass-surface: linear-gradient(var(--glass), var(--glass)), var(--frost, none) 0 0 / 100vw 100vh no-repeat fixed;
-  --glass-strong: rgb(16 19 34 / 0.94);
+  /* never as see-through as the panes: what opens over them must stay readable over their text */
+  --glass-strong: rgb(var(--glass-dense-rgb) / calc(0.8 + 0.2 * var(--glass-opacity)));
   /* the same, for what must hide what scrolls under it (a sticky bar) */
-  --glass-solid: rgb(16 19 34);
+  --glass-solid: rgb(var(--glass-dense-rgb));
   /* a menu over fields: nothing under it shows through */
   --menu-solid: rgb(20 24 40);
   --glass-tint: rgb(255 255 255 / 0.05);
@@ -170,3 +175,256 @@
 
 }
 
+/*
+ * The cellar (src/room/themes/cellar.ts) dresses the panes too: a terminal, light monospace text on near black, tighter
+ * corners, phosphor green for what the indigo accent means elsewhere.
+ */
+/* Preferences.windowStyle: the window styles other than the classic one, apart from the room's theme */
+:root[data-window-style='hacker'] {
+  --font-ui: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --glass-rgb: 6 10 8;
+  --glass-dense-rgb: 7 11 9;
+  --menu-solid: rgb(9 14 11);
+  --glass-tint: rgb(190 255 215 / 0.05);
+  --glass-edge: rgb(150 255 190 / 0.16);
+  --glass-shadow: inset 0 1px 0 rgb(150 255 190 / 0.05), 0 18px 50px rgb(0 0 0 / 0.6);
+  --selected: #d6f5df;
+  --selected-text: #07110b;
+  --bubble-mine: rgb(95 240 143 / 0.16);
+  --bubble-mine-edge: rgb(95 240 143 / 0.38);
+  --track: rgb(190 255 215 / 0.2);
+  --color-backdrop: linear-gradient(180deg, #040605, #0a100d);
+  --color-bg: #060a08;
+  --color-surface: #0b110e;
+  --color-surface-sunken: #040705;
+  --color-surface-raised: #121a15;
+  --color-border: #1c2a22;
+  --color-border-strong: #2a3f32;
+  --color-text: #d6f5df;
+  --color-text-muted: #84a591;
+  --color-accent: #5ff08f;
+  --color-accent-text: #04140a;
+  --color-accent-soft: rgb(95 240 143 / 0.22);
+  --color-focus: #a4f5c0;
+  --flash: rgb(95 240 143 / 0.14);
+}
+
+:root[data-window-style='terminal'] {
+  --font-ui: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --glass-rgb: 20 21 24;
+  --glass-dense-rgb: 24 25 29;
+  --menu-solid: rgb(28 29 33);
+  --glass-tint: rgb(255 255 255 / 0.04);
+  --glass-edge: rgb(255 255 255 / 0.12);
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 18px 50px rgb(0 0 0 / 0.55);
+  --selected: #e6e6e6;
+  --selected-text: #141518;
+  --bubble-mine: rgb(255 255 255 / 0.1);
+  --bubble-mine-edge: transparent;
+  --track: rgb(255 255 255 / 0.2);
+  --color-bg: #141518;
+  --color-surface: #1a1b1f;
+  --color-surface-sunken: #101114;
+  --color-border: #2c2e33;
+  --color-border-strong: #44464d;
+  --color-text: #e4e4e4;
+  --color-text-muted: #8f9198;
+  --color-accent: #e58f78;
+  --color-accent-text: #1e100b;
+  --color-accent-soft: rgb(229 143 120 / 0.24);
+  --color-focus: #f0b3a1;
+}
+
+:root[data-window-style='neon'] {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --glass-rgb: 20 10 38;
+  --glass-dense-rgb: 24 12 44;
+  --menu-solid: rgb(28 14 50);
+  --glass-tint: rgb(255 120 200 / 0.05);
+  --glass-edge: rgb(255 79 163 / 0.42);
+  --glass-shadow: inset 0 1px 0 rgb(92 230 255 / 0.12), 0 0 22px rgb(255 79 163 / 0.2), 0 18px 50px rgb(4 0 16 / 0.55);
+  --selected: #ffd9ee;
+  --selected-text: #2a0418;
+  --bubble-mine: rgb(255 79 163 / 0.2);
+  --bubble-mine-edge: rgb(255 79 163 / 0.55);
+  --track: rgb(92 230 255 / 0.25);
+  --color-bg: #12082a;
+  --color-surface: #1a0e36;
+  --color-surface-sunken: #0c0520;
+  --color-surface-raised: #241446;
+  --color-border: #38225a;
+  --color-border-strong: #5a3a88;
+  --color-text: #f4eaff;
+  --color-text-muted: #ab9ecb;
+  --color-accent: #ff5fae;
+  --color-accent-text: #2a0418;
+  --color-accent-soft: rgb(255 95 174 / 0.26);
+  --color-focus: #5ce6ff;
+  --flash: rgb(92 230 255 / 0.14);
+}
+
+:root[data-window-style='dungeon'] {
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --glass-rgb: 34 27 38;
+  --glass-dense-rgb: 38 30 42;
+  --menu-solid: rgb(44 35 48);
+  --glass-tint: rgb(240 210 150 / 0.05);
+  --glass-edge: rgb(230 180 85 / 0.32);
+  --glass-shadow: inset 0 1px 0 rgb(240 210 150 / 0.1), 0 18px 50px rgb(8 4 10 / 0.6);
+  --selected: #f4e3b8;
+  --selected-text: #2a1b05;
+  --bubble-mine: rgb(230 180 85 / 0.18);
+  --bubble-mine-edge: rgb(230 180 85 / 0.45);
+  --track: rgb(240 210 150 / 0.22);
+  --color-bg: #1c1620;
+  --color-surface: #262028;
+  --color-surface-sunken: #151017;
+  --color-surface-raised: #322a34;
+  --color-border: #44394a;
+  --color-border-strong: #6a5a58;
+  --color-text: #f0e7d4;
+  --color-text-muted: #ad9f94;
+  --color-accent: #e8b859;
+  --color-accent-text: #2a1b05;
+  --color-accent-soft: rgb(232 184 89 / 0.24);
+  --color-focus: #f6d88e;
+  --flash: rgb(232 184 89 / 0.14);
+}
+
+:root[data-window-style='space'] {
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --glass-rgb: 13 21 38;
+  --glass-dense-rgb: 15 24 42;
+  --menu-solid: rgb(18 28 48);
+  --glass-tint: rgb(120 210 255 / 0.05);
+  --glass-edge: rgb(90 209 255 / 0.34);
+  --glass-shadow: inset 0 1px 0 rgb(190 235 255 / 0.1), 0 18px 50px rgb(2 6 18 / 0.6);
+  --selected: #dff4ff;
+  --selected-text: #04202e;
+  --bubble-mine: rgb(90 209 255 / 0.17);
+  --bubble-mine-edge: rgb(90 209 255 / 0.42);
+  --track: rgb(190 235 255 / 0.22);
+  --color-bg: #0b1322;
+  --color-surface: #111b30;
+  --color-surface-sunken: #070d1a;
+  --color-surface-raised: #18243c;
+  --color-border: #23324d;
+  --color-border-strong: #3a5272;
+  --color-text: #e8f3ff;
+  --color-text-muted: #94a9c2;
+  --color-accent: #5ad1ff;
+  --color-accent-text: #04202e;
+  --color-accent-soft: rgb(90 209 255 / 0.24);
+  --color-focus: #a6e6ff;
+  --flash: rgb(90 209 255 / 0.14);
+}
+
+:root[data-window-style='beach'] {
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --glass-rgb: 12 42 50;
+  --glass-dense-rgb: 14 46 54;
+  --menu-solid: rgb(18 52 60);
+  --glass-tint: rgb(170 240 230 / 0.06);
+  --glass-edge: rgb(240 217 166 / 0.3);
+  --glass-shadow: inset 0 1px 0 rgb(240 217 166 / 0.12), 0 18px 50px rgb(2 20 26 / 0.5);
+  --selected: #fbeecb;
+  --selected-text: #2a1d06;
+  --bubble-mine: rgb(79 216 207 / 0.18);
+  --bubble-mine-edge: rgb(79 216 207 / 0.45);
+  --track: rgb(240 217 166 / 0.25);
+  --color-bg: #0c262e;
+  --color-surface: #123540;
+  --color-surface-sunken: #081c22;
+  --color-surface-raised: #184450;
+  --color-border: #21525c;
+  --color-border-strong: #3b7780;
+  --color-text: #fdf5e2;
+  --color-text-muted: #a9c6be;
+  --color-accent: #4fd8cf;
+  --color-accent-text: #04231f;
+  --color-accent-soft: rgb(79 216 207 / 0.24);
+  --color-focus: #f0d9a6;
+  --flash: rgb(79 216 207 / 0.14);
+}
+
+:root[data-window-style='pirate'] {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --glass-rgb: 40 26 14;
+  --glass-dense-rgb: 44 29 16;
+  --menu-solid: rgb(50 33 18);
+  --glass-tint: rgb(240 215 160 / 0.05);
+  --glass-edge: rgb(216 168 56 / 0.36);
+  --glass-shadow: inset 0 1px 0 rgb(240 215 160 / 0.1), 0 18px 50px rgb(14 7 2 / 0.6);
+  --selected: #f2e4bf;
+  --selected-text: #2a1a07;
+  --bubble-mine: rgb(216 168 56 / 0.17);
+  --bubble-mine-edge: rgb(216 168 56 / 0.42);
+  --track: rgb(240 215 160 / 0.22);
+  --color-bg: #21150a;
+  --color-surface: #2d1e10;
+  --color-surface-sunken: #170e06;
+  --color-surface-raised: #3b2915;
+  --color-border: #4d3519;
+  --color-border-strong: #77562d;
+  --color-text: #f4e7ca;
+  --color-text-muted: #bba585;
+  --color-accent: #e2ab3c;
+  --color-accent-text: #2a1a07;
+  --color-accent-soft: rgb(226 171 60 / 0.24);
+  --color-focus: #f3d283;
+  --flash: rgb(226 171 60 / 0.14);
+}
+
+:root[data-window-style='forest'] {
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --glass-rgb: 22 34 20;
+  --glass-dense-rgb: 25 38 22;
+  --menu-solid: rgb(30 44 26);
+  --glass-tint: rgb(190 225 130 / 0.05);
+  --glass-edge: rgb(166 214 90 / 0.3);
+  --glass-shadow: inset 0 1px 0 rgb(220 240 170 / 0.09), 0 18px 50px rgb(5 12 4 / 0.55);
+  --selected: #eaf3cf;
+  --selected-text: #16240a;
+  --bubble-mine: rgb(166 214 90 / 0.16);
+  --bubble-mine-edge: rgb(166 214 90 / 0.4);
+  --track: rgb(220 240 170 / 0.22);
+  --color-bg: #141f12;
+  --color-surface: #1b2a18;
+  --color-surface-sunken: #0e170c;
+  --color-surface-raised: #243620;
+  --color-border: #30462a;
+  --color-border-strong: #50693f;
+  --color-text: #f0f4de;
+  --color-text-muted: #a5b58c;
+  --color-accent: #a9d95f;
+  --color-accent-text: #16240a;
+  --color-accent-soft: rgb(169 217 95 / 0.24);
+  --color-focus: #e8c866;
+  --flash: rgb(169 217 95 / 0.14);
+}

@@ -17,6 +17,7 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
 import { SessionFace } from './SessionFace.tsx';
+import { tagHue } from '../design/tag-colors.ts';
 
 export function SessionList() {
   const sessions = useSessions((s) => s.sessions);
@@ -91,7 +92,7 @@ export function SessionList() {
                       <span className="cp-list__text">
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>
-                          {session.tag && <span className="cp-tag cp-list__tag">{session.tag}</span>}
+                          {session.tag && <span className="cp-tag cp-list__tag" data-hue={tagHue(session.tag)}>{session.tag}</span>}
                           {session.worktree && <BranchMark branch={session.worktree.branch} />}
                           {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
                         </span>
@@ -128,7 +129,7 @@ function Peek({ session, seen, now, x, y }: { session: SessionInfo; seen: SeenSe
     <div className="cp-list__peek" role="tooltip" style={{ '--x': `${x}px`, '--y': `${y}px` } as CSSProperties}>
       <span className="cp-list__line">
         <span className="cp-list__name">{session.name}</span>
-        {session.tag && <span className="cp-tag cp-list__tag">{session.tag}</span>}
+        {session.tag && <span className="cp-tag cp-list__tag" data-hue={tagHue(session.tag)}>{session.tag}</span>}
                           {session.worktree && <BranchMark branch={session.worktree.branch} />}
         {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
       </span>

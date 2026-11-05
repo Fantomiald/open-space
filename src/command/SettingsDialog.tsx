@@ -3,9 +3,10 @@ import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { isFullPath } from '../../shared/paths.ts';
 import type { TerminalKind } from '../../shared/terminal.ts';
+import { applyGlassOpacity } from '../design/glass.ts';
 import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
 import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitch } from '../../shared/claude-settings.ts';
-import { EFFORTS, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
+import { EFFORTS, GLASS_OPACITY, WINDOW_STYLES, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
@@ -16,7 +17,7 @@ import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/setting
 import {
   ActivityIcon, AgentIcon, TagIcon, BellIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
-  PaletteIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
+  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
 import { AccountAction } from './AccountAction.tsx';
 import { AppUpdateAction, CheckButton } from './AppUpdateAction.tsx';
@@ -40,8 +41,8 @@ const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['autoPip']]],
+  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -224,6 +225,27 @@ function SettingsEditor() {
           <Switch checked={draft.reduceMotion} onChange={(reduceMotion) => change({ reduceMotion })} label={rows.reduceMotion.title} />
         </Row>
       );
+      case 'windowStyle': return (
+        <Row key={id} id={id} flash={flash} icon={<TerminalIcon />} title={rows.windowStyle.title} hint={rows.windowStyle.hint}>
+          <select aria-labelledby={`setting-${id}-title`} value={draft.windowStyle} onChange={(e) => change({ windowStyle: e.target.value as Preferences['windowStyle'] })}>
+            {WINDOW_STYLES.map((style) => <option key={style} value={style}>{rows.windowStyle.options[style]}</option>)}
+          </select>
+        </Row>
+      );
+      case 'tagColors': return (
+        <Row key={id} id={id} flash={flash} icon={<TagIcon />} title={rows.tagColors.title} hint={rows.tagColors.hint}>
+          <Switch checked={draft.tagColors} onChange={(tagColors) => change({ tagColors })} label={rows.tagColors.title} />
+        </Row>
+      );
+      case 'glassOpacity': return (
+        <Row key={id} id={id} flash={flash} icon={<OpacityIcon />} title={rows.glassOpacity.title} hint={rows.glassOpacity.hint}>
+          <input
+            type="range" aria-labelledby={`setting-${id}-title`} min={GLASS_OPACITY.min} max={GLASS_OPACITY.max} step={GLASS_OPACITY.step} value={draft.glassOpacity}
+            onChange={(e) => { const glassOpacity = Number(e.target.value); applyGlassOpacity(glassOpacity); change({ glassOpacity }); }}
+          />
+          <output className="cp-prefs__value">{draft.glassOpacity} %</output>
+        </Row>
+      );
       case 'timestamps': return (
         <Row key={id} id={id} flash={flash} icon={<MessageIcon />} title={rows.timestamps.title} hint={rows.timestamps.hint} config={config}>
           <Switch checked={draft.timestamps} onChange={(timestamps) => change({ timestamps })} label={rows.timestamps.title} />
@@ -313,6 +335,11 @@ function SettingsEditor() {
           <select aria-labelledby={`setting-${id}-title`} value={draft.permissionMode} onChange={(e) => change({ permissionMode: e.target.value as Preferences['permissionMode'] })}>
             {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
           </select>
+        </Row>
+      );
+      case 'remoteByDefault': return (
+        <Row key={id} id={id} flash={flash} icon={<PhoneIcon />} title={rows.remoteByDefault.title} hint={rows.remoteByDefault.hint}>
+          <Switch checked={draft.remoteByDefault} onChange={(remoteByDefault) => change({ remoteByDefault })} label={rows.remoteByDefault.title} />
         </Row>
       );
       case 'autoTag': return (

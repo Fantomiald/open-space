@@ -9,9 +9,9 @@ export type SettingRow = keyof typeof t.settings.prefs.rows;
 
 /** Where each row lives. A section without rows (usage, shortcuts) is found by its own name. */
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
-  language: 'general', timeFormat: 'general', reduceMotion: 'general', sound: 'general', notifications: 'general', terminal: 'general',
+  language: 'general', timeFormat: 'general', reduceMotion: 'general', glassOpacity: 'general', windowStyle: 'general', tagColors: 'general', sound: 'general', notifications: 'general', terminal: 'general',
   timestamps: 'general', turnDuration: 'general', copyOnSelect: 'general',
-  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', isolate: 'sessions', autoPip: 'sessions',
+  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', remoteByDefault: 'sessions', isolate: 'sessions', autoPip: 'sessions',
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',

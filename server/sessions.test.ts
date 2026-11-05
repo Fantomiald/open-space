@@ -268,6 +268,31 @@ describe('the shared browser', () => {
   });
 });
 
+describe('Remote Control by default', () => {
+  it('turns it on for a new session when the setting is on, and only then', async () => {
+    let on = false;
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { remoteByDefault: () => on });
+    await manager.init();
+    const off = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    assert.equal(find(off.id).remote, undefined);
+    on = true;
+    const asked = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(find(asked.id).remote?.url, 'https://claude.ai/code/session_test');
+    assert.deepEqual(processes[1].remoteCalls, [true]);
+    await manager.shutdown();
+  });
+
+  it('leaves two live slots for the sessions without it', async () => {
+    const { manager, find } = setup({ maxLive: 4 }, undefined, undefined, undefined, undefined, { remoteByDefault: () => true });
+    await manager.init();
+    const sessions = [await manager.create({ cwd: projectA() }), await manager.create({ cwd: projectA() }), await manager.create({ cwd: projectA() })];
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sessions.map(({ id }) => !!find(id).remote), [true, true, false]);
+    await manager.shutdown();
+  });
+});
+
 describe('automatic tags', () => {
   const tagging = (enabled: boolean) => {
     const asked: string[] = [];
