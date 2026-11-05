@@ -73,6 +73,11 @@ describe('the Playwright server of a session', () => {
     assert.deepEqual(tester.disallowedTools, ['mcp__playwright']);
   });
 
+  it('keeps the user’s own Chrome from every tester when the session has it', () => {
+    const agents = JSON.parse(testerAgents(ENDPOINT, {}, { description: 'd', prompt: 'p' }, undefined, true));
+    for (let lane = 1; lane <= TESTERS; lane++) assert.deepEqual(agents[testerAgent(lane)].disallowedTools, ['mcp__playwright', 'mcp__claude-in-chrome']);
+  });
+
   it('names each browser of a session by its lane', () => {
     assert.equal(browserId('s1'), 's1');
     assert.equal(browserId('s1', 2), 's1.2');

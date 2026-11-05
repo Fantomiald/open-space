@@ -115,6 +115,9 @@ export function accountsBrowserOf(chosen: AccountsBrowser, untrusted: boolean): 
   return untrusted ? null : chosen;
 }
 
+/** The name of the server `claude --chrome` adds, on the user's own Chrome: its tools' prefix. */
+export const CHROME_SERVER = 'claude-in-chrome';
+
 /** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */
 export const SHARED_SERVER = 'shared-browser';
 
@@ -145,14 +148,14 @@ export const testerLane = (type: string) => Number(/^browser-tester-(\d+)$/.exec
  * The --agents of a session: its testers, sub-agents whose Playwright server drives a browser of their own
  * (`${endpoint}/lane/<n>`), so that several test flows at once, each shown in Open Space. One agent per lane: Claude
  * Code runs a single server for every run of a same agent, which would have them share a tab. The server has a name
- * of its own, and the session's Playwright tools are kept from it.
+ * of its own, and the session's Playwright tools are kept from it, like the user's own Chrome when the session has it (`chrome`).
  */
-export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string): string {
+export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string, chrome = false): string {
   return JSON.stringify(Object.fromEntries(Array.from({ length: TESTERS }, (_, at) => {
     const lane = at + 1;
     const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers);
     const own = `tester-browser-${lane}`;
-    if (!sharedEndpoint) return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`] }];
+    if (!sharedEndpoint) return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`, ...(chrome ? [`mcp__${CHROME_SERVER}`] : [])] }];
     // its tabs of the shared browser are its own too, apart from the session's
     const shared = `tester-shared-${lane}`;
     return [testerAgent(lane), {

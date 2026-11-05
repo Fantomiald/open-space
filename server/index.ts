@@ -126,7 +126,7 @@ function browserMcp(sessionId: string, untrusted: boolean) {
   if (!browsers.available) return chrome;
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
   const shared = accounts === 'shared' ? `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}` : undefined;
-  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared) };
+  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome') };
 }
 
 /** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */
