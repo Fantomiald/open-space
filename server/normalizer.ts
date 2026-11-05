@@ -4,6 +4,7 @@
 import path from 'node:path';
 import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
 import type { BackgroundTask, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import { DIFF_TOOLS, fileDiff } from './diffs.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
@@ -77,6 +78,8 @@ export class Normalizer {
   private publishing = new Map<string, Record<string, unknown>>();
   /** the local files of each artifact so far, by its address: what a later publish of its page leaves out is kept there */
   private artifactFiles = new Map<string, Map<string, string>>();
+  /** Edit, MultiEdit and Write calls waiting for their result, which holds their diff: the tool, by call id */
+  private editing = new Map<string, string>();
   /** ScheduleWakeup, CronCreate and CronDelete calls waiting for their result, by tool call id */
   private scheduling = new Map<string, ScheduleChange>();
   /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
@@ -281,6 +284,7 @@ export class Normalizer {
     if (schedule) this.scheduling.set(id, schedule);
     // a page or an asset upload, not a read, list or delete
     if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && (input.file_path || input.file_paths)) this.publishing.set(id, input);
+    if (DIFF_TOOLS.has(name)) this.editing.set(id, name);
     if (name === 'Agent' || name === 'Task') {
       this.hire(id, asString(input.subagent_type), asString(input.description), asString(input.prompt));
     } else if (name === 'TodoWrite' && who === 'chef') {
@@ -323,6 +327,12 @@ export class Normalizer {
       if (publish) {
         this.publishing.delete(id);
         if (!block.is_error) this.published(who, publish, asJson(message.tool_use_result));
+      }
+      const edited = this.editing.get(id);
+      if (edited) {
+        this.editing.delete(id);
+        const diff = block.is_error ? null : fileDiff(edited, asJson(message.tool_use_result), this.options.cwd);
+        if (diff) this.options.emit({ k: 'diff', who, id, diff });
       }
       if (this.present.has(id)) {
         // a sub-agent's report comes back to the main agent as the tool result of the Task call

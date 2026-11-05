@@ -1,6 +1,6 @@
 // Turns a session's event log into the thread shown in the detail panel. Pure function.
 import { isSubagentHandback } from '../../shared/activity.ts';
-import type { BranchNews, LoggedEvent, PlanItem, SentFile, UploadedFile } from '../../shared/protocol.ts';
+import type { BranchNews, FileDiff, LoggedEvent, PlanItem, SentFile, UploadedFile } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 
 /** `agent`: the sub-agent that said or did it (its id), null for the session's own agent; `author` is its name. */
@@ -8,7 +8,8 @@ export type FeedItem =
   /** images: the pictures sent with the message, by name under /attachments/ */
   | { id: number; kind: 'user'; at: number; text: string; images: string[]; files: UploadedFile[] }
   | { id: number; kind: 'assistant'; at: number; text: string; author: string | null; agent: string | null }
-  | { id: number; kind: 'tool'; at: number; tool: string; detail: string; author: string | null; agent: string | null; ok: boolean | null; callId: string }
+  /** `diff`: what an Edit, MultiEdit or Write call changed in its file */
+  | { id: number; kind: 'tool'; at: number; tool: string; detail: string; author: string | null; agent: string | null; ok: boolean | null; callId: string; diff?: FileDiff }
   | { id: number; kind: 'subagent'; at: number; agentId: string; name: string; task: string; status: 'working' | 'done' | 'failed'; report: string }
   /** question: an AskUserQuestion call (allowed = answered) */
   | { id: number; kind: 'permission'; at: number; requestId: string; tool: string; detail: string; author: string | null; agent: string | null; question: boolean; status: 'pending' | 'allowed' | 'denied' | 'cancelled' }
@@ -82,6 +83,11 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
         if (item) item.ok = ev.ok;
         break;
       }
+      case 'diff': {
+        const item = tools.get(ev.id);
+        if (item) item.diff = ev.diff;
+        break;
+      }
       case 'ask': {
         const item = { id: seq, kind: 'permission' as const, at, requestId: ev.requestId, tool: ev.tool, detail: ev.detail, author: author(ev.who), agent: agent(ev.who), question: !!ev.questions, status: 'pending' as const };
         permissions.set(ev.requestId, item);
@@ -148,7 +154,9 @@ export const turnWord = (startId: number, words: readonly { doing: string; done:
 
 /** A run of tool calls in a row, shown as one line that opens on the calls. */
 export interface ToolRun { id: number; kind: 'tools'; tools: (FeedItem & { kind: 'tool' })[] }
-export type ThreadEntry = Exclude<FeedItem, { kind: 'tool' }> | ToolRun;
+/** A call that changed a file, shown with its diff on its own (Preferences.showDiffs). */
+export interface DiffEntry { id: number; kind: 'diff'; call: FeedItem & { kind: 'tool' } }
+export type ThreadEntry = Exclude<FeedItem, { kind: 'tool' }> | ToolRun | DiffEntry;
 
 export interface PublishedPage { url: string; title: string }
 
@@ -166,9 +174,10 @@ export function publishedPages(items: readonly FeedItem[]): PublishedPage[] {
 /**
  * What one tab of the thread shows. The conversation (`agent` null): the user, the session's own agent, the
  * questions and permissions of everyone, one card per sub-agent, the turns. A sub-agent's tab: only what it said and
- * did. In both, consecutive tool calls are gathered into one run.
+ * did. In both, consecutive tool calls are gathered into one run; with `diffs`, a call that changed a file stands
+ * apart with its diff, between the runs.
  */
-export function threadOf(items: readonly FeedItem[], agent: string | null): ThreadEntry[] {
+export function threadOf(items: readonly FeedItem[], agent: string | null, diffs = false): ThreadEntry[] {
   const entries: ThreadEntry[] = [];
   for (const item of items) {
     const owner = 'agent' in item ? item.agent : null;
@@ -177,6 +186,7 @@ export function threadOf(items: readonly FeedItem[], agent: string | null): Thre
       : (item.kind === 'assistant' || item.kind === 'tool' || item.kind === 'permission' || item.kind === 'files' || item.kind === 'artifact') && owner === agent;
     if (!shown) continue;
     if (item.kind !== 'tool') { entries.push(item); continue; }
+    if (diffs && item.diff) { entries.push({ id: item.id, kind: 'diff', call: item }); continue; }
     const last = entries.at(-1);
     if (last?.kind === 'tools') last.tools.push(item);
     else entries.push({ id: item.id, kind: 'tools', tools: [item] });

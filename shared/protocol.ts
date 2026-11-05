@@ -36,6 +36,8 @@ export type OfficeEvent =
   | { k: 'hire'; id: string; type: string; name: string; task: string; prompt: string }
   | { k: 'act'; who: string; id: string; tool: string; detail: string }
   | { k: 'act_done'; who: string; id: string; ok: boolean }
+  /** what an Edit, MultiEdit or Write call (`id`, its act) changed in its file, as Claude Code made the diff */
+  | { k: 'diff'; who: string; id: string; diff: FileDiff }
   /** the report a sub-agent hands back to the main agent */
   | { k: 'report'; who: string; text: string }
   /** a sub-agent finished its work */
@@ -168,6 +170,15 @@ export interface ImageUpload { mediaType: ImageType; data: string }
  * diff. `patch`: its unified diff from the first hunk on, empty when binary, or cut (`truncated`) when too long.
  */
 export interface FileChange { path: string; status: 'modified' | 'added' | 'deleted' | 'outside'; added: number; removed: number; patch: string; binary?: true; truncated?: true }
+
+/** A part of a diff: where it starts in the file before and after, and its lines, each after " ", "-" or "+". */
+export interface DiffHunk { oldStart: number; newStart: number; lines: string[] }
+
+/**
+ * What one Edit, MultiEdit or Write call changed, as Claude Code's own diff of it (structuredPatch): `path` from the
+ * session's folder when inside it; `created`: a new file, all added; `truncated`: lines left out past the first ones.
+ */
+export interface FileDiff { path: string; created: boolean; added: number; removed: number; hunks: DiffHunk[]; truncated?: true }
 /** What a session changed: the files with changes not committed yet, the latest first; `touched`: all the files it wrote. */
 export interface SessionChanges { files: FileChange[]; added: number; removed: number; touched: number }
 
@@ -482,6 +493,8 @@ export interface Preferences {
   timestamps: boolean;
   /** the line at the end of each turn: how long it took and when it ended */
   turnDuration: boolean;
+  /** each Edit, MultiEdit and Write of a session in the threads with its diff, as Claude Code shows them (off: in the run of actions) */
+  showDiffs: boolean;
   /** animations and transitions cut short, whatever the system says */
   reduceMotion: boolean;
   /** how much of what is behind the glass panes their tint hides, in percent (see GLASS_OPACITY) */

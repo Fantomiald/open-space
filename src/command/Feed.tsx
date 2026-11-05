@@ -10,6 +10,7 @@ import { chibiHead, lookOfStranger } from '../room/chibi.ts';
 import { ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { Prose } from './Prose.tsx';
+import { DiffBlock } from './DiffBlock.tsx';
 import { currentTurn, threadOf, toolSummary, turnPhase, turnWord, type Feed as FeedData, type FeedItem, type ThreadEntry, type ToolRun } from '../state/feed.ts';
 import { useSessions } from '../state/sessions.ts';
 import { FeedSearch } from './FeedSearch.tsx';
@@ -166,6 +167,8 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
   switch (item.kind) {
     case 'tools':
       return <Tools run={item} />;
+    case 'diff':
+      return item.call.diff ? <DiffBlock diff={item.call.diff} /> : null;
     case 'user':
       return (
         <li className="cp-feed__item" data-kind="user">
@@ -337,7 +340,8 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   const [viewing, setViewing] = useState<Viewed | null>(null);
   const agents = useMemo(() => feed.items.filter((item): item is Subagent => item.kind === 'subagent'), [feed.items]);
   const shownAgent = agents.find((candidate) => candidate.agentId === agent);
-  const entries = useMemo(() => threadOf(feed.items, shownAgent ? shownAgent.agentId : null), [feed.items, shownAgent]);
+  const showDiffs = useSessions((s) => s.preferences.showDiffs);
+  const entries = useMemo(() => threadOf(feed.items, shownAgent ? shownAgent.agentId : null, showDiffs), [feed.items, shownAgent, showDiffs]);
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   /** the user's last message, once the thread went down for it */

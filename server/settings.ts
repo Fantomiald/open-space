@@ -26,6 +26,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timeFormat: 'auto',
   timestamps: false,
   turnDuration: true,
+  showDiffs: false,
   reduceMotion: false,
   glassOpacity: GLASS_OPACITY.initial,
   windowStyle: 'classic',
@@ -49,7 +50,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
-  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'reduceMotion', 'autoTag', 'remoteByDefault', 'tagColors'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
+  for (const key of ['copyOnSelect', 'autoPip', 'timestamps', 'turnDuration', 'showDiffs', 'reduceMotion', 'autoTag', 'remoteByDefault', 'tagColors'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
   if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
   if (typeof raw.glassOpacity === 'number' && raw.glassOpacity >= GLASS_OPACITY.min && raw.glassOpacity <= GLASS_OPACITY.max) found.glassOpacity = raw.glassOpacity;
   if (IDLE_COMPACT_MINUTES.some((minutes) => minutes === raw.idleCompact)) found.idleCompact = raw.idleCompact as number;

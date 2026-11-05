@@ -58,6 +58,16 @@ export const session = {
     on: (state: string) => `Remote Control : ${state}. Clique pour couper`,
   },
   feed: {
+    diff: {
+      update: 'Update',
+      write: 'Write',
+      changed: (added: number, removed: number) => [added && `${added} ligne${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''}`, removed && `${removed} retirée${removed > 1 ? 's' : ''}`].filter(Boolean).join(', '),
+      wrote: (lines: number) => `${lines} ligne${lines > 1 ? 's' : ''} écrite${lines > 1 ? 's' : ''}`,
+      more: (lines: number) => `… +${lines} ligne${lines > 1 ? 's' : ''} (tout voir)`,
+      less: 'Replier',
+      cut: 'La suite de ce diff n’est pas gardée.',
+      failed: 'La modification a échoué.',
+    },
     subagent: 'Sous-agent',
     permissionStatus: { pending: 'en attente', allowed: 'autorisé', denied: 'refusé', cancelled: 'annulé' },
     questionStatus: { pending: 'en attente', allowed: 'répondu', denied: 'refusé', cancelled: 'annulé' },

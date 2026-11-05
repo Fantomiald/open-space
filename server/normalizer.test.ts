@@ -32,6 +32,21 @@ function replay(fixture: string, agentLaunch?: (agentId: string) => AgentLaunch 
   return { ...created, refused };
 }
 
+describe('Normalizer on a real turn that edits and writes files (2.1.318)', () => {
+  const { events } = replay('edit-turn');
+  const acts = events.filter((event) => event.k === 'act');
+  const diffs = events.filter((event) => event.k === 'diff');
+
+  it('gives each Edit and Write the diff Claude Code made of it, after its action', () => {
+    assert.deepEqual(diffs.map((event) => event.k === 'diff' && [event.diff.path, event.diff.created, event.diff.added, event.diff.removed]), [
+      ['/Users/me/shop/cart.js', false, 1, 1],
+      ['/Users/me/shop/notes.md', true, 3, 0],
+    ]);
+    const editId = acts.find((event) => event.k === 'act' && event.tool === 'Edit');
+    assert.equal(diffs[0].k === 'diff' && diffs[0].id, editId?.k === 'act' && editId.id);
+  });
+});
+
 describe('Normalizer on a real simple turn', () => {
   const { events, results, quotas, inits, partials } = replay('simple-turn');
 

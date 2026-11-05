@@ -114,6 +114,7 @@ export const settings = {
       glassOpacity: { title: 'Opacité des fenêtres', hint: 'Toutes les vitres d’un coup : l’en-tête, les fenêtres, les menus. Plus bas, on voit plus la salle à travers.' },
       timestamps: { title: 'Heure des messages', hint: 'L’heure à côté de chaque message des fils.' },
       turnDuration: { title: 'Durée des tours', hint: 'La ligne en fin de tour : combien de temps ça a pris, et quand ça a fini.' },
+      showDiffs: { title: 'Modifications dans le fil', hint: 'Chaque fichier qu’une session modifie ou crée, avec ses lignes ajoutées et retirées, comme Claude Code les montre. Coupé, elles restent dans les actions.' },
       effort: { title: 'Effort par défaut', hint: 'Combien les nouvelles sessions réfléchissent. Chaque session peut en changer.', auto: 'Celui du modèle' },
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
       outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${STYLES_FOLDER}.`, default: 'Par défaut' },
