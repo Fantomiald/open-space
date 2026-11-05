@@ -30,7 +30,7 @@ import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
 import { useAttachments } from './useAttachments.ts';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
-import { tagHue } from '../design/tag-colors.ts';
+import { sessionTagHues } from '../design/tag-colors.ts';
 
 const NO_EVENTS: never[] = [];
 
@@ -125,6 +125,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const back = () => showPanel('thread');
   const [first, ...others] = session.permissions;
   const tags = session.tags ?? [];
+  const hues = sessionTagHues(tags);
   const setTags = (next: string[]) => send({ t: 'tags', sessionId: session.id, tags: next });
   /** The name or the tags (separated by commas, after the ones there), edited in place: Enter saves, Escape or leaving the field cancels. */
   const field = (kind: 'name' | 'tag') => (
@@ -161,7 +162,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
               {/* shown only where the line under the title is hidden for room */}
               {tags.length
-                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={tagHue(tags[0])} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{tags.join(', ')}</span></button>
+                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={hues[0]} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{tags.join(', ')}</span></button>
                 : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.tagShort}</button>}
             </h2>
           )}
@@ -185,8 +186,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
         <div className="cp-detail__line">
           {editing === 'tag' ? field('tag') : (
             <>
-              {tags.map((tag) => (
-                <span key={tag} className="cp-tag" data-hue={tagHue(tag)} data-removable="true">
+              {tags.map((tag, index) => (
+                <span key={tag} className="cp-tag" data-hue={hues[index]} data-removable="true">
                   <button type="button" className="cp-tag__text" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{tag}</button>
                   <button type="button" className="cp-tag__remove" aria-label={t.session.detail.removeTag(tag)} title={t.session.detail.removeTag(tag)} onClick={() => setTags(withoutTag(tags, tag))}><CloseIcon /></button>
                 </span>

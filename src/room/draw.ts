@@ -24,7 +24,7 @@ import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
 import { Visits, type Visitor } from './visitors.ts';
 import { stackLabels } from './labels.ts';
-import { tagColor } from '../design/tag-colors.ts';
+import { sessionTagColors } from '../design/tag-colors.ts';
 import { roomTags } from '../../shared/tags.ts';
 
 /** How long a visitor at a birthday party wishes it, in ms. */
@@ -752,7 +752,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
         name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch,
-        tags: shownTags.shown.map((text) => ({ text, color: options.tagColors ? tagColor(text) : null })), moreTags: shownTags.more,
+        tags: shownTags.shown.map((text, index) => ({ text, color: options.tagColors ? sessionTagColors(character.person.tags)[index] : null })), moreTags: shownTags.more,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },
     });
