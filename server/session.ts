@@ -6,7 +6,7 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
+import type { AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
@@ -14,7 +14,7 @@ import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
-import { Normalizer, describeRequest, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
@@ -132,6 +132,8 @@ export class Session {
   private emptyResult: NodeJS.Timeout | null = null;
   /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
   private remote: RemoteControl | undefined;
+  /** the page its agent last had in the user's own Chrome (see onChrome) */
+  private chrome: ChromeView | undefined;
   /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
   private autoCompaction: { resting: boolean; hadProcess: boolean; compacted: boolean } | null = null;
   /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
@@ -149,7 +151,7 @@ export class Session {
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     const secrets = this.deps.secretNames?.() ?? [];
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(secrets.length ? { secrets } : {}) };
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(secrets.length ? { secrets } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -427,6 +429,7 @@ export class Session {
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
+      onChrome: (sight) => this.onChrome(sight),
       onBackground: (tasks) => this.onBackground(tasks),
       onSchedule: (change) => this.onSchedule(change),
       onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
@@ -622,6 +625,14 @@ export class Session {
     else if (action === 'enable' || action === 'disable') await process.control({ subtype: 'mcp_toggle', serverName: server, enabled: action === 'enable' });
     else return asString((await process.control({ subtype: 'mcp_authenticate', serverName: server })).authUrl) || null;
     return null;
+  }
+
+  /** A claude-in-chrome call worked on a page of the user's Chrome: the session's Browser view shows it, with the last screenshot. */
+  private onChrome(sight: ChromeSight) {
+    const at = this.now();
+    const picture = sight.picture ? { name: this.deps.saveImage(sight.picture), url: sight.url, at } : this.chrome?.picture;
+    this.chrome = { url: sight.url, title: sight.title, at, ...(picture ? { picture } : {}) };
+    this.publish();
   }
 
   private onRemoteState(state: string) {

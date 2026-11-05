@@ -1,6 +1,6 @@
 // The picture of a session's browser in its window (BrowserView): where the pointer is on the page shown. Pure functions.
-import { MODIFIERS, SHARED_LANE } from '../../shared/browser.ts';
-import type { SubagentInfo } from '../../shared/protocol.ts';
+import { CHROME_LANE, MODIFIERS, SHARED_LANE } from '../../shared/browser.ts';
+import type { AccountsBrowser, SubagentInfo } from '../../shared/protocol.ts';
 import type { FeedItem } from './feed.ts';
 
 type Rect = { left: number; top: number; width: number; height: number };
@@ -21,15 +21,25 @@ export function pictureFraction(box: Rect, picture: { width: number; height: num
 export const modifiersOf = (event: { altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) =>
   (event.altKey ? MODIFIERS.alt : 0) | (event.ctrlKey ? MODIFIERS.ctrl : 0) | (event.metaKey ? MODIFIERS.meta : 0) | (event.shiftKey ? MODIFIERS.shift : 0);
 
-/** The lanes of a session's browsers to pick from: its own, its testers' running, then the shared browser (always offered with it). */
-export function browserLanes(running: readonly number[], shared: boolean): number[] {
-  const testers = running.filter((lane) => lane !== 0 && lane !== SHARED_LANE).sort((a, b) => a - b);
-  return [0, ...testers, ...(shared ? [SHARED_LANE] : [])];
+/**
+ * The lane of the browser of the user's accounts a session's view offers, the one chosen in the settings: the shared
+ * browser when Open Space can run one, or their own Chrome; none for a folder not trusted, which reaches neither.
+ */
+export function accountsLane(chosen: AccountsBrowser, untrusted: boolean, available: boolean): number | null {
+  if (untrusted) return null;
+  if (chosen === 'chrome') return CHROME_LANE;
+  return available ? SHARED_LANE : null;
 }
 
-/** The lane shown: the one picked while it runs (the shared browser even before: looking at it starts it), else the session's own, else the first running. */
-export function shownLane(chosen: number, running: readonly number[], shared: boolean): number {
-  if (running.includes(chosen) || (shared && chosen === SHARED_LANE)) return chosen;
+/** The lanes of a session's browsers to pick from: its own, its testers' running, then the browser of the user's accounts (always offered with it). */
+export function browserLanes(running: readonly number[], accounts: number | null): number[] {
+  const testers = running.filter((lane) => lane !== 0 && lane !== SHARED_LANE).sort((a, b) => a - b);
+  return [0, ...testers, ...(accounts === null ? [] : [accounts])];
+}
+
+/** The lane shown: the one picked while it runs (the accounts' even before: looking at it starts it), else the session's own, else the first running. */
+export function shownLane(chosen: number, running: readonly number[], accounts: number | null): number {
+  if (chosen === accounts || (running.includes(chosen) && chosen !== SHARED_LANE)) return chosen;
   return running.includes(0) || !running.length ? 0 : running[0];
 }
 

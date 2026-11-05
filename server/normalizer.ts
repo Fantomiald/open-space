@@ -3,7 +3,8 @@
 // started a sub-agent (every message of that sub-agent carries it as parent_tool_use_id).
 import path from 'node:path';
 import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
-import type { BackgroundTask, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import type { BackgroundTask, ImageType, ImageUpload, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
@@ -22,6 +23,30 @@ export type AskEvent = Extract<OfficeEvent, { k: 'ask' }>;
 export type ScheduleChange =
   | { kind: 'wakeup'; seconds: number } | { kind: 'wakeup_stop' }
   | { kind: 'cron'; cron: string; recurring: boolean } | { kind: 'cron_delete' };
+
+/** The tab a claude-in-chrome call worked on, as its result tells it, and the screenshot the call took there, if any. */
+export interface ChromeSight { url: string; title: string; picture?: ImageUpload }
+
+/** The tools `claude --chrome` gives, on the user's own Chrome (server/browser.ts CHROME_SERVER). */
+const CHROME_TOOL = /^mcp__claude-in-chrome__/;
+
+/**
+ * What a claude-in-chrome result says of the tab it worked on (checked with 2.1.318): its text ends with a "Tab Context"
+ * that names the tab ("- Executed on tabId: N") among the group's (`• tabId N: "<title>" ("<url>")`); a screenshot comes
+ * as an image block. Null for a call on no tab (a closed one), or a tab still blank.
+ */
+export function chromeSight(content: unknown): ChromeSight | null {
+  const blocks = asArray(content).map(asJson);
+  const text = blocks.filter((block) => block.type === 'text').map((block) => asString(block.text)).join('\n');
+  const tab = /Executed on tabId: (\d+)/.exec(text)?.[1];
+  if (!tab) return null;
+  const line = new RegExp(`tabId ${tab}: "(.*)" \\("(.*)"\\)\\s*$`, 'm').exec(text);
+  if (!line?.[2]) return null;
+  const image = blocks.map((block) => asJson(block.source)).find((source) => source.type === 'base64' && asString(source.data));
+  const mediaType = asString(image?.media_type);
+  const picture = image && Object.hasOwn(IMAGE_EXTENSIONS, mediaType) ? { mediaType: mediaType as ImageType, data: asString(image.data) } : undefined;
+  return { url: line[2], title: line[1], ...(picture ? { picture } : {}) };
+}
 
 /** The Agent call that first started a sub-agent, and the sub-agent's type. */
 export interface AgentLaunch { call: string; type: string }
@@ -54,6 +79,8 @@ export interface NormalizerOptions {
   onBackground?: (tasks: BackgroundTask[]) => void;
   /** a /loop wake-up or a cron job planned or cancelled (ScheduleWakeup, CronCreate, CronDelete) */
   onSchedule?: (change: ScheduleChange) => void;
+  /** a claude-in-chrome call worked on a page of the user's own Chrome (see chromeSight) */
+  onChrome?: (sight: ChromeSight) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
@@ -77,6 +104,8 @@ export class Normalizer {
   private publishing = new Map<string, Record<string, unknown>>();
   /** the local files of each artifact so far, by its address: what a later publish of its page leaves out is kept there */
   private artifactFiles = new Map<string, Map<string, string>>();
+  /** claude-in-chrome calls waiting for their result, which tells the page they worked on */
+  private inChrome = new Set<string>();
   /** ScheduleWakeup, CronCreate and CronDelete calls waiting for their result, by tool call id */
   private scheduling = new Map<string, ScheduleChange>();
   /** the Task call of each sub-agent, by the id Claude Code gives its task (agentId, in the call's result) */
@@ -281,6 +310,7 @@ export class Normalizer {
     if (schedule) this.scheduling.set(id, schedule);
     // a page or an asset upload, not a read, list or delete
     if (name === 'Artifact' && (input.action ?? 'publish') === 'publish' && (input.file_path || input.file_paths)) this.publishing.set(id, input);
+    if (CHROME_TOOL.test(name)) this.inChrome.add(id);
     if (name === 'Agent' || name === 'Task') {
       this.hire(id, asString(input.subagent_type), asString(input.description), asString(input.prompt));
     } else if (name === 'TodoWrite' && who === 'chef') {
@@ -323,6 +353,10 @@ export class Normalizer {
       if (publish) {
         this.publishing.delete(id);
         if (!block.is_error) this.published(who, publish, asJson(message.tool_use_result));
+      }
+      if (this.inChrome.delete(id)) {
+        const sight = chromeSight(block.content);
+        if (sight) this.options.onChrome?.(sight);
       }
       if (this.present.has(id)) {
         // a sub-agent's report comes back to the main agent as the tool result of the Task call

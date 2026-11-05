@@ -296,6 +296,21 @@ describe('the user’s own Chrome', () => {
     await manager.shutdown();
   });
 
+  it('shows the page its agent last had in the user’s Chrome, with the last screenshot it took there', async () => {
+    const { deps } = choosing();
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'ouvre example.com' });
+    assert.equal(find(id).chrome, undefined);
+    processes[0].feed('chrome-turn');
+    const seen = find(id).chrome;
+    assert.equal(seen?.url, 'https://example.com/');
+    assert.equal(seen?.title, 'Example Domain');
+    assert.match(seen?.picture?.name ?? '', ATTACHMENT_NAME);
+    assert.equal(seen?.picture?.url, 'https://example.com/');
+    await manager.shutdown();
+  });
+
   it('a conversation switched over is told once its process has it, and told again when switched back', async () => {
     const { choice, deps } = choosing();
     choice.mode = 'shared';

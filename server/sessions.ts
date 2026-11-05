@@ -191,10 +191,15 @@ export class SessionManager {
   private switchedOffLog(conversationId: string) { return path.join(switchedOffFolder(this.logsDir), `${conversationId}.jsonl`); }
 
   /** Removes in the background the threads of sessions switched off too long ago, then the stored pictures and files no thread names any more (see sweepAttachments). */
+  /** The last screenshots the sessions took in the user's Chrome: shown in their Browser view, named by no log. */
+  private chromePictures(): Set<string> {
+    return new Set([...this.sessions.values()].flatMap((session) => session.snapshot().chrome?.picture?.name ?? []));
+  }
+
   private sweep() {
     this.dropOldThreads()
       .catch((error) => this.deps.log('cannot drop the old threads', error))
-      .then(() => sweepAttachments(attachmentsFolder(this.deps.config.dataDir), this.logsDir, this.now()))
+      .then(() => sweepAttachments(attachmentsFolder(this.deps.config.dataDir), this.logsDir, this.now(), this.chromePictures()))
       .catch((error) => this.deps.log('cannot sweep the attachments', error));
     sweepUploads(uploadsFolder(this.deps.config.dataDir), this.logsDir, this.now())
       .catch((error) => this.deps.log('cannot sweep the uploads', error));

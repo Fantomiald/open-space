@@ -336,6 +336,8 @@ export interface SessionInfo {
   context?: { used: number; max: number };
   /** Remote Control is on: the session is also reachable from claude.ai/code and the Claude app, at `url` ('' until known) */
   remote?: RemoteControl;
+  /** the page its agent last had in the user's own Chrome (not kept when Open Space restarts) */
+  chrome?: ChromeView;
   /** it works on a branch of its own, in a worktree */
   worktree?: WorktreeInfo;
   /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
@@ -498,6 +500,12 @@ export interface Preferences {
   /** where the sessions of trusted folders reach the user's signed-in accounts (see AccountsBrowser) */
   accountsBrowser: AccountsBrowser;
 }
+
+/**
+ * The page a session's agent last had in the user's own Chrome (Preferences.accountsBrowser), read from its
+ * claude-in-chrome calls: the tab it worked on, and the last screenshot it took there (`picture`, under /attachments/).
+ */
+export interface ChromeView { url: string; title: string; at: number; picture?: { name: string; url: string; at: number } }
 
 /**
  * Where the sessions reach the user's signed-in accounts: Open Space's shared browser (server/shared-browser.ts), or the

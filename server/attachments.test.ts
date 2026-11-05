@@ -59,4 +59,17 @@ describe('attachments', () => {
     assert.equal(await sweepAttachments(folder, logs), 0, 'the files a kept bundle names are kept');
     assert.equal(await sweepAttachments(path.join(base, 'none'), logs), 0, 'no folder yet');
   });
+
+  it('keeps the pictures still shown, which no log names (the last screenshot in the user’s Chrome)', async () => {
+    const folder = path.join(base, 'shown');
+    const logs = path.join(base, 'logs-shown');
+    mkdirSync(folder, { recursive: true });
+    mkdirSync(logs, { recursive: true });
+    const shown = `${'d'.repeat(64)}.jpg`;
+    writeFileSync(path.join(folder, shown), 'shot');
+    const hoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+    utimesSync(path.join(folder, shown), hoursAgo, hoursAgo);
+    assert.equal(await sweepAttachments(folder, logs, Date.now(), new Set([shown])), 0);
+    assert.equal(await sweepAttachments(folder, logs), 1, 'gone once nothing shows it');
+  });
 });
