@@ -111,7 +111,7 @@ export const settings: Dictionary['settings'] = {
       tagColors: { title: 'Colour on tags', hint: 'Each tag gets its own colour, always the same for the same name. Off, they keep the colour of the style.' },
       glassOpacity: { title: 'Window opacity', hint: 'All the glass at once: the header, the windows, the menus. Lower shows more of the room through it.' },
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },
-      showDiffs: { title: 'Changes in the thread', hint: 'Each file a session changes or creates, with its added and removed lines, as Claude Code shows them. Off, they stay in the actions.' },
+      detailedActions: { title: 'Detailed actions in the thread', hint: 'Each action of a session on its own, as Claude Code shows it: the first lines of a command, what a search found, each file changed or created with its added and removed lines. Off, they stay gathered in “N actions”.' },
       effort: { title: 'Default effort', hint: 'How hard new sessions think. Each session can change it.', auto: 'The model’s own' },
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
       outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${STYLES_FOLDER}.`, default: 'Default' },

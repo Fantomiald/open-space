@@ -8,7 +8,7 @@ import {
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
 
 export const PlusIcon = icon(Plus);
-/** The diffs of the files a session changes, in its thread (Preferences.showDiffs). */
+/** Each action of a session on its own in its thread, with its diff or what it gave back (Preferences.detailedActions). */
 export const DiffIcon = icon(FileDiff);
 /** Focus mode: the sessions as a list beside their windows. */
 export const FocusIcon = icon(PanelLeft);

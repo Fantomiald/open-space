@@ -68,6 +68,13 @@ export const session = {
       cut: 'La suite de ce diff n’est pas gardée.',
       failed: 'La modification a échoué.',
     },
+    action: {
+      running: 'En cours…',
+      read: (lines: number) => `${lines} ligne${lines > 1 ? 's' : ''} lue${lines > 1 ? 's' : ''}`,
+      empty: '(Rien à afficher)',
+      failed: 'Échec.',
+      cut: (lines: number) => `${lines} ligne${lines > 1 ? 's' : ''} de plus, non gardée${lines > 1 ? 's' : ''}.`,
+    },
     subagent: 'Sous-agent',
     permissionStatus: { pending: 'en attente', allowed: 'autorisé', denied: 'refusé', cancelled: 'annulé' },
     questionStatus: { pending: 'en attente', allowed: 'répondu', denied: 'refusé', cancelled: 'annulé' },

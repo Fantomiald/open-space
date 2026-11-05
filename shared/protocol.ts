@@ -35,7 +35,8 @@ export type OfficeEvent =
   | { k: 'plan'; items: PlanItem[] }
   | { k: 'hire'; id: string; type: string; name: string; task: string; prompt: string }
   | { k: 'act'; who: string; id: string; tool: string; detail: string }
-  | { k: 'act_done'; who: string; id: string; ok: boolean }
+  /** `output`: what it gave back, kept short (server/actions.ts); absent in logs of older versions */
+  | { k: 'act_done'; who: string; id: string; ok: boolean; output?: ToolOutput }
   /** what an Edit, MultiEdit or Write call (`id`, its act) changed in its file, as Claude Code made the diff */
   | { k: 'diff'; who: string; id: string; diff: FileDiff }
   /** the report a sub-agent hands back to the main agent */
@@ -179,6 +180,9 @@ export interface DiffHunk { oldStart: number; newStart: number; lines: string[] 
  * session's folder when inside it; `created`: a new file, all added; `truncated`: lines left out past the first ones.
  */
 export interface FileDiff { path: string; created: boolean; added: number; removed: number; hunks: DiffHunk[]; truncated?: true }
+
+/** What a tool call gave back, for the thread: its first lines and how many it had (`read`: a file read, only counted). */
+export interface ToolOutput { lines: string[]; total: number; read?: true }
 /** What a session changed: the files with changes not committed yet, the latest first; `touched`: all the files it wrote. */
 export interface SessionChanges { files: FileChange[]; added: number; removed: number; touched: number }
 
@@ -493,8 +497,11 @@ export interface Preferences {
   timestamps: boolean;
   /** the line at the end of each turn: how long it took and when it ended */
   turnDuration: boolean;
-  /** each Edit, MultiEdit and Write of a session in the threads with its diff, as Claude Code shows them (off: in the run of actions) */
-  showDiffs: boolean;
+  /**
+   * each action of a session on its own in the threads, as Claude Code shows them: what it gave back (a command's
+   * first lines), an Edit, MultiEdit or Write with its diff (off: gathered in a run of actions)
+   */
+  detailedActions: boolean;
   /** animations and transitions cut short, whatever the system says */
   reduceMotion: boolean;
   /** how much of what is behind the glass panes their tint hides, in percent (see GLASS_OPACITY) */

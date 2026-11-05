@@ -41,7 +41,7 @@ const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'showDiffs', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
@@ -251,9 +251,9 @@ function SettingsEditor() {
           <Switch checked={draft.timestamps} onChange={(timestamps) => change({ timestamps })} label={rows.timestamps.title} />
         </Row>
       );
-      case 'showDiffs': return (
-        <Row key={id} id={id} flash={flash} icon={<DiffIcon />} title={rows.showDiffs.title} hint={rows.showDiffs.hint}>
-          <Switch checked={draft.showDiffs} onChange={(showDiffs) => change({ showDiffs })} label={rows.showDiffs.title} />
+      case 'detailedActions': return (
+        <Row key={id} id={id} flash={flash} icon={<DiffIcon />} title={rows.detailedActions.title} hint={rows.detailedActions.hint}>
+          <Switch checked={draft.detailedActions} onChange={(detailedActions) => change({ detailedActions })} label={rows.detailedActions.title} />
         </Row>
       );
       case 'turnDuration': return (
