@@ -1102,6 +1102,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-prose :is(h3, h4, h5, h6) { font-size: var(--text-sm); }
 .cp-prose :is(h4, h5, h6) { color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cp-prose :is(ul, ol) { padding-left: 1.4em; }
+/* the thread's own list (.cp-feed ul) and tool names (.cp-feed__item code) stop at the message: its lists keep their bullets, its code its weight */
+.cp-prose ul { display: block; list-style-type: disc; }
+.cp-prose ul ul { list-style-type: circle; }
 .cp-prose li + li { margin-top: 0.15em; }
 .cp-prose li > :is(ul, ol) { margin: 0.15em 0 0; }
 /* a task list: GitHub's [ ] and [x], shown as the disabled checkboxes marked renders */
@@ -1110,7 +1113,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-prose blockquote { padding: var(--space-1) var(--space-3); border-left: 3px solid var(--color-border-strong); color: var(--color-text-muted); }
 .cp-prose hr { border: 0; border-top: var(--border-width) solid var(--color-border-strong); }
 .cp-prose pre { max-width: 100%; overflow-x: auto; overflow-wrap: normal; padding: var(--space-2); background: var(--color-bg); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); font: var(--text-xs) / 1.45 var(--font-mono); }
-.cp-prose code { font-family: var(--font-mono); font-size: 0.92em; }
+.cp-prose code { font-family: var(--font-mono); font-size: 0.92em; font-weight: inherit; }
 /* a code block and its copy button, in its top right corner (the block scrolls under it, the button stays) */
 .cp-prose .cp-code { position: relative; margin: 0 0 var(--space-2); }
 .cp-prose .cp-code pre { margin: 0; padding-right: 2.5rem; }
@@ -2496,6 +2499,27 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   .cp-feed__item[data-kind='notice'] { font-style: normal; }
   .cp-feed__item[data-kind='peer'] { max-width: none; background: none; border: 0; border-left: 2px solid var(--tone-peer); border-radius: 0; padding: 0 0 0 var(--space-3); }
   .cp-feed__agent { background: none; border: 0; border-radius: 0; padding: 0 0 0 var(--space-2); }
+
+  /* the Markdown as Claude Code draws it in a terminal: one size, one font, colour and plain characters for the rest */
+  .cp-prose :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 var(--space-2); font-size: inherit; line-height: inherit; color: inherit; text-transform: none; letter-spacing: normal; }
+  .cp-prose h1 { font-style: italic; text-decoration: underline; }
+  .cp-prose code { font-size: inherit; }
+  .cp-prose :not(pre) > code { padding: 0; border: 0; border-radius: 0; background: none; color: var(--color-code); }
+  .cp-prose pre { padding: 0; background: none; border: 0; border-radius: 0; font-size: inherit; line-height: inherit; }
+  .cp-prose pre > code:not([class]) { color: var(--color-code); }
+  .cp-prose .cp-code__copy { background: var(--color-surface); }
+  .cp-prose ul { list-style-type: '- '; }
+  .cp-prose :is(ul, ol) ol { list-style-type: lower-alpha; }
+  .cp-prose :is(ul, ol) :is(ul, ol) ol { list-style-type: lower-roman; }
+  .cp-prose li:has(> input[type='checkbox']) { list-style-type: '- '; margin-left: 0; }
+  .cp-prose li > input[type='checkbox'] { appearance: none; margin: 0; font: inherit; color: inherit; vertical-align: baseline; }
+  .cp-prose li > input[type='checkbox']::before { content: '[ ]'; white-space: pre; }
+  .cp-prose li > input[type='checkbox']:checked::before { content: '[x]'; }
+  .cp-prose hr { height: auto; border: 0; overflow: visible; color: inherit; }
+  .cp-prose hr::before { content: '---'; }
+  .cp-prose table { font-size: inherit; }
+  .cp-prose th { background: none; text-align: center; }
+  .cp-prose tbody tr:nth-child(even) { background: none; }
 
   .cp-feed__typing { padding: 0 0 0 var(--space-2); background: none; }
   .cp-feed__typing span { display: none; }
