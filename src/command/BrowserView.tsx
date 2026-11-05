@@ -3,7 +3,7 @@ import { browserId, CHROME_LANE, lanesOf, SHARED_LANE, shownFormat, type Browser
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { IS_WINDOWS } from '../lib/platform.ts';
-import { accountsLane, browserLanes, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from '../state/browser.ts';
+import { accountsBrowserOfLane, accountsLanes, browserLanes, launchedByLooking, usedAccountsLane, modifiersOf, pictureFraction, shownLane, testersAtWork } from '../state/browser.ts';
 import { formatClock } from '../lib/format.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
@@ -21,25 +21,29 @@ const testerNames = new Map<string, string>();
  */
 export function useLanes(session: SessionInfo, liveOnly = false) {
   const lanes = useSessions((s) => lanesOf(Object.keys(s.browsers), session.id).join(','));
-  const chosen = useSessions((s) => s.preferences.accountsBrowser);
-  const accounts = accountsLane(chosen, !!session.untrusted, useSessions((s) => s.browserAvailable));
+  const used = usedAccountsLane(useAccountsBrowser(session));
+  const accounts = accountsLanes(!!session.untrusted, useSessions((s) => s.browserAvailable)).filter((lane) => !liveOnly || lane !== CHROME_LANE);
   const running = lanes ? lanes.split(',').map(Number) : [];
   const atWork = testersAtWork(session.subagents);
   for (const [lane, name] of Object.entries(atWork)) testerNames.set(browserId(session.id, Number(lane)), name);
   const words = t.session.browser;
-  return browserLanes(running, liveOnly && accounts === CHROME_LANE ? null : accounts).map((lane) => ({
+  return browserLanes(running, accounts).map((lane) => ({
     lane,
     name: lane === SHARED_LANE ? words.shared : lane === CHROME_LANE ? words.chrome : lane ? (testerNames.get(browserId(session.id, lane)) ?? words.tester(lane)) : session.name,
     title: lane === SHARED_LANE ? words.sharedTitle : lane === CHROME_LANE ? words.chromeTitle : undefined,
     running: running.includes(lane) || (lane === CHROME_LANE && !!session.chrome),
     live: lane > 0 && lane in atWork,
+    current: accounts.includes(lane) && lane === used,
   }));
 }
+
+/** The browser of the user's accounts the session uses: its own choice, else the setting's. */
+const useAccountsBrowser = (session: SessionInfo) => useSessions((s) => session.accountsBrowser ?? s.preferences.accountsBrowser);
 
 /** The session's browsers as buttons, the one shown pressed. */
 export function LanePicker({ lanes, shown, onPick }: { lanes: ReturnType<typeof useLanes>; shown: number | null; onPick: (lane: number) => void }) {
   return lanes.map((each) => (
-    <button key={each.lane} type="button" role="tab" aria-selected={each.lane === shown} data-off={!each.running} data-live={each.live} title={each.title} onClick={() => onPick(each.lane)}>{each.name}</button>
+    <button key={each.lane} type="button" role="tab" aria-selected={each.lane === shown} data-off={!each.running} data-live={each.live} data-current={each.current} title={each.current ? `${each.title} · ${t.session.browser.inUse}` : each.title} onClick={() => onPick(each.lane)}>{each.name}</button>
   ));
 }
 
@@ -65,15 +69,38 @@ export function BrowserView({ session, driving }: { session: SessionInfo; drivin
   const chosen = useSessions((s) => s.browserLanes[session.id] ?? 0);
   const showLane = useSessions((s) => s.showBrowserLane);
   const running = lanes.filter((each) => each.running).map((each) => each.lane);
-  const accounts = lanes.find((each) => each.lane === SHARED_LANE || each.lane === CHROME_LANE)?.lane ?? null;
+  const accounts = lanes.filter((each) => accountsBrowserOfLane(each.lane) !== null).map((each) => each.lane);
   const lane = shownLane(chosen, running, accounts);
-  const picker = lanes.length > 1 && (
-    <div className="cp-browser__lanes" role="tablist" aria-label={t.session.browser.lanes}>
-      <LanePicker lanes={lanes} shown={lane} onPick={(each) => showLane(session.id, each)} />
-    </div>
+  const picker = (
+    <>
+      {lanes.length > 1 && (
+        <div className="cp-browser__lanes" role="tablist" aria-label={t.session.browser.lanes}>
+          <LanePicker lanes={lanes} shown={lane} onPick={(each) => showLane(session.id, each)} />
+        </div>
+      )}
+      {accounts.includes(lane) && <AccountsSwitch session={session} lane={lane} />}
+    </>
   );
   if (lane === CHROME_LANE) return <ChromePane session={session}>{picker}</ChromePane>;
   return <BrowserPane key={lane} session={session} lane={lane} driving={driving && lane === 0}>{picker}</BrowserPane>;
+}
+
+/**
+ * Over a browser of the user's accounts the session does not use: which one it uses, and the button that switches it to
+ * this one (its process is released and its next message starts with it, see SessionManager.switchBrowsers).
+ */
+function AccountsSwitch({ session, lane }: { session: SessionInfo; lane: number }) {
+  const send = useSessions((s) => s.send);
+  const used = useAccountsBrowser(session);
+  const shown = accountsBrowserOfLane(lane);
+  const words = t.session.browser;
+  if (!shown || shown === used) return null;
+  return (
+    <div className="cp-browser__switch">
+      <span>{used === 'chrome' ? words.usesChrome : words.usesShared}</span>
+      <button type="button" className="cp-button" data-size="small" onClick={() => send({ t: 'accountsBrowser', sessionId: session.id, browser: shown })}>{words.useHere}</button>
+    </div>
+  );
 }
 
 /**

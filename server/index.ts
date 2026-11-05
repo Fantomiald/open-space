@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import type { AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
@@ -120,8 +120,8 @@ const sharedKey = (sessionId: string) => browserKey(secret, `shared:${sessionId}
  * the browser of the user's own accounts chosen in the settings, the shared one or their Chrome through Claude in Chrome,
  * unless the session's folder was not trusted
  */
-function browserMcp(sessionId: string, untrusted: boolean) {
-  const accounts = accountsBrowserOf(settings.preferences.accountsBrowser, untrusted);
+function browserMcp(sessionId: string, untrusted: boolean, chosen: AccountsBrowser) {
+  const accounts = accountsBrowserOf(chosen, untrusted);
   const chrome = accounts === 'chrome' ? { chrome: true } : {};
   if (!browsers.available) return chrome;
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
@@ -152,6 +152,7 @@ const sessions = new SessionManager({
   tagger: claude ? createTagger(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   autoTag: () => settings.preferences.autoTag,
   remoteByDefault: () => settings.preferences.remoteByDefault,
+  accountsBrowser: () => settings.preferences.accountsBrowser,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,
@@ -325,11 +326,13 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'preferences': {
       const { roots, ...rest } = message.preferences;
       const before = settings.preferences.claude;
+      const accountsBefore = settings.preferences.accountsBrowser;
       await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
       setServerLanguage(settings.preferences.language ?? 'fr');
       applyRoots();
       broadcast(preferencesMessage());
       await sessions.applySettings(changedSettings(before, settings.preferences.claude));
+      if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
       await checkMetrics();
       break;
     }
@@ -350,6 +353,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tag': sessions.tag(message.sessionId, message.tag); break;
+    case 'accountsBrowser': sessions.setAccountsBrowser(message.sessionId, message.browser); break;
     case 'rest': await sessions.rest(message.sessionId); browsers.stopSession(message.sessionId); break;
     case 'forget': await sessions.forget(message.sessionId, message.branch); await browsers.forget(message.sessionId); break;
     case 'browser':

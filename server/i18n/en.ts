@@ -77,6 +77,7 @@ export const en: ServerDictionary = {
       idle: 'Process released after a while doing nothing.',
       released: 'Process released when the server stopped.',
       updated: 'Process released: the next message starts the new version of Claude Code.',
+      browser: 'Process released: the next message starts with the other browser for your accounts.',
       compacted: 'Process released once the conversation was compacted.',
       moved: 'Process released to change folders.',
     },

@@ -338,6 +338,8 @@ export interface SessionInfo {
   remote?: RemoteControl;
   /** the page its agent last had in the user's own Chrome (not kept when Open Space restarts) */
   chrome?: ChromeView;
+  /** the browser of the user's accounts it uses, chosen for it in its Browser view; absent: the one of the settings */
+  accountsBrowser?: AccountsBrowser;
   /** it works on a branch of its own, in a worktree */
   worktree?: WorktreeInfo;
   /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
@@ -600,6 +602,8 @@ export type ClientMessage =
   | { t: 'rename'; sessionId: string; name: string }
   /** an empty tag removes it */
   | { t: 'tag'; sessionId: string; tag: string }
+  /** the browser of the user's accounts this session uses, whatever the setting (the setting's own: it follows the setting again) */
+  | { t: 'accountsBrowser'; sessionId: string; browser: AccountsBrowser }
   /** sends the session to the break room (its process is released; a message calls it back) */
   | { t: 'rest'; sessionId: string }
   /**

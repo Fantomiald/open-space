@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import type { ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { CatalogProbe, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
@@ -280,7 +280,7 @@ describe('the user’s own Chrome', () => {
   /** a turn of the same conversation (simple-turn's init names another one, which /clear would have started) */
   const turn = (process: { handlers: ProcessHandlers }, conversation: string) => {
     process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
-    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 });
   };
 
   it('a new conversation is launched with it and learns its rules from the system prompt', async () => {
@@ -293,6 +293,50 @@ describe('the user’s own Chrome', () => {
     assert.deepEqual(processes[0].sent, ['bonjour']);
     assert.equal(find(id).toldChrome, true);
     assert.equal(find(id).toldSharedBrowser, undefined);
+    await manager.shutdown();
+  });
+
+  /** the launch for the browser of the accounts each session uses, its own choice or the setting's */
+  const byChoice = (setting: { browser: AccountsBrowser }): Partial<SessionManagerDeps> => ({
+    accountsBrowser: () => setting.browser,
+    browserMcp: (_id, _untrusted, chosen) => (chosen === 'chrome' ? { chrome: true, mcpConfig: browserMcpConfig('http://h/cdp', {}) } : { mcpConfig: browserMcpConfig('http://h/cdp', {}, 'http://h/shared') }),
+  });
+
+  it('a session switched on its own is released while it waits, and keeps its choice when the setting changes', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    manager.setAccountsBrowser(id, 'chrome');
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    assert.equal(processes[0].stopCalls.length, 1, 'released while it waits');
+    manager.send(id, 'tu vois GA4 ?');
+    assert.equal(processes[1].launch.chrome, true);
+    assert.match(processes[1].sent.at(-1)!, /claude-in-chrome/);
+    turn(processes[1], id);
+    manager.accountsBrowserChanged();
+    assert.equal(processes[1].stopCalls.length, 0, 'its own choice holds against the setting');
+    manager.setAccountsBrowser(id, 'shared');
+    assert.equal(find(id).accountsBrowser, undefined, 'the same as the setting: it follows the setting again');
+    assert.equal(processes[1].stopCalls.length, 1);
+    await manager.shutdown();
+  });
+
+  it('the setting switches the sessions without a choice of their own, one at work once its turn is over', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    setting.browser = 'chrome';
+    manager.accountsBrowserChanged();
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1, 'released at the end of its turn');
+    manager.send(id, 'encore');
+    assert.equal(processes[1].launch.chrome, true);
+    manager.accountsBrowserChanged();
+    assert.equal(processes[1].stopCalls.length, 0, 'already launched with it: nothing to do');
     await manager.shutdown();
   });
 

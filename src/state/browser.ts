@@ -22,24 +22,29 @@ export const modifiersOf = (event: { altKey: boolean; ctrlKey: boolean; metaKey:
   (event.altKey ? MODIFIERS.alt : 0) | (event.ctrlKey ? MODIFIERS.ctrl : 0) | (event.metaKey ? MODIFIERS.meta : 0) | (event.shiftKey ? MODIFIERS.shift : 0);
 
 /**
- * The lane of the browser of the user's accounts a session's view offers, the one chosen in the settings: the shared
- * browser when Open Space can run one, or their own Chrome; none for a folder not trusted, which reaches neither.
+ * The lanes of the browsers of the user's accounts a session's view offers, to look at and to switch to: the shared
+ * browser when Open Space can run one, and their own Chrome; none for a folder not trusted, which reaches neither.
  */
-export function accountsLane(chosen: AccountsBrowser, untrusted: boolean, available: boolean): number | null {
-  if (untrusted) return null;
-  if (chosen === 'chrome') return CHROME_LANE;
-  return available ? SHARED_LANE : null;
+export function accountsLanes(untrusted: boolean, available: boolean): number[] {
+  if (untrusted) return [];
+  return [...(available ? [SHARED_LANE] : []), CHROME_LANE];
 }
 
-/** The lanes of a session's browsers to pick from: its own, its testers' running, then the browser of the user's accounts (always offered with it). */
-export function browserLanes(running: readonly number[], accounts: number | null): number[] {
-  const testers = running.filter((lane) => lane !== 0 && lane !== SHARED_LANE).sort((a, b) => a - b);
-  return [0, ...testers, ...(accounts === null ? [] : [accounts])];
+/** The lane of the browser of the user's accounts a session uses (its own choice, else the setting's). */
+export const usedAccountsLane = (used: AccountsBrowser) => (used === 'chrome' ? CHROME_LANE : SHARED_LANE);
+
+/** The browser of the user's accounts a lane stands for, or null for another lane. */
+export const accountsBrowserOfLane = (lane: number): AccountsBrowser | null => (lane === CHROME_LANE ? 'chrome' : lane === SHARED_LANE ? 'shared' : null);
+
+/** The lanes of a session's browsers to pick from: its own, its testers' running, then the browsers of the user's accounts (always offered with it). */
+export function browserLanes(running: readonly number[], accounts: readonly number[]): number[] {
+  const testers = running.filter((lane) => lane !== 0 && accountsBrowserOfLane(lane) === null).sort((a, b) => a - b);
+  return [0, ...testers, ...accounts];
 }
 
-/** The lane shown: the one picked while it runs (the accounts' even before: looking at it starts it), else the session's own, else the first running. */
-export function shownLane(chosen: number, running: readonly number[], accounts: number | null): number {
-  if (chosen === accounts || (running.includes(chosen) && chosen !== SHARED_LANE)) return chosen;
+/** The lane shown: the one picked while it runs (an accounts' one even before: looking at it starts it), else the session's own, else the first running. */
+export function shownLane(chosen: number, running: readonly number[], accounts: readonly number[]): number {
+  if (accounts.includes(chosen) || (running.includes(chosen) && accountsBrowserOfLane(chosen) === null)) return chosen;
   return running.includes(0) || !running.length ? 0 : running[0];
 }
 

@@ -6,7 +6,7 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
@@ -933,12 +933,18 @@ export class Session {
    * Lets the process go while the session waits, so that its next message starts the Claude Code installed since.
    * false: it is at work, or keeps its process for its background work or Remote Control.
    */
-  release(): boolean {
+  release(note = st.sessions.stopped.updated): boolean {
     if (!this.process?.alive || this.context.state !== 'wait' || this.keepsProcess() || scheduledUntil(this.schedules, this.now())) return false;
     this.clearIdleTimer();
-    this.stopRequest = { reason: 'idle', note: st.sessions.stopped.updated };
+    this.stopRequest = { reason: 'idle', note };
     void this.process.stop(2000);
     return true;
+  }
+
+  /** The browser of the user's accounts it uses, whatever the setting; undefined: the setting's (see SessionManager.switchBrowsers). */
+  setAccountsBrowser(browser: AccountsBrowser | undefined) {
+    this.info.accountsBrowser = browser;
+    this.publish();
   }
 
   /** Puts a label on the session, or removes it (empty). */

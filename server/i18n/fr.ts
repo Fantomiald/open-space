@@ -87,6 +87,7 @@ export const fr = {
       idle: 'Processus relâché après un moment sans rien faire.',
       released: 'Processus relâché à l’arrêt du serveur.',
       updated: 'Processus relâché : le prochain message part avec la nouvelle version de Claude Code.',
+      browser: 'Processus relâché : le prochain message part avec l’autre navigateur pour tes comptes.',
       compacted: 'Processus relâché après le compactage de la conversation.',
       moved: 'Processus relâché pour changer de dossier.',
     },

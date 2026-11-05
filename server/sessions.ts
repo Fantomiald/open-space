@@ -16,7 +16,7 @@ import type { SecretStore } from './secrets.ts';
 import type { SecretEntry } from '../shared/secrets.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
-import type { Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
@@ -81,7 +81,9 @@ export interface SessionManagerDeps {
    * the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts),
    * and --chrome when the user's own Chrome is the browser of their accounts (Preferences.accountsBrowser)
    */
-  browserMcp?: (sessionId: string, untrusted: boolean) => BrowserLaunch;
+  browserMcp?: (sessionId: string, untrusted: boolean, accounts: AccountsBrowser) => BrowserLaunch;
+  /** Preferences.accountsBrowser: the browser of the user's accounts of the sessions without a choice of their own */
+  accountsBrowser?: () => AccountsBrowser;
   /** the keys the user gives the sessions, and the variables that let a session's os-secret reach them (server/secrets.ts) */
   secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
 }
@@ -116,6 +118,8 @@ export class SessionManager {
   private awaitingTag = new Set<string>();
   /** the browsers each session's last process was launched with: what its conversation is told about is what it has */
   private launchedBrowsers = new Map<string, BrowserLaunch>();
+  /** sessions whose process waits for the end of a turn to be released for other browsers (switchBrowsers) */
+  private switchingBrowsers = new Set<string>();
 
   constructor(deps: SessionManagerDeps) {
     this.deps = deps;
@@ -191,6 +195,45 @@ export class SessionManager {
   private switchedOffLog(conversationId: string) { return path.join(switchedOffFolder(this.logsDir), `${conversationId}.jsonl`); }
 
   /** Removes in the background the threads of sessions switched off too long ago, then the stored pictures and files no thread names any more (see sweepAttachments). */
+  /** The browsers a session's process gets when it starts now: the browser of the accounts it uses, its own choice or the setting's. */
+  private browserLaunch(id: string): BrowserLaunch {
+    const info = this.sessions.get(id)?.snapshot();
+    if (!info) return {};
+    return this.deps.browserMcp?.(id, !!info.untrusted, info.accountsBrowser ?? this.deps.accountsBrowser?.() ?? 'shared') ?? {};
+  }
+
+  /** Whether the process a session runs was launched with other browsers than it would get now. */
+  private browsersChanged(id: string): boolean {
+    const launched = this.launchedBrowsers.get(id);
+    if (!launched) return false;
+    const wanted = this.browserLaunch(id);
+    return !!launched.chrome !== !!wanted.chrome || hasSharedBrowser(launched.mcpConfig) !== hasSharedBrowser(wanted.mcpConfig);
+  }
+
+  /**
+   * A session's process runs with other browsers than it now gets: released while it waits, so that its next message
+   * starts with them (--resume, the conversation goes on); at work, or keeping its process (Remote Control, background
+   * work), once a turn of it is over.
+   */
+  private switchBrowsers(id: string) {
+    const session = this.sessions.get(id);
+    if (!session?.alive || !this.browsersChanged(id)) { this.switchingBrowsers.delete(id); return; }
+    if (session.release(st.sessions.stopped.browser)) this.switchingBrowsers.delete(id);
+    else this.switchingBrowsers.add(id);
+  }
+
+  /** The browser of the user's accounts this session uses; the setting's own: it follows the setting again. */
+  setAccountsBrowser(id: string, browser: AccountsBrowser) {
+    const session = this.session(id);
+    session.setAccountsBrowser(browser === (this.deps.accountsBrowser?.() ?? 'shared') ? undefined : browser);
+    this.switchBrowsers(id);
+  }
+
+  /** Preferences.accountsBrowser changed: the sessions without a choice of their own switch. */
+  accountsBrowserChanged() {
+    for (const [id, session] of this.sessions) if (!session.snapshot().accountsBrowser) this.switchBrowsers(id);
+  }
+
   /** The last screenshots the sessions took in the user's Chrome: shown in their Browser view, named by no log. */
   private chromePictures(): Set<string> {
     return new Set([...this.sessions.values()].flatMap((session) => session.snapshot().chrome?.picture?.name ?? []));
@@ -268,7 +311,7 @@ export class SessionManager {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
         if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
         const env = this.deps.secrets?.env(info.id);
-        const browsers = this.deps.browserMcp?.(info.id, !!info.untrusted) ?? {};
+        const browsers = this.browserLaunch(info.id);
         this.launchedBrowsers.set(info.id, browsers);
         return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...browsers, ...(env ? { env } : {}) }, handlers);
       },
@@ -654,6 +697,7 @@ export class SessionManager {
   /** A turn of an isolated session is over: the merge it was asked for is checked and done, or its branch looked at again. */
   private onTurnEnd(id: string, how: TurnEnd) {
     if (how === 'done') this.idleCompactPaused = false;
+    if (this.switchingBrowsers.has(id)) this.switchBrowsers(id);
     const session = this.sessions.get(id);
     const worktree = session?.snapshot().worktree;
     if (!session || !worktree) return;
@@ -974,6 +1018,7 @@ export class SessionManager {
     this.closeAside(id);
     this.sessions.delete(id);
     this.launchedBrowsers.delete(id);
+    this.switchingBrowsers.delete(id);
     const log = this.logs.get(id);
     this.logs.delete(id);
     await log?.close();
@@ -1088,6 +1133,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     toldPlace: asString(raw.toldPlace) || undefined,
     toldSharedBrowser: raw.toldSharedBrowser === true || undefined,
     toldChrome: raw.toldChrome === true || undefined,
+    accountsBrowser: raw.accountsBrowser === 'chrome' || raw.accountsBrowser === 'shared' ? raw.accountsBrowser : undefined,
     toldSecrets: raw.toldSecrets === true || undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),

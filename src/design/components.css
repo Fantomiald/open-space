@@ -499,6 +499,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-browser__lanes > button[data-off='true'] { opacity: 0.6; }
 /* a tester at work in its browser */
 .cp-browser__lanes > button[data-live='true'] { display: inline-flex; align-items: center; gap: var(--space-1); }
+/* the browser of the user's accounts the session uses (its own choice or the setting's) */
+.cp-browser__lanes > button[data-current='true'] { display: inline-flex; align-items: center; gap: var(--space-1); }
+.cp-browser__lanes > button[data-current='true']::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); }
+.cp-browser__switch { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-bottom: var(--border-width) solid var(--color-border); font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-browser__switch > .cp-button { flex: none; white-space: nowrap; }
 .cp-browser__lanes > button[data-live='true']::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--tone-work); animation: cp-pulse 1.4s ease-in-out infinite; }
 .cp-browser__tabs { flex: none; display: flex; gap: var(--space-1); padding: var(--space-1) var(--space-2); overflow-x: auto; border-bottom: var(--border-width) solid var(--color-border); }
 .cp-browser__tab { flex: 0 1 11rem; min-width: 5rem; display: flex; align-items: center; border-radius: var(--radius-sm); color: var(--color-text-muted); font-size: var(--text-xs); }
