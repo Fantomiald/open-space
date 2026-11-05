@@ -25,6 +25,7 @@ import { paintActivity } from './activity-icons.ts';
 import { Visits, type Visitor } from './visitors.ts';
 import { stackLabels } from './labels.ts';
 import { tagColor } from '../design/tag-colors.ts';
+import { roomTags } from '../../shared/tags.ts';
 
 /** How long a visitor at a birthday party wishes it, in ms. */
 const WISH_MS = 4000;
@@ -429,8 +430,9 @@ interface NameTag {
   name: string;
   colour: string;
   status: Exclude<Status, null> | null;
-  tag: string | null;
-  tagColor?: string | null;
+  /** the session's first tags (shared/tags.ts roomTags), each in its colour when the settings colour them, then how many more */
+  tags: readonly { text: string; color: string | null }[];
+  moreTags: number;
   /** on a branch of its own: a little branch after the name */
   branch?: boolean;
   /** whose sub-agents they are, for their faces */
@@ -465,7 +467,8 @@ const extraAgents = (tag: NameTag) => Math.max(0, tag.agents.length - SHOWN_AGEN
 function tagWidth(context: Context, tag: NameTag): number {
   let width = (tag.status ? 2 + ICON_SIZE + TAG_GAP : TAG_PADDING) + textWidthOf(context, tag.name) + TAG_PADDING;
   if (tag.branch) width += TAG_GAP + BRANCH_GLYPH_WIDTH;
-  if (tag.tag) width += SEPARATED + textWidthOf(context, tag.tag);
+  for (const { text } of tag.tags) width += SEPARATED + textWidthOf(context, text);
+  if (tag.moreTags) width += TAG_GAP + textWidthOf(context, `+${tag.moreTags}`);
   if (tag.agents.length) {
     const shown = Math.min(tag.agents.length, SHOWN_AGENTS);
     width += SEPARATED + HEAD_SIZE + (shown - 1) * HEAD_STEP;
@@ -557,11 +560,17 @@ function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, lef
     for (const [dx, dy] of BRANCH_GLYPH) rect(context, x + dx, glyphTop + dy, 1, 1, P.branch);
     x += BRANCH_GLYPH_WIDTH;
   }
-  if (tag.tag) {
+  for (const { text, color } of tag.tags) {
     x = separator(context, x, top);
-    context.fillStyle = tag.tagColor ?? P.sessionTag;
-    context.fillText(tag.tag, x, top + 10);
-    x += textWidthOf(context, tag.tag);
+    context.fillStyle = color ?? P.sessionTag;
+    context.fillText(text, x, top + 10);
+    x += textWidthOf(context, text);
+  }
+  if (tag.moreTags) {
+    x += TAG_GAP;
+    context.fillStyle = P.sessionTag;
+    context.fillText(`+${tag.moreTags}`, x, top + 10);
+    x += textWidthOf(context, `+${tag.moreTags}`);
   }
   if (tag.agents.length) paintTagAgents(context, sprites, tag, separator(context, x, top), top, time, reducedMotion);
   context.restore();
@@ -738,10 +747,12 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const noticed = status !== null || isSelected(character) || options.hoveredId === character.person.id;
     // what waits for the user stays at full strength, like the open session and the one under the pointer
     const calling = status !== null && status !== 'working';
+    const shownTags = roomTags(character.person.tags);
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, tag: character.person.tag, tagColor: options.tagColors && character.person.tag ? tagColor(character.person.tag) : null, branch: character.person.branch,
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch,
+        tags: shownTags.shown.map((text) => ({ text, color: options.tagColors ? tagColor(text) : null })), moreTags: shownTags.more,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },
     });
@@ -749,7 +760,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const playerFeet = toScreen(scene.player.position);
   tags.push({
     x: playerFeet.x, bottom: playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - TAG_LIFT, faint: options.hoveredId !== PLAYER_ID,
-    tag: { name: options.playerName, colour: P.playerTagText, status: null, tag: null, sessionId: PLAYER_ID, agents: [], framed: false },
+    tag: { name: options.playerName, colour: P.playerTagText, status: null, tags: [], moreTags: 0, sessionId: PLAYER_ID, agents: [], framed: false },
   });
   const boxes = tags.map(({ tag, x, bottom }) => { const width = tagWidth(context, tag); return { left: Math.round(x - width / 2), top: Math.round(bottom - TAG_HEIGHT), width, height: TAG_HEIGHT }; });
   stackLabels(boxes).forEach((top, index) => {
@@ -771,7 +782,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const head = feet.y - sprites.height(pose, visitor.id);
     let above = head;
     if (hovered) {
-      const tag: NameTag = { name: visitor.name, colour: P.tagText, status: null, tag: null, sessionId: visitor.id, agents: [], framed: false };
+      const tag: NameTag = { name: visitor.name, colour: P.tagText, status: null, tags: [], moreTags: 0, sessionId: visitor.id, agents: [], framed: false };
       const width = tagWidth(context, tag);
       above = Math.round(head - TAG_LIFT - TAG_HEIGHT);
       paintNameTag(context, sprites, tag, Math.round(feet.x - width / 2), above, options.time, options.reducedMotion);

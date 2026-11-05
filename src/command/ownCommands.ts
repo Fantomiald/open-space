@@ -1,5 +1,6 @@
 // What Open Space's own slash commands do (the list and how they are typed: state/commands.ts).
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { parseTags } from '../../shared/tags.ts';
 import { t } from '../i18n/index.ts';
 import type { OwnName } from '../state/commands.ts';
 import { answerFromEnd, buildFeed, conversationMarkdown } from '../state/feed.ts';
@@ -31,7 +32,7 @@ export function runOwnCommand(name: OwnName, argument: string, session: SessionI
   if (!session || !id) return false;
   switch (name) {
     case 'btw': return false;
-    case 'tag': return s.send({ t: 'tag', sessionId: id, tag: argument.slice(0, 24) });
+    case 'tag': return s.send({ t: 'tags', sessionId: id, tags: parseTags(argument) });
     case 'rename': return !!argument && s.send({ t: 'rename', sessionId: id, name: argument.slice(0, 40) });
     case 'plan': {
       const sent = s.send({ t: 'tune', sessionId: id, permissionMode: 'plan' });

@@ -20,20 +20,20 @@ export function useMentionable(exceptId?: string): Mentionable[] {
     .map((other) => ({ name: other.name, session: other, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, exceptId]);
 }
 
-/** A line of the suggestions: a command or a session (`aside`: its tag, after its name). `insert` replaces what is typed; typed as `whole`, Enter sends. */
+/** A line of the suggestions: a command or a session (`aside`: its tags, after its name). `insert` replaces what is typed; typed as `whole`, Enter sends. */
 interface Suggestion { label: string; aside?: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }
 
 /**
- * The sessions whose name or tag starts with what follows the "@", then those whose name or tag holds it, accents and
- * case aside: one line each, its name then its tag. Completing writes the one typed: the tag when only the tag fits.
+ * The sessions whose name or one of its tags starts with what follows the "@", then those whose name or tag holds it,
+ * accents and case aside: one line each, its name then its tags. Completing writes the one typed: a tag when only it fits.
  */
 function mentionSuggestions(people: readonly Mentionable[], typed: string): Suggestion[] {
   const word = foldQuery(typed);
   const line = (person: Mentionable, test: (folded: string) => boolean): Suggestion | null => {
-    const { name, session: { tag } } = person;
-    const written = test(foldQuery(name)) ? name : tag && test(foldQuery(tag)) ? tag : null;
+    const { name, session: { tags = [] } } = person;
+    const written = test(foldQuery(name)) ? name : tags.find((tag) => test(foldQuery(tag))) ?? null;
     if (!written) return null;
-    return { label: `@${name}`, aside: tag, description: person.detail, insert: `@${written} `, whole: `@${written}`, face: person.session };
+    return { label: `@${name}`, aside: tags.join(', ') || undefined, description: person.detail, insert: `@${written} `, whole: `@${written}`, face: person.session };
   };
   const starting = people.map((person) => line(person, (folded) => folded.startsWith(word)));
   const holding = people.map((person, index) => (starting[index] ? null : line(person, (folded) => folded.includes(word))));

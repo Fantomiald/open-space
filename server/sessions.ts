@@ -24,7 +24,8 @@ import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, lastName, listConversations, searchConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
-import { MAX_NAME, MAX_TAG } from './messages.ts';
+import { MAX_NAME } from './messages.ts';
+import { storedTags } from '../shared/tags.ts';
 import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
@@ -563,7 +564,7 @@ export class SessionManager {
       const base = asked || repo.branch;
       if (!base) throw new Error(repo.branches.length ? st.worktree.noBase : st.worktree.noCommit);
       if (!repo.branches.includes(base)) throw new Error(st.worktree.unknownBase(base));
-      const made = await createWorktree({ mainRoot: repo.root, name: info.name, about: info.tag || about, base, note: { name: info.name, sub: repo.sub, conversation: info.id } });
+      const made = await createWorktree({ mainRoot: repo.root, name: info.name, about: info.tags?.[0] || about, base, note: { name: info.name, sub: repo.sub, conversation: info.id } });
       await this.settleWorktree(session, repo, made.root, made.branch, base, cwd);
     } catch (error) {
       session.announce({ k: 'note', text: st.worktree.prepareFailed(error instanceof Error ? error.message : String(error), info.name, path.basename(cwd)) });
@@ -854,7 +855,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tag ? { tag: source.tag } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -876,7 +877,7 @@ export class SessionManager {
     this.tagFromFirstMessage(session, text);
   }
 
-  /** A new conversation without a tag gets one from its first message, a little later, unless the user put one meanwhile. */
+  /** A new conversation without tags gets one from its first message, a little later, unless the user put some meanwhile. */
   private tagFromFirstMessage(session: Session, text: string) {
     const info = session.snapshot();
     const tagger = this.deps.tagger;
@@ -884,11 +885,11 @@ export class SessionManager {
     // a slash command or a message without words says nothing of the subject: the next one may
     if (!text.trim() || text.trimStart().startsWith('/')) return;
     this.awaitingTag.delete(info.id);
-    if (!tagger || !this.deps.autoTag?.() || info.tag) return;
+    if (!tagger || !this.deps.autoTag?.() || info.tags?.length) return;
     void tagger(text).then((tag) => {
       const current = this.sessions.get(info.id);
-      if (!tag || !current || current.snapshot().tag) return;
-      current.setTag(tag);
+      if (!tag || !current || current.snapshot().tags?.length) return;
+      current.setTags([tag]);
       this.save();
     });
   }
@@ -923,7 +924,7 @@ export class SessionManager {
     this.session(id).rename(clean);
   }
 
-  tag(id: string, tag: string) { this.session(id).setTag(tag); }
+  setTags(id: string, tags: readonly string[]) { this.session(id).setTags(tags); }
   rest(id: string) { return this.session(id).rest(); }
   remoteControl(id: string, enabled: boolean) { return this.session(id).setRemote(enabled); }
   inspect(id: string, view: InspectView) { return this.session(id).inspect(view); }
@@ -1062,7 +1063,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     quietFrom: typeof raw.quietFrom === 'number' && Number.isInteger(raw.quietFrom) && raw.quietFrom >= 0 ? raw.quietFrom : undefined,
     conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,
-    tag: asString(raw.tag).slice(0, MAX_TAG) || undefined,
+    tags: storedTags(raw).length ? storedTags(raw) : undefined,
     resting: raw.resting === true || undefined,
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,

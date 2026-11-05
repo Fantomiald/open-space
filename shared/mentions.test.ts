@@ -21,12 +21,14 @@ describe('mentions', () => {
     assert.equal(mentionAt('@Li puis', 8), null);
   });
 
-  it('names a session by its tag too', () => {
-    const names = mentionNames([{ name: 'Iris', tag: 'dark mode' }, { name: 'PL' }]);
-    assert.deepEqual(names, ['Iris', 'dark mode', 'PL']);
-    assert.deepEqual(findMentions('demande à @dark mode et @pl', names).map((mention) => mention.name), ['dark mode', 'PL']);
-    assert.ok(isNamedBy('Dark Mode', { name: 'Iris', tag: 'dark mode' }));
-    assert.ok(isNamedBy('iris', { name: 'Iris', tag: 'dark mode' }));
-    assert.ok(!isNamedBy('PL', { name: 'Iris', tag: 'dark mode' }));
+  it('names a session by any of its tags too', () => {
+    const iris = { name: 'Iris', tags: ['dark mode', 'Pro'] };
+    const names = mentionNames([iris, { name: 'PL' }]);
+    assert.deepEqual(names, ['Iris', 'dark mode', 'Pro', 'PL']);
+    assert.deepEqual(findMentions('demande à @dark mode, @pro et @pl', names).map((mention) => mention.name), ['dark mode', 'Pro', 'PL']);
+    assert.ok(isNamedBy('Dark Mode', iris));
+    assert.ok(isNamedBy('pro', iris));
+    assert.ok(isNamedBy('iris', iris));
+    assert.ok(!isNamedBy('PL', iris));
   });
 });

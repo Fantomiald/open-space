@@ -24,15 +24,15 @@ export function findMentions(text: string, names: readonly string[]): Mention[] 
   return found;
 }
 
-/** What "@" can name a session by: its name, and its tag when it has one. */
-export function mentionNames(sessions: Iterable<{ name: string; tag?: string }>): string[] {
-  return [...sessions].flatMap((session) => (session.tag ? [session.name, session.tag] : [session.name]));
+/** What "@" can name a session by: its name, and each of its tags. */
+export function mentionNames(sessions: Iterable<{ name: string; tags?: readonly string[] }>): string[] {
+  return [...sessions].flatMap((session) => [session.name, ...(session.tags ?? [])]);
 }
 
-/** Whether a mention found by findMentions names this session, by its name or its tag. */
-export function isNamedBy(mention: string, session: { name: string; tag?: string }): boolean {
+/** Whether a mention found by findMentions names this session, by its name or one of its tags. */
+export function isNamedBy(mention: string, session: { name: string; tags?: readonly string[] }): boolean {
   const wanted = mention.toLowerCase();
-  return session.name.toLowerCase() === wanted || session.tag?.toLowerCase() === wanted;
+  return session.name.toLowerCase() === wanted || !!session.tags?.some((tag) => tag.toLowerCase() === wanted);
 }
 
 /** The "@" being typed where the caret is ("va voir @Li"): where it starts and what follows it, else null. */

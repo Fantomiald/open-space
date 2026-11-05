@@ -309,7 +309,7 @@ describe('automatic tags', () => {
     assert.deepEqual(tags.asked, ['refais le paywall']);
     tags.answer('paywall');
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(find(id).tag, 'paywall');
+    assert.deepEqual(find(id).tags, ['paywall']);
     processes[0].feed('simple-turn');
     manager.send(id, 'et le bouton aussi');
     assert.equal(tags.asked.length, 1);
@@ -324,10 +324,10 @@ describe('automatic tags', () => {
     assert.deepEqual(tags.asked, []);
     processes[0].feed('simple-turn');
     manager.send(id, 'la page de vente');
-    manager.tag(id, 'vente');
+    manager.setTags(id, ['vente']);
     tags.answer('landing');
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(find(id).tag, 'vente');
+    assert.deepEqual(find(id).tags, ['vente']);
     await manager.shutdown();
 
     const off = tagging(false);
@@ -402,18 +402,34 @@ describe('resuming a conversation started elsewhere', () => {
 });
 
 describe('tags', () => {
-  it('puts a tag on a session, keeps it across a restart, and removes it when empty', async () => {
+  it('puts several tags on a session, keeps them across a restart, and removes them all with none', async () => {
     const dataDir = path.join(base, `data-tag-${++counter}`);
     const first = setup({}, dataDir);
     await first.manager.init();
     const { id } = await first.manager.create({ cwd: projectA(), text: 'hi' });
-    first.manager.tag(id, 'urgent');
+    first.manager.setTags(id, ['Pro', 'PDF']);
     await first.manager.shutdown();
     const second = setup({}, dataDir);
     await second.manager.init();
-    assert.equal(second.find(id).tag, 'urgent');
-    second.manager.tag(id, '');
-    assert.equal(second.find(id).tag, undefined);
+    assert.deepEqual(second.find(id).tags, ['Pro', 'PDF']);
+    second.manager.setTags(id, []);
+    assert.equal(second.find(id).tags, undefined);
+    await second.manager.shutdown();
+  });
+
+  it('keeps the single tag a session was saved with by an older version', async () => {
+    const dataDir = path.join(base, `data-tag-${++counter}`);
+    const first = setup({}, dataDir);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'hi' });
+    await first.manager.shutdown();
+    const file = path.join(dataDir, 'sessions.json');
+    const stored = JSON.parse(readFileSync(file, 'utf8'));
+    for (const session of Array.isArray(stored) ? stored : stored.sessions) if (session.id === id) session.tag = 'urgent';
+    writeFileSync(file, JSON.stringify(stored));
+    const second = setup({}, dataDir);
+    await second.manager.init();
+    assert.deepEqual(second.find(id).tags, ['urgent']);
     await second.manager.shutdown();
   });
 });
@@ -458,7 +474,7 @@ describe('mentions', () => {
     const { manager, processes } = setup();
     await manager.init();
     const pl = await manager.create({ cwd: projectA(), name: 'PL', text: 'hi' });
-    manager.tag(pl.id, 'paywall');
+    manager.setTags(pl.id, ['Pro', 'paywall']);
     await manager.create({ cwd: projectA(), name: 'Iris', text: 'demande à @Paywall où il en est' });
     const asking = processes.find((process) => process.sent.some((text) => text.startsWith('demande')));
     assert.match(asking!.sent[0], /\n\n@paywall : la session « PL » de l’Open Space, taguée « paywall »[\s\S]*to: "PL"/);
@@ -1176,7 +1192,7 @@ describe('process life cycle', () => {
     const { manager, processes, find } = setup({ idleMs: 30 });
     await manager.init();
     const { id, name } = await manager.create({ cwd: projectA() });
-    manager.tag(id, 'Création vidéos');
+    manager.setTags(id, ['Création vidéos']);
     await manager.remoteControl(id, true);
     assert.equal(processes.length, 1);
     assert.deepEqual(processes[0].remoteTitles, [`Création vidéos - ${name}`], 'titled by what it is about, then who');

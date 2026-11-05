@@ -346,7 +346,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'close': await sessions.close(message.sessionId); break;
     case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
-    case 'tag': sessions.tag(message.sessionId, message.tag); break;
+    case 'tags': sessions.setTags(message.sessionId, message.tags); break;
     case 'rest': await sessions.rest(message.sessionId); browsers.stopSession(message.sessionId); break;
     case 'forget': await sessions.forget(message.sessionId, message.branch); await browsers.forget(message.sessionId); break;
     case 'browser':

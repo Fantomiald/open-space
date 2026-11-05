@@ -1,5 +1,6 @@
 import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { MAX_TAG, MAX_TAGS, parseTags, withoutTag } from '../../shared/tags.ts';
 import { t } from '../i18n/index.ts';
 import { shortcut } from '../lib/platform.ts';
 import { drivesBrowser } from '../state/browser.ts';
@@ -17,7 +18,7 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
@@ -123,18 +124,20 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
 
   const back = () => showPanel('thread');
   const [first, ...others] = session.permissions;
-  /** The name or the tag, edited in place: Enter saves, Escape or leaving the field cancels. */
+  const tags = session.tags ?? [];
+  const setTags = (next: string[]) => send({ t: 'tags', sessionId: session.id, tags: next });
+  /** The name or the tags (separated by commas, after the ones there), edited in place: Enter saves, Escape or leaving the field cancels. */
   const field = (kind: 'name' | 'tag') => (
     <form className="cp-detail__edit" onSubmit={(e) => {
       e.preventDefault();
       const value = String(new FormData(e.currentTarget).get('value') ?? '').trim();
       if (kind === 'name' && value) send({ t: 'rename', sessionId: session.id, name: value });
-      if (kind === 'tag') send({ t: 'tag', sessionId: session.id, tag: value });
+      if (kind === 'tag') setTags(parseTags(value));
       setEditing(null);
     }}>
       <label className="cp-sr-only" htmlFor={`${kind}-field`}>{kind === 'name' ? t.session.detail.newName : t.session.detail.tag}</label>
       <input
-        id={`${kind}-field`} name="value" defaultValue={kind === 'name' ? session.name : session.tag ?? ''} maxLength={kind === 'name' ? 40 : 24} autoFocus
+        id={`${kind}-field`} name="value" defaultValue={kind === 'name' ? session.name : tags.length ? `${tags.join(', ')}, ` : ''} maxLength={kind === 'name' ? 40 : (MAX_TAG + 2) * MAX_TAGS} autoFocus
         placeholder={kind === 'tag' ? t.session.detail.tagPlaceholder : undefined}
         onBlur={() => setEditing(null)} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}
       />
@@ -157,8 +160,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
               <span className="cp-detail__name">{session.name}</span>
               <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
               {/* shown only where the line under the title is hidden for room */}
-              {session.tag
-                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={tagHue(session.tag)} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{session.tag}</span></button>
+              {tags.length
+                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={tagHue(tags[0])} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{tags.join(', ')}</span></button>
                 : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.tagShort}</button>}
             </h2>
           )}
@@ -180,9 +183,19 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
           </div>
         </div>
         <div className="cp-detail__line">
-          {editing === 'tag' ? field('tag') : session.tag
-            ? <button type="button" className="cp-tag" data-hue={tagHue(session.tag)} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{session.tag}</button>
-            : <button type="button" className="cp-tag" data-empty="true" onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.addTag}</button>}
+          {editing === 'tag' ? field('tag') : (
+            <>
+              {tags.map((tag) => (
+                <span key={tag} className="cp-tag" data-hue={tagHue(tag)} data-removable="true">
+                  <button type="button" className="cp-tag__text" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{tag}</button>
+                  <button type="button" className="cp-tag__remove" aria-label={t.session.detail.removeTag(tag)} title={t.session.detail.removeTag(tag)} onClick={() => setTags(withoutTag(tags, tag))}><CloseIcon /></button>
+                </span>
+              ))}
+              {tags.length < MAX_TAGS && (
+                <button type="button" className="cp-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}>{tags.length ? <PlusIcon /> : <TagIcon />}{tags.length ? t.session.detail.tagShort : t.session.detail.addTag}</button>
+              )}
+            </>
+          )}
           {session.worktree && (
             <button type="button" className="cp-branch-pill" title={t.branches.pill(session.worktree.branch, session.worktree.base)} onClick={() => openBranches(session.worktree?.home ?? session.cwd)}>
               <BranchIcon /><span className="cp-branch-pill__name">{session.worktree.branch}</span>
