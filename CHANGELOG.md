@@ -1,5 +1,9 @@
 # Versions
 
+## 1.24.4
+
+- Open Space ne redémarre plus tout seul après avoir téléchargé une mise à jour, ce qui coupait les sessions en cours : elle s'installe quand tu redémarres depuis les réglages ou quand tu quittes l'app.
+
 ## 1.24.3
 
 - Navigateur des sessions, grâce à JB : le point, l'apostrophe, les parenthèses, `&`, `%`, `$` et `#` se tapent enfin (le point effaçait le caractère suivant, les autres faisaient bouger le curseur).

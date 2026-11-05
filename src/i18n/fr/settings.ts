@@ -84,9 +84,9 @@ export const settings = {
     claudeSays: (value: string) => `Claude Code : ${value}`,
     update: {
       appReady: (version: string) => `Open Space ${version} est prêt`,
-      appReadyHint: 'Il s’installe tout seul dès qu’aucune session ne travaille, ou redémarre maintenant : tes sessions reprennent où elles en étaient.',
+      appReadyHint: 'Il s’installe quand tu redémarres ou quittes l’app : tes sessions reprennent où elles en étaient.',
       appDownloading: (version: string) => `Open Space ${version} se télécharge`,
-      appDownloadingHint: 'Il s’installera tout seul dès qu’aucune session ne travaille.',
+      appDownloadingHint: 'Il s’installera quand tu redémarreras ou quitteras l’app.',
       appRestart: 'Redémarrer',
       restartQuestion: 'Redémarrer maintenant ?',
       restartBusy: (count: number, names: string) => `${names} ${count > 1 ? 'travaillent' : 'travaille'} encore : ce qui est en cours sera coupé. Les sessions reprennent ensuite où elles en étaient.`,

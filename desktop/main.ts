@@ -289,8 +289,8 @@ function checkNow() {
 }
 
 /**
- * Looks for a new Open Space at launch and every hour, and downloads it: the bridge restarts the app on it once no
- * session has work under way, or the settings do at once. Quitting the app installs it too.
+ * Looks for a new Open Space at launch and every hour, and downloads it. It never restarts the app by itself, which
+ * would cut every session: it installs when the user restarts from the settings, or when they quit the app.
  */
 function watchForUpdates() {
   if (!app.isPackaged) return;
