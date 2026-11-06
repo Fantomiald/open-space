@@ -1703,7 +1703,13 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   .cp-stack__slot[data-compact='true'] .cp-composer textarea {
     height: auto; min-height: 2.5rem; max-height: min(calc(6lh + 2 * var(--space-2) + 2 * var(--border-width)), calc(var(--h, 100vh) * 0.35));
   }
+  .cp-stack[data-rows='3'] > [data-compact='true'][data-span='1'] .cp-composer textarea { max-height: calc(2lh + 2 * var(--space-2) + 2 * var(--border-width)); }
 }
+/* three windows on top of each other: no room for a row of tools under the field, they go back on its left */
+.cp-stack[data-rows='3'] > [data-compact='true'][data-span='1'] .cp-composer { grid-template-columns: auto minmax(0, 1fr); align-items: end; }
+.cp-stack[data-rows='3'] > [data-compact='true'][data-span='1'] .cp-composer > * { grid-column: 1 / -1; }
+.cp-stack[data-rows='3'] > [data-compact='true'][data-span='1'] .cp-composer > .cp-composer__actions { grid-column: 1; order: 1; padding-bottom: 0.25rem; }
+.cp-stack[data-rows='3'] > [data-compact='true'][data-span='1'] .cp-composer > .cp-command-field { grid-column: 2; order: 2; }
 
 /* ── A command run with "!" (like Claude Code's bash mode): the command, how it went, what it wrote ── */
 .cp-feed__item[data-kind='shell'] { display: grid; gap: var(--space-1); }
