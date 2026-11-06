@@ -1185,11 +1185,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-composer__aside { font-weight: 400; opacity: 0.75; }
 .cp-composer__actions { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .cp-composer__actions > [type='submit'] { flex: none; white-space: nowrap; }
-/* a small window: the tools and a one-line field side by side, the tools' panels still opening upward */
+/* a small window: a one-line field, its tools under it closer together, and Enter to send */
 .cp-composer[data-compact='true'] { padding: var(--space-2); }
-.cp-composer__row { display: flex; align-items: flex-end; gap: var(--space-2); min-width: 0; }
-.cp-composer__row > .cp-composer__tools { flex: none; gap: var(--space-1); padding-bottom: 0.25rem; }
-.cp-composer__field { flex: 1 1 0; min-width: 0; display: grid; }
+.cp-composer[data-compact='true'] .cp-composer__tools { gap: var(--space-1); }
 /* messages sent during a turn, waiting for it to end */
 /* the answer to a side question (/btw), above the message field */
 .cp-aside { display: grid; gap: var(--space-2); margin: 0 var(--space-4); padding: var(--space-2) var(--space-3) var(--space-3); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-sunken)); border: var(--border-width) solid var(--color-accent-soft); max-height: 40vh; overflow: auto; }
@@ -1694,6 +1692,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 /* a session named in a sent message */
 .cp-mention { color: var(--tone-peer); }
 .cp-command-field[data-marked='true'] textarea { color: transparent; caret-color: var(--color-text); scrollbar-gutter: stable; }
+/* the field grows with what is typed, as in Claude Code, and scrolls past twelve lines or 40% of its window (six lines
+   and 35% in a small window); a browser without field-sizing keeps the fixed field and its resize handle */
+@supports (field-sizing: content) {
+  .cp-command-field textarea {
+    field-sizing: content; resize: none;
+    max-height: min(calc(12lh + 2 * var(--space-2) + 2 * var(--border-width)), calc(var(--h, 100vh) * 0.4));
+  }
+  .cp-composer textarea { min-height: calc(3lh + 2 * var(--space-2) + 2 * var(--border-width)); }
+  .cp-stack__slot[data-compact='true'] .cp-composer textarea {
+    height: auto; min-height: 2.5rem; max-height: min(calc(6lh + 2 * var(--space-2) + 2 * var(--border-width)), calc(var(--h, 100vh) * 0.35));
+  }
+}
 
 /* ── A command run with "!" (like Claude Code's bash mode): the command, how it went, what it wrote ── */
 .cp-feed__item[data-kind='shell'] { display: grid; gap: var(--space-1); }
