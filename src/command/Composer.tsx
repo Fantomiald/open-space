@@ -125,21 +125,11 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       )}
       <CompactHint session={session} />
       <AttachmentStrip attachments={attachments} />
-      {stacked ? (
-        // a small window: the tools as icons on the left of a one-line field, Enter to send
-        <div className="cp-composer__row">
-          {tools}
-          <div className="cp-composer__field">{field}</div>
-        </div>
-      ) : (
-        <>
-          {field}
-          <div className="cp-composer__actions">
-            {tools}
-            <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>
-          </div>
-        </>
-      )}
+      {field}
+      <div className="cp-composer__actions">
+        {tools}
+        {!stacked && <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>}
+      </div>
     </form>
   );
 }
