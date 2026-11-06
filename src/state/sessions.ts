@@ -244,9 +244,11 @@ interface CommandPostState {
   zoom: (sessionId: string | null) => void;
   /** one of the open sessions takes the keyboard (the user clicked in it) */
   focus: (sessionId: string) => void;
+  /** asks the server for a session's conversation, once: its events keep it up to date from then on */
+  follow: (sessionId: string) => void;
   /** takes one of the open sessions out */
   closeOpen: (sessionId: string) => void;
-  /** sets the open windows (stack.ts makes them), kept for the next visit */
+  /** sets the open windows (stack.ts makes them), kept for the next visit; each one follows its conversation */
   arrange: (columns: Columns) => void;
   /** a window dragged to another place of the grid */
   moveWindow: (sessionId: string, to: DropSlot) => void;
@@ -641,10 +643,14 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     }
     s.markSeen(sessionId);
     writeLayout(get().columns, sessionId);
-    if (!s.logs[sessionId]) {
-      set({ logs: { ...s.logs, [sessionId]: [] }, logLoaded: { ...s.logLoaded, [sessionId]: false } });
-      s.send({ t: 'log', sessionId, after: 0 });
-    }
+    s.follow(sessionId);
+  },
+
+  follow: (sessionId) => {
+    const s = get();
+    if (s.logs[sessionId]) return;
+    set({ logs: { ...s.logs, [sessionId]: [] }, logLoaded: { ...s.logLoaded, [sessionId]: false } });
+    s.send({ t: 'log', sessionId, after: 0 });
   },
 
   closeOpen: (sessionId) => {
@@ -667,6 +673,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     }));
     writeLayout(columns, get().selectedId);
     writeWindows(get());
+    for (const sessionId of openIds) get().follow(sessionId);
   },
 
   moveWindow: (sessionId, to) => {
