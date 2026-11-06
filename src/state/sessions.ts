@@ -417,7 +417,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', autoTag: false, remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,

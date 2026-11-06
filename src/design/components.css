@@ -1091,6 +1091,20 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-feed__tool code { font-family: var(--font-mono); font-weight: var(--weight-bold); flex: none; }
 .cp-feed__tool[data-ok='no'] code { color: var(--tone-error); }
 .cp-feed__item[data-kind='brief'] p { font-size: var(--text-sm); color: var(--color-text-muted); }
+/* ── A file a session changed in the thread, with its diff in the table of .cp-diff (DiffBlock, Preferences.detailedActions), and an action with what it gave back (ActionBlock) ── */
+.cp-edit { display: grid; gap: 2px; min-width: 0; }
+.cp-edit__head { margin: 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.cp-edit__head code { font-weight: var(--weight-bold); }
+.cp-edit__summary { margin: 0; padding-left: var(--space-3); color: var(--color-text-muted); font-size: var(--text-xs); }
+.cp-edit .cp-diff { border-radius: var(--radius-sm); background: var(--color-surface-sunken); }
+.cp-edit .cp-diff table.cp-code { display: table; }
+.cp-edit .cp-diff__line code { font: inherit; }
+.cp-edit .cp-diff td { overflow-wrap: normal; white-space: pre; }
+.cp-edit .cp-diff__line > span { margin-right: 1ch; }
+.cp-edit__output { margin: 0; padding-left: var(--space-3); overflow-x: auto; color: var(--color-text-muted); font: var(--text-xs) / 1.55 var(--font-mono); white-space: pre; }
+.cp-edit[data-status='failed'] :is(.cp-edit__output, .cp-edit__summary) { color: var(--tone-error); }
+.cp-edit__more { justify-self: start; padding: 0 var(--space-3); border: 0; background: none; color: var(--color-text-muted); font: var(--text-xs) var(--font-mono); cursor: pointer; }
+.cp-edit__more:hover { color: var(--color-text); }
 /* Markdown from the assistant (src/lib/markdown.ts, GitHub flavour): everything it can send, readable in a narrow panel */
 .cp-prose { line-height: 1.55; overflow-wrap: anywhere; }
 .cp-prose > :first-child { margin-top: 0; }
@@ -1102,6 +1116,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-prose :is(h3, h4, h5, h6) { font-size: var(--text-sm); }
 .cp-prose :is(h4, h5, h6) { color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cp-prose :is(ul, ol) { padding-left: 1.4em; }
+/* the thread's own list (.cp-feed ul) and tool names (.cp-feed__item code) stop at the message: its lists keep their bullets, its code its weight */
+.cp-prose ul { display: block; list-style-type: disc; }
+.cp-prose ul ul { list-style-type: circle; }
 .cp-prose li + li { margin-top: 0.15em; }
 .cp-prose li > :is(ul, ol) { margin: 0.15em 0 0; }
 /* a task list: GitHub's [ ] and [x], shown as the disabled checkboxes marked renders */
@@ -1110,7 +1127,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-prose blockquote { padding: var(--space-1) var(--space-3); border-left: 3px solid var(--color-border-strong); color: var(--color-text-muted); }
 .cp-prose hr { border: 0; border-top: var(--border-width) solid var(--color-border-strong); }
 .cp-prose pre { max-width: 100%; overflow-x: auto; overflow-wrap: normal; padding: var(--space-2); background: var(--color-bg); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-sm); font: var(--text-xs) / 1.45 var(--font-mono); }
-.cp-prose code { font-family: var(--font-mono); font-size: 0.92em; }
+.cp-prose code { font-family: var(--font-mono); font-size: 0.92em; font-weight: inherit; }
 /* a code block and its copy button, in its top right corner (the block scrolls under it, the button stays) */
 .cp-prose .cp-code { position: relative; margin: 0 0 var(--space-2); }
 .cp-prose .cp-code pre { margin: 0; padding-right: 2.5rem; }
@@ -2496,6 +2513,42 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   .cp-feed__item[data-kind='notice'] { font-style: normal; }
   .cp-feed__item[data-kind='peer'] { max-width: none; background: none; border: 0; border-left: 2px solid var(--tone-peer); border-radius: 0; padding: 0 0 0 var(--space-3); }
   .cp-feed__agent { background: none; border: 0; border-radius: 0; padding: 0 0 0 var(--space-2); }
+
+  /* a changed file as Claude Code draws it: "● Update(path)", then "⎿" before what changed, the lines without a frame */
+  .cp-edit__head { padding-left: calc(var(--space-2) + 1.25rem); text-indent: calc(-1 * (var(--space-2) + 1.25rem)); }
+  .cp-edit__head::before { content: '●'; display: inline-block; width: 1.25rem; padding-left: var(--space-2); box-sizing: content-box; text-indent: 0; color: var(--tone-reply); }
+  .cp-edit__summary { padding-left: calc(var(--space-2) + 1.25rem); }
+  .cp-edit__summary::before { content: '⎿  '; white-space: pre; }
+  .cp-edit .cp-diff { margin-left: calc(var(--space-2) + 1.25rem); border-radius: 0; background: none; }
+  .cp-edit[data-status='running'] .cp-edit__head::before { color: var(--color-text-muted); animation: cp-terminal-pulse 1.2s infinite ease-in-out; }
+  .cp-edit[data-status='failed'] .cp-edit__head::before { color: var(--tone-error); }
+  .cp-edit__output { padding-left: calc(var(--space-2) + 1.25rem + 3ch); text-indent: -3ch; font-size: inherit; }
+  .cp-edit__output::before { content: '⎿  '; }
+  .cp-edit__more { padding-left: calc(var(--space-2) + 1.25rem + 3ch); }
+  .cp-edit .cp-diff table { font-size: inherit; }
+  .cp-edit .cp-diff tr[data-kind='hunk'] td { padding-block: 0; background: none; }
+  .cp-diff tr:is([data-kind='add'], [data-kind='remove']) :is(.cp-diff__number, .cp-diff__line > span) { color: var(--color-text); opacity: 1; }
+
+  /* the Markdown as Claude Code draws it in a terminal: one size, one font, colour and plain characters for the rest */
+  .cp-prose :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 var(--space-2); font-size: inherit; line-height: inherit; color: inherit; text-transform: none; letter-spacing: normal; }
+  .cp-prose h1 { font-style: italic; text-decoration: underline; }
+  .cp-prose code { font-size: inherit; }
+  .cp-prose :not(pre) > code { padding: 0; border: 0; border-radius: 0; background: none; color: var(--color-code); }
+  .cp-prose pre { padding: 0; background: none; border: 0; border-radius: 0; font-size: inherit; line-height: inherit; }
+  .cp-prose pre > code:not([class]) { color: var(--color-code); }
+  .cp-prose .cp-code__copy { background: var(--color-surface); }
+  .cp-prose ul { list-style-type: '- '; }
+  .cp-prose :is(ul, ol) ol { list-style-type: lower-alpha; }
+  .cp-prose :is(ul, ol) :is(ul, ol) ol { list-style-type: lower-roman; }
+  .cp-prose li:has(> input[type='checkbox']) { list-style-type: '- '; margin-left: 0; }
+  .cp-prose li > input[type='checkbox'] { appearance: none; margin: 0; font: inherit; color: inherit; vertical-align: baseline; }
+  .cp-prose li > input[type='checkbox']::before { content: '[ ]'; white-space: pre; }
+  .cp-prose li > input[type='checkbox']:checked::before { content: '[x]'; }
+  .cp-prose hr { height: auto; border: 0; overflow: visible; color: inherit; }
+  .cp-prose hr::before { content: '---'; }
+  .cp-prose table { font-size: inherit; }
+  .cp-prose th { background: none; text-align: center; }
+  .cp-prose tbody tr:nth-child(even) { background: none; }
 
   .cp-feed__typing { padding: 0 0 0 var(--space-2); background: none; }
   .cp-feed__typing span { display: none; }

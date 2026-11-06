@@ -15,7 +15,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, TagIcon, BellIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -41,7 +41,7 @@ const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
@@ -249,6 +249,11 @@ function SettingsEditor() {
       case 'timestamps': return (
         <Row key={id} id={id} flash={flash} icon={<MessageIcon />} title={rows.timestamps.title} hint={rows.timestamps.hint} config={config}>
           <Switch checked={draft.timestamps} onChange={(timestamps) => change({ timestamps })} label={rows.timestamps.title} />
+        </Row>
+      );
+      case 'detailedActions': return (
+        <Row key={id} id={id} flash={flash} icon={<DiffIcon />} title={rows.detailedActions.title} hint={rows.detailedActions.hint}>
+          <Switch checked={draft.detailedActions} onChange={(detailedActions) => change({ detailedActions })} label={rows.detailedActions.title} />
         </Row>
       );
       case 'turnDuration': return (

@@ -241,6 +241,10 @@
   --color-accent-text: #1e100b;
   --color-accent-soft: rgb(229 143 120 / 0.24);
   --color-focus: #f0b3a1;
+  --color-code: rgb(177 185 249);
+  /* the lines of a diff in Claude Code's dark theme (diffAdded, diffRemoved) */
+  --diff-add-soft: rgb(34 92 43);
+  --diff-remove-soft: rgb(122 41 54);
 }
 
 :root[data-window-style='neon'] {

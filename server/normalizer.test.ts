@@ -32,6 +32,33 @@ function replay(fixture: string, agentLaunch?: (agentId: string) => AgentLaunch 
   return { ...created, refused };
 }
 
+describe('Normalizer on a real turn that edits and writes files (2.1.318)', () => {
+  const { events } = replay('edit-turn');
+  const acts = events.filter((event) => event.k === 'act');
+  const diffs = events.filter((event) => event.k === 'diff');
+
+  it('gives each Edit and Write the diff Claude Code made of it, after its action', () => {
+    assert.deepEqual(diffs.map((event) => event.k === 'diff' && [event.diff.path, event.diff.created, event.diff.added, event.diff.removed]), [
+      ['/Users/me/shop/cart.js', false, 1, 1],
+      ['/Users/me/shop/notes.md', true, 3, 0],
+    ]);
+    const editId = acts.find((event) => event.k === 'act' && event.tool === 'Edit');
+    assert.equal(diffs[0].k === 'diff' && diffs[0].id, editId?.k === 'act' && editId.id);
+  });
+});
+
+describe('Normalizer on a real turn of commands, reads and searches (2.1.318)', () => {
+  const { events } = replay('actions-turn');
+  const outputs = events.flatMap((event) => (event.k === 'act_done' ? [event.output] : []));
+
+  it('gives each call’s end what it gave back', () => {
+    assert.equal(outputs.length, 3);
+    assert.deepEqual(outputs[0], { lines: ['ligne 1', 'ligne 2', 'ligne 3', 'ligne 4', 'ligne 5', 'ligne 6', 'ligne 7'], total: 7 });
+    assert.deepEqual(outputs[1], { lines: [], total: 8, read: true });
+    assert.match(outputs[2]?.lines[0] ?? '', /^cart\.js:1:/);
+  });
+});
+
 describe('Normalizer on a real simple turn', () => {
   const { events, results, quotas, inits, partials } = replay('simple-turn');
 

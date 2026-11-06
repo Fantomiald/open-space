@@ -58,6 +58,23 @@ export const session: Dictionary['session'] = {
     on: (state: string) => `Remote Control: ${state}. Click to turn it off`,
   },
   feed: {
+    diff: {
+      update: 'Update',
+      write: 'Write',
+      changed: (added: number, removed: number) => [added && `Added ${added} line${added > 1 ? 's' : ''}`, removed && `${added ? 'removed' : 'Removed'} ${removed} line${removed > 1 ? 's' : ''}`].filter(Boolean).join(', '),
+      wrote: (lines: number) => `Wrote ${lines} line${lines > 1 ? 's' : ''}`,
+      more: (lines: number) => `… +${lines} line${lines > 1 ? 's' : ''} (show all)`,
+      less: 'Fold',
+      cut: 'The rest of this diff is not kept.',
+      failed: 'The change failed.',
+    },
+    action: {
+      running: 'Running…',
+      read: (lines: number) => `Read ${lines} line${lines > 1 ? 's' : ''}`,
+      empty: '(No content)',
+      failed: 'Failed.',
+      cut: (lines: number) => `${lines} more line${lines > 1 ? 's' : ''}, not kept.`,
+    },
     subagent: 'Sub-agent',
     permissionStatus: { pending: 'pending', allowed: 'allowed', denied: 'denied', cancelled: 'cancelled' },
     questionStatus: { pending: 'pending', allowed: 'answered', denied: 'denied', cancelled: 'cancelled' },
