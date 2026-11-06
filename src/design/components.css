@@ -2529,7 +2529,22 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   .cp-feed__item[data-kind='turn']::before { content: '✻'; display: inline-block; width: 1.25rem; }
   .cp-feed__item[data-kind='notice'] { font-style: normal; }
   .cp-feed__item[data-kind='peer'] { max-width: none; background: none; border: 0; border-left: 2px solid var(--tone-peer); border-radius: 0; padding: 0 0 0 var(--space-3); }
-  .cp-feed__agent { background: none; border: 0; border-radius: 0; padding: 0 0 0 var(--space-2); }
+  /* a sub-agent's card: its face (22px) in the column of the "●", its name on the column of the text */
+  .cp-feed__agent { background: none; border: 0; border-radius: 0; padding: 0; column-gap: calc(1.75rem - 22px); }
+  .cp-feed__item[data-kind='subagent'] > .cp-fold, .cp-feed__item[data-kind='brief'], .cp-feed__item[data-kind='assistant'][data-named] .cp-feed__who { padding-left: 1.75rem; }
+  /* an authorization asked for an action: "⎿" on the column of the text, under the action, like what it gave back */
+  .cp-feed__item[data-kind='permission'] { padding-left: 1.75rem; }
+  .cp-feed__item[data-kind='permission']::before { content: '⎿  '; flex: none; white-space: pre; margin-right: calc(-1 * var(--space-2)); }
+  .cp-feed__item:is([data-kind='action'], [data-kind='diff'], [data-kind='tools']) + [data-kind='permission'] { margin-top: calc(2px - var(--space-3)); }
+  /* what the agent sends (pictures, files, a page): under its "●", on the column of the text */
+  .cp-feed__item:is([data-kind='files'], [data-kind='artifact']) { position: relative; gap: 0; padding-left: 1.75rem; }
+  .cp-feed__item:is([data-kind='files'], [data-kind='artifact']):not([data-named]) .cp-feed__who { font-size: 0; }
+  .cp-feed__item:is([data-kind='files'], [data-kind='artifact'])::before { content: '●'; position: absolute; left: var(--space-2); color: var(--color-text); }
+  .cp-feed__caption + .cp-feed__files { margin-top: var(--space-1); }
+  /* a "!" command: the "!" where the "❯" of a message sits, the command and what it wrote on the column of the text */
+  .cp-feed__item[data-kind='shell'] { padding-left: var(--space-2); }
+  .cp-shell__prompt { width: calc(1.25rem - var(--space-2)); }
+  .cp-shell__output, .cp-shell__note { margin-left: 1.25rem; }
 
   /* a changed file as Claude Code draws it: "● Update(path)", then "⎿" before what changed, the lines without a frame */
   .cp-edit__head { padding-left: calc(var(--space-2) + 1.25rem); text-indent: calc(-1 * (var(--space-2) + 1.25rem)); }
