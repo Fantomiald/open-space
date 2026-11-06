@@ -118,7 +118,7 @@ function ArtifactCard({ item, speaker, onView }: { item: FeedItem & { kind: 'art
   // with its pictures and files, when Open Space has them (see servePage in server/http.ts)
   const src = item.bundle ? `/pages/${item.bundle.split('.')[0]}/` : item.stored ? `/attachments/${item.stored}` : null;
   return (
-    <li className="cp-feed__item" data-kind="artifact">
+    <li className="cp-feed__item" data-kind="artifact" data-named={item.author ? 'true' : undefined}>
       <span className="cp-feed__who">{item.author ?? speaker}</span>
       <div className="cp-artifact">
         {src && <PagePreview src={src} title={item.title} onOpen={() => onView({ src, alt: item.title, caption: item.title, kind: 'page', link: { href: item.url, label: t.session.feed.viewer.onClaude } })} />}
@@ -235,7 +235,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
       return <BranchNewsItem item={item} sessionId={sessionId} speaker={speaker} />;
     case 'files':
       return (
-        <li className="cp-feed__item" data-kind="files">
+        <li className="cp-feed__item" data-kind="files" data-named={item.author ? 'true' : undefined}>
           <span className="cp-feed__who">{item.author ?? speaker}</span>
           {item.caption && <p className="cp-feed__caption">{item.caption}</p>}
           <div className="cp-feed__files">{item.files.map((file) => <SentFileView key={`${file.title}:${file.stored ?? ''}`} file={file} caption={item.caption} onView={onView} />)}</div>
