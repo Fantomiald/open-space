@@ -1,5 +1,15 @@
 # Versions
 
+## 1.26.0
+
+Tout vient de GC :
+
+- Plusieurs tags par session : jusqu'à cinq, chacun de sa couleur si « Couleur sur les tags » est activé. Une pastille avec sa croix dans l'en-tête de la fenêtre, « + Tag » pour en ajouter, `/tag Pro, PDF` pour les remplacer. La salle et les listes en montrent deux puis « +N », et `@` trouve une session par n'importe lequel de ses tags.
+- Mon Chrome (Sessions > Navigateur, coupé par défaut) : une session peut passer par ton vrai Chrome, déjà connecté à tes comptes, via l'extension Claude in Chrome, au lieu du navigateur partagé. Pour toutes les sessions ou une seule, depuis son onglet Navigateur. L'extension peut ne rien demander avant d'agir : c'est le mode de la session qui garde tes comptes.
+- Actions détaillées dans le fil (Général > Fils, coupé par défaut) : chaque action s'affiche à part, comme dans Claude Code, avec ce qu'elle a rendu, et le diff des fichiers modifiés.
+- Blocs de code colorés selon leur langage, dans tous les styles. Les listes à puces retrouvent leurs puces, et le code n'est plus tout en gras.
+- Style Terminal : le Markdown se lit comme dans Claude Code (titres, code en couleur, listes, cases à cocher, tableaux).
+
 ## 1.25.0
 
 - Style des fenêtres (Général > Affichage) : l'habillage des fenêtres et du fil se choisit à part du thème du bureau. Classique, Terminal (le fil se lit comme Claude Code dans un terminal), Hacker, Tokyo néon, Donjon, Navette spatiale, Plage, Pirate, Forêt, ou Assorti au bureau, qui suit le thème. Seul l'habillage change, tous les boutons restent.

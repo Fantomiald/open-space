@@ -20,9 +20,6 @@ import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, Fold
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
-
-/** The browser options of a session's launch (SessionManagerDeps.browserMcp). */
-type BrowserLaunch = Pick<LaunchOptions, 'mcpConfig' | 'agents' | 'chrome'>;
 import type { Config } from './config.ts';
 import { lastContextUse, lastExchanges, lastName, listConversations, searchConversations } from './conversations.ts';
 import { st } from './i18n/index.ts';
@@ -49,6 +46,9 @@ const MAX_COMMAND_DESCRIPTION = 200;
 const IDLE_COMPACT_MIN_TOKENS = 100_000;
 /** how long the thread of a switched off session is kept to come back with it (see forget) */
 const SWITCHED_OFF_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** The browser options of a session's launch (SessionManagerDeps.browserMcp). */
+type BrowserLaunch = Pick<LaunchOptions, 'mcpConfig' | 'agents' | 'chrome'>;
 
 export interface SessionManagerDeps {
   config: Config;
@@ -195,7 +195,6 @@ export class SessionManager {
 
   private switchedOffLog(conversationId: string) { return path.join(switchedOffFolder(this.logsDir), `${conversationId}.jsonl`); }
 
-  /** Removes in the background the threads of sessions switched off too long ago, then the stored pictures and files no thread names any more (see sweepAttachments). */
   /** The browsers a session's process gets when it starts now: the browser of the accounts it uses, its own choice or the setting's. */
   private browserLaunch(id: string): BrowserLaunch {
     const info = this.sessions.get(id)?.snapshot();
@@ -240,6 +239,7 @@ export class SessionManager {
     return new Set([...this.sessions.values()].flatMap((session) => session.snapshot().chrome?.picture?.name ?? []));
   }
 
+  /** Removes in the background the threads of sessions switched off too long ago, then the stored pictures and files no thread names any more (see sweepAttachments). */
   private sweep() {
     this.dropOldThreads()
       .catch((error) => this.deps.log('cannot drop the old threads', error))
