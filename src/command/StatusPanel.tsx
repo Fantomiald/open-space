@@ -8,7 +8,7 @@ import { formatAge } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { roomSessions } from '../room/cast.ts';
-import { todoLabel } from '../state/labels.ts';
+import { backgroundLabel, todoLabel } from '../state/labels.ts';
 import { attentionQueue, otherSessions } from '../state/queue.ts';
 import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -105,7 +105,7 @@ export function StatusPanel() {
                     session.compacting && words.compacting[session.compacting],
                     session.state === 'starting' && words.starting,
                     session.subagents.length > 0 && words.subagents(session.subagents.length),
-                    session.background && words.background(session.background.length),
+                    session.background && backgroundLabel(session.background),
                   ].filter((note) => typeof note === 'string');
                   return (
                   <li key={session.id}>

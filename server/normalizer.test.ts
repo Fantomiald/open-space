@@ -193,13 +193,32 @@ describe('Normalizer on a real Bash command sent to the background', () => {
   const { background, events, results } = replay('bash-background');
 
   it('tells which commands run in the background, until there are none', () => {
-    assert.deepEqual(background, [[{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished' }], []]);
+    assert.deepEqual(background, [[{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished', kind: 'shell' }], []]);
     assert.equal(events.filter((event) => event.k === 'hire').length, 0, 'a command is not a sub-agent');
     assert.equal(results.length, 2, 'its end starts a turn of its own');
   });
 
   it('leaves background sub-agents out: they come and go as hire and leave events', () => {
     assert.deepEqual(replay('subagent-background').background, [[], []]);
+  });
+
+  it('names a monitor as one, and leaves the kind out of a task of another type', () => {
+    const { normalizer, background: changes } = createNormalizer();
+    normalizer.handle({ type: 'system', subtype: 'background_tasks_changed', tasks: [
+      { task_id: 'm1', task_type: 'monitor_mcp', description: 'Watch the deploy' },
+      { task_id: 'w1', task_type: 'local_workflow', description: 'Review' },
+    ] });
+    assert.deepEqual(changes, [[{ id: 'm1', description: 'Watch the deploy', kind: 'monitor' }, { id: 'w1', description: 'Review' }]]);
+  });
+});
+
+describe('Normalizer on a real background command stopped by stop_task (2.1.319)', () => {
+  const { background, events, results } = replay('bash-stop-task');
+
+  it('drops the stopped command from the list, without a sub-agent leaving nor a turn of its own', () => {
+    assert.deepEqual(background, [[{ id: 'bgj07aynt', description: 'Sleep two minutes then echo finished', kind: 'shell' }], []]);
+    assert.equal(events.filter((event) => event.k === 'leave' || event.k === 'report').length, 0);
+    assert.equal(results.length, 1, 'only the turn that started it: Claude does not wake up for a stopped command');
   });
 });
 

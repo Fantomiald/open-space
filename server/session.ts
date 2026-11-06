@@ -594,6 +594,12 @@ export class Session {
   /** Stops a "!" command still running (its whole process group); what it wrote so far is kept. */
   stopShell(shellId: string) { this.shells.get(shellId)?.stop.abort(); }
 
+  /** Stops one of the tasks Claude Code told of (stop_task), while its process lives: the tasks die with it. */
+  async stopTask(taskId: string) {
+    if (!this.process?.alive || !this.info.background?.some((task) => task.id === taskId)) return;
+    await this.process.control({ subtype: 'stop_task', task_id: taskId });
+  }
+
   /** Stops every "!" command still running, once they have ended and been written down: none outlives the session. */
   async stopShells() {
     const running = [...this.shells.values()];

@@ -58,6 +58,16 @@ export const session: Dictionary['session'] = {
     off: 'Remote Control: off. Click to continue it from your phone or claude.ai',
     on: (state: string) => `Remote Control: ${state}. Click to turn it off`,
   },
+  background: {
+    shells: (count: number) => plural(count, 'background shell', 'background shells'),
+    monitors: (count: number) => plural(count, 'background monitor', 'background monitors'),
+    tasks: (count: number) => plural(count, 'background task', 'background tasks'),
+    title: 'What runs in the background: click to stop one',
+    listLabel: 'Background tasks',
+    kinds: { shell: 'shell', monitor: 'monitor', other: 'task' },
+    stop: 'Stop',
+    stopTitle: (description: string) => `Stop “${description}”`,
+  },
   feed: {
     diff: {
       update: 'Update',
@@ -337,7 +347,6 @@ export const session: Dictionary['session'] = {
     starting: 'starting',
     compacting: { auto: 'auto-compacting', manual: 'compacting' },
     subagents: (count: number) => (count === 1 ? '1 sub-agent' : `${count} sub-agents`),
-    background: (count: number) => (count === 1 ? '1 background command' : `${count} background commands`),
     scheduled: (count: number) => (count === 1 ? '1 planned wake-up' : `${count} planned wake-ups`),
     fold: 'Fold',
     unfold: 'Unfold',

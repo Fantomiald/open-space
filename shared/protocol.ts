@@ -148,8 +148,12 @@ export const isPermissionMode = (value: unknown): value is PermissionMode => PER
 
 /** A sub-agent at work: `id` is the id of the Agent/Task call that started it (the `who` of its events). */
 export interface SubagentInfo { id: string; name: string; type: string }
-/** A command Claude Code runs in the background (Bash with run_in_background, Monitor…): it wakes the session up when it ends */
-export interface BackgroundTask { id: string; description: string }
+/**
+ * A command Claude Code runs in the background (Bash with run_in_background, Monitor…): it wakes the session up when it ends.
+ * `kind`: a Bash command (Claude Code also counts a Monitor call as one), or a monitor of an MCP server or a web socket; left
+ * out for any other type, and in a session saved before it was kept.
+ */
+export interface BackgroundTask { id: string; description: string; kind?: 'shell' | 'monitor' }
 
 /** Why a session waits for the user. */
 export type AttentionKind = 'permission' | 'question' | 'finished' | 'error';
@@ -676,6 +680,8 @@ export type ClientMessage =
   /** runs a command typed with "!" in the session's folder, without Claude; Claude learns of it with the next message */
   | { t: 'shell'; sessionId: string; command: string }
   | { t: 'stopShell'; sessionId: string; shellId: string }
+  /** stops one of the session's background tasks (SessionInfo.background), through Claude Code's stop_task */
+  | { t: 'stopTask'; sessionId: string; taskId: string }
   /** asks a session's Claude Code for one of the panel's views (its process starts if needed) */
   | { t: 'inspect'; sessionId: string; view: InspectView }
   /** reconnects, turns on or off, or signs in to one of a session's MCP servers; the MCP view follows */

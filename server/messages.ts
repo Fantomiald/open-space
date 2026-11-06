@@ -325,6 +325,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const shellId = boundedString(raw.shellId, 100);
       return sessionId && shellId ? { t: 'stopShell', sessionId, shellId } : null;
     }
+    case 'stopTask': {
+      const taskId = boundedString(raw.taskId, 100);
+      return sessionId && taskId ? { t: 'stopTask', sessionId, taskId } : null;
+    }
     case 'inspect': return sessionId && INSPECT_VIEWS.has(raw.view as InspectView) ? { t: 'inspect', sessionId, view: raw.view as InspectView } : null;
     case 'mcpAction': {
       const server = boundedString(raw.server, 200);

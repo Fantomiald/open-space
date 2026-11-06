@@ -1278,13 +1278,39 @@ describe('process life cycle', () => {
     const { id } = await manager.create({ cwd: projectA(), text: 'render the videos' });
     processes[0].feed('bash-background', 0, 11);
     assert.equal(find(id).state, 'wait');
-    assert.deepEqual(find(id).background, [{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished' }]);
+    assert.deepEqual(find(id).background, [{ id: 'brd1kvdrn', description: 'Run a 12-second background sleep then echo finished', kind: 'shell' }]);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(processes[0].alive, true, 'its end has to wake the session up');
     processes[0].feed('bash-background', 11);
     assert.equal(find(id).background, undefined);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(processes[0].alive, false, 'released once idle');
+    await manager.shutdown();
+  });
+
+  it('stops a background command when asked, and only one the session told of', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'sleep in the background' });
+    processes[0].feed('bash-stop-task', 0, 11);
+    await manager.stopTask(id, 'not-a-task');
+    assert.deepEqual(processes[0].controls, [], 'an id the session never told of goes nowhere');
+    await manager.stopTask(id, 'bgj07aynt');
+    assert.deepEqual(processes[0].controls, [{ subtype: 'stop_task', task_id: 'bgj07aynt' }]);
+    processes[0].feed('bash-stop-task', 11, 14);
+    assert.equal(find(id).background, undefined);
+    await manager.shutdown();
+  });
+
+  it('does not wake a released session up to stop a command that died with its process', async () => {
+    const { manager, processes } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'sleep in the background' });
+    processes[0].feed('bash-stop-task', 0, 11);
+    processes[0].exit(0, null, '');
+    await manager.stopTask(id, 'bgj07aynt');
+    assert.equal(processes.length, 1, 'no new process');
+    assert.deepEqual(processes[0].controls, []);
     await manager.shutdown();
   });
 
