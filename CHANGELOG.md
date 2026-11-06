@@ -1,5 +1,11 @@
 # Versions
 
+## 1.27.1
+
+Vient de GC :
+
+- Style Terminal : chaque élément du fil s'aligne sur la colonne du texte. Une autorisation passe sous son action avec « ⎿ », ce que l'agent envoie (images, fichiers, page) prend le « ● » d'un message, une commande `!` met son « ! » à la place du « ❯ », et les sous-agents suivent la même colonne.
+
 ## 1.27.0
 
 Vient de GC :
