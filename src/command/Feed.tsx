@@ -359,14 +359,6 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
     const el = scroller.current;
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   }, [entries.length, agent, working]);
-  // the window resized (another view tiles the sessions differently): a thread at the bottom stays there
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const observer = new ResizeObserver(() => { if (stuck.current) el.scrollTop = el.scrollHeight; });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
   // scrolled up: how many entries the thread had then; what came since shows in a pill that brings the user down
   const [awayFrom, setAwayFrom] = useState<number | null>(null);
   // a message starts being written: the thread stops following, so it reads at the user's pace as it grows (the
@@ -384,6 +376,20 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   // only the user's own scrolling counts: the thread's height changing (a message replacing its draft) scrolls it too
   const gesture = useRef(0);
   const onGesture = () => { gesture.current = Date.now(); };
+  // the window resized (another view tiles the sessions differently), or an entry grew (a diff or an output under its
+  // action): a thread at the bottom stays there, unless the user just unfolded something in it
+  const list = useRef<HTMLUListElement>(null);
+  const listShown = !loading && (entries.length > 0 || !!shownAgent);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const follow = () => { if (stuck.current) el.scrollTop = el.scrollHeight; };
+    const box = new ResizeObserver(follow);
+    box.observe(el);
+    const content = new ResizeObserver(() => { if (Date.now() - gesture.current > 1000) follow(); });
+    if (list.current) content.observe(list.current);
+    return () => { box.disconnect(); content.disconnect(); };
+  }, [listShown]);
   const onScroll = (el: HTMLDivElement) => {
     if (Date.now() - gesture.current > 1000) return;
     stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -401,7 +407,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
       {searching && <FeedSearch key={searchSeed} thread={scroller} version={entries} />}
       <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onScroll={(e) => onScroll(e.currentTarget)} onWheel={onGesture} onTouchMove={onGesture} onKeyDown={onGesture} onPointerDown={onGesture} tabIndex={0} role="region" aria-label={t.session.feed.region}>
         {loading ? <p className="cp-muted">{t.session.feed.loading}</p> : entries.length === 0 && !shownAgent ? <p className="cp-muted">{t.session.feed.empty}</p> : (
-          <ul>
+          <ul ref={list}>
             {shownAgent && (
               <li className="cp-feed__item" data-kind="brief"><span className="cp-feed__who">{t.session.feed.mission}</span><p>{shownAgent.task}</p></li>
             )}
