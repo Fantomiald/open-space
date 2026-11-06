@@ -7,6 +7,7 @@ import { contextLevel } from '../state/labels.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
+import { BackgroundTasks } from './BackgroundTasks.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
 import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
 import { runOwnCommand } from './ownCommands.ts';
@@ -95,6 +96,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} title={words.commands} onClick={() => openPalette(true, '/')}><CommandIcon /></button>
       <TuneMenu tuning={session} cwd={session.cwd} onChange={(change) => send({ t: 'tune', sessionId: session.id, ...change })} compact={stacked} />
       <AttachButton attachments={attachments} />
+      {session.background && <BackgroundTasks sessionId={session.id} tasks={session.background} compact={stacked} />}
     </div>
   );
   return (

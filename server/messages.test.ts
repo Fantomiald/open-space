@@ -18,6 +18,13 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'openTerminal', sessionId: 5 }), null);
   });
 
+  it('reads a request to stop a background task of a session', () => {
+    assert.deepEqual(parseClientMessage({ t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' }), { t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' });
+    assert.equal(parseClientMessage({ t: 'stopTask', sessionId: 's1' }), null);
+    assert.equal(parseClientMessage({ t: 'stopTask', sessionId: 's1', taskId: 7 }), null);
+    assert.equal(parseClientMessage({ t: 'stopTask', taskId: 'bgj07aynt' }), null);
+  });
+
   it('reads a change of model or effort, and refuses an unknown effort', () => {
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: 'sonnet' }), { t: 'tune', sessionId: 's1', model: 'sonnet' });
     assert.deepEqual(parseClientMessage({ t: 'tune', sessionId: 's1', model: '', effort: '' }), { t: 'tune', sessionId: 's1', model: '', effort: '' });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
-import { contextLevel, stateLabel, toneOf } from './labels.ts';
+import { backgroundLabel, backgroundWork, contextLevel, stateLabel, toneOf } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, ownCommand, withOwnCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
 import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
@@ -104,6 +104,16 @@ describe('attention queue', () => {
     assert.equal(toneOf(rendering, null), 'work');
     assert.equal(stateLabel(rendering, null), stateLabel(session('w', 'work'), null));
     assert.equal(attentionKind(rendering, {}), 'finished', 'what it said before going on still waits to be read');
+  });
+
+  it('names what runs in the background as Claude Code does: shells, monitors, or tasks when they are mixed', () => {
+    const shell = (id: string) => ({ id, description: id, kind: 'shell' as const });
+    assert.equal(backgroundLabel([shell('a')]), '1 shell en fond');
+    assert.equal(backgroundLabel([shell('a'), shell('b')]), '2 shells en fond');
+    assert.equal(backgroundLabel([{ id: 'm', description: 'Watch', kind: 'monitor' }]), '1 moniteur en fond');
+    assert.equal(backgroundLabel([shell('a'), { id: 'm', description: 'Watch', kind: 'monitor' }]), '2 tâches en fond');
+    assert.equal(backgroundLabel([{ id: 'old', description: 'Saved before the kind was kept' }]), '1 tâche en fond');
+    assert.deepEqual(backgroundWork(session('bg', 'wait', { background: [shell('a'), shell('b')] })), ['2 shells en fond'], 'the same words before a rest or a switch-off');
   });
 
   it('detects sessions that just started waiting, not those already waiting, nor errors', () => {

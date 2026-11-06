@@ -990,6 +990,7 @@ export class SessionManager {
   inspect(id: string, view: InspectView) { return this.session(id).inspect(view); }
   shell(id: string, command: string) { return this.session(id).shell(command); }
   stopShell(id: string, shellId: string) { this.session(id).stopShell(shellId); }
+  stopTask(id: string, taskId: string) { return this.session(id).stopTask(taskId); }
   mcpAction(id: string, server: string, action: McpAction) { return this.session(id).mcpAction(server, action); }
 
   /**

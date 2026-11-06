@@ -1,5 +1,5 @@
 // Words and tones for session states. One place, so the design can restyle the tones without touching logic.
-import type { PermissionMode, SessionInfo } from '../../shared/protocol.ts';
+import type { BackgroundTask, PermissionMode, SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { type AttentionKind, isWorking } from './queue.ts';
 
@@ -17,14 +17,23 @@ export function toneOf(session: SessionInfo, kind: AttentionKind | null): Tone {
   }
 }
 
-/** What a session left running on its own, which stops with its process ("1 commande en fond"); empty when nothing. */
+/** What a session left running on its own, which stops with its process ("1 shell en fond"); empty when nothing. */
 export function backgroundWork(session: SessionInfo): string[] {
   const words = t.session.status;
   return [
     session.subagents.length ? words.subagents(session.subagents.length) : '',
-    session.background ? words.background(session.background.length) : '',
+    session.background ? backgroundLabel(session.background) : '',
     session.scheduled ? words.scheduled(session.scheduled) : '',
   ].filter(Boolean);
+}
+
+/** What runs in the background, worded as Claude Code's footer does: "2 shells", "1 monitor", tasks when the kinds mix. */
+export function backgroundLabel(tasks: readonly BackgroundTask[]): string {
+  const words = t.session.background;
+  const kinds = new Set(tasks.map((task) => task.kind));
+  if (kinds.size === 1 && kinds.has('shell')) return words.shells(tasks.length);
+  if (kinds.size === 1 && kinds.has('monitor')) return words.monitors(tasks.length);
+  return words.tasks(tasks.length);
 }
 
 /** The models offered for a session: the alias Claude Code takes, and its name ('' : Claude Code's default). */

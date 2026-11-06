@@ -107,7 +107,7 @@ export const settings: Dictionary['settings'] = {
       timeFormat: { title: 'Time format', hint: 'In the threads and the usage view.', options: { auto: 'From the language', '24h': '24-hour (14:05)', '12h': '12-hour (2:05 PM)' } },
       reduceMotion: { title: 'Reduce motion', hint: 'Cuts the page’s transitions and animations and stills the room, even when the system keeps them.' },
       timestamps: { title: 'Message timestamps', hint: 'The time next to each message in the threads.' },
-      windowStyle: { title: 'Window style', hint: 'How the windows and the thread are dressed. “Match” follows the office theme. Nothing changes in what they do.', options: { classic: 'Classic', match: 'Match the office', terminal: 'Terminal', hacker: 'Hacker', neon: 'Neon Tokyo', dungeon: 'Dungeon', space: 'Space shuttle', beach: 'Beach', pirate: 'Pirate', forest: 'Forest' } },
+      windowStyle: { title: 'Window style', hint: 'How the windows and the thread are dressed. “Match” follows the office theme. Nothing changes in what they do.', options: { classic: 'Classic', match: 'Match the office', terminal: 'Claude Code', hacker: 'Hacker', neon: 'Neon Tokyo', dungeon: 'Dungeon', space: 'Space shuttle', beach: 'Beach', pirate: 'Pirate', forest: 'Forest' } },
       tagColors: { title: 'Colour on tags', hint: 'Each tag gets its own colour, always the same for the same name. Off, they keep the colour of the style.' },
       glassOpacity: { title: 'Window opacity', hint: 'All the glass at once: the header, the windows, the menus. Lower shows more of the room through it.' },
       turnDuration: { title: 'Turn duration', hint: 'The line at the end of a turn: how long it took and when it ended.' },

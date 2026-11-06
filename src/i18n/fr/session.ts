@@ -58,6 +58,16 @@ export const session = {
     off: 'Remote Control : coupé. Clique pour la continuer depuis ton téléphone ou claude.ai',
     on: (state: string) => `Remote Control : ${state}. Clique pour couper`,
   },
+  background: {
+    shells: (count: number) => plural(count, 'shell en fond', 'shells en fond'),
+    monitors: (count: number) => plural(count, 'moniteur en fond', 'moniteurs en fond'),
+    tasks: (count: number) => plural(count, 'tâche en fond', 'tâches en fond'),
+    title: 'Ce qui tourne en fond : clique pour en arrêter',
+    listLabel: 'Tâches en fond',
+    kinds: { shell: 'shell', monitor: 'moniteur', other: 'tâche' },
+    stop: 'Arrêter',
+    stopTitle: (description: string) => `Arrêter « ${description} »`,
+  },
   feed: {
     diff: {
       update: 'Update',
@@ -349,7 +359,6 @@ export const session = {
     starting: 'démarre',
     compacting: { auto: 'compactage auto', manual: 'compactage' },
     subagents: (count: number) => (count === 1 ? '1 sous-agent' : `${count} sous-agents`),
-    background: (count: number) => (count === 1 ? '1 commande en fond' : `${count} commandes en fond`),
     scheduled: (count: number) => (count === 1 ? '1 réveil prévu' : `${count} réveils prévus`),
     fold: 'Replier',
     unfold: 'Déplier',

@@ -234,7 +234,7 @@ export class Normalizer {
       case 'background_tasks_changed':
         // the whole list each time (fixtures/bash-background.jsonl, 2.1.304)
         this.options.onBackground?.(asArray(message.tasks).map(asJson).filter((task) => asString(task.task_id) && !asString(task.task_type).includes('agent'))
-          .map((task) => ({ id: asString(task.task_id), description: cut(task.description, 90) })));
+          .map((task) => backgroundTask(task)));
         break;
       case 'commands_changed':
         this.options.onCommands(asArray(message.commands).map(asJson).filter((c) => asString(c.name)).map((c) => ({
@@ -431,6 +431,14 @@ export class Normalizer {
     if (!files) { files = new Map(); this.artifactFiles.set(url, files); }
     return files;
   }
+}
+
+/** The kinds Claude Code's own footer names, by task_type ("1 shell", "1 monitor"); any other type has none. */
+const BACKGROUND_KINDS: Record<string, BackgroundTask['kind']> = { local_bash: 'shell', monitor_mcp: 'monitor', monitor_ws: 'monitor' };
+
+function backgroundTask(task: Json): BackgroundTask {
+  const kind = BACKGROUND_KINDS[asString(task.task_type)];
+  return { id: asString(task.task_id), description: cut(task.description, 90), ...(kind ? { kind } : {}) };
 }
 
 function scheduleOf(tool: string, input: Record<string, unknown>): ScheduleChange | null {

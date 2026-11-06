@@ -457,6 +457,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'remoteControl': await sessions.remoteControl(message.sessionId, message.enabled); break;
     case 'shell': await sessions.shell(message.sessionId, message.command); break;
     case 'stopShell': sessions.stopShell(message.sessionId, message.shellId); break;
+    case 'stopTask': await sessions.stopTask(message.sessionId, message.taskId); break;
     case 'inspect': send({ t: 'inspection', sessionId: message.sessionId, inspection: await sessions.inspect(message.sessionId, message.view) }); break;
     case 'mcpAction':
       try {
