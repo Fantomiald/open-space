@@ -1,5 +1,13 @@
 # Versions
 
+## 1.27.2
+
+Vient de GC :
+
+- Tâches en fond : une pastille sous le champ dit ce qui tourne (« 1 shell en fond », « 1 moniteur en fond », « 3 tâches en fond »). Un clic ouvre la liste, avec un bouton Arrêter pour chaque tâche. Le panneau d'état et les questions de Repos et Éteindre emploient les mêmes mots.
+- Le fil suit une entrée qui grandit : la fin d'un diff ne reste plus sous le bord. Déplier un diff garde sa place.
+- Le style de fenêtre « Terminal » s'appelle maintenant « Claude Code ».
+
 ## 1.27.1
 
 Vient de GC :
