@@ -1,5 +1,13 @@
 # Versions
 
+## 1.27.0
+
+Vient de GC :
+
+- Le champ de message grandit avec ce qu'on écrit, comme dans Claude Code : jusqu'à douze lignes dans une fenêtre seule, six dans une petite, puis il défile. Quand trois fenêtres sont empilées, il s'arrête à deux lignes et les boutons restent à sa gauche, pour garder le fil lisible. Le champ du lanceur grandit aussi.
+- Dans une petite fenêtre, les boutons passent sous le champ.
+- Après un rechargement, toutes les fenêtres retrouvent leur conversation : seule celle qui avait le clavier la chargeait, les autres restaient sur « Chargement… ».
+
 ## 1.26.0
 
 Tout vient de GC :
