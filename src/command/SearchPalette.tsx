@@ -16,7 +16,7 @@ import { runOwnCommand } from './ownCommands.ts';
 import { SessionFace } from './SessionFace.tsx';
 import { Snippet } from './Snippet.tsx';
 import { StateBadge } from './StateBadge.tsx';
-import { tagHue } from '../design/tag-colors.ts';
+import { TagChips } from './TagChips.tsx';
 
 /** How long the field waits after a key before it searches the threads again. */
 const TYPING_PAUSE_MS = 140;
@@ -192,7 +192,7 @@ function PaletteContent() {
           <span className="cp-find__text">
             <span className="cp-find__line">
               <span className="cp-find__name">{result.session.name}</span>
-              {result.session.tag && <span className="cp-tag" data-hue={tagHue(result.session.tag)}>{result.session.tag}</span>}
+              <TagChips tags={result.session.tags} />
               <StateBadge session={result.session} kind={attentionKind(result.session, seen)} />
               <span className="cp-find__when">{when(result.session.stateSince, now)}</span>
             </span>

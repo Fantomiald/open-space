@@ -304,8 +304,8 @@ export interface SessionInfo {
   permissionMode: PermissionMode;
   /** the name the session's Claude was last told it has; differs from `name` after a rename (or for older sessions) */
   introducedAs?: string;
-  /** a short label the user put on the session ("urgent", "Jarvis"), shown next to its name */
-  tag?: string;
+  /** the short labels the user put on the session ("Pro", "PDF"), shown next to its name (shared/tags.ts); absent: none */
+  tags?: string[];
   /** runs without its folder's own settings (hooks, MCP servers): the folder was not trusted */
   untrusted?: boolean;
   /** put to rest by the user: its process is released and it waits in the break room until it gets a message */
@@ -620,8 +620,8 @@ export type ClientMessage =
   | { t: 'avatar'; png: string }
   | { t: 'close'; sessionId: string }
   | { t: 'rename'; sessionId: string; name: string }
-  /** an empty tag removes it */
-  | { t: 'tag'; sessionId: string; tag: string }
+  /** the session's tags, all of them (an empty list takes them all off) */
+  | { t: 'tags'; sessionId: string; tags: string[] }
   /** the browser of the user's accounts this session uses, whatever the setting (the setting's own: it follows the setting again) */
   | { t: 'accountsBrowser'; sessionId: string; browser: AccountsBrowser }
   /** sends the session to the break room (its process is released; a message calls it back) */

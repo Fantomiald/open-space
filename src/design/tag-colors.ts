@@ -10,6 +10,23 @@ export function tagHue(tag: string): number {
 
 export const tagColor = (tag: string) => TAG_COLORS[tagHue(tag)];
 
+/**
+ * The colours of one session's tags, in their order: each its own (tagHue), unless an earlier tag of the session took
+ * it; then the next free one, so that the tags of a session never look alike.
+ */
+export function sessionTagHues(tags: readonly string[]): number[] {
+  const taken = new Set<number>();
+  return tags.map((tag) => {
+    let hue = tagHue(tag);
+    while (taken.has(hue) && taken.size < TAG_COLORS.length) hue = (hue + 1) % TAG_COLORS.length;
+    taken.add(hue);
+    return hue;
+  });
+}
+
+/** The colours of one session's tags, in their order (see sessionTagHues). */
+export const sessionTagColors = (tags: readonly string[]) => sessionTagHues(tags).map((hue) => TAG_COLORS[hue]);
+
 export function applyTagColors(enabled: boolean) {
   const root = document.documentElement;
   root.dataset.tagColors = String(enabled);

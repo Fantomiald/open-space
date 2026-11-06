@@ -85,7 +85,7 @@ export const common: Dictionary['common'] = {
   },
   ownCommands: {
     btw: { description: 'A side question: the session answers without stopping, and it stays out of its conversation', argumentHint: '<your question>' },
-    tag: { description: 'Gives the session this tag, or removes it with nothing after', argumentHint: '[tag]' },
+    tag: { description: 'Gives the session these tags, separated by commas, or removes them with nothing after', argumentHint: '[tag, tag…]' },
     rename: { description: 'Renames the session, here and in Claude Code', argumentHint: '<new name>' },
     plan: { description: 'Switches to Plan mode, and starts the task if you give one', argumentHint: '[task]' },
     review: { description: 'Reviews the changed code: short for /code-review', argumentHint: '[effort] [PR, branch or path]' },

@@ -84,7 +84,7 @@ export const common = {
   },
   ownCommands: {
     btw: { description: 'Une question à côté : la session répond sans s’interrompre, et ça n’entre pas dans sa conversation', argumentHint: '<ta question>' },
-    tag: { description: 'Met ce tag à la session, ou l’enlève sans rien après', argumentHint: '[tag]' },
+    tag: { description: 'Met ces tags à la session, séparés par des virgules, ou les enlève sans rien après', argumentHint: '[tag, tag…]' },
     rename: { description: 'Renomme la session, ici et dans Claude Code', argumentHint: '<nouveau nom>' },
     plan: { description: 'Passe en mode Plan, et lance la tâche si tu en donnes une', argumentHint: '[tâche]' },
     review: { description: 'Relit le code changé : raccourci de /code-review', argumentHint: '[effort] [PR, branche ou chemin]' },

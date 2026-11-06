@@ -9,6 +9,7 @@ import { isEntryName } from './files.ts';
 import { parseJobs } from '../shared/jobs.ts';
 import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
+import { storedTags } from '../shared/tags.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
@@ -16,8 +17,6 @@ import { CONVERSATION_ID } from './conversations.ts';
 import { asJson, asNumber, isJson } from './json.ts';
 
 export const MAX_NAME = 40;
-/** Session tags are short labels. */
-export const MAX_TAG = 24;
 const MAX_SEARCH = 100;
 /** The search over every session's threads takes a few words. */
 const MAX_QUERY = 200;
@@ -269,10 +268,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return sessionId && name !== null ? { t: 'rename', sessionId, name } : null;
     }
     case 'rest': return sessionId ? { t: 'rest', sessionId } : null;
-    case 'tag': {
-      const tag = typeof raw.tag === 'string' ? raw.tag.trim().slice(0, MAX_TAG) : null;
-      return sessionId && tag !== null ? { t: 'tag', sessionId, tag } : null;
-    }
+    case 'tags': return sessionId && Array.isArray(raw.tags) ? { t: 'tags', sessionId, tags: storedTags({ tags: raw.tags }) } : null;
     case 'accountsBrowser': {
       const browser = ACCOUNTS_BROWSERS.find((each) => each === raw.browser);
       return sessionId && browser ? { t: 'accountsBrowser', sessionId, browser } : null;

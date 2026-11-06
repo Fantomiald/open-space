@@ -6,6 +6,7 @@ import os from 'node:os';
 import { claudeCommand, type ClaudeBinary } from './claude-process.ts';
 import { signalTree } from './process-tree.ts';
 import { asString, isJson } from './json.ts';
+import { MAX_TAG } from '../shared/tags.ts';
 
 /** The tag for a first message, or null when it has no subject yet or the call failed. */
 export type Tagger = (message: string) => Promise<string | null>;
@@ -13,7 +14,6 @@ export type Tagger = (message: string) => Promise<string | null>;
 const TIME_LIMIT_MS = 30_000;
 /** Enough of a long message to tell what it is about. */
 const MAX_MESSAGE = 2000;
-const MAX_TAG = 24;
 /** Past this many words the model wrote a sentence (« Je n'ai pas assez de contexte… »), not a tag. */
 const MAX_WORDS = 5;
 /** What the model answers for a message without a subject (a greeting). */

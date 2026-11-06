@@ -533,7 +533,7 @@ export class Session {
       // --remote-control flag (both do nothing there). Checked with 2.1.302: the answer carries session_url, then
       // system/bridge_state messages follow ("ready", "connected").
       // its title on claude.ai and in the app (`name`, kept apart from --name, which other sessions write to): what it is about, then who
-      const title = `${this.info.tag || path.basename(this.info.cwd)} - ${this.info.name}`;
+      const title = `${this.info.tags?.join(', ') || path.basename(this.info.cwd)} - ${this.info.name}`;
       const ask = (reattach?: string) => process.control({ subtype: 'remote_control', enabled: true, name: title, keep_session_on_exit: true, ...(reattach ? { reattach_session_id: reattach } : {}) });
       // a session ended on claude.ai meanwhile cannot be reattached to: a new one then
       const answer = await ask(this.info.remoteSession).catch((error: unknown) => (this.info.remoteSession ? ask() : Promise.reject(error)));
@@ -947,9 +947,9 @@ export class Session {
     this.publish();
   }
 
-  /** Puts a label on the session, or removes it (empty). */
-  setTag(tag: string) {
-    this.info.tag = tag || undefined;
+  /** Puts these labels on the session (shared/tags.ts), or takes them all off (none). */
+  setTags(tags: readonly string[]) {
+    this.info.tags = tags.length ? [...tags] : undefined;
     this.publish();
   }
 
