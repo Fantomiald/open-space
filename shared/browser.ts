@@ -7,6 +7,8 @@
 export const browserId = (sessionId: string, lane = 0) => (lane ? `${sessionId}.${lane}` : sessionId);
 /** The lane of a session's view of the shared browser (server/shared-browser.ts): the one signed in to the user's own accounts. */
 export const SHARED_LANE = 99;
+/** The lane of the user's own Chrome in a session's Browser view: no browser of Open Space's, what the agent last saw there. */
+export const CHROME_LANE = 98;
 export const sessionOfBrowser = (id: string) => id.split('.')[0];
 export const laneOf = (id: string) => Number(id.split('.')[1] ?? 0);
 /** The lanes of a session's running browsers, its own first. */

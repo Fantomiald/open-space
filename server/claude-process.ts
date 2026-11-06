@@ -132,6 +132,8 @@ export interface LaunchOptions {
   mcpConfig?: string;
   /** its sub-agents with a browser of their own (server/browser.ts testerAgents) */
   agents?: string;
+  /** the user's own Chrome through the Claude in Chrome extension, for their accounts (Preferences.accountsBrowser) */
+  chrome?: boolean;
   /** variables of this session only, on top of the shared environment (os-secret's address: server/secrets.ts) */
   env?: Record<string, string>;
   /** it works on a branch of its own, in a worktree: its conversation is told so when it starts */
@@ -154,8 +156,10 @@ export interface LaunchOptions {
  * - `--name` is how other Claude Code sessions of the machine see this one (ListAgents, SendMessage "to"), accents and
  *   spaces kept (checked with 2.1.302). It is also the conversation's title in Claude Code's own /resume; Open Space's
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
+ * - `--chrome` connects the claude-in-chrome server to the Claude in Chrome extension in `-p` too (checked with 2.1.318:
+ *   two sessions at once, each in a tab group of its own, and no site permission asked by the extension).
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -172,9 +176,10 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   // a server of the same name in the user's settings gives way to this one (checked with 2.1.306)
   if (options.mcpConfig) args.push('--mcp-config', options.mcpConfig);
   if (options.agents) args.push('--agents', options.agents);
+  if (options.chrome) args.push('--chrome');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig)));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome));
   return args;
 }
 
@@ -183,8 +188,8 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false): string {
-  const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared);
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false): string {
+  const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared, chrome);
   return worktree ? `${identity}\n\n${st.prompt.worktree(worktree)}` : identity;
 }
 
@@ -199,6 +204,9 @@ export const renameNote = (name: string) => st.prompt.rename(name);
 
 /** Told once to a conversation started before it had the shared browser: what it may do with it (see identityPrompt). */
 export const sharedBrowserNote = (user = '') => st.prompt.sharedBrowserNote(user.trim());
+
+/** Told once to a conversation whose process now has the user's own Chrome instead: what it may do with it (see identityPrompt). */
+export const chromeNote = (user = '') => st.prompt.chromeNote(user.trim());
 
 /** Told once to a conversation started before Open Space had os-secret (see identityPrompt). */
 export const secretsNote = (user = '') => st.prompt.secretsNote(user.trim());

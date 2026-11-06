@@ -351,12 +351,18 @@ export interface SessionInfo {
   context?: { used: number; max: number };
   /** Remote Control is on: the session is also reachable from claude.ai/code and the Claude app, at `url` ('' until known) */
   remote?: RemoteControl;
+  /** the page its agent last had in the user's own Chrome (not kept when Open Space restarts) */
+  chrome?: ChromeView;
+  /** the browser of the user's accounts it uses, chosen for it in its Browser view; absent: the one of the settings */
+  accountsBrowser?: AccountsBrowser;
   /** it works on a branch of its own, in a worktree */
   worktree?: WorktreeInfo;
   /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
   toldPlace?: string;
   /** its conversation knows the rules of the shared browser (system prompt or Session.sharedBrowserNote) */
   toldSharedBrowser?: true;
+  /** its conversation knows the rules of the user's own Chrome (system prompt or Session.chromeNote); never with toldSharedBrowser */
+  toldChrome?: true;
   /** its conversation knows os-secret (server/secrets.ts): in the system prompt of a new one, else told once in a message */
   toldSecrets?: true;
 }
@@ -513,7 +519,22 @@ export interface Preferences {
   idleCompact: number;
   /** when the launcher offers to put a new session on a branch of its own (see IsolateMode) */
   isolate: IsolateMode;
+  /** where the sessions of trusted folders reach the user's signed-in accounts (see AccountsBrowser) */
+  accountsBrowser: AccountsBrowser;
 }
+
+/**
+ * The page a session's agent last had in the user's own Chrome (Preferences.accountsBrowser), read from its
+ * claude-in-chrome calls: the tab it worked on, and the last screenshot it took there (`picture`, under /attachments/).
+ */
+export interface ChromeView { url: string; title: string; at: number; picture?: { name: string; url: string; at: number } }
+
+/**
+ * Where the sessions reach the user's signed-in accounts: Open Space's shared browser (server/shared-browser.ts), or the
+ * user's own Chrome through the Claude in Chrome extension (`claude --chrome`), which reaches every account it is signed in to.
+ */
+export const ACCOUNTS_BROWSERS = ['shared', 'chrome'] as const;
+export type AccountsBrowser = (typeof ACCOUNTS_BROWSERS)[number];
 
 /** The range of Preferences.glassOpacity: under its minimum, text on a pane over a bright sky can no longer be read. */
 export const GLASS_OPACITY = { min: 40, max: 100, step: 5, initial: 70 } as const;
@@ -601,6 +622,8 @@ export type ClientMessage =
   | { t: 'rename'; sessionId: string; name: string }
   /** an empty tag removes it */
   | { t: 'tag'; sessionId: string; tag: string }
+  /** the browser of the user's accounts this session uses, whatever the setting (the setting's own: it follows the setting again) */
+  | { t: 'accountsBrowser'; sessionId: string; browser: AccountsBrowser }
   /** sends the session to the break room (its process is released; a message calls it back) */
   | { t: 'rest'; sessionId: string }
   /**

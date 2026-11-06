@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { browserLanes, drivesBrowser, floatsOutOfSight, isBrowserTool, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from './browser.ts';
-import { SHARED_LANE } from '../../shared/browser.ts';
+import { accountsBrowserOfLane, accountsLanes, usedAccountsLane, browserLanes, drivesBrowser, floatsOutOfSight, isBrowserTool, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from './browser.ts';
+import { CHROME_LANE, SHARED_LANE } from '../../shared/browser.ts';
 
 describe('the picture of a session’s browser', () => {
   const box = { left: 100, top: 50, width: 800, height: 600 };
@@ -56,18 +56,32 @@ describe('the testers of a session', () => {
 });
 
 describe('the browsers of a session to pick from', () => {
-  it('offers its own, its testers’ running, then the shared browser, always', () => {
-    assert.deepEqual(browserLanes([2, 0], true), [0, 2, SHARED_LANE]);
-    assert.deepEqual(browserLanes([SHARED_LANE, 1], true), [0, 1, SHARED_LANE]);
-    assert.deepEqual(browserLanes([2, 0], false), [0, 2]);
+  const both = [SHARED_LANE, CHROME_LANE];
+
+  it('offers its own, its testers’ running, then the browsers of the user’s accounts, always', () => {
+    assert.deepEqual(browserLanes([2, 0], both), [0, 2, SHARED_LANE, CHROME_LANE]);
+    assert.deepEqual(browserLanes([SHARED_LANE, 1], both), [0, 1, SHARED_LANE, CHROME_LANE]);
+    assert.deepEqual(browserLanes([2, 0], []), [0, 2]);
+    assert.deepEqual(browserLanes([SHARED_LANE, 0], []), [0], 'the shared browser left running is not offered to a folder not trusted');
   });
 
-  it('shows the shared browser when picked even before it runs, a tester’s only while it runs', () => {
-    assert.equal(shownLane(SHARED_LANE, [0], true), SHARED_LANE);
-    assert.equal(shownLane(SHARED_LANE, [0], false), 0);
-    assert.equal(shownLane(3, [0], true), 0);
-    assert.equal(shownLane(3, [0, 3], true), 3);
-    assert.equal(shownLane(0, [2], true), 2);
+  it('shows a browser of the accounts when picked even before it runs, a tester’s only while it runs', () => {
+    assert.equal(shownLane(SHARED_LANE, [0], both), SHARED_LANE);
+    assert.equal(shownLane(CHROME_LANE, [0], both), CHROME_LANE);
+    assert.equal(shownLane(SHARED_LANE, [0, SHARED_LANE], []), 0);
+    assert.equal(shownLane(3, [0], both), 0);
+    assert.equal(shownLane(3, [0, 3], both), 3);
+    assert.equal(shownLane(0, [2], both), 2);
+  });
+
+  it('offers both browsers of the accounts to a trusted folder, and marks the one the session uses', () => {
+    assert.deepEqual(accountsLanes(false, true), both);
+    assert.deepEqual(accountsLanes(false, false), [CHROME_LANE], 'no shared browser without a Chrome to run it; the user’s Chrome needs none of Open Space’s');
+    assert.deepEqual(accountsLanes(true, true), []);
+    assert.equal(usedAccountsLane('chrome'), CHROME_LANE);
+    assert.equal(usedAccountsLane('shared'), SHARED_LANE);
+    assert.equal(accountsBrowserOfLane(CHROME_LANE), 'chrome');
+    assert.equal(accountsBrowserOfLane(0), null);
   });
 
   it('starts the session’s own browser and the shared one when looked at, never a tester’s', () => {

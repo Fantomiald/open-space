@@ -143,5 +143,5 @@ function SessionLanes({ sessionId, first, shown, onPick }: { sessionId: string; 
 }
 
 function Lanes({ session, shown, onPick }: { session: SessionInfo; shown: number | null; onPick: (lane: number) => void }) {
-  return <LanePicker lanes={useLanes(session)} shown={shown} onPick={onPick} />;
+  return <LanePicker lanes={useLanes(session, true)} shown={shown} onPick={onPick} />;
 }

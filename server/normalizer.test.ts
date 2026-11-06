@@ -4,17 +4,17 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import type { BackgroundTask, OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
 import { asJson } from './json.ts';
-import { Normalizer, describeRequest, ruleText, type AgentLaunch, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, ruleText, type AgentLaunch, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 
 function createNormalizer(peerName?: (address: string) => string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
   const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
-  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[] };
+  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[], chrome: [] as ChromeSight[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
-    onBackground: (tasks) => seen.background.push(tasks), onSchedule: (change) => seen.schedules.push(change),
+    onBackground: (tasks) => seen.background.push(tasks), onSchedule: (change) => seen.schedules.push(change), onChrome: (sight) => seen.chrome.push(sight),
     names: new Set(), peerName, agentLaunch, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
@@ -56,6 +56,23 @@ describe('Normalizer on a real turn of commands, reads and searches (2.1.318)', 
     assert.deepEqual(outputs[0], { lines: ['ligne 1', 'ligne 2', 'ligne 3', 'ligne 4', 'ligne 5', 'ligne 6', 'ligne 7'], total: 7 });
     assert.deepEqual(outputs[1], { lines: [], total: 8, read: true });
     assert.match(outputs[2]?.lines[0] ?? '', /^cart\.js:1:/);
+  });
+});
+
+describe('Normalizer on a real turn in the user’s Chrome (claude --chrome, 2.1.318)', () => {
+  const { chrome, events } = replay('chrome-turn');
+
+  it('follows the page of the tab each call worked on, with the screenshot it took', () => {
+    assert.deepEqual(chrome.map(({ url, title, picture }) => ({ url, title, picture: picture?.mediaType })), [
+      { url: 'https://example.com/', title: 'https://example.com/', picture: undefined },
+      { url: 'https://example.com/', title: 'Example Domain', picture: 'image/jpeg' },
+    ]);
+    assert.ok(chrome[1].picture?.data.length);
+  });
+
+  it('says nothing of a blank tab nor of a closed one, and still shows each call in the thread', () => {
+    assert.equal(chrome.length, 2);
+    assert.ok(events.some((event) => event.k === 'act' && event.tool === 'mcp__claude-in-chrome__navigate'));
   });
 });
 

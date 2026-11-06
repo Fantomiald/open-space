@@ -9,7 +9,7 @@ import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
-import { DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 import { expandHomePath, isFullPath } from '../shared/paths.ts';
 import { TERMINALS, type TerminalKind } from '../shared/terminal.ts';
@@ -36,6 +36,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   remoteByDefault: false,
   // a settings file from before worktrees has none: it gets this one
   isolate: 'busy',
+  accountsBrowser: 'shared',
 };
 
 export const MAX_AGENT_NOTE = 600;
@@ -57,6 +58,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (WINDOW_STYLES.some((style) => style === raw.windowStyle)) found.windowStyle = raw.windowStyle as Preferences['windowStyle'];
   if (TIME_FORMATS.some((format) => format === raw.timeFormat)) found.timeFormat = raw.timeFormat as Preferences['timeFormat'];
   if (ISOLATE_MODES.some((mode) => mode === raw.isolate)) found.isolate = raw.isolate as Preferences['isolate'];
+  if (ACCOUNTS_BROWSERS.some((browser) => browser === raw.accountsBrowser)) found.accountsBrowser = raw.accountsBrowser as Preferences['accountsBrowser'];
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && path.isAbsolute(root)).map((root) => path.resolve(root)))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);

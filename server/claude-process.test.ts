@@ -39,6 +39,17 @@ describe('buildClaudeArgs', () => {
     assert.equal(reading[reading.indexOf('--add-dir') + 1], '/data/uploads', 'the files the user sends are readable');
   });
 
+  it('lets a session drive the user’s own Chrome through Claude in Chrome, and tells it what for', () => {
+    const args = buildClaudeArgs({ ...base, chrome: true });
+    assert.ok(args.includes('--chrome'));
+    const prompt = args[args.indexOf('--append-system-prompt') + 1];
+    assert.match(prompt, /claude-in-chrome/);
+    assert.match(prompt, /mot de passe/);
+    assert.doesNotMatch(prompt, /shared-browser/);
+    assert.ok(!buildClaudeArgs(base).includes('--chrome'));
+    assert.doesNotMatch(identityPrompt('Iris', 'Max'), /claude-in-chrome/);
+  });
+
   it('passes the session permission mode', () => {
     const args = buildClaudeArgs({ ...base, permissionMode: 'manual' });
     assert.equal(args[args.indexOf('--permission-mode') + 1], 'manual');

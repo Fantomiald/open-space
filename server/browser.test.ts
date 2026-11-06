@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -73,6 +73,11 @@ describe('the Playwright server of a session', () => {
     assert.deepEqual(tester.disallowedTools, ['mcp__playwright']);
   });
 
+  it('keeps the user’s own Chrome from every tester when the session has it', () => {
+    const agents = JSON.parse(testerAgents(ENDPOINT, {}, { description: 'd', prompt: 'p' }, undefined, true));
+    for (let lane = 1; lane <= TESTERS; lane++) assert.deepEqual(agents[testerAgent(lane)].disallowedTools, ['mcp__playwright', 'mcp__claude-in-chrome']);
+  });
+
   it('names each browser of a session by its lane', () => {
     assert.equal(browserId('s1'), 's1');
     assert.equal(browserId('s1', 2), 's1.2');
@@ -84,6 +89,15 @@ describe('the Playwright server of a session', () => {
     assert.equal(browserKey('secret', 's1'), browserKey('secret', 's1'));
     assert.notEqual(browserKey('secret', 's1'), browserKey('secret', 's2'));
     assert.notEqual(browserKey('secret', 's1'), browserKey('other', 's1'));
+  });
+});
+
+describe('the browser of the user’s accounts', () => {
+  it('is the one chosen in the settings, for a trusted folder only', () => {
+    assert.equal(accountsBrowserOf('shared', false), 'shared');
+    assert.equal(accountsBrowserOf('chrome', false), 'chrome');
+    assert.equal(accountsBrowserOf('chrome', true), null, 'a folder not trusted never reaches the user’s Chrome');
+    assert.equal(accountsBrowserOf('shared', true), null, 'nor the shared browser');
   });
 });
 

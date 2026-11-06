@@ -1,6 +1,6 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
-import { BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_SESSION_FILE, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type FileAction, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_SESSION_FILE, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type FileAction, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
 import { parseBirthday } from '../shared/festivals.ts';
@@ -272,6 +272,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'tag': {
       const tag = typeof raw.tag === 'string' ? raw.tag.trim().slice(0, MAX_TAG) : null;
       return sessionId && tag !== null ? { t: 'tag', sessionId, tag } : null;
+    }
+    case 'accountsBrowser': {
+      const browser = ACCOUNTS_BROWSERS.find((each) => each === raw.browser);
+      return sessionId && browser ? { t: 'accountsBrowser', sessionId, browser } : null;
     }
     case 'log': return sessionId ? { t: 'log', sessionId, after: Math.max(0, Math.floor(asNumber(raw.after))) } : null;
     case 'directories': return { t: 'directories' };

@@ -4,6 +4,12 @@ import { MAX_TEXT } from '../shared/protocol.ts';
 import { MAX_NAME, parseClientMessage } from './messages.ts';
 
 describe('parseClientMessage', () => {
+  it('takes the browser of the accounts a session uses, a known one only', () => {
+    assert.deepEqual(parseClientMessage({ t: 'accountsBrowser', sessionId: 's1', browser: 'chrome' }), { t: 'accountsBrowser', sessionId: 's1', browser: 'chrome' });
+    assert.equal(parseClientMessage({ t: 'accountsBrowser', sessionId: 's1', browser: 'firefox' }), null);
+    assert.equal(parseClientMessage({ t: 'accountsBrowser', browser: 'chrome' }), null);
+  });
+
   it('reads openTerminal with or without a session, and nothing else', () => {
     assert.deepEqual(parseClientMessage({ t: 'openTerminal' }), { t: 'openTerminal' });
     assert.deepEqual(parseClientMessage({ t: 'openTerminal', sessionId: 's1' }), { t: 'openTerminal', sessionId: 's1' });

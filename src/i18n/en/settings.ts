@@ -140,6 +140,7 @@ export const settings: Dictionary['settings'] = {
         hint: 'A new session on a branch and in a folder of its own (a git worktree), away from the others’ files. Open Space merges when you ask.',
         options: { busy: 'When the folder is taken', always: 'Always', never: 'Never' },
       },
+      accountsBrowser: { title: 'Browser for your accounts', hint: 'Where sessions go to your signed-in accounts. “My Chrome” goes through the Claude in Chrome extension: your real Chrome, signed in everywhere, mail included. Trusted folders only, from each session’s next launch.', options: { shared: 'Shared browser', chrome: 'My Chrome' } },
       autoPip: { title: 'Automatic mini window', hint: 'A tester’s browser pops up in a mini window, and comes back when you leave the Browser view. A session checking its own pages just lights up its globe.' },
       roots: { title: 'Allowed folders', hint: 'Check the ones where you keep your projects.' },
       defaultFolder: { title: 'Default folder', hint: 'Shift+N starts a session in it.' },

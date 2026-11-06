@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import type { ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { CatalogProbe, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
@@ -264,6 +264,120 @@ describe('the shared browser', () => {
     manager.send(id, 'encore');
     assert.equal(processes[0].sent.at(-1), 'encore');
     assert.equal(find(id).toldSharedBrowser, undefined);
+    await manager.shutdown();
+  });
+});
+
+describe('the user’s own Chrome', () => {
+  /** the launch Open Space gives a session, for the browser of the user's accounts chosen at that moment */
+  const choosing = () => {
+    const choice = { mode: 'chrome' as 'chrome' | 'shared' };
+    const deps: Partial<SessionManagerDeps> = {
+      browserMcp: () => (choice.mode === 'chrome' ? { chrome: true, mcpConfig: browserMcpConfig('http://h/cdp', {}) } : { mcpConfig: browserMcpConfig('http://h/cdp', {}, 'http://h/shared') }),
+    };
+    return { choice, deps };
+  };
+  /** a turn of the same conversation (simple-turn's init names another one, which /clear would have started) */
+  const turn = (process: { handlers: ProcessHandlers }, conversation: string) => {
+    process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
+    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 });
+  };
+
+  it('a new conversation is launched with it and learns its rules from the system prompt', async () => {
+    const { deps } = choosing();
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    assert.equal(processes[0].launch.chrome, true);
+    assert.doesNotMatch(String(processes[0].launch.mcpConfig), /shared-browser/);
+    assert.deepEqual(processes[0].sent, ['bonjour']);
+    assert.equal(find(id).toldChrome, true);
+    assert.equal(find(id).toldSharedBrowser, undefined);
+    await manager.shutdown();
+  });
+
+  /** the launch for the browser of the accounts each session uses, its own choice or the setting's */
+  const byChoice = (setting: { browser: AccountsBrowser }): Partial<SessionManagerDeps> => ({
+    accountsBrowser: () => setting.browser,
+    browserMcp: (_id, _untrusted, chosen) => (chosen === 'chrome' ? { chrome: true, mcpConfig: browserMcpConfig('http://h/cdp', {}) } : { mcpConfig: browserMcpConfig('http://h/cdp', {}, 'http://h/shared') }),
+  });
+
+  it('a session switched on its own is released while it waits, and keeps its choice when the setting changes', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    manager.setAccountsBrowser(id, 'chrome');
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    assert.equal(processes[0].stopCalls.length, 1, 'released while it waits');
+    manager.send(id, 'tu vois GA4 ?');
+    assert.equal(processes[1].launch.chrome, true);
+    assert.match(processes[1].sent.at(-1)!, /claude-in-chrome/);
+    turn(processes[1], id);
+    manager.accountsBrowserChanged();
+    assert.equal(processes[1].stopCalls.length, 0, 'its own choice holds against the setting');
+    manager.setAccountsBrowser(id, 'shared');
+    assert.equal(find(id).accountsBrowser, undefined, 'the same as the setting: it follows the setting again');
+    assert.equal(processes[1].stopCalls.length, 1);
+    await manager.shutdown();
+  });
+
+  it('the setting switches the sessions without a choice of their own, one at work once its turn is over', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    setting.browser = 'chrome';
+    manager.accountsBrowserChanged();
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1, 'released at the end of its turn');
+    manager.send(id, 'encore');
+    assert.equal(processes[1].launch.chrome, true);
+    manager.accountsBrowserChanged();
+    assert.equal(processes[1].stopCalls.length, 0, 'already launched with it: nothing to do');
+    await manager.shutdown();
+  });
+
+  it('shows the page its agent last had in the user’s Chrome, with the last screenshot it took there', async () => {
+    const { deps } = choosing();
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'ouvre example.com' });
+    assert.equal(find(id).chrome, undefined);
+    processes[0].feed('chrome-turn');
+    const seen = find(id).chrome;
+    assert.equal(seen?.url, 'https://example.com/');
+    assert.equal(seen?.title, 'Example Domain');
+    assert.match(seen?.picture?.name ?? '', ATTACHMENT_NAME);
+    assert.equal(seen?.picture?.url, 'https://example.com/');
+    await manager.shutdown();
+  });
+
+  it('a conversation switched over is told once its process has it, and told again when switched back', async () => {
+    const { choice, deps } = choosing();
+    choice.mode = 'shared';
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    choice.mode = 'chrome';
+    manager.send(id, 'encore');
+    assert.equal(processes[0].sent.at(-1), 'encore', 'its process still has the shared browser');
+    turn(processes[0], id);
+    processes[0].exit(0, null, '');
+    manager.send(id, 'tu vois GA4 ?');
+    assert.equal(processes[1].launch.chrome, true);
+    assert.match(processes[1].sent.at(-1)!, /claude-in-chrome[\s\S]*tu vois GA4 \?$/);
+    assert.equal(find(id).toldChrome, true);
+    assert.equal(find(id).toldSharedBrowser, undefined);
+    turn(processes[1], id);
+    processes[1].exit(0, null, '');
+    choice.mode = 'shared';
+    manager.send(id, 'et GTM ?');
+    assert.match(processes[2].sent.at(-1)!, /navigateur partagé[\s\S]*et GTM \?$/);
+    assert.equal(find(id).toldChrome, undefined);
     await manager.shutdown();
   });
 });

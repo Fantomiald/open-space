@@ -98,12 +98,12 @@ export async function namedInLogs(logsDir: string, pattern: RegExp): Promise<Set
   return named;
 }
 
-/** Removes the stored files no session log names any more (their sessions were forgotten); returns how many. */
-export async function sweepAttachments(folder: string, logsDir: string, now = Date.now()): Promise<number> {
+/** Removes the stored files no session log names any more (their sessions were forgotten), nor `shown`; returns how many. */
+export async function sweepAttachments(folder: string, logsDir: string, now = Date.now(), shown: ReadonlySet<string> = new Set()): Promise<number> {
   const stored = (await readdir(folder).catch(() => [] as string[])).filter((name) => ATTACHMENT_NAME.test(name));
   if (!stored.length) return 0;
   const pattern = /[0-9a-f]{64}\.[a-z0-9]{1,8}/g;
-  const named = await namedInLogs(logsDir, pattern);
+  const named = new Set([...await namedInLogs(logsDir, pattern), ...shown]);
   // a page's files are named by its bundle only
   for (const bundle of [...named].filter((name) => name.endsWith(`.${BUNDLE_EXTENSION}`))) {
     for (const [name] of (await readFile(path.join(folder, bundle), 'utf8').catch(() => '')).matchAll(pattern)) named.add(name);

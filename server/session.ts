@@ -6,15 +6,15 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AttentionKind, BackgroundTask, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
-import { placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
-import { Normalizer, describeRequest, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
@@ -34,8 +34,10 @@ export interface SessionDeps {
   onAttention?: (kind: AttentionKind, session: SessionInfo) => void;
   /** a sub-agent is done, its task finished or stopped (`type`: its subagent_type) */
   onSubagentLeft?: (type: string) => void;
-  /** whether the session's process gets the shared browser (server/shared-browser.ts) */
+  /** whether the session's process was launched with the shared browser (server/shared-browser.ts) */
   sharedBrowser?: () => boolean;
+  /** whether the session's process was launched with the user's own Chrome (claude --chrome) */
+  chrome?: () => boolean;
   /** the names of the keys the user gave it (server/secrets.ts); absent without os-secret */
   secretNames?: () => string[];
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
@@ -130,6 +132,8 @@ export class Session {
   private emptyResult: NodeJS.Timeout | null = null;
   /** Remote Control, while it is on: it lasts as long as the process, which is then never released for being idle */
   private remote: RemoteControl | undefined;
+  /** the page its agent last had in the user's own Chrome (see onChrome) */
+  private chrome: ChromeView | undefined;
   /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
   private autoCompaction: { resting: boolean; hadProcess: boolean; compacted: boolean } | null = null;
   /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
@@ -147,7 +151,7 @@ export class Session {
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     const secrets = this.deps.secretNames?.() ?? [];
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(secrets.length ? { secrets } : {}) };
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(secrets.length ? { secrets } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -351,14 +355,18 @@ export class Session {
     if (command === 'compact') this.info.compacting = 'manual';
     const spawning = !this.process?.alive;
     if (spawning) {
-      // a new conversation gets the name in its system prompt (see buildClaudeArgs), and where it works
-      if (!this.info.resumable && !this.info.forkOf) {
+      // a new conversation gets the name in its system prompt (see buildClaudeArgs), where it works, and the browsers its process was launched with
+      const fresh = !this.info.resumable && !this.info.forkOf;
+      if (fresh) {
         this.info.introducedAs = this.info.name;
         this.info.toldPlace = this.info.cwd;
-        this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
         this.info.toldSecrets = this.deps.secretNames ? true : undefined;
       }
       this.startProcess();
+      if (fresh) {
+        this.info.toldSharedBrowser = this.deps.sharedBrowser?.() ? true : undefined;
+        this.info.toldChrome = this.deps.chrome?.() ? true : undefined;
+      }
       this.info.error = undefined;
     }
     let outgoing = clean;
@@ -372,10 +380,16 @@ export class Session {
       outgoing = placeNote(this.info.cwd, this.info.worktree) + outgoing;
       this.info.toldPlace = this.info.cwd;
     }
-    // the shared browser came after its conversation started: told what it is for, once
+    // the shared browser or the user's Chrome came after its conversation started, or replaced the other: told what it is for, once
     if (!this.info.toldSharedBrowser && !command && this.deps.sharedBrowser?.()) {
       outgoing = sharedBrowserNote(this.deps.identity?.().user) + outgoing;
       this.info.toldSharedBrowser = true;
+      this.info.toldChrome = undefined;
+    }
+    if (!this.info.toldChrome && !command && this.deps.chrome?.()) {
+      outgoing = chromeNote(this.deps.identity?.().user) + outgoing;
+      this.info.toldChrome = true;
+      this.info.toldSharedBrowser = undefined;
     }
     if (!this.info.toldSecrets && !command && this.deps.secretNames) {
       outgoing = secretsNote(this.deps.identity?.().user) + outgoing;
@@ -415,6 +429,7 @@ export class Session {
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
+      onChrome: (sight) => this.onChrome(sight),
       onBackground: (tasks) => this.onBackground(tasks),
       onSchedule: (change) => this.onSchedule(change),
       onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
@@ -475,6 +490,7 @@ export class Session {
       this.info.context = undefined;
       // the rules of the shared browser went with the old conversation when they were told in a message: told again
       this.info.toldSharedBrowser = undefined;
+      this.info.toldChrome = undefined;
       this.info.toldSecrets = undefined;
       this.record({ k: 'cleared' });
       this.cleared = true;
@@ -609,6 +625,14 @@ export class Session {
     else if (action === 'enable' || action === 'disable') await process.control({ subtype: 'mcp_toggle', serverName: server, enabled: action === 'enable' });
     else return asString((await process.control({ subtype: 'mcp_authenticate', serverName: server })).authUrl) || null;
     return null;
+  }
+
+  /** A claude-in-chrome call worked on a page of the user's Chrome: the session's Browser view shows it, with the last screenshot. */
+  private onChrome(sight: ChromeSight) {
+    const at = this.now();
+    const picture = sight.picture ? { name: this.deps.saveImage(sight.picture), url: sight.url, at } : this.chrome?.picture;
+    this.chrome = { url: sight.url, title: sight.title, at, ...(picture ? { picture } : {}) };
+    this.publish();
   }
 
   private onRemoteState(state: string) {
@@ -909,12 +933,18 @@ export class Session {
    * Lets the process go while the session waits, so that its next message starts the Claude Code installed since.
    * false: it is at work, or keeps its process for its background work or Remote Control.
    */
-  release(): boolean {
+  release(note = st.sessions.stopped.updated): boolean {
     if (!this.process?.alive || this.context.state !== 'wait' || this.keepsProcess() || scheduledUntil(this.schedules, this.now())) return false;
     this.clearIdleTimer();
-    this.stopRequest = { reason: 'idle', note: st.sessions.stopped.updated };
+    this.stopRequest = { reason: 'idle', note };
     void this.process.stop(2000);
     return true;
+  }
+
+  /** The browser of the user's accounts it uses, whatever the setting; undefined: the setting's (see SessionManager.switchBrowsers). */
+  setAccountsBrowser(browser: AccountsBrowser | undefined) {
+    this.info.accountsBrowser = browser;
+    this.publish();
   }
 
   /** Puts a label on the session, or removes it (empty). */

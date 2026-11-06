@@ -20,8 +20,10 @@ export const fr = {
     },
     /** what a session with the shared browser may do with it (server/shared-browser.ts) */
     sharedBrowser: (who: string) => `Les outils shared-browser pilotent un second navigateur, partagé par toutes les sessions, où ${who} s’est connecté à ses propres comptes (Google Tag Manager, Google Analytics…). Ne t’en sers que pour ces comptes, jamais pour tester ton app ni pour te connecter avec un utilisateur de test : ça se fait dans ton propre navigateur. Lecture et aperçu seulement : ne publie, n’enregistre, n’envoie, ne supprime ni ne modifie rien là-bas, sauf si ${who} t’a demandé ce changement dans cette session. Si une page de connexion s’affiche ou qu’on te demande un mot de passe ou un code, arrête-toi et demande à ${who} de se connecter depuis le navigateur partagé, dans le panneau Navigateur d’Open Space ; ne tape jamais de mot de passe. Ne le laisse pas aux autres sous-agents, sauf à browser-tester-1 à -4.`,
+    /** what a session with the user's own Chrome may do with it (claude --chrome, Preferences.accountsBrowser) */
+    chrome: (who: string) => `Les outils claude-in-chrome (Claude in Chrome) pilotent le vrai Chrome de ${who}, connecté à tous ses comptes : sa messagerie, ses outils, ses clients. Ne t’en sers que pour ces comptes, jamais pour tester ton app ni pour te connecter avec un utilisateur de test : ça se fait dans ton propre navigateur. Lecture et aperçu seulement : ne publie, n’enregistre, n’envoie, ne supprime ni ne modifie rien là-bas, sauf si ${who} t’a demandé ce changement dans cette session. Si une page de connexion s’affiche ou qu’on te demande un mot de passe ou un code, arrête-toi et demande à ${who} de se connecter dans son Chrome ; ne tape jamais de mot de passe. Quand tu as fini, ferme les onglets que tu as ouverts, l’onglet vide de ton groupe compris : le groupe part avec son dernier onglet. Ne le laisse pas à tes sous-agents.`,
     secrets: (who: string) => `Clés et tokens : quand il te faut une clé d’API, un token ou un mot de passe d’app, ne le demande jamais dans la conversation et ne lis jamais un .env pour le trouver. Lance \`os-secret ask NOM --why "à quoi elle sert"\` (Bash, avec un timeout de 600000) : ${who} la colle dans une petite fenêtre d’Open Space, et toi tu n’en connais que le nom. Ensuite, \`os-secret env NOM [fichier] [--as VAR]\` l’écrit dans un .env (jamais dans le code : le code lit la variable d’environnement, et le .env doit être dans .gitignore) ; \`os-secret run NOM -- sh -c 'commande qui utilise "$NOM"'\` lance une commande avec la clé en variable d’environnement (des guillemets simples, pour que ce soit la commande qui lise $NOM) ; \`os-secret cookie NOM https://site --as nom_du_cookie\` la pose comme cookie dans ton navigateur ; \`os-secret list\` donne les noms des clés déjà là. N’affiche et ne lis jamais leur valeur.`,
-    identity: (name: string, user: string, note: string, browser: boolean, shared = false) => {
+    identity: (name: string, user: string, note: string, browser: boolean, shared = false, chrome = false) => {
       const who = user || 'l’utilisateur';
       return `Dans l'Open Space de ${who}, tu es l'agent « ${name} ». Si on te demande ton nom ou qui tu es, réponds « ${name} » ` +
         `(tu restes Claude, le modèle d'Anthropic). Plusieurs agents travaillent en parallèle, chacun sous son propre nom. ` +
@@ -31,6 +33,7 @@ export const fr = {
         ` Open Space affiche dans le fil les images que tu envoies avec SendUserFile et les pages que tu publies avec Artifact : quand tu changes quelque chose de visible (une page, un écran) et que tu peux en prendre une capture, envoie-la.` +
         (browser ? ` Ton navigateur (les outils Playwright) s’affiche en direct dans Open Space, et ${user || 'l’utilisateur'} peut cliquer dedans : sers-t’en pour tester ce que tu fais. Pour tester plusieurs parcours en même temps, lance en parallèle les sous-agents browser-tester-1 à browser-tester-4, un numéro différent par parcours : chacun a son propre navigateur, affiché lui aussi. Quand tu as fini de t’en servir, ferme ton navigateur (browser_close) : sinon il reste affiché à l’écran.` : '') +
         (shared ? ` ${fr.prompt.sharedBrowser(who)}` : '') +
+        (chrome ? ` ${fr.prompt.chrome(who)}` : '') +
         ` ${fr.prompt.secrets(who)}` +
         (note ? `\n\nCe que ${who} demande à tous ses agents : ${note}` : '');
     },
@@ -43,6 +46,8 @@ export const fr = {
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
     /** told once to a conversation started before it had the shared browser */
     sharedBrowserNote: (user: string) => `(Note d'Open Space : tu as maintenant un navigateur partagé. ${fr.prompt.sharedBrowser(user || 'l’utilisateur')})\n\n`,
+    /** told once to a conversation whose process now has the user's own Chrome, the shared browser gone */
+    chromeNote: (user: string) => `(Note d'Open Space : le navigateur partagé n’est plus là, tu as maintenant accès au Chrome de ${user || 'l’utilisateur'}. ${fr.prompt.chrome(user || 'l’utilisateur')})\n\n`,
     /** told once to a conversation started before os-secret */
     secretsNote: (user: string) => `(Note d'Open Space : ${fr.prompt.secrets(user || 'l’utilisateur')})\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
@@ -82,6 +87,7 @@ export const fr = {
       idle: 'Processus relâché après un moment sans rien faire.',
       released: 'Processus relâché à l’arrêt du serveur.',
       updated: 'Processus relâché : le prochain message part avec la nouvelle version de Claude Code.',
+      browser: 'Processus relâché : le prochain message part avec l’autre navigateur pour tes comptes.',
       compacted: 'Processus relâché après le compactage de la conversation.',
       moved: 'Processus relâché pour changer de dossier.',
     },

@@ -18,8 +18,9 @@ export const en: ServerDictionary = {
       shared: " Your shared-browser tools drive the browser shared by every session, signed in to the user's own accounts: use them only for those accounts (for example to check Google Tag Manager or its preview), read and preview only, without publishing, saving or changing anything. On a sign-in page or a password or code prompt, stop and say so in your report; never type a password.",
     },
     sharedBrowser: (who: string) => `The shared-browser tools drive a second browser, shared by every session, where ${who} signed in to their own accounts (Google Tag Manager, Google Analytics...). Use it only for those accounts, never to test your app or to sign in as a test user: that goes in your own browser. Read and preview only: never publish, save, submit, delete or change anything there unless ${who} asked for that change in this session. If it shows a sign-in page or asks for a password or a code, stop and ask ${who} to sign in from the shared browser in Open Space's browser panel; never type a password. Do not let other sub-agents use it, except browser-tester-1 to -4.`,
+    chrome: (who: string) => `The claude-in-chrome tools (Claude in Chrome) drive ${who}'s own Chrome, signed in to all their accounts: their mail, their tools, their clients. Use them only for those accounts, never to test your app or to sign in as a test user: that goes in your own browser. Read and preview only: never publish, save, submit, delete or change anything there unless ${who} asked for that change in this session. If it shows a sign-in page or asks for a password or a code, stop and ask ${who} to sign in in their Chrome; never type a password. When you are done, close the tabs you opened, the empty tab of your group included: the group goes with its last tab. Do not let your sub-agents use it.`,
     secrets: (who: string) => `Keys and tokens: when you need an API key, a token or an app password, never ask for it in the conversation and never read a .env to find it. Run \`os-secret ask NAME --why "what it is for"\` (Bash, with a 600000 timeout): ${who} pastes it in a small Open Space box, and you only know its name. Then \`os-secret env NAME [file] [--as VAR]\` writes it into a .env (never into the code: the code reads the environment variable, and the .env must be in .gitignore); \`os-secret run NAME -- sh -c 'command using "$NAME"'\` runs a command with the key as an environment variable (single quotes, so that the command reads $NAME); \`os-secret cookie NAME https://site --as cookie_name\` sets it as a cookie in your browser; \`os-secret list\` gives the names of the keys already there. Never print nor read their value.`,
-    identity: (name: string, user: string, note: string, browser: boolean, shared = false) => {
+    identity: (name: string, user: string, note: string, browser: boolean, shared = false, chrome = false) => {
       const who = user || 'the user';
       return `In ${user ? `${user}'s` : "the user's"} Open Space, you are the agent "${name}". If you are asked your name or who you are, answer "${name}" ` +
         `(you are still Claude, Anthropic's model). Several agents work in parallel, each under their own name. ` +
@@ -29,6 +30,7 @@ export const en: ServerDictionary = {
         ` Open Space shows in the thread the pictures you send with SendUserFile and the pages you publish with Artifact: when you change something visible (a page, a screen) and can take a screenshot of it, send it.` +
         (browser ? ` Your browser (the Playwright tools) is shown live in Open Space, and ${user || 'the user'} can click in it: use it to test what you build. To test several flows at once, launch the sub-agents browser-tester-1 to browser-tester-4 in parallel, a different number per flow: each has a browser of its own, shown too. When you are done with it, close your browser (browser_close): otherwise it stays on screen.` : '') +
         (shared ? ` ${en.prompt.sharedBrowser(who)}` : '') +
+        (chrome ? ` ${en.prompt.chrome(who)}` : '') +
         ` ${en.prompt.secrets(who)}` +
         (note ? `\n\nWhat ${who} asks of all their agents: ${note}` : '');
     },
@@ -38,6 +40,7 @@ export const en: ServerDictionary = {
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
     sharedBrowserNote: (user: string) => `(Note from Open Space: you now have a shared browser. ${en.prompt.sharedBrowser(user || 'the user')})\n\n`,
+    chromeNote: (user: string) => `(Note from Open Space: the shared browser is gone, you now have ${user ? `${user}'s` : "the user's"} Chrome. ${en.prompt.chrome(user || 'the user')})\n\n`,
     secretsNote: (user: string) => `(Note from Open Space: ${en.prompt.secrets(user || 'the user')})\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
       'in the conversation, without using any tool. Your answer does not enter the main conversation.',
@@ -74,6 +77,7 @@ export const en: ServerDictionary = {
       idle: 'Process released after a while doing nothing.',
       released: 'Process released when the server stopped.',
       updated: 'Process released: the next message starts the new version of Claude Code.',
+      browser: 'Process released: the next message starts with the other browser for your accounts.',
       compacted: 'Process released once the conversation was compacted.',
       moved: 'Process released to change folders.',
     },

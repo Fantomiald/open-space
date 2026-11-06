@@ -143,6 +143,7 @@ export const settings = {
         hint: 'Une nouvelle session sur une branche et dans un dossier à elle (un worktree git), pour ne pas toucher aux fichiers des autres. Open Space fusionne quand tu le demandes.',
         options: { busy: 'Quand le dossier est déjà pris', always: 'Toujours', never: 'Jamais' },
       },
+      accountsBrowser: { title: 'Navigateur pour tes comptes', hint: 'Là où les sessions vont sur tes comptes connectés. « Mon Chrome » passe par l’extension Claude in Chrome : ton vrai Chrome, connecté partout, messagerie comprise. Dossiers approuvés seulement, au prochain lancement de chaque session.', options: { shared: 'Navigateur partagé', chrome: 'Mon Chrome' } },
       autoPip: { title: 'Mini-fenêtre automatique', hint: 'Le navigateur d’un testeur s’ouvre tout seul en mini-fenêtre, et revient quand tu quittes la vue Navigateur. Une session qui vérifie ses propres pages fait juste clignoter son globe.' },
       roots: { title: 'Dossiers autorisés', hint: 'Coche ceux où tu ranges tes projets.' },
       defaultFolder: { title: 'Dossier par défaut', hint: 'Maj+N lance une session dedans.' },
