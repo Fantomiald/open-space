@@ -1,6 +1,6 @@
 // Path guards. Everything is compared on real paths (symlinks resolved), never on lexical ones:
 // a symlink created inside an allowed folder must not be able to lead outside of it.
-import { readdirSync, realpathSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expandHomePath } from '../shared/paths.ts';
@@ -67,20 +67,6 @@ function offeredChildren(directory: string, root: string): string[] {
   return names.flatMap((name) => resolveAllowedDirectory(path.join(directory, name), [root]) ?? []);
 }
 
-/**
- * The choices for a new session, as real paths: the sub-folders of each root and their own sub-folders
- * (many first-level folders hold several projects, e.g. atlas/mobile). The roots themselves are not offered.
- */
-export function listProjectDirectories(roots: readonly string[], limit = 1000): string[] {
-  const found: string[] = [];
-  for (const root of roots) {
-    let realRoot: string;
-    try { realRoot = realpathSync(root); } catch { continue; }
-    for (const child of offeredChildren(realRoot, realRoot)) found.push(child, ...offeredChildren(child, realRoot));
-  }
-  return [...new Set(found)].slice(0, limit);
-}
-
 /** What makes a folder a project. */
 const PROJECT_MARKERS = ['.git', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json', 'pubspec.yaml', 'pom.xml', 'build.gradle', 'Package.swift'];
 /** Folders of a home that hold no code, or that the system keeps for itself. */
@@ -91,6 +77,30 @@ const PROTECTED = new Set(['Desktop', 'Documents']);
 const isProject = (directory: string) => {
   try { return readdirSync(directory).some((name) => PROJECT_MARKERS.includes(name) || name.endsWith('.xcodeproj')); } catch { return false; }
 };
+
+/**
+ * True for a linked worktree (git worktree add): its .git is a file pointing into <repo>/.git/worktrees/<name>.
+ * A submodule's .git is a file too, but points into .git/modules: it stays offered.
+ */
+const isLinkedWorktree = (directory: string) => {
+  try { return /^gitdir:.*[\\/]worktrees[\\/][^\\/]+[\\/]?\s*$/m.test(readFileSync(path.join(directory, '.git'), 'utf8')); } catch { return false; }
+};
+
+/**
+ * The choices for a new session, as real paths: the sub-folders of each root and, for those that are not projects
+ * themselves, their own sub-folders (many first-level folders hold several projects, e.g. atlas/mobile). The roots
+ * themselves are not offered, nor linked worktrees: they belong to their repository.
+ */
+export function listProjectDirectories(roots: readonly string[], limit = 1000): string[] {
+  const found: string[] = [];
+  for (const root of roots) {
+    let realRoot: string;
+    try { realRoot = realpathSync(root); } catch { continue; }
+    const offered = (directory: string) => offeredChildren(directory, realRoot).filter((child) => !isLinkedWorktree(child));
+    for (const child of offered(realRoot)) found.push(child, ...(isProject(child) ? [] : offered(child)));
+  }
+  return [...new Set(found)].slice(0, limit);
+}
 
 /**
  * The folders of the home worth offering at the first start as places for sessions to run in: those holding projects
