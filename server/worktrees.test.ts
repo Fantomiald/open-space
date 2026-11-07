@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { projectFolder } from './conversations.ts';
 import {
-  branchNotes, branchStatus, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, includedEntries, inUse, keptBranchOf,
+  branchNotes, branchStatus, checkoutHome, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, includedEntries, inUse, keptBranchOf,
   landBranch, listBranches, moveConversation, parseWorktreeList, recreateWorktree, removeWorktree, setBranchNote,
 } from './worktrees.ts';
 
@@ -34,6 +34,31 @@ function repository(): string {
 }
 
 const commit = (cwd: string, file: string, text: string, message = `change ${file}`) => { write(path.join(cwd, file), text); sh(cwd, 'add', '.'); sh(cwd, 'commit', '-q', '-m', message); };
+
+test('a worktree made by hand goes back to the same place in the main checkout; a main checkout, a plain folder, a submodule or a bare repository do not', () => {
+  const root = repository();
+  const feature = path.join(scratch, `feature-${count}`);
+  sh(root, 'worktree', 'add', '-q', '-b', 'feature', feature);
+  write(path.join(feature, 'only-here', 'x.ts'), 'x\n');
+  assert.equal(checkoutHome(feature), root);
+  assert.equal(checkoutHome(path.join(feature, 'mobile')), path.join(root, 'mobile'));
+  // a folder the main checkout does not have goes back to its root
+  assert.equal(checkoutHome(path.join(feature, 'only-here')), root);
+  assert.equal(checkoutHome(root), null);
+  assert.equal(checkoutHome(path.join(root, 'mobile')), null);
+  const plain = path.join(scratch, `plain-${count}`);
+  mkdirSync(plain);
+  assert.equal(checkoutHome(plain), null);
+  const submodule = path.join(root, 'vendored');
+  write(path.join(submodule, '.git'), 'gitdir: ../.git/modules/vendored\n');
+  mkdirSync(path.join(root, '.git', 'modules', 'vendored'), { recursive: true });
+  assert.equal(checkoutHome(submodule), null);
+  const bare = path.join(scratch, `bare-${count}.git`);
+  sh(scratch, 'clone', '-q', '--bare', root, bare);
+  const fromBare = path.join(scratch, `from-bare-${count}`);
+  sh(bare, 'worktree', 'add', '-q', fromBare, 'main');
+  assert.equal(checkoutHome(fromBare), null);
+});
 
 test('a folder outside git is no repository; inside, its root, branch, branches and changes', async () => {
   const outside = path.join(scratch, 'plain');

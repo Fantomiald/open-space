@@ -12,6 +12,12 @@ describe('projects', () => {
     assert.deepEqual(projectsOf([session('a', '/code/app'), branch], {}).map(({ name, count }) => [name, count]), [['app', 2]]);
   });
 
+  it('counts a session in a worktree made outside Open Space in its main checkout', () => {
+    const outside = session('c', '/code/app-feature', { checkout: '/code/app' });
+    assert.equal(projectOf(outside), '/code/app');
+    assert.deepEqual(projectsOf([session('a', '/code/app'), outside], {}).map(({ name, count }) => [name, count]), [['app', 2]]);
+  });
+
   it('sorts by name, tells same-named folders apart and flags the one waiting for the user', () => {
     const projects = projectsOf([session('a', '/web/app'), session('b', '/mobile/app', { state: 'perm', permissions: [{}] } as unknown as Partial<SessionInfo>), session('c', '/code/blog')], {});
     assert.deepEqual(projects.map(({ name, waiting }) => [name, waiting]), [['blog', false], ['mobile/app', true], ['web/app', false]]);

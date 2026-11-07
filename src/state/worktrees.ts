@@ -51,8 +51,8 @@ export function branchCard(session: SessionInfo, snoozed: string | undefined): B
 /** Switching off an isolated session asks what becomes of its branch when it has work on it (or when that is not known yet). */
 export const asksBeforeSwitchingOff = (session: SessionInfo) => !!session.worktree && (!session.worktree.status || hasNews(session.worktree.status));
 
-/** Where a session's folder is for the user: the main checkout's folder for an isolated one, not its worktree. */
-export const shownFolder = (session: SessionInfo) => session.worktree?.home ?? session.cwd;
+/** Where a session's folder is for the user: the main checkout's folder for one in a worktree (made by Open Space or not), not the worktree. */
+export const shownFolder = (session: SessionInfo) => session.worktree?.home ?? session.checkout ?? session.cwd;
 
 /** How a session on a branch of the cleaning panel is doing: at work, waiting at its desk, resting, or switched off (none). */
 export type RowSession = 'working' | 'ready' | 'resting' | 'off';

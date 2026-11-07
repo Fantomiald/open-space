@@ -5,8 +5,8 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 /** A folder sessions work in, as the header's filter shows it: its name, how many sessions, whether one waits for the user. */
 export interface Project { folder: string; name: string; count: number; waiting: boolean }
 
-/** The folder a session works for: the one asked for in the main checkout when it runs on a branch of its own. */
-export const projectOf = (session: SessionInfo) => session.worktree?.home ?? session.cwd;
+/** The folder a session works for: the one asked for in the main checkout when it runs on a branch of its own, made by Open Space or not. */
+export const projectOf = (session: SessionInfo) => session.worktree?.home ?? session.checkout ?? session.cwd;
 
 /** Whether a session belongs to the project picked in the header ('' = all of them). */
 export const inProject = (session: SessionInfo, project: string) => !project || projectOf(session) === project;

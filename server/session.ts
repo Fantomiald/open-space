@@ -18,6 +18,7 @@ import { Normalizer, describeRequest, type ChromeSight, type InitInfo, type Sche
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
+import { checkoutHome } from './worktrees.ts';
 
 export interface SessionDeps {
   spawnProcess: ProcessFactory;
@@ -86,7 +87,7 @@ type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
 interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void }
 
 /** Session fields that are computed, not stored. */
-export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets'>;
+export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout'>;
 
 const LAST_MESSAGE_LENGTH = 400;
 const GRACE_MS = 3000;
@@ -138,11 +139,14 @@ export class Session {
   private autoCompaction: { resting: boolean; hadProcess: boolean; compacted: boolean } | null = null;
   /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
   private preparing = false;
+  /** the main checkout's folder when its own is in a worktree made outside Open Space (SessionInfo.checkout) */
+  private checkout: string | null;
 
   constructor(info: StoredInfo, deps: SessionDeps) {
     this.info = info;
     this.deps = deps;
     this.context = initialContext(info.state);
+    this.checkout = checkoutHome(info.cwd);
   }
 
   get id() { return this.info.id; }
@@ -151,7 +155,7 @@ export class Session {
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     const secrets = this.deps.secretNames?.() ?? [];
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(secrets.length ? { secrets } : {}) };
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.checkout && !this.info.worktree ? { checkout: this.checkout } : {}), ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(secrets.length ? { secrets } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -292,6 +296,7 @@ export class Session {
     if (this.info.resumable || this.info.forkOf) this.info.toldPlace ??= this.info.cwd;
     this.info.cwd = cwd;
     this.info.worktree = worktree;
+    this.checkout = checkoutHome(cwd);
     this.publish();
   }
 
