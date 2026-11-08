@@ -30,7 +30,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './g
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
 import { dressRoom, themedLighting } from './themes/index.ts';
 import { SERVERS } from './themes/servers.ts';
-import { withRobots } from './robot.ts';
+import { robotHead, withRobots } from './robot.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName, type Character } from './scene.ts';
 import type { Pose } from './sprites.ts';
@@ -71,6 +71,18 @@ function showSky(document: Document, lighting: Lighting) {
   if (style.getPropertyValue('--sky-top') === top && style.getPropertyValue('--sky-bottom') === bottom) return;
   style.setProperty('--sky-top', top);
   style.setProperty('--sky-bottom', bottom);
+}
+
+/**
+ * The role of an automaton by its person id, or undefined for anyone else: an automaton in the room, or one of the
+ * runs it started, a face on its tag (`<its id>/<the run's id>`).
+ */
+function automatonRoleOf(scene: Scene, personId: string): string | undefined {
+  const own = scene.characters.get(personId)?.person;
+  if (own) return own.automatonRole;
+  const cut = personId.lastIndexOf('/');
+  const owner = cut > 0 ? scene.characters.get(personId.slice(0, cut))?.person : undefined;
+  return owner?.automaton === undefined ? undefined : owner.agents.find((agent) => agent.id === personId.slice(cut + 1))?.type;
 }
 
 /** Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. */
@@ -135,7 +147,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   // the automatons are robots of their role (robot.ts), everyone else a chibi in the festival's outfit
   const [sprites] = useState(() => withRobots(chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
-    : outfitFor(festival, scene.nameOf(personId), false, guests)), (personId) => scene.characters.get(personId)?.person.automatonRole));
+    : outfitFor(festival, scene.nameOf(personId), false, guests)), (personId) => automatonRoleOf(scene, personId)));
   // a click reaches someone up to the top of their hat
   useEffect(() => { scene.heightOf = (personId) => sprites.height(STANDING, personId); }, [scene, sprites]);
   const [furniture] = useState(() => pixelFurniture(boardContent(festival, guests)));
@@ -147,6 +159,9 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const bots = useMemo(() => seatedRuns(automata), [automata]);
   const plan = useMemo(() => planRoom(list, seen, new Map([...keptSeats.current, ...scene.seats()]), floor.seatCount, room, scene.playerSeats(), bots), [list, seen, scene, floor, room, moves, bots]);
   const hidden = useMemo(() => inRoom.filter((session) => !plan.seats.has(session.id)), [inRoom, plan]);
+  // the automatons without a capsule, shown over the server room's door
+  const waiting = useRef(plan.waitingAutomata);
+  waiting.current = plan.waitingAutomata;
   const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => { selected.current = openIds; }, [openIds]);
@@ -180,7 +195,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const lighting = themedLighting(lightingAt(hour));
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
@@ -206,7 +221,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const words = bubbleText(text);
       if (!position || !words) return;
       const label = personId === PLAYER_ID ? selfName(crewRef.current) : scene.characters.get(personId)!.person.title;
-      const head = chibiHead(lookFor(personId));
+      const role = automatonRoleOf(scene, personId);
+      const head = role === undefined ? chibiHead(lookFor(personId)) : robotHead(role);
       setBubbles((stack) => pushBubble(stack, { id: ++lastId, sessionId, label, text: words, x: position.x, fromUser: personId === PLAYER_ID, head, bornAt: Date.now() }));
     });
   }, [scene, lookFor]);
@@ -336,7 +352,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
 
   const seated = plan.people.length;
-  const description = t.room.description[room](seated);
+  const description = t.room.description[room](seated, plan.waitingAutomata);
   return (
     <div className="cp-room" onClick={onBackdropClick}>
       <div className="cp-room__fit">

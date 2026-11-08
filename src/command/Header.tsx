@@ -38,8 +38,8 @@ export function Header() {
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
-    // the automatons' room: the runs at work and their sub-agents, each at a desk (src/state/automata.ts seatedRuns)
-    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: seatedRuns(automata).length };
+    // the automatons' room: every automaton at work, with or without a capsule, and the runs a coordinator started
+    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: seatedRuns(automata).reduce((count, bot) => count + 1 + bot.helpers.length, 0) };
   }, [sessions, seen, automata]);
 
   const words = t.common.header;

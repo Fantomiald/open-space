@@ -7,6 +7,8 @@ import { reducedMotion } from '../lib/motion.ts';
 import { copyCodeOnClick } from './copyCode.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
+import { robotHead } from '../room/robot.ts';
+import { runOfPerson } from '../../shared/automata.ts';
 import { ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { Prose } from './Prose.tsx';
@@ -21,7 +23,8 @@ export type Subagent = FeedItem & { kind: 'subagent' };
 
 /** A sub-agent's face, the one it has in the room (next to its session's name), with how it is doing. */
 export function AgentFace({ sessionId, agent }: { sessionId: string; agent: Subagent }) {
-  const head = useMemo(() => chibiHead(lookOfStranger(`${sessionId}/${agent.agentId}`)), [sessionId, agent.agentId]);
+  // an automaton's sub-agent is a robot of its role, as in the room (its name is its role's)
+  const head = useMemo(() => (runOfPerson(sessionId) ? robotHead(agent.name) : chibiHead(lookOfStranger(`${sessionId}/${agent.agentId}`))), [sessionId, agent.agentId, agent.name]);
   return (
     <span className="cp-agent-face" data-status={agent.status}>
       <img src={head} alt="" width={22} height={22} />

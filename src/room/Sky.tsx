@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Festival } from '../../shared/festivals.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useReducedMotion } from '../lib/motion.ts';
 import { currentHour, lightingAt } from './lighting.ts';
 import { SKY_PIXEL, paintClouds, paintSky, paintSkyFestival, skyIsBusy } from './sky.ts';
-import { themeKit, themedLighting } from './themes/index.ts';
+import { DRESS_EVENT, isDressed, themeKit, themedLighting } from './themes/index.ts';
 
 /** How often what moves in the sky moves on: the clouds go a sky pixel a second at most, snow and fireworks need more. */
 const CLOUD_MS = 1000;
@@ -27,6 +27,13 @@ export function Sky({ festival }: { festival: Festival | null }) {
   const sky = useRef<HTMLCanvasElement>(null);
   const moving = useRef<HTMLCanvasElement>(null);
   const previewHour = useSessions((s) => s.preview.hour);
+  // a room in its own dress (the automatons' server room) brings its own sky: painted again when it comes or goes
+  const [dress, setDress] = useState(0);
+  useEffect(() => {
+    const changed = () => setDress((count) => count + 1);
+    window.addEventListener(DRESS_EVENT, changed);
+    return () => window.removeEventListener(DRESS_EVENT, changed);
+  }, []);
   useEffect(() => {
     const back = sky.current!, front = moving.current!;
     let painted = '';
@@ -38,7 +45,7 @@ export function Sky({ festival }: { festival: Festival | null }) {
       if (kit?.paintSkyMotion) kit.paintSkyMotion(context, front.width, front.height, seconds, lighting);
       else if (!kit?.paintSky) paintClouds(context, front.width, front.height, lighting, seconds);
       else context.clearRect(0, 0, front.width, front.height);
-      if (!still) paintSkyFestival(context, front.width, front.height, festival, lighting, seconds);
+      if (!still && !isDressed()) paintSkyFestival(context, front.width, front.height, festival, lighting, seconds);
     };
     const paint = () => {
       const hour = previewHour ?? currentHour();
@@ -53,10 +60,10 @@ export function Sky({ festival }: { festival: Festival | null }) {
     };
     paint();
     const hourly = window.setInterval(paint, 60_000);
-    const frames = still ? undefined : window.setInterval(() => { if (!document.hidden) move(); }, skyIsBusy(festival) ? FESTIVAL_MS : themeKit()?.skyFrameMs ?? CLOUD_MS);
+    const frames = still ? undefined : window.setInterval(() => { if (!document.hidden) move(); }, skyIsBusy(festival) && !isDressed() ? FESTIVAL_MS : themeKit()?.skyFrameMs ?? CLOUD_MS);
     window.addEventListener('resize', paint);
     return () => { window.clearInterval(hourly); window.clearInterval(frames); window.removeEventListener('resize', paint); };
-  }, [previewHour, festival, still]);
+  }, [previewHour, festival, still, dress]);
   useEffect(() => frost([sky.current!, moving.current!]), []);
   return <><canvas ref={sky} className="cp-sky" /><canvas ref={moving} className="cp-sky" /></>;
 }

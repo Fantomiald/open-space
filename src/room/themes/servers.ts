@@ -3,7 +3,9 @@
 // of light around the orb, and a dim, cold light that the orb and the capsules give. What moves: the racks' diodes
 // blink, and the orb sends out rings of light as it pulses. The cords of light to the automatons are drawn by draw.ts
 // (they follow the people), from server-room.ts.
-import { SERVERS_FURNITURE as F, SERVERS_PALETTE as S } from '../../design/theme-servers.ts';
+import { SERVERS_FURNITURE as F, SERVERS_PALETTE as S, SERVERS_SKY as SKY } from '../../design/theme-servers.ts';
+import { rgb } from '../lighting.ts';
+import { paintServerSky, paintServerSkyMotion } from './servers-sky.ts';
 import { ORB, ROOM, type FurniturePiece, type Layout } from '../../../shared/room-layout.ts';
 import { toScreen, type Point } from '../geometry.ts';
 import { ART_SCALE, fillPolygon, toArt, tones } from '../pixel-art.ts';
@@ -112,8 +114,11 @@ export const SERVERS: ThemeKit = {
   officeLamps: false,
   screenLight: S.podLight,
   doorLight: S.doorLight,
-  // a room without windows: dim and cold at any hour, lit by the orb and the capsules
-  lighting: (lighting) => ({ ...lighting, tint: [150, 160, 192], beam: 0, glow: 1, stars: 0 }),
+  // a room without windows: dim and cold at any hour, lit by the orb and the capsules; behind it, a data centre at night
+  lighting: (lighting) => ({ ...lighting, tint: [150, 160, 192], beam: 0, glow: 1, stars: 0, skyTop: rgb(SKY.top), skyBottom: rgb(SKY.bottom) }),
+  paintSky: paintServerSky,
+  paintSkyMotion: paintServerSkyMotion,
+  skyFrameMs: 250,
   lights(layout: Layout): ThemeLight[] {
     const lights: ThemeLight[] = [{ x: ORB.x, y: ORB.y, height: ORB.z * ART_SCALE, radius: 230, colour: S.orbLight, strength: 1 }];
     for (const seat of layout.seats) lights.push({ x: seat.x + 0.5, y: seat.y + 0.5, height: 30, radius: 60, colour: S.podLight, strength: 0.9 });

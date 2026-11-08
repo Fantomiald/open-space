@@ -43,6 +43,8 @@ export interface RoomPlan {
   seats: Map<string, number>;
   /** sessions that would be in the room but found no seat */
   hiddenSessions: number;
+  /** automatons at work that found no capsule (they take one as soon as one is free) */
+  waitingAutomata: number;
 }
 
 /**
@@ -135,5 +137,6 @@ export function planRoom(
     people,
     seats: assignSeats(people.map(({ id }) => ({ id })), previousSeats, seatCount, reserved),
     hiddenSessions: eligible.length - admitted.length,
+    waitingAutomata: room === 'automata' ? automata.length - bots.length : 0,
   };
 }

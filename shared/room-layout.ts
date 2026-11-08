@@ -261,11 +261,12 @@ export const LOUNGE: Layout = {
 /** The orb floating in the middle of the server room: the tile under its centre, and how high it floats (art pixels). */
 export const ORB = { x: 10, y: 7, z: 30 };
 
-/** The direction (see Seat) closest to the one from a tile's middle to a floor point. */
-export function facingToward(from: { x: number; y: number }, to: { x: number; y: number }): number {
-  const angle = Math.atan2(to.y - from.y - 0.5, to.x - from.x - 0.5);
-  return ((Math.round(angle / (Math.PI / 4)) + 2) % 8 + 8) % 8;
-}
+/**
+ * How an automaton stands in a capsule: always facing the viewer (+x or +y, never its back to them), turned to the
+ * side the orb is on, on screen (the screen's x runs with x - y).
+ */
+export const podFacing = (pod: { x: number; y: number }, orb: { x: number; y: number } = ORB): number =>
+  (orb.x - orb.y) < (pod.x - pod.y) ? 4 : 2;
 
 /**
  * The capsules, in a ring around the orb, in the order they are taken: the far ones first (their cord of light runs
@@ -276,7 +277,7 @@ const PODS: readonly (readonly [number, number])[] = [
 ];
 /** How high an automaton stands in its capsule, on its base, in room pixels. */
 export const POD_LIFT = 4;
-const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: facingToward({ x, y }, ORB), lift: POD_LIFT, standing: true }));
+const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: podFacing({ x, y }), lift: POD_LIFT, standing: true }));
 
 /** A rack of servers against the back wall (facing +y) or the left wall (facing +x). */
 const rack = (x: number, y: number, alongLeft = false) => (alongLeft ? piece('serverRack', x, y, 0.9, 1) : piece('serverRack', x, y, 1, 0.9));

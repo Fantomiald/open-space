@@ -15,7 +15,8 @@ const COORDINATOR = 'coordinator';
 
 /** A role's robot: the same role always gets the same accent (the high bits of its hash spread the roles best). */
 export function robotLook(role: string): RobotLook {
-  const name = role.trim().toLowerCase();
+  // a role as its file names it ("weekly-retro") or as people read it ("Weekly retro"): the same robot
+  const name = role.trim().toLowerCase().replace(/[\s_]+/g, '-');
   return { accent: ROBOT_ACCENTS[(hash(name) >>> 24) % ROBOT_ACCENTS.length], coordinator: name === COORDINATOR };
 }
 
@@ -176,9 +177,32 @@ export function withRobots(people: SpriteSource, roleOf: (personId: string) => s
     drawHead(context, personId, x, y, size) {
       const robot = robotOf(personId);
       if (!robot) return people.drawHead(context, personId, x, y, size);
-      const sprite = robotSprite(robot, { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: false, gesture: 'none' });
-      const top = FEET.y - robotRows(robot, false, false).length + 1 + (robot.coordinator ? CROWN.length : 0) + 2;
-      context.drawImage(sprite, FACE.x, top, FACE.size, FACE.size, Math.round(x), Math.round(y), size, size);
+      paintRobotHead(context, robot, x, y, size);
     },
   };
+}
+
+const FACING: Pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: false, gesture: 'none' };
+
+/** A robot's head, face on, in a square of `size` at (x, y). */
+function paintRobotHead(context: CanvasRenderingContext2D, robot: RobotLook, x: number, y: number, size: number) {
+  const sprite = robotSprite(robot, FACING);
+  const top = FEET.y - robotRows(robot, false, false).length + 1 + (robot.coordinator ? CROWN.length : 0) + 2;
+  context.drawImage(sprite, FACE.x, top, FACE.size, FACE.size, Math.round(x), Math.round(y), size, size);
+}
+
+const heads = new Map<string, string>();
+/** A role's robot head as an image (36 px square), for a speech bubble or a sub-agent's face in a thread. */
+export function robotHead(role: string): string {
+  const robot = robotLook(role);
+  const key = `${robot.accent}|${robot.coordinator}`;
+  let url = heads.get(key);
+  if (!url) {
+    const { canvas, context } = artCanvas(36, 36);
+    context.imageSmoothingEnabled = false;
+    paintRobotHead(context, robot, 0, 0, 36);
+    url = canvas.toDataURL();
+    heads.set(key, url);
+  }
+  return url;
 }

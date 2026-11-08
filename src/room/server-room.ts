@@ -3,6 +3,8 @@
 // pixels, tested without a DOM (room.test.ts); themes/servers.ts and draw.ts paint them.
 import { ORB } from '../../shared/room-layout.ts';
 import { toScreen, type Point } from './geometry.ts';
+import { glyphRows } from './wall-art.ts';
+import { BOT_GLYPH, BOT_GLYPH_SIZE } from './status-glyphs.ts';
 import { ART_SCALE } from './pixel-art.ts';
 
 /** The orb's centre on screen, raised by its bob (room pixels, see bobOf). */
@@ -24,6 +26,19 @@ export function pulseRings(time: number): { radius: number; alpha: number }[] {
 
 /** Where a cord reaches an automaton: its chest, a little more than half its height above its feet. */
 export const chestOf = (feet: Point, height: number): Point => ({ x: feet.x, y: Math.round(feet.y - height * 0.55) });
+
+/**
+ * Where a cord plugs into an automaton, who always faces the viewer: one that stands between the orb and the viewer
+ * (its feet lower on screen than the orb's foot) takes it in the nape, from behind, the cord drawn under it; the
+ * others take it in the chest, the cord drawn over them. `orbFloorY`: the screen y of the floor under the orb.
+ */
+export function cordEnd(feet: Point, height: number, orbFloorY: number): { at: Point; fromBehind: boolean } {
+  const fromBehind = feet.y > orbFloorY;
+  return { at: fromBehind ? { x: feet.x, y: Math.round(feet.y - height * 0.78) } : chestOf(feet, height), fromBehind };
+}
+
+/** The screen y of the floor under the orb. */
+export const orbFloorY = () => toScreen({ x: ORB.x, y: ORB.y }).y;
 
 /**
  * A cord of light from the orb to an automaton: the art pixels it lights, in room pixels, from the orb's edge to the
@@ -64,4 +79,24 @@ export function packetsOn(pathLength: number, time: number, seed = 0): number[] 
     const share = (((time + seed) / PACKET_MS + index / PACKETS) % 1 + 1) % 1;
     return Math.min(pathLength - 1, Math.floor(share * pathLength));
   });
+}
+
+/**
+ * The display over the door that says how many automatons wait without a capsule: a little robot's head, then "+N",
+ * in a frame. One letter an art pixel: "f" frame, "b" its screen, "g" the robot, "#" the digits. None while none waits.
+ */
+export function waitingSign(count: number): string[] {
+  if (count <= 0) return [];
+  const digits = glyphRows(`+${count}`);
+  const glyph = Array.from({ length: BOT_GLYPH_SIZE }, () => Array<string>(BOT_GLYPH_SIZE).fill('b'));
+  for (const [x, y] of BOT_GLYPH) glyph[y][x] = 'g';
+  // the digits sit on the robot's middle rows
+  const top = Math.floor((BOT_GLYPH_SIZE - digits.length) / 2);
+  const inner = glyph.map((row, y) => {
+    const text = y >= top && y < top + digits.length ? digits[y - top].replaceAll('.', 'b') : 'b'.repeat(digits[0].length);
+    return `b${row.join('')}bb${text}b`;
+  });
+  const width = inner[0].length;
+  const blank = 'b'.repeat(width);
+  return ['f'.repeat(width + 2), ...[blank, ...inner, blank].map((row) => `f${row}f`), 'f'.repeat(width + 2)];
 }

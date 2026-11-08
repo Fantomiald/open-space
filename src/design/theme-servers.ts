@@ -77,4 +77,22 @@ export const SERVERS_FURNITURE = {
   cord: '#5ad1ff80',
   cordCore: '#c9f3ff',
   packet: '#ffffff',
+  /** the display over the door: how many automatons wait without a capsule */
+  signFrame: '#3f4659',
+  signScreen: '#0b1220',
+  signRobot: '#5ad1ff',
+  signInk: '#ffc44a',
+} as const;
+
+/** The page behind the server room: the dark of a data centre at night, its network, its towers and their diodes. */
+export const SERVERS_SKY = {
+  top: '#04070d',
+  bottom: '#0c1626',
+  link: '#163049',
+  node: '#5ad1ff',
+  nodeHalo: '#1d4a66',
+  packet: '#c9f3ff',
+  tower: '#080c14',
+  towerEdge: '#1b2433',
+  diodes: ['#3fd6a0', '#5ad1ff', '#ffc44a', '#3fd6a0', '#ff6a6a'],
 } as const;

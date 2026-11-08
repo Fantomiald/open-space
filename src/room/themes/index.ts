@@ -15,7 +15,15 @@ const KITS: Readonly<Record<RoomTheme, ThemeKit | null>> = { office: null, space
 
 /** A room that keeps its own dress whatever the theme (the automatons' server room, themes/servers.ts), while it is shown. */
 let dressed: ThemeKit | null = null;
-export function dressRoom(kit: ThemeKit | null) { dressed = kit; }
+/** Told to the page (the sky behind the room repaints) when a room puts on or takes off its own dress. */
+export const DRESS_EVENT = 'cp:dress';
+export function dressRoom(kit: ThemeKit | null) {
+  if (kit === dressed) return;
+  dressed = kit;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(DRESS_EVENT));
+}
+/** A room wears its own dress (the festivals' sky stays out of it). */
+export const isDressed = () => dressed !== null;
 
 export const themeKit = (): ThemeKit | null => dressed ?? KITS[roomTheme()];
 /** The light of the hour as the theme sees it. */

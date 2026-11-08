@@ -21,12 +21,13 @@ import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
 import { bobOf, furnitureDepth, type FurnitureSprites } from './pixel-furniture.ts';
 import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
-import { chestOf, cordPath, orbCenter, packetsOn } from './server-room.ts';
+import { cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, waitingSign } from './server-room.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
 import { Visits, type Visitor } from './visitors.ts';
 import { stackLabels } from './labels.ts';
+import { roomPointOnWall } from './wall-art.ts';
 import { sessionTagColors } from '../design/tag-colors.ts';
 import { roomTags } from '../../shared/tags.ts';
 
@@ -68,6 +69,8 @@ export interface FrameOptions {
   playerName: string;
   /** the office pet the user chose */
   pet: PetChoice;
+  /** in the automatons' server room, how many wait without a capsule: shown over the door */
+  waitingAutomata?: number;
 }
 
 /** Something drawn in depth order: a piece of furniture, a person, the pet. */
@@ -659,7 +662,7 @@ const PACKET_GLOW = [[0, -1], [-1, 0], [1, 0], [0, 1]] as const;
 
 /**
  * A cord of light from the orb (the server room's, if the room has one) to each automaton standing in its capsule, with
- * the packets of data it pulls along: drawn after the light, hidden by whatever stands in front of the automaton.
+ * the packets of data it pulls along: drawn after the light, hidden by whatever stands in front of it (cordEnd).
  */
 function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: (character: Character) => { feet: Point; height: number; depth: number }, options: FrameOptions): ThemeEffect[] {
   const orb = layout.furniture.find((piece) => piece.kind === 'orb');
@@ -667,12 +670,15 @@ function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: 
   const time = options.reducedMotion ? 0 : options.time;
   const center = orbCenter(options.reducedMotion ? 0 : bobOf(orb, ORB_FLOAT, options.time));
   const cell = (on: Context, point: Point, colour: string) => { on.fillStyle = colour; on.fillRect(point.x - ART_SCALE / 2, point.y - ART_SCALE / 2, ART_SCALE, ART_SCALE); };
+  const under = orbFloorY();
   return automatons.map((character) => {
     const { feet, height, depth } = placeOf(character);
-    const path = cordPath(center, chestOf(feet, height), ORB_SHAPE.radius * ART_SCALE);
+    const end = cordEnd(feet, height, under);
+    const path = cordPath(center, end.at, ORB_SHAPE.radius * ART_SCALE);
     return {
-      // just after the capsule's glass: the light goes through it to the chest
-      depth: depth + 0.06,
+      // into the nape: after the capsule's back, before the automaton, who hides its end; into the chest: just after
+      // the capsule's glass, the light going through it
+      depth: end.fromBehind ? depth - 0.01 : depth + 0.06,
       paint(on) {
         for (const point of path) cell(on, { x: point.x, y: point.y - ART_SCALE }, SF.cord);
         for (const point of path) cell(on, point, SF.cordCore);
@@ -685,6 +691,28 @@ function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: 
       },
     };
   });
+}
+
+/** The display over the door of the server room, lit like a screen: how many automatons wait without a capsule. */
+function waitingEffect(layout: Layout, count: number): ThemeEffect[] {
+  const rows = waitingSign(count);
+  if (!rows.length || !layout.furniture.some((piece) => piece.kind === 'orb')) return [];
+  const colours: Readonly<Record<string, string>> = { f: SF.signFrame, b: SF.signScreen, g: SF.signRobot, '#': SF.signInk };
+  // centred over the door, its bottom a little above the doorway
+  const from = layout.door.y + DOOR_SIZE.width / 2 - rows[0].length / 16;
+  const bottom = DOOR_SIZE.height / ART_SCALE + 6;
+  return [{
+    // on the wall: behind whatever stands in the room
+    depth: -0.5,
+    paint(on) {
+      for (const [line, row] of rows.entries()) [...row].forEach((letter, column) => {
+        // along the left wall, the further along, the further left on screen: read from the far end
+        const point = roomPointOnWall('left', from + (row.length - 1 - column) / 8, bottom + rows.length - 1 - line);
+        on.fillStyle = colours[letter];
+        on.fillRect(Math.round(point.x), Math.round(point.y), ART_SCALE, ART_SCALE);
+      });
+    },
+  }];
 }
 
 export function roomCanvas(): { canvas: HTMLCanvasElement; context: Context } {
@@ -768,7 +796,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const feet = raise(toScreen(character.position), scene.floor.seatLift(character.seat));
     return { feet, height: sprites.height(poseFor(character), character.person.id), depth: depthOf(character.position) };
   }, options);
-  const effects = [...(kit?.effects?.(layout, time, lighting, options.hour) ?? []), ...cords];
+  const effects = [...(kit?.effects?.(layout, time, lighting, options.hour) ?? []), ...cords, ...waitingEffect(layout, options.waitingAutomata ?? 0)];
   paintThemeEffects(context, effects, layers);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
