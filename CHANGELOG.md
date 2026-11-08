@@ -1,5 +1,12 @@
 # Versions
 
+## 1.27.3
+
+Vient de Mouhrad :
+
+- Les worktrees faits à la main (`git worktree add`) ne sont plus proposés comme des projets à part dans le choix du dossier, et une session lancée dans l'un d'eux est rangée dans son projet principal (filtre du header, recherche ⌘K, panneau Branches).
+- Le choix du dossier ne propose plus l'intérieur d'un projet : `app/src` ou `app/mobile` n'apparaissent plus, seulement `app`. Un dossier qui regroupe plusieurs projets montre toujours ses sous-dossiers.
+
 ## 1.27.2
 
 Vient de GC :
