@@ -1,23 +1,23 @@
 // The automatons of the user's orchestrator drawn as robots, not as people: a square head with an antenna and its
 // diode, a visor with two lit eyes, a body of plates with a glowing core on the chest, visible joints. Each role has
-// its accent (eyes, core, diode), picked from its name, so a Coordinator and a Sentry triage tell apart at a glance;
-// the coordinator stands taller, a crown of light on its antenna and its shoulders in its accent. One letter a pixel,
+// its accent (eyes, core, diode), picked from its name, so two roles tell apart at a glance; a run the orchestrator
+// launched (a lead, its sub-agents around it) stands taller, a crown of light on its antenna and its shoulders in its accent. One letter a pixel,
 // drawn once per pose like the chibi people (chibi.ts), through the same SpriteSource.
 import { PEOPLE_INK as INK, ROBOT_ACCENTS, ROBOT_METAL as M } from '../design/people-palette.ts';
 import { ART_SCALE, artCanvas, outline, tones } from './pixel-art.ts';
 import { hash, type Pose, type SpriteSource } from './sprites.ts';
 
-/** How a robot looks: its accent, and whether it is a coordinator (taller, crowned). */
-export interface RobotLook { accent: string; coordinator: boolean }
+/** How a robot looks: its accent, and whether it is a lead, a run the orchestrator launched (taller, crowned). */
+export interface RobotLook { accent: string; lead: boolean }
 
-/** The role that coordinates the others: drawn taller. */
-const COORDINATOR = 'coordinator';
-
-/** A role's robot: the same role always gets the same accent (the high bits of its hash spread the roles best). */
-export function robotLook(role: string): RobotLook {
-  // a role as its file names it ("weekly-retro") or as people read it ("Weekly retro"): the same robot
+/**
+ * A role's robot: the same role always gets the same accent (the high bits of its hash spread the roles best).
+ * `lead`: a run of the orchestrator, not one of its sub-agents.
+ */
+export function robotLook(role: string, lead = false): RobotLook {
+  // a role as its file names it ("code-reviewer") or as people read it ("Code reviewer"): the same robot
   const name = role.trim().toLowerCase().replace(/[\s_]+/g, '-');
-  return { accent: ROBOT_ACCENTS[(hash(name) >>> 24) % ROBOT_ACCENTS.length], coordinator: name === COORDINATOR };
+  return { accent: ROBOT_ACCENTS[(hash(name) >>> 24) % ROBOT_ACCENTS.length], lead };
 }
 
 /** The canvas of a sprite and where its feet are on it, as for the chibi people (chibi.ts), so they stand alike. */
@@ -78,7 +78,7 @@ const LEGS_STEP = [
   '...hhhh..ffff...',
   '.........hhhh...',
 ];
-/** The coordinator's crown of light above its antenna. */
+/** A lead's crown of light above its antenna. */
 const CROWN = ['......aAAa......', '.......AA.......'];
 
 /** One sprite's rows, top to bottom, for a frame. */
@@ -86,9 +86,9 @@ export function robotRows(look: RobotLook, back: boolean, walkStep: boolean): st
   const head = back ? HEAD_BACK : HEAD_FRONT;
   const torso = back ? TORSO_BACK : TORSO_FRONT;
   const body = torso.map((row, index) => `${ARM_LEFT[index]}${row}${ARM_RIGHT[index]}`);
-  // the coordinator's shoulders are plates of its accent
-  if (look.coordinator) body[0] = `aaa${torso[0].slice(1, -1)}aaa`;
-  return [...(look.coordinator ? CROWN : []), ...head, ...body, ...(walkStep ? LEGS_STEP : LEGS)];
+  // a lead's shoulders are plates of its accent
+  if (look.lead) body[0] = `aaa${torso[0].slice(1, -1)}aaa`;
+  return [...(look.lead ? CROWN : []), ...head, ...body, ...(walkStep ? LEGS_STEP : LEGS)];
 }
 
 interface Frame { back: boolean; walkStep: boolean; blinking: boolean; working: boolean }
@@ -131,7 +131,7 @@ export function robotSprite(look: RobotLook, pose: Pose): HTMLCanvasElement {
     blinking: pose.blinking, working: pose.gesture !== 'none' && pose.step === 1,
   };
   const left = pose.direction.endsWith('left');
-  const key = `${look.accent}|${look.coordinator}|${frame.back}|${frame.walkStep}|${frame.blinking}|${frame.working}|${left}`;
+  const key = `${look.accent}|${look.lead}|${frame.back}|${frame.walkStep}|${frame.blinking}|${frame.working}|${left}`;
   let sprite = sprites.get(key);
   if (!sprite) {
     const right = paint(look, frame);
@@ -141,21 +141,18 @@ export function robotSprite(look: RobotLook, pose: Pose): HTMLCanvasElement {
   return sprite;
 }
 
-/** How tall a robot stands, in room pixels: the chibi people's 52, the coordinator its crown more. */
-export const robotHeight = (look: RobotLook) => (look.coordinator ? 56 : 52);
+/** How tall a robot stands, in room pixels: the chibi people's 52, a lead its crown more. */
+export const robotHeight = (look: RobotLook) => (look.lead ? 56 : 52);
 
 /** The rows of the head on the sprite (the antenna left out): the face shown on name tags. */
 const FACE = { x: LEFT + 1, size: 14 };
 
 /**
- * People, and the automatons as robots: `roleOf` gives the role of whoever is an automaton (undefined for anyone
+ * People, and the automatons as robots: `lookOf` gives the robot of whoever is an automaton (undefined for anyone
  * else, drawn by `people` as before).
  */
-export function withRobots(people: SpriteSource, roleOf: (personId: string) => string | undefined): SpriteSource {
-  const robotOf = (personId: string | undefined) => {
-    const role = personId === undefined ? undefined : roleOf(personId);
-    return role === undefined ? null : robotLook(role);
-  };
+export function withRobots(people: SpriteSource, lookOf: (personId: string) => RobotLook | undefined): SpriteSource {
+  const robotOf = (personId: string | undefined) => (personId === undefined ? null : lookOf(personId) ?? null);
   return {
     height(pose, personId) {
       const robot = robotOf(personId);
@@ -187,15 +184,14 @@ const FACING: Pose = { direction: 'down-right', posture: 'stand', step: 0, blink
 /** A robot's head, face on, in a square of `size` at (x, y). */
 function paintRobotHead(context: CanvasRenderingContext2D, robot: RobotLook, x: number, y: number, size: number) {
   const sprite = robotSprite(robot, FACING);
-  const top = FEET.y - robotRows(robot, false, false).length + 1 + (robot.coordinator ? CROWN.length : 0) + 2;
+  const top = FEET.y - robotRows(robot, false, false).length + 1 + (robot.lead ? CROWN.length : 0) + 2;
   context.drawImage(sprite, FACE.x, top, FACE.size, FACE.size, Math.round(x), Math.round(y), size, size);
 }
 
 const heads = new Map<string, string>();
-/** A role's robot head as an image (36 px square), for a speech bubble or a sub-agent's face in a thread. */
-export function robotHead(role: string): string {
-  const robot = robotLook(role);
-  const key = `${robot.accent}|${robot.coordinator}`;
+/** A robot's head as an image (36 px square), for a speech bubble or a sub-agent's face in a thread. */
+export function robotHead(robot: RobotLook): string {
+  const key = `${robot.accent}|${robot.lead}`;
   let url = heads.get(key);
   if (!url) {
     const { canvas, context } = artCanvas(36, 36);

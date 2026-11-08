@@ -48,7 +48,7 @@ export const settings: Dictionary['settings'] = {
     metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
     metricsFileInvalid: `The numbers file must be a full path to a .md file (${FULL_PATH}), or stay empty.`,
-    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\ops' : '~/ops',
+    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\agents' : '~/agents',
     automataFolderInvalid: `The automata folder must be a full path (${FULL_PATH}), or stay empty.`,
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },

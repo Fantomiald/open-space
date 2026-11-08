@@ -51,7 +51,7 @@ export const settings = {
     metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
     metricsFileInvalid: `Le fichier des chiffres doit être un chemin complet vers un .md (${FULL_PATH}), ou rester vide.`,
-    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\ops' : '~/ops',
+    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\agents' : '~/agents',
     automataFolderInvalid: `Le dossier des automates doit être un chemin complet (${FULL_PATH}), ou rester vide.`,
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],

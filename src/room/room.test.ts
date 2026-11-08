@@ -810,26 +810,26 @@ describe('automatons in the room', () => {
     assert.equal(decorOf('lounge'), 'lounge');
   });
 
-  it('shows the runs a coordinator started as faces on its tag', () => {
-    const seated = seatedRuns(state([bot('lead', { role: 'coordinator' }), bot('helper', { parent: 'lead' }), bot('orphan', { parent: 'gone' })]));
+  it('shows the runs a run started as faces on its tag', () => {
+    const seated = seatedRuns(state([bot('lead', { role: 'planner' }), bot('helper', { parent: 'lead' }), bot('orphan', { parent: 'gone' })]));
     assert.deepEqual(seated.map(({ run }) => run.id), ['lead', 'orphan']);
     const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seated);
     assert.deepEqual(plan.people[0].agents.map((agent) => agent.id), ['helper']);
   });
 
   it('seats each sub-agent at work at a desk of its own, after its run, named after its role', () => {
-    const agents = { lead: [{ id: 'call-1', role: 'weekly-retro', task: 'Retro W45' }, { id: 'call-2', role: 'sentry-triage', task: 'Sentry W45' }] };
-    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], agents)));
+    const agents = { lead: [{ id: 'call-1', role: 'test-writer', task: 'Write the tests' }, { id: 'call-2', role: 'code-reviewer', task: 'Review the diff' }] };
+    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'planner' })], agents)));
     assert.deepEqual(plan.people.map((person) => [person.id, person.name, person.automaton, person.automatonAgent]), [
-      [automatonPersonId('lead'), 'Coordinator', 'lead', undefined],
-      [automatonAgentPersonId('lead', 'call-1'), 'Weekly retro', 'lead', 'call-1'],
-      [automatonAgentPersonId('lead', 'call-2'), 'Sentry triage', 'lead', 'call-2'],
+      [automatonPersonId('lead'), 'Planner', 'lead', undefined],
+      [automatonAgentPersonId('lead', 'call-1'), 'Test writer', 'lead', 'call-1'],
+      [automatonAgentPersonId('lead', 'call-2'), 'Code reviewer', 'lead', 'call-2'],
     ]);
     assert.equal(plan.seats.size, 3);
     // they keep their seats when one of them is back
-    const after = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
+    const after = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'planner' })], { lead: [agents.lead[1]] })));
     const before = new Map([...plan.seats]);
-    const kept = planRoom([], {}, before, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
+    const kept = planRoom([], {}, before, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'planner' })], { lead: [agents.lead[1]] })));
     assert.equal(after.people.length, 2);
     assert.equal(kept.seats.get(automatonAgentPersonId('lead', 'call-2')), plan.seats.get(automatonAgentPersonId('lead', 'call-2')));
   });
@@ -1079,8 +1079,8 @@ describe('the automatons\' server room', () => {
     assert.ok(sign.every((row) => row[0] === 'f' && row.at(-1) === 'f') && /^f+$/.test(sign[0]) && /^f+$/.test(sign.at(-1)!), 'framed');
     assert.ok(sign.some((row) => row.includes('g')) && sign.some((row) => row.includes('#')), 'a robot and the digits');
     assert.ok(waitingSign(12)[0].length > sign[0].length, 'two digits are wider');
-    const run = (id: string): AutomatonRun => ({ id, role: 'coordinator', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null });
-    const agents = (count: number, from = 0) => Array.from({ length: count }, (_, index) => ({ id: `c${from + index}`, role: 'weekly-retro', task: '' }));
+    const run = (id: string): AutomatonRun => ({ id, role: 'planner', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null });
+    const agents = (count: number, from = 0) => Array.from({ length: count }, (_, index) => ({ id: `c${from + index}`, role: 'test-writer', task: '' }));
     const state = (count: number, from = 0): AutomataState => ({ folder: 'ok', running: [run('lead')], recent: [], tasks: [], roles: [], agents: { lead: agents(count, from) } });
     const seats = SERVER_ROOM.seats.length;
     const full = planRoom([], {}, NOBODY, seats, 'automata', new Set(), seatedRuns(state(seats + 1)));
@@ -1122,26 +1122,28 @@ describe('the automatons\' server room', () => {
 });
 
 describe('the automatons as robots', () => {
-  it('gives each role its accent, the same every time, and the coordinator its crown', () => {
-    const roles = ['coordinator', 'sentry-triage', 'weekly-retro', 'backlog-groomer'];
-    const looks = roles.map(robotLook);
-    assert.deepEqual(roles.map(robotLook), looks);
+  it('gives each role its accent, the same every time, and a lead its crown whatever its role', () => {
+    const roles = ['planner', 'code-reviewer', 'test-writer', 'doc-writer'];
+    const looks = roles.map((role) => robotLook(role));
+    assert.deepEqual(roles.map((role) => robotLook(role)), looks);
     assert.ok(looks.every((look) => (ROBOT_ACCENTS as readonly string[]).includes(look.accent)));
-    assert.equal(new Set(looks.map((look) => look.accent)).size, roles.length, 'four roles, four accents');
-    assert.deepEqual(looks.map((look) => look.coordinator), [true, false, false, false]);
-    assert.equal(robotLook(' Coordinator ').coordinator, true);
+    // from a hash on a short palette: two roles may share an accent, but the roles do not all look alike
+    assert.ok(new Set(looks.map((look) => look.accent)).size > 1);
+    assert.ok(looks.every((look) => !look.lead));
+    // a run of the orchestrator is a lead, its sub-agents are not: the crown says who launched whom, not a role's name
+    assert.deepEqual(robotLook('code-reviewer', true), { accent: robotLook('code-reviewer').accent, lead: true });
     // the same robot whether the role is read from its file or as people read it (a sub-agent's name in a thread)
-    assert.deepEqual(robotLook('Weekly retro'), robotLook('weekly-retro'));
-    assert.deepEqual(robotLook('backlog_groomer'), robotLook('backlog-groomer'));
+    assert.deepEqual(robotLook('Test writer'), robotLook('test-writer'));
+    assert.deepEqual(robotLook('doc_writer'), robotLook('doc-writer'));
   });
 
-  it('draws them a pixel a letter, the same width, the coordinator two rows taller', () => {
-    for (const look of [robotLook('coordinator'), robotLook('sentry-triage')]) for (const back of [false, true]) for (const step of [false, true]) {
+  it('draws them a pixel a letter, the same width, a lead two rows taller', () => {
+    for (const look of [robotLook('planner', true), robotLook('code-reviewer')]) for (const back of [false, true]) for (const step of [false, true]) {
       const rows = robotRows(look, back, step);
       assert.ok(rows.every((row) => row.length === 16), rows.find((row) => row.length !== 16));
       assert.equal(rows.length * ART_SCALE, robotHeight(look));
     }
-    assert.equal(robotHeight(robotLook('coordinator')) - robotHeight(robotLook('weekly-retro')), 2 * ART_SCALE);
+    assert.equal(robotHeight(robotLook('test-writer', true)) - robotHeight(robotLook('test-writer')), 2 * ART_SCALE);
     // the face (visor, eyes) only from the front, the core on the chest too
     assert.ok(robotRows(robotLook('x'), false, false).some((row) => row.includes('e')));
     assert.ok(!robotRows(robotLook('x'), true, false).some((row) => row.includes('e') || row.includes('c')));
@@ -1152,9 +1154,9 @@ describe('the automatons as robots', () => {
     const people: SpriteSource = {
       height: () => 50, draw: (_c, id) => { calls.push(id); }, drawTypingHand: (_c, id) => { calls.push(`hand:${id}`); }, drawHead: (_c, id) => { calls.push(`head:${id}`); },
     };
-    const sprites = withRobots(people, (id) => (id === 'bot' ? 'coordinator' : undefined));
+    const sprites = withRobots(people, (id) => (id === 'bot' ? robotLook('planner', true) : undefined));
     const pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: false, gesture: 'none' } as const;
-    assert.equal(sprites.height(pose, 'bot'), robotHeight(robotLook('coordinator')));
+    assert.equal(sprites.height(pose, 'bot'), robotHeight(robotLook('planner', true)));
     assert.equal(sprites.height(pose, 'someone'), 50);
     assert.equal(sprites.height(pose), 50);
     sprites.draw(null as never, 'someone', pose, 0, 0);
@@ -1164,9 +1166,9 @@ describe('the automatons as robots', () => {
   });
 
   it('tells the room each automaton\'s role, its run\'s or its sub-agent\'s', () => {
-    const run: AutomatonRun = { id: 'lead', role: 'coordinator', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null };
-    const state: AutomataState = { folder: 'ok', running: [run], recent: [], tasks: [], roles: [], agents: { lead: [{ id: 'c1', role: 'sentry-triage', task: '' }] } };
+    const run: AutomatonRun = { id: 'lead', role: 'planner', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null };
+    const state: AutomataState = { folder: 'ok', running: [run], recent: [], tasks: [], roles: [], agents: { lead: [{ id: 'c1', role: 'code-reviewer', task: '' }] } };
     const plan = planRoom([], {}, NOBODY, SERVER_ROOM.seats.length, 'automata', new Set(), seatedRuns(state));
-    assert.deepEqual(plan.people.map((person) => person.automatonRole), ['coordinator', 'sentry-triage']);
+    assert.deepEqual(plan.people.map((person) => person.automatonRole), ['planner', 'code-reviewer']);
   });
 });

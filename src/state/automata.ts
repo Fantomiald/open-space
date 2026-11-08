@@ -23,7 +23,7 @@ export interface SeatedAutomaton { run: AutomatonRun; helpers: AutomatonRun[]; a
 
 /**
  * The automatons that take a seat in the room, oldest first: each run at work with the runs at work it started (a
- * run whose coordinator is at work too shows as a face on its coordinator's tag), then its sub-agents at work, each
+ * run whose parent run is at work too shows as a face on its parent's tag), then its sub-agents at work, each
  * at a desk of its own.
  */
 export function seatedRuns(state: AutomataState): SeatedAutomaton[] {
@@ -44,5 +44,5 @@ export const roleOf = (state: AutomataState, role: string): AutomatonRole | unde
 export const taskOf = (state: AutomataState, run: AutomatonRun): AutomatonTask | undefined =>
   state.tasks.find((task) => task.id === run.task) ?? state.tasks.find((task) => task.runs.includes(run.id));
 
-/** The runs a run started (a coordinator's helpers), at work or ended. */
+/** The runs a run started, at work or ended. */
 export const childrenOf = (state: AutomataState, runId: string): AutomatonRun[] => allRuns(state).filter((run) => run.parent === runId);

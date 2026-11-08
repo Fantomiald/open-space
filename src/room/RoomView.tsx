@@ -30,7 +30,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './g
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
 import { dressRoom, themedLighting } from './themes/index.ts';
 import { SERVERS } from './themes/servers.ts';
-import { robotHead, withRobots } from './robot.ts';
+import { robotHead, robotLook, withRobots, type RobotLook } from './robot.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName, type Character } from './scene.ts';
 import type { Pose } from './sprites.ts';
@@ -77,15 +77,16 @@ function showSky(document: Document, lighting: Lighting) {
 }
 
 /**
- * The role of an automaton by its person id, or undefined for anyone else: an automaton in the room, or one of the
- * runs it started, a face on its tag (`<its id>/<the run's id>`).
+ * The robot of an automaton by its person id, or undefined for anyone else: an automaton in the room (a run is a
+ * lead, its sub-agents are not), or one of the runs it started, a face on its tag (`<its id>/<the run's id>`).
  */
-function automatonRoleOf(scene: Scene, personId: string): string | undefined {
+function automatonLookOf(scene: Scene, personId: string): RobotLook | undefined {
   const own = scene.characters.get(personId)?.person;
-  if (own) return own.automatonRole;
+  if (own) return own.automatonRole === undefined ? undefined : robotLook(own.automatonRole, own.automatonAgent === undefined);
   const cut = personId.lastIndexOf('/');
   const owner = cut > 0 ? scene.characters.get(personId.slice(0, cut))?.person : undefined;
-  return owner?.automaton === undefined ? undefined : owner.agents.find((agent) => agent.id === personId.slice(cut + 1))?.type;
+  const role = owner?.automaton === undefined ? undefined : owner.agents.find((agent) => agent.id === personId.slice(cut + 1))?.type;
+  return role === undefined ? undefined : robotLook(role);
 }
 
 /**
@@ -183,7 +184,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   // the automatons are robots of their role (robot.ts), everyone else a chibi in the festival's outfit
   const [sprites] = useState(() => withRobots(chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
-    : outfitFor(festival, scene.nameOf(personId), false, guests)), (personId) => automatonRoleOf(scene, personId)));
+    : outfitFor(festival, scene.nameOf(personId), false, guests)), (personId) => automatonLookOf(scene, personId)));
   // a click reaches someone up to the top of their hat
   useEffect(() => { scene.heightOf = (personId) => sprites.height(STANDING, personId); }, [scene, sprites]);
   const [furniture] = useState(() => pixelFurniture(boardContent(festival, guests)));
@@ -260,8 +261,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const words = bubbleText(text);
       if (!position || !words) return;
       const label = personId === PLAYER_ID ? selfName(crewRef.current) : scene.characters.get(personId)!.person.title;
-      const role = automatonRoleOf(scene, personId);
-      const head = role === undefined ? chibiHead(lookFor(personId)) : robotHead(role);
+      const robot = automatonLookOf(scene, personId);
+      const head = robot === undefined ? chibiHead(lookFor(personId)) : robotHead(robot);
       setBubbles((stack) => pushBubble(stack, { id: ++lastId, sessionId, label, text: words, x: position.x, fromUser: personId === PLAYER_ID, head, bornAt: Date.now() }));
     });
   }, [scene, lookFor]);

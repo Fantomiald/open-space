@@ -22,7 +22,7 @@ export interface AutomatonRun {
   endedAt: number | null;
   status: RunStatus;
   pid: number | null;
-  /** the run that started this one (a coordinator's), or null */
+  /** the run that started this one, or null */
   parent: string | null;
 }
 
@@ -52,7 +52,7 @@ export interface AutomatonRole {
   authority: string;
 }
 
-/** A sub-agent at work in a run (a coordinator's helper): the id of the Agent call that launched it, its role, its task. */
+/** A sub-agent at work in a run: the id of the Agent call that launched it, its role, its task. */
 export interface AutomatonAgent {
   id: string;
   role: string;

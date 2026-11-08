@@ -72,7 +72,7 @@ describe('the automatons: what their files say', () => {
     assert.equal(runOfPerson('some-session'), null);
     assert.equal(roleLabel('code-reviewer'), 'Code reviewer');
     assert.equal(isAutomataFolder(''), true);
-    assert.equal(isAutomataFolder('~/ops'), true);
+    assert.equal(isAutomataFolder('~/agents'), true);
     assert.equal(isAutomataFolder('ops'), false);
   });
 
@@ -80,7 +80,7 @@ describe('the automatons: what their files say', () => {
     assert.equal(DEFAULT_PREFERENCES.automataFolder, '');
     // a settings file from before has none: the defaults fill it
     assert.equal(parsePreferences({ notifications: true }).automataFolder, undefined);
-    assert.equal(parsePreferences({ automataFolder: '~/ops' }, '/home/me').automataFolder, '/home/me/ops');
+    assert.equal(parsePreferences({ automataFolder: '~/agents' }, '/home/me').automataFolder, '/home/me/agents');
     assert.equal(parsePreferences({ automataFolder: 'relative' }).automataFolder, undefined);
     assert.deepEqual(parseClientMessage({ t: 'automatonLog', runId: 'r-1' }), { t: 'automatonLog', runId: 'r-1' });
     assert.equal(parseClientMessage({ t: 'automatonLog', runId: '../x' }), null);
@@ -137,8 +137,8 @@ describe('a run\'s thread, from its transcript', () => {
     assert.deepEqual(thread.working(), []);
     // told by run, only for the runs at work that have some
     const at = (id: string) => ({ ...parseRun({ id, sessionId: 's', status: 'running' }, id)! });
-    const agents = new Map([['r1', [{ id: 'c1', role: 'weekly-retro', task: 'Retro' }]], ['r2', []], ['gone', [{ id: 'c2', role: 'x', task: '' }]]]);
-    assert.deepEqual(agentsAtWork([at('r1'), at('r2')], agents), { r1: [{ id: 'c1', role: 'weekly-retro', task: 'Retro' }] });
+    const agents = new Map([['r1', [{ id: 'c1', role: 'test-writer', task: 'Write the tests' }]], ['r2', []], ['gone', [{ id: 'c2', role: 'x', task: '' }]]]);
+    assert.deepEqual(agentsAtWork([at('r1'), at('r2')], agents), { r1: [{ id: 'c1', role: 'test-writer', task: 'Write the tests' }] });
   });
 
   it('keeps only the last events', () => {
