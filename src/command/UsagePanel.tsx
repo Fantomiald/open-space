@@ -235,7 +235,7 @@ function WeekRewind({ report }: { report: CostReport }) {
   const series = useMemo(() => seriesOf(report), [report]);
   const rewind = useMemo(() => rewindOf(report, monday, series), [report, monday, series]);
   const oldest = mondayOf(daysUntil(today, USAGE_DAYS)[0]);
-  const step = (weeks: number) => setMonday(daysAfter(monday, weeks * 7)[0]);
+  const step = (direction: -1 | 1) => setMonday(direction > 0 ? daysAfter(monday, 8)[7] : daysUntil(monday, 8)[0]);
   const last = rewind.days[6];
   const range = `${shortDay(monday)} - ${shortDay(last)}`;
   const peakMinutes = Math.max(1, ...rewind.heatmap.flat());

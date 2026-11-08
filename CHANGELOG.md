@@ -1,5 +1,9 @@
 # Versions
 
+## 1.27.4
+
+- Récap de la semaine : la flèche « Semaine précédente » ne fait plus planter l'affichage.
+
 ## 1.27.3
 
 Vient de Mouhrad :
