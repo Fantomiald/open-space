@@ -52,6 +52,13 @@ export interface AutomatonRole {
   authority: string;
 }
 
+/** A sub-agent at work in a run (a coordinator's helper): the id of the Agent call that launched it, its role, its task. */
+export interface AutomatonAgent {
+  id: string;
+  role: string;
+  task: string;
+}
+
 /**
  * What the page is told: `folder` says whether the feature is off (no folder set), the folder missing (or unreadable),
  * or watched. `running`: the runs at work, oldest first; `recent`: the ended ones (done, failed, interrupted), newest first.
@@ -62,15 +69,19 @@ export interface AutomataState {
   recent: AutomatonRun[];
   tasks: AutomatonTask[];
   roles: AutomatonRole[];
+  /** the sub-agents at work, by the run that launched them (read from its transcript) */
+  agents: Record<string, AutomatonAgent[]>;
 }
 
-export const NO_AUTOMATA: AutomataState = { folder: 'off', running: [], recent: [], tasks: [], roles: [] };
+export const NO_AUTOMATA: AutomataState = { folder: 'off', running: [], recent: [], tasks: [], roles: [], agents: {} };
 
 /** A run's id as the orchestrator names its file: letters, digits, ".", "_", "-", nothing that leaves the folder. */
 export const RUN_ID = /^[\w][\w.-]{0,127}$/;
 
 /** The id the room and the page give an automaton, apart from the sessions'. */
 export const automatonPersonId = (runId: string) => `automaton:${runId}`;
+/** A run's sub-agent in the room: a person of its own, apart from the run's. */
+export const automatonAgentPersonId = (runId: string, agentId: string) => `automaton:${runId}/${agentId}`;
 export const runOfPerson = (personId: string): string | null => (personId.startsWith('automaton:') ? personId.slice('automaton:'.length) : null);
 
 /** A role's name as people read it: "code-reviewer" -> "Code reviewer". */

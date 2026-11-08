@@ -26,6 +26,7 @@ const roleName = (run: AutomatonRun) => roleLabel(run.role || run.id);
 function Automata() {
   const state = useSessions((s) => s.automata);
   const picked = useSessions((s) => s.automatonId);
+  const pickedAgent = useSessions((s) => s.automatonAgent);
   const folder = useSessions((s) => s.preferences.automataFolder);
   const openAutomata = useSessions((s) => s.openAutomata);
   const words = t.automata;
@@ -47,7 +48,7 @@ function Automata() {
             <h3>{words.recent}</h3>
             {state.recent.length ? <RunList runs={state.recent} current={run?.id ?? null} /> : <p className="cp-muted">{words.none}</p>}
           </nav>
-          {run ? <RunDetail key={run.id} run={run} /> : <p className="cp-muted">{words.pick}</p>}
+          {run ? <RunDetail key={`${run.id}/${pickedAgent ?? ''}`} run={run} /> : <p className="cp-muted">{words.pick}</p>}
         </div>
       )}
       <div className="cp-form__actions">
@@ -82,7 +83,8 @@ function RunDetail({ run }: { run: AutomatonRun }) {
   const state = useSessions((s) => s.automata);
   const log = useSessions((s) => s.automatonLogs[run.id]);
   const openAutomata = useSessions((s) => s.openAutomata);
-  const [agent, setAgent] = useState<string | null>(null);
+  // a click on a sub-agent in the room opens its run on its thread
+  const [agent, setAgent] = useState<string | null>(() => useSessions.getState().automatonAgent);
   const now = useNow(10_000);
   const words = t.automata;
   const role = roleOf(state, run.role);

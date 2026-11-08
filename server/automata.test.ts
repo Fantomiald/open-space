@@ -5,7 +5,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { automatonPersonId, isAutomataFolder, roleLabel, runOfPerson, type AutomataState } from '../shared/automata.ts';
 import type { LoggedEvent, ServerMessage } from '../shared/protocol.ts';
-import { automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, taskNotification, withLiveness } from './automata.ts';
+import { agentsAtWork, automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, taskNotification, withLiveness } from './automata.ts';
 import { AutomataWatch } from './automata-watch.ts';
 import { projectFolder } from './conversations.ts';
 import { parseClientMessage } from './messages.ts';
@@ -127,6 +127,20 @@ describe('a run\'s thread, from its transcript', () => {
     assert.ok(thread.events.some(({ ev }) => ev.k === 'say' && ev.who === AGENT_CALL));
   });
 
+  it('knows which sub-agents are at work: from their launch until they are back', () => {
+    const thread = new RunThread('/tmp/automata-fixture');
+    const records = fixture('automaton-run.jsonl');
+    const launched = records.findIndex((record) => JSON.stringify(record).includes(AGENT_CALL));
+    for (const record of records.slice(0, launched + 1)) thread.add(record);
+    assert.deepEqual(thread.working().map((agent) => [agent.id, agent.role]), [[AGENT_CALL, 'general-purpose']]);
+    for (const record of records.slice(launched + 1)) thread.add(record);
+    assert.deepEqual(thread.working(), []);
+    // told by run, only for the runs at work that have some
+    const at = (id: string) => ({ ...parseRun({ id, sessionId: 's', status: 'running' }, id)! });
+    const agents = new Map([['r1', [{ id: 'c1', role: 'weekly-retro', task: 'Retro' }]], ['r2', []], ['gone', [{ id: 'c2', role: 'x', task: '' }]]]);
+    assert.deepEqual(agentsAtWork([at('r1'), at('r2')], agents), { r1: [{ id: 'c1', role: 'weekly-retro', task: 'Retro' }] });
+  });
+
   it('keeps only the last events', () => {
     const thread = new RunThread('/tmp', 3);
     for (let i = 0; i < 5; i++) thread.add({ type: 'user', message: { content: `prompt ${i}` } });
@@ -192,6 +206,7 @@ describe('watching the automatons\' folder', () => {
     await watch.poll();
     const all = messages.filter((message) => message.t === 'automatonEvents').flatMap((message) => (message as { events: LoggedEvent[] }).events);
     assert.ok(all.some(({ ev }) => ev.k === 'hire'));
+    assert.deepEqual(Object.keys(watch.state.agents), [], 'its sub-agent is back by the end of the transcript');
     assert.deepEqual(all.map((event) => event.seq), all.map((_, index) => index + 1));
 
     // the run ends: its thread stays for the page

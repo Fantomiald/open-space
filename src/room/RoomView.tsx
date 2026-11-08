@@ -232,7 +232,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const point = roomPoint(event);
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
-    if (character?.person.automaton) { useSessions.getState().openAutomata(true, character.person.automaton); return; }
+    if (character?.person.automaton) { useSessions.getState().openAutomata(true, character.person.automaton, character.person.automatonAgent); return; }
     if (character) { show(character.person.sessionId); return; }
     const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }

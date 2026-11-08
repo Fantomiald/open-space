@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { NO_AUTOMATA, RUN_ID, type AutomataState, type AutomatonRole, type AutomatonRun, type AutomatonTask } from '../shared/automata.ts';
 import type { LoggedEvent, ServerMessage } from '../shared/protocol.ts';
-import { automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, withLiveness } from './automata.ts';
+import { agentsAtWork, automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, withLiveness } from './automata.ts';
 import { agentLaunch, CONVERSATION_ID, projectFolder } from './conversations.ts';
 import { resolveDirectory } from './paths.ts';
 
@@ -149,12 +149,15 @@ export class AutomataWatch {
     if (this.polling) return;
     this.polling = true;
     try {
-      const next = await this.read();
+      const read = await this.read();
+      await this.follow(read.running);
+      // the sub-agents at work, as their run's transcript tells them so far
+      const working = new Map([...this.following].map(([id, follower]) => [id, follower.thread.working()]));
+      const next = { ...read, agents: agentsAtWork(read.running, working) };
       if (JSON.stringify(next) !== JSON.stringify(this.state)) {
         this.state = next;
         this.options.broadcast({ t: 'automata', state: next });
       }
-      await this.follow(next.running);
     } catch (error) {
       this.options.log('automatons', error);
     } finally {

@@ -1,6 +1,6 @@
 // The automatons on the page's side (shared/automata.ts): who of them goes into the room, and their threads as the
 // server tells them. Pure functions, tested without a DOM.
-import type { AutomataState, AutomatonRole, AutomatonRun, AutomatonTask } from '../../shared/automata.ts';
+import type { AutomataState, AutomatonAgent, AutomatonRole, AutomatonRun, AutomatonTask } from '../../shared/automata.ts';
 import type { LoggedEvent } from '../../shared/protocol.ts';
 
 /** A run's thread as the page has it. */
@@ -18,14 +18,21 @@ export function appendRunEvents(log: RunLog, events: readonly LoggedEvent[], max
   return all.length > max ? { events: all.slice(-max), truncated: true } : { events: all, truncated: log.truncated };
 }
 
+/** Who of the automatons takes a seat: a run at work, or one of its sub-agents at work (`agent`). */
+export interface SeatedAutomaton { run: AutomatonRun; helpers: AutomatonRun[]; agent: AutomatonAgent | null }
+
 /**
- * The runs that take a seat in the room, oldest first, each with the runs at work it started: a run whose coordinator
- * is at work too shows as a face on its coordinator's tag, like a session's sub-agents.
+ * The automatons that take a seat in the room, oldest first: each run at work with the runs at work it started (a
+ * run whose coordinator is at work too shows as a face on its coordinator's tag), then its sub-agents at work, each
+ * at a desk of its own.
  */
-export function seatedRuns(state: AutomataState): { run: AutomatonRun; helpers: AutomatonRun[] }[] {
+export function seatedRuns(state: AutomataState): SeatedAutomaton[] {
   const running = new Set(state.running.map((run) => run.id));
   const top = state.running.filter((run) => !run.parent || !running.has(run.parent));
-  return top.map((run) => ({ run, helpers: state.running.filter((other) => other.parent === run.id) }));
+  return top.flatMap((run) => [
+    { run, helpers: state.running.filter((other) => other.parent === run.id), agent: null },
+    ...(state.agents[run.id] ?? []).map((agent) => ({ run, helpers: [], agent })),
+  ]);
 }
 
 /** Every run the page knows, at work first. */

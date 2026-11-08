@@ -4,7 +4,7 @@
 // The contract is the orchestrator's, written by someone else: every field may be missing, and what does not fit is left
 // out rather than refused. A transcript is Claude Code's own format (see conversations.ts), close to the stream-json
 // one: its records are turned into stream messages and read by the same Normalizer as a session's.
-import { RUN_ID, roleLabel, TASK_STATUSES, type AutomataState, type AutomatonRole, type AutomatonRun, type AutomatonTask, type AutomatonTaskStatus } from '../shared/automata.ts';
+import { RUN_ID, roleLabel, TASK_STATUSES, type AutomataState, type AutomatonAgent, type AutomatonRole, type AutomatonRun, type AutomatonTask, type AutomatonTaskStatus } from '../shared/automata.ts';
 import type { LoggedEvent, OfficeEvent } from '../shared/protocol.ts';
 import { asArray, asJson, asNumber, asString, isJson, type Json } from './json.ts';
 import { Normalizer } from './normalizer.ts';
@@ -98,7 +98,13 @@ export function automataState(runs: readonly AutomatonRun[], tasks: readonly Aut
     folder: 'ok', running, recent,
     tasks: [...tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_TASKS),
     roles: [...roles].sort((a, b) => a.name.localeCompare(b.name)),
+    agents: {},
   };
+}
+
+/** The sub-agents at work, by run, kept only for the runs at work that have some. */
+export function agentsAtWork(running: readonly AutomatonRun[], agents: ReadonlyMap<string, readonly AutomatonAgent[]>): Record<string, AutomatonAgent[]> {
+  return Object.fromEntries(running.flatMap((run) => (agents.get(run.id)?.length ? [[run.id, [...agents.get(run.id)!]]] : [])));
 }
 
 /** A task-notification Claude Code adds to a transcript when a sub-agent sent to the background ends (checked with 2.1.304). */
@@ -149,6 +155,8 @@ export class RunThread {
   private readonly max: number;
   /** the sub-agents seen launched, by the id of their Agent call */
   private readonly hired = new Set<string>();
+  /** the sub-agents at work, by the id of their Agent call */
+  private readonly atWork = new Map<string, AutomatonAgent>();
 
   constructor(cwd: string, max = MAX_RUN_EVENTS) {
     this.max = max;
@@ -166,7 +174,9 @@ export class RunThread {
       // told once: by its own transcript first, or by the Agent call (the one read first wins)
       if (this.hired.has(ev.id)) return;
       this.hired.add(ev.id);
+      this.atWork.set(ev.id, { id: ev.id, role: ev.type || 'agent', task: ev.task });
     }
+    if (ev.k === 'leave') this.atWork.delete(ev.who);
     const event = { seq: ++this.seq, at: this.at || Date.now(), ev };
     this.events.push(event);
     this.fresh.push(event);
@@ -190,6 +200,9 @@ export class RunThread {
   subagent(call: string, type: string, description: string) {
     if (!this.hired.has(call)) this.push({ k: 'hire', id: call, type, name: '', task: description.slice(0, 48) || type, prompt: '' });
   }
+
+  /** The sub-agents launched and not back yet, oldest first. */
+  working(): AutomatonAgent[] { return [...this.atWork.values()]; }
 
   /** The events added since the last call. */
   take(): LoggedEvent[] {

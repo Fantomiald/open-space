@@ -114,6 +114,8 @@ interface CommandPostState {
   /** the automatons' panel is open, on a run (null: the first at work, or the last ended) */
   automataOpen: boolean;
   automatonId: string | null;
+  /** the sub-agent of that run whose thread to show first (its Agent call), or null for the run's own */
+  automatonAgent: string | null;
   /** the threads of the runs the page asked for, by run id */
   automatonLogs: Record<string, RunLog>;
   /** the music apps of the computer the radio can drive (none outside macOS) */
@@ -315,7 +317,7 @@ interface CommandPostState {
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
   /** opens the automatons' panel (on a run, whose thread is then asked for) or closes it */
-  openAutomata: (open: boolean, runId?: string | null) => void;
+  openAutomata: (open: boolean, runId?: string | null, agent?: string | null) => void;
   /** false when the message could not leave (not connected) */
   /** `birthday`: "MM-DD", or undefined for none */
   saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
@@ -389,6 +391,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   automata: NO_AUTOMATA,
   automataOpen: false,
   automatonId: null,
+  automatonAgent: null,
   automatonLogs: {},
   musicApps: [],
   nowPlaying: null,
@@ -860,9 +863,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ metricsOpen: open, metrics: undefined });
     if (open) get().send({ t: 'metrics' });
   },
-  openAutomata: (open, runId = null) => {
+  openAutomata: (open, runId = null, agent = null) => {
     // a thread is read again each time it is shown: what was kept may have missed events while the page was away
-    set((state) => ({ automataOpen: open, automatonId: open ? runId : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));
+    set((state) => ({ automataOpen: open, automatonId: open ? runId : null, automatonAgent: open && runId ? agent : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));
     if (open && runId) get().send({ t: 'automatonLog', runId });
   },
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
