@@ -201,7 +201,7 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={room} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}:${automataOn}`} room={room} day={day}/>}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>

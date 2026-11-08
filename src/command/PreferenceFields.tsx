@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
+import { DROID_COLORS, FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
 import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
+import { DROID_KINDS, type DroidChoice } from '../../shared/droids.ts';
+import { droidColour, droidPreview } from '../room/droid-art.ts';
 import { furOf, petSprite } from '../room/pet.ts';
 import { isAbsolutePath } from '../../shared/paths.ts';
 import { homeRelative } from '../lib/format.ts';
@@ -237,3 +239,56 @@ export function LanguagePicker({ language, onLanguage }: { language: Language; o
     </label>
   );
 }
+
+/** A droid drawn at three screen pixels per art pixel: its wheels turning when it is the one picked. */
+function DroidSprite({ droid, moving }: { droid: Exclude<DroidChoice, { kind: 'none' }>; moving: boolean }) {
+  const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const context = canvas.current!.getContext('2d')!;
+    context.imageSmoothingEnabled = false;
+    let turned = false;
+    const paint = () => {
+      const sprite = droidPreview(droid, turned);
+      const { width, height } = canvas.current!;
+      context.clearRect(0, 0, width, height);
+      // at three pixels per art pixel, centred, its wheels on the tile's bottom (the sprite's top rows are empty)
+      context.drawImage(sprite, Math.round((width - sprite.width * 3) / 2), height - sprite.height * 3 + 3, sprite.width * 3, sprite.height * 3);
+      turned = !turned;
+    };
+    paint();
+    if (!moving || still) return;
+    const timer = window.setInterval(paint, 180);
+    return () => window.clearInterval(timer);
+  }, [droid, moving, still]);
+  // the size of a pet's tile, so the droids line up with them
+  return <canvas ref={canvas} width={22 * 3} height={17 * 3} />;
+}
+
+/** The automatons' droid: its colour (shown as it is now), then its model, or none. */
+export function DroidPicker({ droid, onDroid }: { droid: DroidChoice; onDroid: (droid: DroidChoice) => void }) {
+  const words = t.settings.droid;
+  return (
+    <div className="cp-pet">
+      {droid.kind !== 'none' && (
+        <div className="cp-pet__colours">
+          <ColourRow label={words.colour} colours={withCurrent(DROID_COLORS, droidColour(droid))} value={droidColour(droid)} onPick={(color) => onDroid({ ...droid, color })} />
+        </div>
+      )}
+      <PetTiles label={words.model}>
+        {DROID_KINDS.map((kind) => {
+          // the droid picked is drawn with its colour; another model keeps that colour when picked
+          const choice: DroidChoice = kind === 'none' ? { kind } : { kind, ...(droid.kind !== 'none' && droid.color ? { color: droid.color } : {}) };
+          const picked = droid.kind === kind;
+          return (
+            <button key={kind} type="button" className="cp-pet__tile" aria-pressed={picked} title={words.kinds[kind]} onClick={() => !picked && onDroid(choice)}>
+              {choice.kind === 'none' ? <span className="cp-pet__empty" aria-hidden="true" /> : <DroidSprite droid={picked && droid.kind !== 'none' ? droid : choice} moving={picked} />}
+              <span className="cp-pet__name">{words.kinds[kind]}</span>
+            </button>
+          );
+        })}
+      </PetTiles>
+    </div>
+  );
+}
+

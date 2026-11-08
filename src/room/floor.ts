@@ -1,7 +1,7 @@
 // One room's floor, from its layout: where its seats are, which tiles are free, and the walking routes across it.
 // The office and the break room each have their own (see shared/room-layout.ts).
 import type { Festival } from '../../shared/festivals.ts';
-import { blockedTiles, isMetricsPiece, layoutOn, withMetrics, type Layout, type MetricsKind, type PlayerSpot } from '../../shared/room-layout.ts';
+import { blockedTiles, isMetricsPiece, layoutOn, withAutomataAccess, withMetrics, type Layout, type MetricsKind, type PlayerSpot } from '../../shared/room-layout.ts';
 import { DOOR_SIZE, ROOM, boxOutline, facingVector, insideConvex, onLeftWall, tileCenter, type Box, type Point } from './geometry.ts';
 import { route } from './paths.ts';
 
@@ -28,6 +28,12 @@ export const METRICS_BOXES: Readonly<Record<MetricsKind, Box>> = {
   piggyBank: { fromX: 0.6, toX: 1.4, fromY: 0, toY: 0.6, low: 48, high: 70 },
 };
 
+/** The teleporter under the pointer: its plinth and its ring, up to the top, in room pixels (pixel-furniture.ts PORTAL). */
+const PORTAL_HEIGHT = 66;
+/** Where one stands in its ring (tiles into its footprint), and behind it, in the room, to walk up to it from. */
+const IN_RING = 0.3;
+const BEFORE_RING = 0.75;
+
 /** Grows a box by `across` tiles on each side and `up` room pixels above and below. */
 const grown = (box: Box, across: number, up: number): Box => ({
   fromX: box.fromX - across, toX: box.toX + across, fromY: box.fromY - across, toY: box.toY + across, low: box.low - up, high: box.high + up,
@@ -46,10 +52,21 @@ export class Floor {
   readonly board: Box | null;
   /** the numbers object, where a click opens the numbers (the office) */
   readonly metrics: Box | null;
+  /**
+   * the teleporter between the office and the automatons' room: where one stands in its ring (going through), the
+   * free spot before it one walks up to, and its box under the pointer
+   */
+  readonly portal: Point | null;
+  readonly portalFront: Point | null;
+  private readonly portalBox: Box | null;
 
-  /** `festival`: its decorations join the furniture. `numbers`: the office has its numbers object. */
-  constructor(layout: Layout, festival: Festival | null = null, numbers = false) {
-    this.layout = layoutOn(numbers ? withMetrics(layout) : layout, festival);
+  /**
+   * `festival`: its decorations join the furniture. `numbers`: the office has its numbers object. `automata`: it has
+   * the teleporter to the automatons' room.
+   */
+  constructor(layout: Layout, festival: Festival | null = null, numbers = false, automata = false) {
+    const furnished = numbers ? withMetrics(layout) : layout;
+    this.layout = layoutOn(automata ? withAutomataAccess(furnished) : furnished, festival);
     this.door = { x: 0.4, y: layout.door.y + 0.6 };
     this.blocked = blockedTiles(this.layout.furniture);
     this.avoided = blockedTiles(this.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined && !piece.wall).map((piece) => ({ ...piece, blocks: true })));
@@ -62,6 +79,10 @@ export class Floor {
     const metrics = this.layout.furniture.find(isMetricsPiece);
     const box = metrics && METRICS_BOXES[metrics.kind as MetricsKind];
     this.metrics = metrics && box ? { ...box, fromX: metrics.x + box.fromX, toX: metrics.x + box.toX, fromY: metrics.y + box.fromY, toY: metrics.y + box.toY } : null;
+    const portal = this.layout.furniture.find((piece) => piece.kind === 'portal');
+    this.portal = portal ? { x: portal.x + portal.width / 2, y: portal.y + IN_RING } : null;
+    this.portalFront = portal ? { x: portal.x + portal.width / 2, y: portal.y - BEFORE_RING } : null;
+    this.portalBox = portal ? { fromX: portal.x, toX: portal.x + portal.width, fromY: portal.y, toY: portal.y + portal.depth, low: 0, high: PORTAL_HEIGHT } : null;
   }
 
   get seatCount() { return this.layout.seats.length; }
@@ -118,6 +139,17 @@ export class Floor {
   /** True for a canvas point on the numbers object. */
   isMetricsAt(screen: Point): boolean {
     return !!this.metrics && insideConvex(screen, boxOutline(this.metrics));
+  }
+
+  /** True for a canvas point on the teleporter, its plinth or its ring. */
+  isPortalAt(screen: Point): boolean {
+    return !!this.portalBox && insideConvex(screen, boxOutline(this.portalBox));
+  }
+
+  /** The way into the ring: up to the spot before it, then in (nothing when there is no teleporter). */
+  pathIntoPortal(from: Point): Point[] {
+    if (!this.portal || !this.portalFront) return [];
+    return [...this.route(from, this.portalFront), { ...this.portal }];
   }
 
   /** The spot where the user can sit whose area holds a floor point, if any. */

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import type { Look } from '../../shared/look.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
+import { DEFAULT_DROID } from '../../shared/droids.ts';
 import { GLASS_OPACITY, type Preferences } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { chibiHead } from '../room/chibi.ts';
@@ -31,7 +32,7 @@ export function Onboarding() {
   const [birthday, setBirthday] = useState('');
   const [roots, setRoots] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Omit<Preferences, 'roots'>>({
-    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, isolate: 'busy', autoPip: true, autoTag: false,
+    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, droid: DEFAULT_DROID, isolate: 'busy', autoPip: true, autoTag: false,
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
     favoriteNotes: [],

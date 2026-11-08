@@ -19,9 +19,13 @@ import type { ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
-import { bobOf, furnitureDepth, type FurnitureSprites } from './pixel-furniture.ts';
+import { PORTAL, bobOf, furnitureDepth, portalMiddle, type FurnitureSprites } from './pixel-furniture.ts';
 import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
 import { cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, waitingSign } from './server-room.ts';
+import { beamGlow, hiddenInBeam, portalMotes, vortex } from './portal.ts';
+import { droidBeam, droidHere, isBleeping } from './droid.ts';
+import { droidHeight, drawDroid } from './droid-art.ts';
+import type { DroidChoice } from '../../shared/droids.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
@@ -38,7 +42,7 @@ const TAG_HEIGHT = 13;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;
 
-export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | null;
+export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | 'portal' | null;
 
 export interface FrameOptions {
   time: number;
@@ -69,6 +73,10 @@ export interface FrameOptions {
   playerName: string;
   /** the office pet the user chose */
   pet: PetChoice;
+  /** the automatons' droid the user chose, while their folder is set (null: none) */
+  droid?: Exclude<DroidChoice, { kind: 'none' }> | null;
+  /** the droid is under the pointer: a white line around it */
+  droidHovered?: boolean;
   /** in the automatons' server room, how many wait without a capsule: shown over the door */
   waitingAutomata?: number;
 }
@@ -236,6 +244,7 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
     if (piece.kind === 'counter' && lamps) lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
     if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 68), radius: 80, colour: P.light.screen, strength: 0.7 });
+    if (piece.kind === 'automataConsole') lights.push({ at: above(x + 1.6, y + 0.5, 30), radius: 70, colour: P.light.screen, strength: 0.7 });
     if (piece.kind === 'ticker') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 78), radius: 70, colour: P.light.screenIdle, strength: 0.5 });
     if (piece.kind === 'cooler' && lamps) lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {
@@ -693,6 +702,83 @@ function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: 
   });
 }
 
+/**
+ * The teleporter's light: the vortex turning in its ring (behind the ring's band, which the effect stops at), the motes
+ * coming out of it into the room, its light on the floor before it; and the column of light that takes the user (or
+ * the droid) away or brings them in. Squares of light, no blur; the vortex still with motion reduced, no column.
+ */
+function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): ThemeEffect[] {
+  const portal = layout.furniture.find((piece) => piece.kind === 'portal');
+  if (!portal) return [];
+  const time = options.reducedMotion ? 0 : options.time;
+  const middle = portalMiddle(portal.width);
+  // a point of the ring's plane (or `out` tiles before it, towards the viewer), `across` and `high` art pixels from its middle
+  const onRing = (across: number, high: number, out = 0): Point => {
+    const floor = toScreen({ x: portal.x + middle.across + across / 8, y: portal.y + PORTAL.plane + out });
+    return { x: floor.x, y: floor.y - (middle.up + high) * ART_SCALE };
+  };
+  const cell = (on: Context, x: number, y: number, colour: string, alpha: number) => {
+    on.globalAlpha = alpha;
+    on.fillStyle = colour;
+    on.fillRect(Math.round(x / ART_SCALE) * ART_SCALE, Math.round(y / ART_SCALE) * ART_SCALE, ART_SCALE, ART_SCALE);
+  };
+  const column = (on: Context, feet: Point, glow: number) => {
+    if (glow <= 0) return;
+    for (let up = 0; up < 64; up += ART_SCALE) for (const across of [-6, -4, -2, 0, 2, 4]) {
+      const core = Math.abs(across + 1) <= 2;
+      cell(on, feet.x + across, feet.y - up, core ? SF.orbCore : SF.orbInner, glow * (core ? 0.9 : 0.45) * (1 - up / 80));
+    }
+  };
+  const tones = [SF.orbOuter, SF.orbInner, SF.orbCore] as const;
+  // the floor before its face (towards the viewer)
+  const front = { x: portal.x + middle.across, y: portal.y + portal.depth + 0.3 };
+  const inRing = { x: portal.x + middle.across, y: portal.y + PORTAL.plane };
+  const effects: ThemeEffect[] = [
+    {
+      // the floor before the ring, lit by it: drawn under whoever stands there
+      depth: depthOf(front) - 0.6,
+      paint(on) {
+        for (let out = 0; out < 10; out++) for (let across = -12; across <= 12; across += 2) {
+          const fade = 1 - out / 10 - Math.abs(across) / 16;
+          if (fade <= 0) continue;
+          const point = toScreen({ x: portal.x + middle.across + across / 8, y: portal.y + portal.depth + out / 8 });
+          cell(on, point.x, point.y, SF.orbInner, 0.28 * fade);
+        }
+        on.globalAlpha = 1;
+      },
+    },
+    {
+      // under whoever steps into the ring, and under the ring's band, drawn after it, over the vortex's edge
+      depth: depthOf(inRing) - 0.05,
+      paint(on) {
+        for (const pixel of vortex(time, PORTAL.across - PORTAL.band, PORTAL.up - PORTAL.band)) {
+          const at = onRing(pixel.across, pixel.up);
+          cell(on, at.x, at.y, tones[pixel.tone], pixel.alpha);
+        }
+        on.globalAlpha = 1;
+      },
+    },
+    {
+      depth: depthOf(front),
+      paint(on) {
+        if (options.reducedMotion) return;
+        for (const mote of portalMotes(time, PORTAL.up)) {
+          const at = onRing(mote.across, mote.up, mote.out);
+          cell(on, at.x, at.y, mote.alpha > 0.6 ? SF.orbCore : SF.orbInner, mote.alpha * 0.9);
+        }
+        on.globalAlpha = 1;
+      },
+    },
+  ];
+  const beams: { feet: Point; depth: number; glow: number }[] = [];
+  const player = scene.playerBeam();
+  if (player) beams.push({ feet: toScreen(scene.player.position), depth: depthOf(scene.player.position) + 0.01, glow: beamGlow(player.progress) });
+  const droid = scene.droid && droidBeam(scene.droid);
+  if (droid && scene.droid) beams.push({ feet: toScreen(scene.droid.position), depth: depthOf(scene.droid.position) + 0.01, glow: beamGlow(droid.progress) });
+  if (!options.reducedMotion) for (const beam of beams) effects.push({ depth: beam.depth, paint(on) { column(on, beam.feet, beam.glow); on.globalAlpha = 1; } });
+  return effects;
+}
+
 /** The display over the door of the server room, lit like a screen: how many automatons wait without a capsule. */
 function waitingEffect(layout: Layout, count: number): ThemeEffect[] {
   const rows = waitingSign(count);
@@ -778,7 +864,20 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const choice = options.pet.kind === 'none' ? null : options.pet;
   if (pet && choice) layers.push({ depth: depthOf(pet.position), paint: (on) => drawPet(on, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
   const playerLift = scene.playerSpot?.lift ?? 0;
-  layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
+  // the column of light of the teleporter hides the user while it takes them away or brings them in
+  if (!scene.playerHidden()) layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
+  const droid = scene.droid;
+  const look = options.droid;
+  if (droid && look && droidHere(droid)) {
+    const beam = droidBeam(droid);
+    if (!beam || !hiddenInBeam(beam.kind, beam.progress)) {
+      layers.push({ depth: depthOf(droid.position), paint: (on) => {
+        const feet = toScreen(droid.position);
+        const direction = directionOf(droid.heading);
+        drawDroid(on, look, feet.x, feet.y, { moving: droid.path.length > 0, back: direction.startsWith('up'), left: direction.endsWith('left'), time: options.reducedMotion ? 0 : options.time, outlined: options.droidHovered === true });
+      } });
+    }
+  }
   for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint(context);
   // someone carried goes over everything, above the free seats they can be put on
   const carried = scene.carried;
@@ -796,7 +895,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     const feet = raise(toScreen(character.position), scene.floor.seatLift(character.seat));
     return { feet, height: sprites.height(poseFor(character), character.person.id), depth: depthOf(character.position) };
   }, options);
-  const effects = [...(kit?.effects?.(layout, time, lighting, options.hour) ?? []), ...cords, ...waitingEffect(layout, options.waitingAutomata ?? 0)];
+  const effects = [...(kit?.effects?.(layout, time, lighting, options.hour) ?? []), ...cords, ...waitingEffect(layout, options.waitingAutomata ?? 0), ...portalEffects(layout, scene, options)];
   paintThemeEffects(context, effects, layers);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
@@ -805,10 +904,11 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     paintFestivalEffects(context, { festival: options.festival, room: options.room, layout, time, lighting, heads });
   }
   if (options.hoveredThing === 'door') paintDoorOutline(context, layout);
-  // a white line around the user's laptop itself (a click there opens a terminal), around the whiteboard (its notes), or
-  // around the numbers object
+  // a white line around the user's laptop itself (a click there opens a terminal), around the whiteboard (its notes),
+  // around the numbers object, or around the teleporter
   const hovered = options.hoveredThing;
   const clickable = hovered === 'metrics' ? layout.furniture.find(isMetricsPiece)
+    : hovered === 'portal' ? layout.furniture.find((piece) => piece.kind === 'portal')
     : hovered === 'screen' || hovered === 'board' ? layout.furniture.find((piece) => piece.kind === (hovered === 'screen' ? 'bossDesk' : 'whiteboard')) : undefined;
   if (clickable) paintHighlight(context, furniture, clickable, layers);
   const metrics = options.metricsBadge ? layout.furniture.find(isMetricsPiece) : undefined;
@@ -841,7 +941,8 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     });
   }
   const playerFeet = toScreen(scene.player.position);
-  tags.push({
+  // gone in the teleporter's light, their name goes with them
+  if (!scene.playerHidden()) tags.push({
     x: playerFeet.x, bottom: playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - TAG_LIFT, faint: options.hoveredId !== PLAYER_ID,
     tag: { name: options.playerName, colour: P.playerTagText, status: null, tags: [], moreTags: 0, sessionId: PLAYER_ID, agents: [], framed: false },
   });
@@ -851,6 +952,10 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     paintNameTag(context, sprites, tags[index].tag, boxes[index].left, top, options.time, options.reducedMotion);
   });
   context.globalAlpha = 1;
+  if (droid && look && droidHere(droid) && isBleeping(droid)) {
+    const wheels = toScreen(droid.position);
+    paintSpeech(context, t.room.droidLines[droid.line % t.room.droidLines.length], wheels.x, wheels.y - droidHeight(look.kind));
+  }
   if (pet && choice) {
     const paws = toScreen(pet.position);
     drawHearts(context, pet, paws.x, paws.y);

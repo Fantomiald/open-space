@@ -86,6 +86,10 @@ export const ROOM_PALETTE = {
     piggy: '#f49ac1', piggyShade: '#d86f9c', piggySnout: '#ff8fbd', coin: '#f2c14e',
     /** around what a click opens (the user's laptop, the whiteboard, the numbers), under the pointer, like the door */
     highlight: '#ffffff',
+    // the server room's console: a dark frame, a deep teal screen, its teal line, the keys' glow
+    automataFrame: '#1a2230', automataFace: '#0b2a30', automataLine: '#5fd3c4', automataKeys: '#2f8f86',
+    // the teleporter: its plinth and steps of dark stone, its ring of metal plates, its chevrons lit (the orb's colours)
+    portalStone: '#3a4356', portalStoneLight: '#56627a', portalRing: '#6f7a90', portalRingLight: '#a9b3c6', portalRingDark: '#2c3342', portalChevron: '#5ad1ff', portalChevronCore: '#f2fdff',
   },
   /** Halloween's decorations (src/room/halloween.ts, and the pumpkins of pixel-furniture.ts) */
   halloween: {

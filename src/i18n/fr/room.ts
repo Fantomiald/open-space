@@ -19,7 +19,7 @@ export const room = {
   },
   /** the line in the corner of the room until the room or a window was moved by hand */
   arrange: { title: 'Astuce', move: 'glisser : bouger la salle ou une fenêtre', zoom: 'molette : zoomer', close: 'Compris' },
-  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
+  hint: { toLounge: 'Salle de repos', toOffice: 'Open space', openTerminal: 'Ouvrir un terminal', openBoard: 'Tableau : tes notes', openMetrics: 'Chiffres', openAutomata: 'Ouvrir les automates', toAutomata: 'Aller dans la salle des automates', portalToOffice: 'Retour à l\'open space', newMetrics: 'Chiffres : du nouveau', startWith: (name: string) => `Lancer une session avec ${name}` },
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
     office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,
@@ -32,6 +32,8 @@ export const room = {
   /** before someone's words in a speech bubble */
   speaker: (label: string) => `${label} :`,
   /** what each pet says: a cat meows, a dog barks, the rubber duck listens to your bug, Rocky speaks in chords */
+  /** what the automatons' droid bleeps now and then */
+  droidLines: ['Bip !', 'Bip-bouup !', 'Bidou-bip ?', 'Brrrip !', 'Bip bip.'],
   petLines: {
     cat: ['Miaou !', 'Mrrrr…', 'Miaou ?', 'Mraou !'],
     dog: ['Ouaf ouaf !', 'Wouf !', 'Ouaf ?', 'Ouaf ouaf ouaf !'],

@@ -5,6 +5,8 @@ import type { PlayerSpot } from '../../shared/room-layout.ts';
 import { t } from '../i18n/index.ts';
 import type { Person, RoomPlan } from './cast.ts';
 import { createPet, cuddle, stepPet, type Pet } from './pet.ts';
+import { BEAM_MS, beamProgress, hiddenInBeam } from './portal.ts';
+import { bleep, createDroid, droidHere, stepDroid, type Droid, type Passage } from './droid.ts';
 import type { Floor } from './floor.ts';
 import { depthOf, distance, facingVector, onFigure, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
@@ -58,15 +60,40 @@ export class Scene {
   readonly pet: Pet | null;
   /** the crew without a session dropping by (the office only) */
   readonly visits: Visits | null;
+  /** the room's own clock, in ms */
+  time = 0;
+  /** the column of light taking the user away through the teleporter, or bringing them in, and when it started */
+  beam: { kind: 'out' | 'in'; at: number } | null = null;
+  private goingToPortal = false;
+  /** when the user, brought in by the teleporter, steps out of its ring (room time), or null */
+  private stepOutAt: number | null = null;
+  /** set once the user went through the teleporter: the view moves to the other room */
+  playerTeleported = false;
+  /** set once the droid went out of this room, by this passage (the page moves it to the room on the other side) */
+  droidLeftBy: Passage | null = null;
+  /** the automatons' droid while it is in this room (it comes and goes: src/room/droid.ts) */
+  droid: Droid | null = null;
+  /** the ways out the droid may take from this room */
+  droidExits: readonly Passage[] = [];
 
-  /** `atDoor`: the user comes in through the door (from the other room) instead of sitting at the room's first spot. */
-  constructor(floor: Floor, { withPet, atDoor = false, withVisitors = false }: { withPet: boolean; atDoor?: boolean; withVisitors?: boolean }) {
+  /**
+   * `atDoor`: the user comes in through the door (from the other room) instead of sitting at the room's first spot;
+   * `atPortal`: they come in through the teleporter, in its column of light.
+   */
+  constructor(floor: Floor, { withPet, atDoor = false, atPortal = false, withVisitors = false }: { withPet: boolean; atDoor?: boolean; atPortal?: boolean; withVisitors?: boolean }) {
     this.floor = floor;
     const start = floor.layout.playerSpots[0];
-    this.player = atDoor
-      ? { position: { ...floor.door }, heading: { x: 1, y: 0 }, path: [floor.inside], blinkOffset: blinkOffsetOf(PLAYER_ID) }
-      : { position: { ...start.at }, heading: facingVector(start.seat.facing), path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) };
-    this.playerSpot = atDoor ? null : start;
+    const portal = floor.portal;
+    const beamedIn = atPortal && portal !== null;
+    this.player = beamedIn
+      ? { position: { ...portal }, heading: { x: 1, y: 1 }, path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) }
+      : atDoor
+        ? { position: { ...floor.door }, heading: { x: 1, y: 0 }, path: [floor.inside], blinkOffset: blinkOffsetOf(PLAYER_ID) }
+        : { position: { ...start.at }, heading: facingVector(start.seat.facing), path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) };
+    this.playerSpot = atDoor || beamedIn ? null : start;
+    // they step out of the ring once the light has brought them in
+    if (beamedIn) { this.beam = { kind: 'in', at: 0 }; this.stepOutAt = BEAM_MS; }
+
     this.pet = withPet ? createPet() : null;
     this.visits = withVisitors ? new Visits(floor) : null;
   }
@@ -124,6 +151,15 @@ export class Scene {
   }
 
   step(ms: number) {
+    this.time += ms;
+    if (this.beam && this.time - this.beam.at >= BEAM_MS) {
+      if (this.beam.kind === 'out') this.playerTeleported = true;
+      this.beam = null;
+    }
+    if (this.stepOutAt !== null && this.time >= this.stepOutAt) {
+      this.stepOutAt = null;
+      if (this.floor.portalFront && !this.player.path.length) this.player.path = [{ ...this.floor.portalFront }];
+    }
     for (const [id, character] of this.characters) {
       if (!advance(character, ms)) continue;
       if (character.phase === 'leaving') this.characters.delete(id);
@@ -135,8 +171,13 @@ export class Scene {
     if (advance(this.player, ms)) {
       if (this.headingFor) this.sit(this.headingFor);
       else if (this.goingOut) { this.goingOut = false; this.playerWentOut = true; }
+      else if (this.goingToPortal) { this.goingToPortal = false; this.beam = { kind: 'out', at: this.time }; }
     }
     if (this.pet) stepPet(this.pet, ms, this.floor);
+    if (this.droid) {
+      const left = stepDroid(this.droid, ms, this.floor, this.droidExits);
+      if (left) this.droidLeftBy = left;
+    }
   }
 
   /** Picks someone up (a long press on them): they follow the pointer until dropped. False: they are walking out. */
@@ -229,17 +270,21 @@ export class Scene {
   }
 
   walkPlayerTo(tile: Point) {
+    if (this.beam?.kind === 'out') return;
     this.playerSpot = null;
     this.headingFor = null;
     this.goingOut = false;
+    this.goingToPortal = false;
     this.player.path = this.floor.route(this.player.position, tile);
   }
 
   /** Sends the player to sit at a spot (the boss's chair, the sofa). */
   sitPlayerAt(spot: PlayerSpot) {
+    if (this.beam?.kind === 'out') return;
     this.playerSpot = null;
     this.headingFor = spot;
     this.goingOut = false;
+    this.goingToPortal = false;
     this.player.path = [...this.floor.route(this.player.position, tileCenter(spot.seat)), { ...spot.at }];
     if (Math.hypot(this.player.position.x - spot.at.x, this.player.position.y - spot.at.y) < 0.01) this.sit(spot);
   }
@@ -254,11 +299,55 @@ export class Scene {
 
   /** Sends the user out through the door; `playerWentOut` tells when they reached it. */
   walkPlayerOut() {
+    if (this.beam?.kind === 'out') return;
     this.playerSpot = null;
     this.headingFor = null;
+    this.goingToPortal = false;
     this.goingOut = true;
     this.player.path = this.floor.pathToDoor(this.player.position);
   }
+
+  /**
+   * Sends the user into the teleporter's ring: once in, a column of light takes them away and `playerTeleported` tells
+   * the view to move to the other room.
+   */
+  walkPlayerToPortal() {
+    if (!this.floor.portal || this.beam?.kind === 'out') return;
+    this.playerSpot = null;
+    this.headingFor = null;
+    this.goingOut = false;
+    this.goingToPortal = true;
+    this.player.path = this.floor.pathIntoPortal(this.player.position);
+  }
+
+  /** Where the user's column of light is (0 to 1), or null. */
+  playerBeam(): { kind: 'out' | 'in'; progress: number } | null {
+    return this.beam ? { kind: this.beam.kind, progress: beamProgress(this.beam.at, this.time) } : null;
+  }
+
+  /** True while the column of light hides the user (going away, or not yet in). */
+  playerHidden(): boolean {
+    const beam = this.playerBeam();
+    return beam !== null && hiddenInBeam(beam.kind, beam.progress);
+  }
+
+  /** The droid comes into this room (by a passage, or already there), meaning to stay `stayLeft` ms. */
+  bringDroid(via: Passage | null, stayLeft: number, exits: readonly Passage[]) {
+    this.droid = createDroid(this.floor, via, stayLeft);
+    this.droidExits = exits;
+    this.droidLeftBy = null;
+  }
+
+  /** True when a canvas point falls on the droid while it is here; it bleeps. */
+  droidAt(point: Point, height: number): boolean {
+    const droid = this.droid;
+    if (!droid || !droidHere(droid)) return false;
+    const feet = toScreen(droid.position);
+    return Math.abs(point.x - feet.x) <= 12 && point.y <= feet.y + 3 && point.y >= feet.y - height;
+  }
+
+  /** A click on the droid: it bleeps back. */
+  pokeDroid() { if (this.droid) bleep(this.droid); }
 
   /** The visitor under a canvas point, if visitors come to this room. */
   visitorAt(point: Point) {

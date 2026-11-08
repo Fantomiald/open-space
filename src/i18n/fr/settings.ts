@@ -208,6 +208,11 @@ export const settings = {
     add: 'Ajouter',
     defaultFolder: 'Dossier par défaut (Maj+N lance une session dedans)',
   },
+  droid: {
+    model: 'Modèle',
+    colour: 'Couleur',
+    kinds: { dome: 'Dôme rond', square: 'Tête carrée', sphere: 'Sphère', none: 'Aucun' },
+  },
   pet: {
     kinds: {
       cat: 'Un chat', dog: 'Un chien', duck: 'Un canard en plastique', capybara: 'Un capybara', axolotl: 'Un axolotl', rocky: 'Rocky (Projet Dernière Chance)', clawd: 'Clawd (la mascotte de Claude Code)',
@@ -247,6 +252,7 @@ export const settings = {
     sections: 'Équipe',
     people: 'Personnes',
     pet: 'Animal',
+    droid: 'Droïde',
     noName: 'Donne un prénom pour enregistrer.',
     nameTaken: (name: string) => `${name} existe déjà dans l’équipe.`,
     you: ' (toi)',
@@ -261,6 +267,7 @@ export const settings = {
     memberIntro: 'Une session qui porte ce prénom a ce perso dans la salle.',
     newIntro: 'Donne-lui un prénom : la personne s’enregistre toute seule.',
     petIntro: 'Il se promène dans la salle et passe te voir.',
+    droidIntro: 'Le compagnon des automates : il roule de salle en salle quand leur dossier est réglé. Un clic dessus ouvre les automates.',
   },
   look: {
     preview: (name: string) => `Aperçu de ${name || 'la personne'}`,

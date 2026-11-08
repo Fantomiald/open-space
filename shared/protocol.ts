@@ -8,6 +8,7 @@ import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
+import type { DroidChoice } from './droids.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
@@ -489,6 +490,8 @@ export interface Preferences {
   remoteByDefault: boolean;
   /** the office pet: a cat, a dog, Rocky, or none */
   pet: PetChoice;
+  /** the automatons' droid, rolling from room to room while their folder is set (shared/droids.ts), or none */
+  droid: DroidChoice;
   /** the place both rooms are dressed as (shared/room-themes.ts) */
   theme: RoomTheme;
   /** the folder of the whiteboard's notes, one Markdown file per project (absolute; ~/Journal by default) */

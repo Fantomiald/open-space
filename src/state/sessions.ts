@@ -15,6 +15,8 @@ import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import type { TerminalChoice } from '../../shared/terminal.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
+import { DEFAULT_DROID } from '../../shared/droids.ts';
+import { startTrip, type DroidTrip } from '../room/droid.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
 import { GLASS_OPACITY } from '../../shared/protocol.ts';
@@ -196,6 +198,10 @@ interface CommandPostState {
   project: string;
   /** false until the user changes room: they then come in through the door instead of sitting at their desk */
   enteredThroughDoor: boolean;
+  /** the user came into the room shown through the teleporter (src/room/portal.ts), in its column of light */
+  arrivedByPortal: boolean;
+  /** where the automatons' droid is, from room to room (src/room/droid.ts) */
+  droidTrip: DroidTrip;
   /** the user's settings (kept by the server) */
   preferences: Preferences;
   /** the language the page is shown in: the one chosen in the settings, else the browser's (the App is mounted again when it changes) */
@@ -291,6 +297,10 @@ interface CommandPostState {
   /** the user is looking at this session: what it shows now is no longer news */
   markSeen: (sessionId: string) => void;
   setView: (view: View) => void;
+  /** to the other room through the teleporter: the user comes in on its twin */
+  teleport: (view: View) => void;
+  /** the droid went on to another room (or the room shown moved it on by the clock) */
+  moveDroid: (trip: DroidTrip) => void;
   setProject: (project: string) => void;
   toggleNotifications: () => void;
   toggleSound: () => void;
@@ -435,9 +445,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   view: (['repos', 'automates', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   project: readPreference('project', ''),
   enteredThroughDoor: false,
+  arrivedByPortal: false,
+  droidTrip: startTrip(Date.now()),
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, droid: DEFAULT_DROID, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -815,12 +827,17 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     writePreference('project', project);
     set({ project });
   },
+  teleport: (view) => {
+    get().setView(view);
+    set({ arrivedByPortal: true });
+  },
+  moveDroid: (droidTrip) => set({ droidTrip }),
   setView: (view) => {
     const s = get();
     writePreference('view', view);
     if (view !== 'focus') set({ launcherOpen: false });
     // from one room to the other the user walks through the door; out of focus mode they are back at their desk
-    set({ view, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
+    set({ view, arrivedByPortal: false, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
     if (tilingOf(view) === tilingOf(s.view)) return;
     const columns = retile(s.columns, maxColumnsIn(view), tilingOf(view));
     // the other arrangement keeps the sizes it was given: the windows are laid out again, not changed

@@ -23,6 +23,11 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ pet: { kind: 'dragon', variant: 'red', colors: { fur: '#e8645a' } } }).pet, { kind: 'dragon', colors: { fur: '#e8645a' } }, 'a later pet, its colour kept');
     assert.deepEqual(parsePreferences({ pet: { kind: 'cat', variant: 'grey' } }).pet, { kind: 'cat', variant: 'plain', colors: { fur: '#8b919c' } }, 'a coat named after its colour becomes a plain cat of that colour');
     assert.deepEqual(parsePreferences({ pet: { kind: 'duck' } }).pet, { kind: 'duck' });
+    assert.deepEqual(parsePreferences({ droid: { kind: 'sphere', color: '#e8742c' } }).droid, { kind: 'sphere', color: '#e8742c' });
+    assert.deepEqual(parsePreferences({ droid: { kind: 'dome', color: 'blue' } }).droid, { kind: 'dome' }, 'only a valid colour');
+    assert.deepEqual(parsePreferences({ droid: { kind: 'none', color: '#000000' } }).droid, { kind: 'none' });
+    assert.equal(parsePreferences({ droid: { kind: 'wookiee' } }).droid, undefined);
+    assert.deepEqual({ ...DEFAULT_PREFERENCES, ...parsePreferences({ pet: { kind: 'duck' } }) }.droid, { kind: 'dome' }, 'a settings file from before the droid gets the default one');
     assert.equal(parsePreferences({ theme: 'pirate' }).theme, 'pirate');
     assert.equal(parsePreferences({ theme: 'moon' }).theme, undefined, 'an unknown theme is left out');
     assert.deepEqual(parsePreferences({ effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false, reduceMotion: 'yes' }), { effort: 'xhigh', timeFormat: '12h', timestamps: true, turnDuration: false });

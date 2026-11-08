@@ -110,6 +110,53 @@ function drawChart(p: Painter) {
   for (let column = 1; column < 6; column++) at(column, 12, C.screenGrid);
 }
 
+/** The server room's console: a desk of dark metal, a deck of glowing keys, and a small screen turned to the room. */
+const CONSOLE_SCREEN = { y: 0.36, fromX: 1.33, toX: 1.87, low: 12, high: 20 };
+function paintAutomataConsole(p: Painter) {
+  for (const [x, y] of [[0.06, 0.08], [1.84, 0.08], [0.06, 0.82], [1.84, 0.82]]) p.box(x, y, 0.1, 0.1, 0, 9, C.metal);
+  p.box(0, 0, 2, 0.95, 9, 2, C.automataFrame);
+  for (const x of [0.2, 0.45, 0.7, 0.95]) for (const y of [0.45, 0.7]) p.box(x, y, 0.15, 0.12, 11, 1, C.automataKeys);
+  p.box(1.3, 0.3, 0.6, 0.06, 11, 10, C.automataFrame);
+  p.onFront(CONSOLE_SCREEN.y, CONSOLE_SCREEN.fromX, CONSOLE_SCREEN.toX, CONSOLE_SCREEN.low, CONSOLE_SCREEN.high, C.automataFace);
+}
+/** A pulse of work across the console's screen, the height of each column. */
+const CONSOLE_PULSE = [3, 4, 2, 6] as const;
+function drawConsoleScreen(p: Painter) {
+  const at = (column: number, row: number, colour: string) => p.pixel(CONSOLE_SCREEN.fromX + (column + 0.5) / 8, CONSOLE_SCREEN.y, CONSOLE_SCREEN.low + row, colour);
+  for (const [index, height] of CONSOLE_PULSE.entries()) at(index, 1 + height, C.automataLine);
+  for (const x of [0.25, 0.75]) p.pixel(x, 0.57, 12, C.automataLine);
+}
+
+/**
+ * The teleporter: a ring standing on a plinth with a step, its face to the viewer (+y), like a gate. Its band of metal
+ * plates is lit by chevrons; its inside is empty here: the vortex turns in it every frame, its motes come out of it and
+ * its light lies on the floor before it (draw.ts, portal.ts). `across` and `up`: the ring's radii, in art pixels.
+ */
+export const PORTAL = { plane: 0.22, across: 11, up: 13, plinth: 4, band: 3 } as const;
+/** The middle of the ring: across (tiles from the piece's corner) and up (art pixels above the floor). */
+export const portalMiddle = (width: number) => ({ across: width / 2, up: PORTAL.plinth + PORTAL.up });
+function paintPortal(p: Painter, piece: FurniturePiece) {
+  // the plinth, and its step up from the room behind
+  p.box(0.15, 0, piece.width - 0.3, piece.depth, 0, 2, C.portalStone, C.portalStoneLight);
+  p.box(0.4, 0.05, piece.width - 0.8, piece.depth - 0.1, 2, 2, C.portalStone, C.portalStoneLight);
+  const { across, up } = portalMiddle(piece.width);
+  const at = (shrink: number, angle: number, plane: number, colour: string) =>
+    p.pixel(across + (Math.cos(angle) * (PORTAL.across - shrink)) / 8, plane, up + Math.sin(angle) * (PORTAL.up - shrink), colour);
+  // the band: its back edge in shade, then its plates, lit at the top and dark at the bottom
+  for (let step = 0; step < 240; step++) {
+    const angle = (step / 240) * Math.PI * 2;
+    for (let band = 0; band < PORTAL.band; band++) {
+      at(band, angle, PORTAL.plane - 0.06, C.portalRingDark);
+      at(band, angle, PORTAL.plane, band === 0 ? C.portalRingDark : Math.sin(angle) > 0.3 ? C.portalRingLight : C.portalRing);
+    }
+  }
+  // the chevrons, round the band but at its foot
+  for (let chevron = 0; chevron < 7; chevron++) {
+    const angle = -Math.PI / 2 + ((chevron + 1) / 8) * Math.PI * 2;
+    for (const [shrink, turn] of [[1, 0], [2, 0], [1, 0.07], [1, -0.07]] as const) at(shrink, angle + turn, PORTAL.plane + 0.02, shrink === 1 && turn === 0 ? C.portalChevronCore : C.portalChevron);
+  }
+}
+
 /** A stock ticker along the left wall: a strip of lights (what it shows: writeOnTicker). */
 const TICKER = { fromY: 0.1, toY: 4.1, low: 36, high: 42 };
 function paintTicker(p: Painter) {
@@ -219,8 +266,9 @@ export function writeOnBoard(p: Painter, board: BoardContent) {
 const BOARD_BALLOONS = [[0.15, 54, 0], [0.55, 58, 2], [0.3, 63, 1]] as const;
 
 /** What a click opens on a piece, outlined in white under the pointer: the user's laptop on their desk, the whiteboard. */
-const CLICKABLE: Partial<Record<PieceKind, (paint: Painter) => void>> = {
+const CLICKABLE: Partial<Record<PieceKind, (paint: Painter, piece: FurniturePiece) => void>> = {
   bossDesk: paintLaptop, whiteboard: paintWhiteboard, cash: paintCash, metricsTv: paintMetricsTv, ticker: paintTicker, piggyBank: paintPiggy,
+  portal: paintPortal,
 };
 
 /**
@@ -635,6 +683,8 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
   metricsTv: { height: 46, paint: paintMetricsTv, fine: drawChart },
   ticker: { height: 46, paint: paintTicker, fine: writeOnTicker },
   piggyBank: { height: 40, paint: paintPiggy },
+  automataConsole: { height: 24, paint: paintAutomataConsole, fine: drawConsoleScreen },
+  portal: { height: PORTAL.plinth + PORTAL.up * 2 + 4, paint: paintPortal },
   counter: { height: 24, paint(p) {
     p.box(0, 0.1, 3, 0.85, 0, 11, C.counter);
     for (const x of [1, 2]) p.onFront(0.95, x - 0.02, x + 0.02, 1, 10, tones(C.counter).shade);
@@ -646,11 +696,14 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
   } },
 };
 
+/** How tall a piece is drawn, in art pixels above its footprint (the canvas' headroom): what may hide what is behind it. */
+export const pieceHeight = (kind: PieceKind) => DESIGNS[kind].height;
+
 /** The canvas of a piece, and where its far corner (its x, y) sits on it. */
 interface Drawn { canvas: HTMLCanvasElement; corner: Point; ground?: HTMLCanvasElement; float?: number }
 
 /** A piece drawn on its own canvas; `part`: only that part of it, as a white line around it (see CLICKABLE). */
-function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Painter) => void): Drawn {
+function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Painter, piece: FurniturePiece) => void): Drawn {
   const design = designOf(piece.kind);
   const width = (piece.width + piece.depth) * TILE.x + MARGIN * 2;
   const height = (piece.width + piece.depth) * TILE.y + design.height + MARGIN * 2;
@@ -660,7 +713,7 @@ function render(piece: FurniturePiece, board: BoardContent, part?: (paint: Paint
   const { canvas } = drawing;
   const painter = painterOn(drawing, piece, corner);
   if (part) {
-    part(painter);
+    part(painter, piece);
     ring(canvas, C.highlight);
     return { canvas, corner, float: design.float };
   }

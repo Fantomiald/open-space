@@ -13,6 +13,10 @@ export type PieceKind =
   // the automatons' server room: racks along the walls, the capsules they stand in (their back, then their glass drawn
   // over whoever stands in it), and the orb floating in the middle
   | 'serverRack' | 'pod' | 'podGlass' | 'orb'
+  // the operator's console of the server room
+  | 'automataConsole'
+  // a teleporter on the floor between the office and the automatons' room, a twin in each
+  | 'portal'
   // the numbers object, one of these (see METRICS_OBJECT)
   | MetricsKind
   // the festivals' (see FESTIVAL_PIECES): standing on the floor
@@ -282,6 +286,9 @@ const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: podFaci
 /** A rack of servers against the back wall (facing +y) or the left wall (facing +x). */
 const rack = (x: number, y: number, alongLeft = false) => (alongLeft ? piece('serverRack', x, y, 0.9, 1) : piece('serverRack', x, y, 1, 0.9));
 
+/** The server room's teleporter, back to the office: at the front, right of the capsules, clear of them. */
+export const SERVER_PORTAL: FurniturePiece = piece('portal', 16.8, 13.2, 3, 0.5);
+
 export const SERVER_ROOM: Layout = {
   furniture: [
     ...[1, 2, 3, 5, 6, 7, 13, 14, 15, 17, 18].map((x) => rack(x, 0)),
@@ -289,7 +296,8 @@ export const SERVER_ROOM: Layout = {
     ...POD_SEATS.flatMap((seat) => [piece('pod', seat.x, seat.y, 1, 1, false, { behind: true }), piece('podGlass', seat.x, seat.y, 1, 1, false, { front: true })]),
     piece('orb', ORB.x - 0.5, ORB.y - 0.5),
     // the operator's console, front left, where the user sits to watch them
-    piece('desk', 2, 12, 2),
+    piece('automataConsole', 2, 12, 2),
+    SERVER_PORTAL,
     piece('chair', 2, 11, 1, 1, false),
   ],
   seats: POD_SEATS,
@@ -353,6 +361,16 @@ const FESTIVAL_VISITS: Partial<Record<Festival, readonly VisitSpot[]>> = {
 };
 
 /** The office with its numbers object (the user named a numbers file); the other room as it is. */
+/**
+ * The teleporter to the automatons' room: a ring standing on its plinth at the front of the office, between the
+ * bookshelf and the coffee corner, its face to the viewer (+y): nothing stands in front of it, and it is off the
+ * aisles. Whoever goes through walks up behind it and into the ring (Floor.portalFront, Floor.portal); its twin in the
+ * server room (SERVER_PORTAL) brings back.
+ */
+export const OFFICE_PORTAL: FurniturePiece = piece('portal', 9, 13.2, 3, 0.5);
+/** A layout with the teleporter to the automatons' room. */
+export const withAutomataAccess = (layout: Layout): Layout => ({ ...layout, furniture: [...layout.furniture, OFFICE_PORTAL] });
+
 export const withMetrics = (layout: Layout): Layout => (layout === OFFICE ? { ...layout, furniture: [...layout.furniture, METRICS_PIECES[METRICS_OBJECT]] } : layout);
 
 /** A room as it is for a festival (or none): its furniture, plus the festival's, and the festival's places to drop by. */

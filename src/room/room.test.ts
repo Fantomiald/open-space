@@ -5,11 +5,11 @@ import { earlySpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
 import { VISIBLE_ROWS, bubbleText, earlyBubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import type { SeenSequences } from '../state/queue.ts';
 import { decorOf, planRoom, roleTitle, roomSessions } from './cast.ts';
-import { LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ORB, ROOM, SERVER_ROOM, blockedTiles, isMetricsPiece, podFacing, layoutOn, type MetricsKind } from '../../shared/room-layout.ts';
+import { OFFICE_PORTAL, SERVER_PORTAL, LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ORB, ROOM, SERVER_ROOM, blockedTiles, isMetricsPiece, podFacing, layoutOn, type MetricsKind } from '../../shared/room-layout.ts';
 import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/festivals.ts';
 import { outfitFor } from './outfits.ts';
 import { Floor } from './floor.ts';
-import { depthOf, distance, facingVector, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
+import { boxOutline, depthOf, distance, facingVector, insideConvex, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
@@ -29,6 +29,11 @@ import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
 import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
 import { stackLabels } from './labels.ts';
+import { BEAM_MS, beamGlow, beamProgress, ellipseDistance, hiddenInBeam, portalMotes, vortex } from './portal.ts';
+import { advanceTrip, createDroid, droidBeam, exitsOf, pickExit, startTrip, stepDroid, through, type Droid } from './droid.ts';
+import { PORTAL, pieceHeight } from './pixel-furniture.ts';
+import { WALL_EFFECT } from './themes/kit.ts';
+import { ROOM_THEMES } from '../../shared/room-themes.ts';
 
 const session = (id: string, state: SessionState, extra: Partial<SessionInfo> = {}): SessionInfo => ({
   id, name: id, cwd: `/work/${id}`, model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
@@ -842,6 +847,155 @@ describe('automatons in the room', () => {
     assert.deepEqual(short.events.map((e) => e.seq), [3, 4, 5]);
     assert.equal(short.truncated, true);
     assert.equal(appendRunEvents(log, [event(1)]), log);
+  });
+});
+
+describe('the teleporter, in every theme and festival', () => {
+  const overlaps = (a: { x: number; y: number; width: number; depth: number }, b: { x: number; y: number; width: number; depth: number }) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.depth && b.y < a.y + a.depth;
+  /** Points of the ring and its inside, on screen: what must never be hidden. */
+  const ringPoints = (portal: typeof OFFICE_PORTAL) => {
+    const points: Point[] = [];
+    for (let across = -PORTAL.across; across <= PORTAL.across; across += 2) for (let high = -PORTAL.up; high <= PORTAL.up; high += 2) {
+      if (ellipseDistance(across, high, PORTAL.across, PORTAL.up) > 1) continue;
+      const floor = toScreen({ x: portal.x + portal.width / 2 + across / 8, y: portal.y + PORTAL.plane });
+      points.push({ x: floor.x, y: floor.y - (PORTAL.plinth + PORTAL.up + high) * ART_SCALE });
+    }
+    return points;
+  };
+
+  for (const [room, layout, portal, automata] of [['office', OFFICE, OFFICE_PORTAL, true], ['server room', SERVER_ROOM, SERVER_PORTAL, false]] as const) {
+    it(`stands in the ${room}, clear of every piece, seat and passage, nothing drawn over it, whatever the festival`, () => {
+      for (const festival of room === 'office' ? [null, ...FESTIVALS] : [null]) {
+        const floor = new Floor(layout, festival, true, automata);
+        assert.ok(floor.layout.furniture.includes(portal));
+        for (const piece of floor.layout.furniture) {
+          if (piece === portal) continue;
+          assert.ok(piece.wall || !overlaps(piece, portal), `${festival}: ${piece.kind} on the teleporter`);
+          // drawn after it (in front), its box must not cover the ring
+          if (furnitureDepth(piece) <= furnitureDepth(portal)) continue;
+          const box = { fromX: piece.x, toX: piece.x + piece.width, fromY: piece.y, toY: piece.y + piece.depth, low: (piece.top ?? 0) * ART_SCALE, high: pieceHeight(piece.kind) * ART_SCALE };
+          for (const point of ringPoints(portal)) assert.ok(!insideConvex(point, boxOutline(box)), `${festival}: ${piece.kind} at ${piece.x},${piece.y} hides the ring`);
+        }
+        for (const seat of floor.layout.seats) assert.ok(!overlaps({ x: Math.floor(seat.x), y: Math.floor(seat.y), width: 1, depth: 1 }, portal), `${festival}: a seat on it`);
+        for (const spot of floor.layout.visitSpots ?? []) assert.ok(!overlaps({ x: spot.at.x, y: spot.at.y, width: 0.01, depth: 0.01 }, portal), `${festival}: a visit on it`);
+        // everyone still reaches their seat, and the way into its ring is free
+        for (const [index] of floor.layout.seats.entries()) assert.ok(floor.pathToSeat(floor.inside, index).length > 0, `${festival}: seat ${index}`);
+        for (const spot of floor.layout.visitSpots ?? []) assert.ok(floor.route(floor.inside, spot.at).length > 0, `${festival}: the ${spot.activity} visit`);
+        assert.ok(floor.isWalkable(floor.portalFront!), `${festival}: the spot before it`);
+        assert.ok(floor.pathIntoPortal(floor.inside).length > 1, `${festival}: the way in`);
+      }
+    });
+  }
+
+  it('is drawn over the walls\' art and what moves on them, in every theme: it stands on the floor', () => {
+    // a theme or a festival paints its walls in the backdrop, then what moves on them at WALL_EFFECT (-1): a piece on
+    // the floor comes after both, so no theme's decoration covers it
+    assert.ok(ROOM_THEMES.length >= 8);
+    assert.ok(furnitureDepth(OFFICE_PORTAL) > WALL_EFFECT);
+    assert.ok(furnitureDepth(SERVER_PORTAL) > WALL_EFFECT);
+    assert.equal(OFFICE_PORTAL.wall, undefined);
+    // taller than the user (52 room pixels), and under the top of the wall
+    const top = (PORTAL.plinth + PORTAL.up * 2) * ART_SCALE;
+    assert.ok(top > 52 && top < 100, `${top}`);
+    assert.equal(new Floor(OFFICE).portal, null, 'not in the office without the automatons');
+    const floor = new Floor(OFFICE, null, false, true);
+    for (const point of ringPoints(OFFICE_PORTAL)) assert.ok(floor.isPortalAt(point));
+    assert.equal(floor.isPortalAt(toScreen({ x: 10, y: 10 })), false);
+  });
+
+  it('turns a vortex inside its ring, and lets motes out into the room', () => {
+    const [wide, high] = [PORTAL.across - PORTAL.band, PORTAL.up - PORTAL.band];
+    const inside = vortex(0, wide, high);
+    assert.ok(inside.every((pixel) => ellipseDistance(pixel.across, pixel.up, wide, high) <= 1));
+    assert.ok(inside.some((pixel) => pixel.tone === 2) && inside.some((pixel) => pixel.tone === 1) && inside.some((pixel) => pixel.tone === 0));
+    const later = vortex(500, wide, high);
+    assert.notDeepEqual(later.filter((pixel) => pixel.tone > 0), inside.filter((pixel) => pixel.tone > 0), 'it turns');
+    assert.ok(portalMotes(800, PORTAL.up).every((mote) => mote.out >= 0 && mote.out <= 1.3 && mote.alpha >= 0 && mote.alpha <= 1));
+  });
+});
+
+describe('going through the teleporter', () => {
+  it('lights a column that hides the user half way, then takes them to the other room', () => {
+    assert.equal(beamProgress(0, BEAM_MS / 2), 0.5);
+    assert.equal(hiddenInBeam('out', 0.4), false);
+    assert.equal(hiddenInBeam('out', 0.6), true);
+    assert.equal(hiddenInBeam('in', 0.4), true);
+    assert.equal(beamGlow(0.5), 1);
+    const scene = new Scene(new Floor(OFFICE, null, false, true), { withPet: false });
+    scene.walkPlayerToPortal();
+    assert.ok(scene.player.path.length > 0);
+    for (let step = 0; step < 400 && !scene.playerTeleported; step++) scene.step(50);
+    assert.equal(scene.playerTeleported, true);
+    assert.deepEqual(scene.player.position, new Floor(OFFICE, null, false, true).portal, 'in the ring');
+  });
+
+  it('brings them in on the twin, in its light', () => {
+    const floor = new Floor(SERVER_ROOM);
+    const scene = new Scene(floor, { withPet: false, atPortal: true });
+    assert.deepEqual(scene.player.position, floor.portal);
+    assert.equal(scene.playerHidden(), true);
+    scene.step(BEAM_MS / 2 + 50);
+    assert.equal(scene.playerHidden(), false);
+    scene.step(BEAM_MS);
+    assert.equal(scene.playerBeam(), null);
+    assert.equal(scene.playerTeleported, false);
+    // then out of the ring, onto the floor before it
+    for (let step = 0; step < 40; step++) scene.step(50);
+    assert.deepEqual(scene.player.position, floor.portalFront);
+  });
+});
+
+describe('the automatons\' droid', () => {
+  const office = new Floor(OFFICE, null, false, true);
+  const run = (droid: Droid, floor: Floor, exits: Parameters<typeof stepDroid>[3], ms = 120_000) => {
+    let random = 0.37;
+    const next = () => { random = (random * 9301 + 49297) % 233280 / 233280; return random; };
+    for (let time = 0; time < ms; time += 50) { const left = stepDroid(droid, 50, floor, exits, next); if (left) return left; }
+    return null;
+  };
+
+  it('comes in through the door, the teleporter, or is already there', () => {
+    const byDoor = createDroid(office, 'door', 60_000, () => 0.5);
+    assert.deepEqual(byDoor.position, office.door);
+    assert.equal(byDoor.activity, 'rolling');
+    const byPortal = createDroid(office, 'portal', 60_000, () => 0.5);
+    assert.deepEqual(byPortal.position, office.portal);
+    assert.equal(droidBeam(byPortal)?.kind, 'in');
+    const there = createDroid(office, null, 60_000, () => 0.5);
+    assert.equal(there.activity, 'idle');
+    assert.ok(office.isWalkable(there.position));
+  });
+
+  it('rolls about, then goes out by the way it picked, once', () => {
+    const byDoor = createDroid(office, null, 8000, () => 0.3);
+    assert.equal(run(byDoor, office, ['door']), 'door');
+    assert.equal(byDoor.activity, 'gone');
+    assert.equal(stepDroid(byDoor, 50, office, ['door']), null, 'told once');
+    const byPortal = createDroid(office, null, 8000, () => 0.3);
+    assert.equal(run(byPortal, office, ['portal']), 'portal');
+    assert.deepEqual(byPortal.position, office.portal);
+    // never out by the teleporter of a room without one
+    const lounge = new Floor(LOUNGE);
+    assert.equal(run(createDroid(lounge, null, 8000, () => 0.3), lounge, ['portal'], 40_000), null);
+  });
+
+  it('goes from room to room: the door to the break room, the teleporter to the automatons\' room', () => {
+    assert.deepEqual(exitsOf('office').map((exit) => [exit.via, exit.to]), [['door', 'lounge'], ['portal', 'automata']]);
+    assert.deepEqual(exitsOf('lounge').map((exit) => exit.to), ['office']);
+    assert.deepEqual(exitsOf('automata').map((exit) => exit.to), ['office', 'office']);
+    const trip = startTrip(1000, () => 0);
+    assert.equal(trip.room, 'office');
+    assert.equal(trip.via, null);
+    assert.deepEqual(through(trip, 'portal', 5000, () => 0), { room: 'automata', via: 'portal', since: 5000, stay: trip.stay });
+    assert.equal(through(trip, 'door', 5000).room, 'lounge');
+    assert.equal(pickExit('lounge', () => 0.99), 'door');
+    // while its room is shown, the room steps it; elsewhere the clock moves it on once its stay is over
+    assert.equal(advanceTrip(trip, trip.since + trip.stay + 1, 'office'), trip);
+    assert.equal(advanceTrip(trip, trip.since + 10, 'lounge'), trip);
+    const moved = advanceTrip(trip, trip.since + trip.stay + 1, 'lounge', () => 0);
+    assert.equal(moved.room, 'lounge');
+    assert.equal(moved.via, 'door');
   });
 });
 

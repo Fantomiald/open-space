@@ -205,6 +205,11 @@ export const settings: Dictionary['settings'] = {
     add: 'Add',
     defaultFolder: 'Default folder (Shift+N starts a session in it)',
   },
+  droid: {
+    model: 'Model',
+    colour: 'Colour',
+    kinds: { dome: 'Round dome', square: 'Square head', sphere: 'Sphere', none: 'None' },
+  },
   pet: {
     kinds: {
       cat: 'A cat', dog: 'A dog', duck: 'A rubber duck', capybara: 'A capybara', axolotl: 'An axolotl', rocky: 'Rocky (Project Hail Mary)', clawd: 'Clawd (Claude Code’s mascot)',
@@ -244,6 +249,7 @@ export const settings: Dictionary['settings'] = {
     sections: 'Crew',
     people: 'People',
     pet: 'Pet',
+    droid: 'Droid',
     noName: 'Give a first name to save.',
     nameTaken: (name: string) => `${name} is already in the crew.`,
     you: ' (you)',
@@ -258,6 +264,7 @@ export const settings: Dictionary['settings'] = {
     memberIntro: 'A session with this first name gets this character in the room.',
     newIntro: 'Give them a first name: they save themselves.',
     petIntro: 'It wanders around the room and comes to see you.',
+    droidIntro: 'The automata\'s companion: it rolls from room to room while their folder is set. A click on it opens the automata.',
   },
   look: {
     preview: (name: string) => `Preview of ${name || 'the person'}`,

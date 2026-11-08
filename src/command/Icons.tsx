@@ -116,6 +116,8 @@ export const ActivityIcon = icon(Activity);
 export const TrendIcon = icon(TrendingUp);
 export const WeekIcon = icon(CalendarDays);
 export const AgentIcon = icon(Bot);
+/** The automatons' droid, in the crew's page */
+export const DroidIcon = icon(Bot);
 /** an automaton: a headless agent of the user's orchestrator, watched read-only (shared/automata.ts) */
 export const AutomatonIcon = icon(Cpu);
 export const EnterIcon = icon(CornerDownLeft);
