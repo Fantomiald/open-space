@@ -61,13 +61,18 @@ export function sessionStatus(session: SessionInfo, seen: SeenSequences): Status
   return isWorking(session) ? 'working' : null;
 }
 
-export type RoomKind = 'office' | 'lounge';
+/** The office, the break room, and the automatons' room (the office's plan, its desks for the automatons only). */
+export type RoomKind = 'office' | 'lounge' | 'automata';
+
+/** The room whose decor a room wears: the automatons' room is furnished like the office. */
+export const decorOf = (room: RoomKind): 'office' | 'lounge' => (room === 'lounge' ? 'lounge' : 'office');
 
 const STOPPED: ReadonlySet<SessionInfo['state']> = new Set(['closed', 'done', 'error']);
 
 /** Sessions that belong in a room, by priority (in the office: waiting for the user, then working, then idle; oldest first in each group). */
 export function roomSessions(all: readonly SessionInfo[], seen: SeenSequences, room: RoomKind = 'office'): SessionInfo[][] {
   const inLounge = (session: SessionInfo) => session.resting === true || (STOPPED.has(session.state) && attentionKind(session, seen) === null);
+  if (room === 'automata') return [];
   if (room === 'lounge') return [all.filter(inLounge).sort((a, b) => a.createdAt - b.createdAt)];
   const sessions = all.filter((session) => !inLounge(session));
   const queue = attentionQueue(sessions, seen).map(({ session }) => session);
@@ -101,7 +106,8 @@ export function automatonPerson({ run, helpers, agent }: SeatedAutomaton): Perso
 
 /**
  * `previousSeats`: who sits where now (people walking out excluded). `reserved`: seats nobody gets (the user's).
- * `automata`: the automatons at work, with the runs each started (src/state/automata.ts seatedRuns), office only.
+ * `automata`: the automatons at work, with the runs each started (src/state/automata.ts seatedRuns): only in their own
+ * room, which holds no session, so they never take a session's desk.
  */
 export function planRoom(
   sessions: readonly SessionInfo[], seen: SeenSequences, previousSeats: ReadonlyMap<string, number>, seatCount: number,
@@ -112,7 +118,7 @@ export function planRoom(
   const eligible = roomSessions(sessions, seen, room).flatMap((group) => seatedFirst(group, (session) => isSeated(session.id)));
   const admitted = eligible.slice(0, seatCount - reserved.size);
   const left = seatCount - reserved.size - admitted.length;
-  const bots = room === 'office' ? seatedFirst(automata, (bot) => isSeated(automatonPerson(bot).id)).slice(0, Math.max(0, left)) : [];
+  const bots = room === 'automata' ? seatedFirst(automata, (bot) => isSeated(automatonPerson(bot).id)).slice(0, Math.max(0, left)) : [];
 
   const people: Person[] = admitted.map((session) => ({
     id: session.id, sessionId: session.id, name: session.name,

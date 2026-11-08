@@ -2,7 +2,7 @@
 
 ## Pas encore publié
 
-- Automates, en lecture seule : un nouveau réglage « Dossier des automates » (Réglages > Notes et chiffres, vide par défaut) nomme le dossier d'un orchestrateur d'agents `claude -p` lancés hors d'Open Space. Ses runs au travail s'assoient aux postes que les sessions laissent libres, en tenue d'automate, avec une étiquette turquoise à petit robot et leur rôle. Un clic sur l'un d'eux, ou le bouton Automates de l'en-tête, ouvre leur panneau : runs au travail et terminés récemment (fini, échoué, interrompu), rôle et sa description du catalogue, tâche, sous-agents (chacun dans son onglet, nommé par son rôle) et le fil lu dans le transcript de Claude Code. Rien n'est piloté, rien n'est écrit dans ce dossier.
+- Automates, en lecture seule : un nouveau réglage « Dossier des automates » (Réglages > Notes et chiffres, vide par défaut) nomme le dossier d'un orchestrateur d'agents `claude -p` lancés hors d'Open Space. Ses runs au travail, et chacun de leurs sous-agents, ont leur salle à eux, la salle des automates (bouton à robot de l'en-tête, à côté de Bureau et Repos) : ils ne prennent jamais le poste d'une session. Ils y sont en tenue d'automate, avec une étiquette turquoise à petit robot et leur rôle. Un clic sur l'un d'eux, ou le bouton Automates de l'en-tête, ouvre leur panneau : runs au travail et terminés récemment (fini, échoué, interrompu), rôle et sa description du catalogue, tâche, sous-agents (chacun dans son onglet, nommé par son rôle) et le fil lu dans le transcript de Claude Code. Rien n'est piloté, rien n'est écrit dans ce dossier.
 
 ## 1.27.4
 

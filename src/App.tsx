@@ -40,6 +40,9 @@ export function App() {
   useAltKey();
   const view = useSessions((s) => s.view);
   const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
+  // the automatons' room exists while the settings name their folder; without it, the view falls back on the office
+  const automataOn = useSessions((s) => s.preferences.automataFolder !== '');
+  const room = view === 'repos' ? 'lounge' : view === 'automates' && automataOn ? 'automata' : 'office';
   const day = useFestival();
   // the room and the sky read the theme as they paint: set before they mount again for it (their keys)
   const theme = useSessions((s) => s.preferences.theme);
@@ -198,7 +201,7 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={room} day={day}/>}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>

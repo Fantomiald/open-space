@@ -28,6 +28,7 @@ describe('room frame', () => {
   });
   it('drops saved frames that are not numbers', () => {
     assert.deepEqual(sanitizeRoomFrames({ office: { x: 0.1, y: 0, scale: 0.5 }, lounge: { x: 'a' } }), { office: { x: 0.1, y: 0, scale: 0.5 } });
+    assert.deepEqual(sanitizeRoomFrames({ automata: { x: 0, y: 0.2, scale: 0.8 } }), { automata: { x: 0, y: 0.2, scale: 0.8 } });
     assert.deepEqual(sanitizeRoomFrames(null), {});
   });
 });

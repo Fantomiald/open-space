@@ -1,5 +1,6 @@
 // A room of the office, drawn on a canvas: the office itself (the default view), where the sessions work at their
-// desks, or the break room, where the sessions put to rest doze on sofas. People come and go through the door, what is
+// desks, the break room, where the sessions put to rest doze on sofas, or the automatons' room, the office's plan where
+// only the automatons of the user's orchestrator sit (src/room/cast.ts). People come and go through the door, what is
 // said rises in speech bubbles, and clicking someone (or their bubble) opens their session in the detail panel.
 import { inProject } from '../state/projects.ts';
 import { useProjects } from '../state/useProjects.ts';
@@ -19,7 +20,7 @@ import type { Look } from '../../shared/look.ts';
 import { LOUNGE, OFFICE } from '../../shared/room-layout.ts';
 import { paintBackdrop } from './backdrop.ts';
 import { BUBBLE_LANE, BUBBLE_ROW_HEIGHT, VISIBLE_ROWS, bubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
-import { planRoom, roomSessions, type RoomKind } from './cast.ts';
+import { decorOf, planRoom, roomSessions, type RoomKind } from './cast.ts';
 import { chibiHead, chibiSprites, lookOfStranger } from './chibi.ts';
 import { outfitFor } from './outfits.ts';
 import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
@@ -81,7 +82,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const show = useSessions((s) => s.show);
   /** a click opens the session alone; Shift+click adds it under the open ones (or takes it out) */
   const crew = useSessions((s) => s.crew);
-  // the user's automatons at work take the office seats the sessions leave (src/room/cast.ts)
+  // the user's automatons at work sit in their own room, never at a session's desk (src/room/cast.ts)
   const automata = useSessions((s) => s.automata);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -92,7 +93,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   crewRef.current = crew;
   const synced = useRef(false);
   // the numbers object is there while the settings name a numbers file (App mounts the room again when that changes)
-  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival, useSessions.getState().preferences.metricsFile !== ''));
+  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival, room === 'office' && useSessions.getState().preferences.metricsFile !== ''));
   const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', withVisitors: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
   // the seats the user put people on, by session, kept for when they come back (and across reloads)
   const keptSeats = useRef(new Map(Object.entries(readPreference<Record<string, number>>(`seats:${room}`, {})).filter(([, seat]) => seat < floor.seatCount)));
@@ -154,7 +155,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const context = canvas.current!.getContext('2d')!;
     context.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
     context.imageSmoothingEnabled = false;
-    const backdrop = paintBackdrop(floor.layout, festival, room, guests);
+    const backdrop = paintBackdrop(floor.layout, festival, decorOf(room), guests);
     const dozing = room === 'lounge';
     let timer: number | undefined;
     let last = 0;
@@ -168,7 +169,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const lighting = themedLighting(lightingAt(hour));
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room, playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
     };
@@ -324,7 +325,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
 
   const seated = plan.people.length;
-  const description = room === 'lounge' ? t.room.description.lounge(seated) : t.room.description.office(seated);
+  const description = t.room.description[room](seated);
   return (
     <div className="cp-room" onClick={onBackdropClick}>
       <div className="cp-room__fit">

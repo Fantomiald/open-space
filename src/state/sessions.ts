@@ -40,7 +40,7 @@ const writeLayout = (columns: Columns, selectedId: string | null) => writePrefer
 /** stopped: the bridge does not answer; unpaired: it answers but this browser has no valid session cookie */
 export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
 /** The office, the break room, or focus mode: the sessions listed beside their windows, without the room. */
-export type View = 'salle' | 'repos' | 'focus';
+export type View = 'salle' | 'repos' | 'automates' | 'focus';
 
 export const tilingOf = (view: View) => (view === 'focus' ? FOCUS_TILING : ROOM_TILING);
 export const arrangementOf = (view: View): Arrangement => (view === 'focus' ? 'focus' : 'room');
@@ -432,7 +432,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   free: savedWindows.free,
   windowModeRequest: null,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
-  view: (['repos', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
+  view: (['repos', 'automates', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   project: readPreference('project', ''),
   enteredThroughDoor: false,
   // the server's setting, given with its hello

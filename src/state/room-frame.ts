@@ -10,7 +10,7 @@ export const DEFAULT_ROOM_FRAME: RoomFrame = { x: 0, y: 0, scale: 1 };
 /** smaller, the people and their tags stop being readable */
 export const MIN_ROOM_SCALE = 0.6;
 
-export type RoomName = 'office' | 'lounge';
+export type RoomName = 'office' | 'lounge' | 'automata';
 
 export const roomBox = (home: Box, frame: RoomFrame): Box => ({
   left: home.left + frame.x * home.width, top: home.top + frame.y * home.height, width: home.width * frame.scale, height: home.height * frame.scale,
@@ -49,7 +49,7 @@ const isFrame = (value: unknown): value is RoomFrame =>
 export function sanitizeRoomFrames(raw: unknown): Partial<Record<RoomName, RoomFrame>> {
   if (typeof raw !== 'object' || raw === null) return {};
   const frames: Partial<Record<RoomName, RoomFrame>> = {};
-  for (const room of ['office', 'lounge'] as const) {
+  for (const room of ['office', 'lounge', 'automata'] as const) {
     const frame = (raw as Record<string, unknown>)[room];
     if (isFrame(frame)) frames[room] = { x: frame.x, y: frame.y, scale: frame.scale };
   }

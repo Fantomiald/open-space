@@ -4,7 +4,7 @@ import type { SessionInfo, SessionState } from '../../shared/protocol.ts';
 import { earlySpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
 import { VISIBLE_ROWS, bubbleText, earlyBubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import type { SeenSequences } from '../state/queue.ts';
-import { planRoom, roleTitle, roomSessions } from './cast.ts';
+import { decorOf, planRoom, roleTitle, roomSessions } from './cast.ts';
 import { LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ROOM, blockedTiles, isMetricsPiece, type MetricsKind } from '../../shared/room-layout.ts';
 import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/festivals.ts';
 import { outfitFor } from './outfits.ts';
@@ -770,29 +770,44 @@ describe('automatons in the room', () => {
   });
   const state = (running: AutomatonRun[], agents: AutomataState['agents'] = {}): AutomataState => ({ folder: 'ok', running, recent: [], tasks: [], roles: [], agents });
 
-  it('seats the automatons after the sessions, on the seats they leave, never in the break room', () => {
+  it('seats the automatons in their own room only: never at a session\'s desk, never in the break room', () => {
     const sessions = Array.from({ length: SEAT_COUNT - 2 }, (_, index) => session(`s${index}`, 'work'));
-    const plan = planRoom(sessions, {}, NOBODY, SEAT_COUNT, 'office', new Set([0]), seatedRuns(state([bot('a'), bot('b'), bot('c')])));
-    const bots = plan.people.filter((person) => person.automaton);
-    // one seat is the user's, the sessions take all but one of the rest: one automaton finds a seat
-    assert.deepEqual(bots.map((person) => person.id), [automatonPersonId('a')]);
-    assert.equal(bots[0].name, 'Code reviewer');
-    assert.equal(bots[0].status, 'working');
-    assert.equal(plan.seats.size, SEAT_COUNT - 1);
-    assert.equal(plan.hiddenSessions, 0);
-    assert.deepEqual(planRoom([], {}, NOBODY, LOUNGE_FLOOR.seatCount, 'lounge', new Set(), seatedRuns(state([bot('a')]))).people, []);
+    const bots = seatedRuns(state([bot('a'), bot('b'), bot('c')]));
+    // the office keeps every desk for the sessions, the automatons' waiting or not
+    const office = planRoom(sessions, {}, NOBODY, SEAT_COUNT, 'office', new Set([0]), bots);
+    assert.equal(office.people.filter((person) => person.automaton).length, 0);
+    assert.equal(office.people.length, SEAT_COUNT - 2);
+    assert.deepEqual(planRoom([], {}, NOBODY, LOUNGE_FLOOR.seatCount, 'lounge', new Set(), bots).people, []);
+    // their room holds no session, whatever the sessions do
+    const room = planRoom(sessions, {}, NOBODY, SEAT_COUNT, 'automata', new Set([0]), bots);
+    assert.deepEqual(room.people.map((person) => person.id), ['a', 'b', 'c'].map(automatonPersonId));
+    assert.equal(room.people[0].name, 'Code reviewer');
+    assert.equal(room.people[0].status, 'working');
+    assert.equal(room.seats.size, 3);
+    assert.ok(![...room.seats.values()].includes(0), 'the user\'s seat stays theirs');
+    assert.equal(room.hiddenSessions, 0);
+    assert.deepEqual(roomSessions(sessions, {}, 'automata'), []);
+    // more automatons than desks: the oldest sit
+    const many = seatedRuns(state(Array.from({ length: SEAT_COUNT + 2 }, (_, index) => bot(`r${index}`))));
+    assert.equal(planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set([0]), many).people.length, SEAT_COUNT - 1);
+  });
+
+  it('furnishes the automatons\' room like the office', () => {
+    assert.equal(decorOf('automata'), 'office');
+    assert.equal(decorOf('office'), 'office');
+    assert.equal(decorOf('lounge'), 'lounge');
   });
 
   it('shows the runs a coordinator started as faces on its tag', () => {
     const seated = seatedRuns(state([bot('lead', { role: 'coordinator' }), bot('helper', { parent: 'lead' }), bot('orphan', { parent: 'gone' })]));
     assert.deepEqual(seated.map(({ run }) => run.id), ['lead', 'orphan']);
-    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'office', new Set(), seated);
+    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seated);
     assert.deepEqual(plan.people[0].agents.map((agent) => agent.id), ['helper']);
   });
 
   it('seats each sub-agent at work at a desk of its own, after its run, named after its role', () => {
     const agents = { lead: [{ id: 'call-1', role: 'weekly-retro', task: 'Retro W45' }, { id: 'call-2', role: 'sentry-triage', task: 'Sentry W45' }] };
-    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'office', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], agents)));
+    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], agents)));
     assert.deepEqual(plan.people.map((person) => [person.id, person.name, person.automaton, person.automatonAgent]), [
       [automatonPersonId('lead'), 'Coordinator', 'lead', undefined],
       [automatonAgentPersonId('lead', 'call-1'), 'Weekly retro', 'lead', 'call-1'],
@@ -800,9 +815,9 @@ describe('automatons in the room', () => {
     ]);
     assert.equal(plan.seats.size, 3);
     // they keep their seats when one of them is back
-    const after = planRoom([], {}, NOBODY, SEAT_COUNT, 'office', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
+    const after = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
     const before = new Map([...plan.seats]);
-    const kept = planRoom([], {}, before, SEAT_COUNT, 'office', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
+    const kept = planRoom([], {}, before, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('lead', { role: 'coordinator' })], { lead: [agents.lead[1]] })));
     assert.equal(after.people.length, 2);
     assert.equal(kept.seats.get(automatonAgentPersonId('lead', 'call-2')), plan.seats.get(automatonAgentPersonId('lead', 'call-2')));
   });

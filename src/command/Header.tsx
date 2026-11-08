@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { plural, t } from '../i18n/index.ts';
 import { MODIFIER } from '../lib/platform.ts';
-import { roomSessions } from '../room/cast.ts';
+import { roomSessions, type RoomKind } from '../room/cast.ts';
+import { seatedRuns } from '../state/automata.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { AutomatonIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
-const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge']] as const satisfies readonly (readonly [View, () => unknown, 'office' | 'lounge'])[];
+/** The rooms, the automatons' only while the settings name their folder. */
+const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['automates', AutomatonIcon, 'automata']] as const satisfies readonly (readonly [View, () => unknown, RoomKind])[];
 /** The search opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both); focus mode, with Cmd+. or Ctrl+. */
 const PALETTE_KEYS = `${MODIFIER} K`;
 const FOCUS_KEYS = `${MODIFIER} .`;
@@ -25,6 +27,7 @@ export function Header() {
   // the automatons' button, while the settings name their folder
   const automataOn = useSessions((s) => s.preferences.automataFolder !== '');
   const automataAtWork = useSessions((s) => s.automata.running.length);
+  const automata = useSessions((s) => s.automata);
   const openAutomata = useSessions((s) => s.openAutomata);
   const outdated = useSessions(selectOutdatedCount);
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
@@ -35,8 +38,9 @@ export function Header() {
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
-    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length };
-  }, [sessions, seen]);
+    // the automatons' room: the runs at work and their sub-agents, each at a desk (src/state/automata.ts seatedRuns)
+    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: seatedRuns(automata).length };
+  }, [sessions, seen, automata]);
 
   const words = t.common.header;
   return (
@@ -46,8 +50,8 @@ export function Header() {
         {connection !== 'live' && <span className="cp-header__signal" data-connection={connection} title={words.disconnected} />}
         <h1 className="cp-sr-only">Open Space</h1>
         <nav className="cp-segmented" data-icons aria-label={words.rooms}>
-          {VIEWS.map(([id, ViewIcon, room]) => (
-            <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
+          {VIEWS.filter(([, , room]) => room !== 'automata' || automataOn).map(([id, ViewIcon, room]) => (
+            <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
               <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
             </button>
           ))}

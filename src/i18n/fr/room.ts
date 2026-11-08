@@ -23,6 +23,7 @@ export const room = {
   description: {
     lounge: (count: number) => `Salle de repos : ${plural(count, 'session au repos', 'sessions au repos')}.`,
     office: (count: number) => `Bureau : ${plural(count, 'session', 'sessions')} à leur poste.`,
+    automata: (count: number) => `Salle des automates : ${plural(count, 'automate', 'automates')} au travail.`,
   },
   hidden: {
     more: (count: number) => `${plural(count, 'autre session', 'autres sessions')} sans place`,

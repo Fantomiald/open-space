@@ -18,6 +18,7 @@ export const room: Dictionary['room'] = {
   description: {
     lounge: (count) => `Break room: ${plural(count, 'session resting', 'sessions resting')}.`,
     office: (count) => `Office: ${plural(count, 'session', 'sessions')} at their desks.`,
+    automata: (count) => `Automatons' room: ${plural(count, 'automaton', 'automatons')} at work.`,
   },
   hidden: {
     more: (count) => `${plural(count, 'more session', 'more sessions')} without a seat`,
