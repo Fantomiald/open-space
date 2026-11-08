@@ -51,6 +51,8 @@ export const settings = {
     metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
     metricsFileInvalid: `Le fichier des chiffres doit être un chemin complet vers un .md (${FULL_PATH}), ou rester vide.`,
+    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\ops' : '~/ops',
+    automataFolderInvalid: `Le dossier des automates doit être un chemin complet (${FULL_PATH}), ou rester vide.`,
     // around <code>python3 scripts/macos-app.py</code>
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
@@ -155,6 +157,7 @@ export const settings = {
       crew: { title: 'Ton perso, ton équipe et ton animal', hint: 'Prénoms, looks, anniversaires et métiers.', action: 'Ouvrir l’équipe' },
       journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir. Le dossier est créé à la première note.' },
       metricsFile: { title: 'Fichier des chiffres', hint: 'Un markdown tenu à jour par tes scripts ou une session. Vide : pas d’objet.' },
+      automataFolder: { title: 'Dossier des automates', hint: 'Le dossier de ton orchestrateur d’agents headless (state/runs, state/tasks, .claude/agents). Open Space le lit sans jamais y écrire. Vide : rien.' },
       version: { title: 'Open Space', hint: 'L’app télécharge les nouvelles versions et redémarre dessus dès qu’aucune session ne travaille.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Introuvable sur cet ordinateur.' },
       account: {

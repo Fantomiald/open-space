@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { AutomataState } from './automata.ts';
 import type { SecretEntry } from './secrets.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
 import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
@@ -496,6 +497,8 @@ export interface Preferences {
   favoriteNotes: string[];
   /** the Markdown file the office's numbers object shows, kept up to date by the user's scripts or sessions (absolute; '' by default: no object) */
   metricsFile: string;
+  /** the folder of the user's orchestrator of headless agents, watched read-only (shared/automata.ts; absolute; '' by default: off) */
+  automataFolder: string;
   /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
   language?: Language;
   /** text selected in the page is copied at once, like in a terminal */
@@ -709,6 +712,8 @@ export type ClientMessage =
   | { t: 'searchNotes'; query: string }
   /** reads the numbers file to show it: its numbers then count as seen */
   | { t: 'metrics' }
+  /** the thread of an automaton's run so far (answered with `automatonLog`) */
+  | { t: 'automatonLog'; runId: string }
   /** the threads of every session searched for `query` (answered with `searchResults` carrying the same `id`) */
   | { t: 'search'; id: number; query: string }
   /** what Claude Code spent on this computer, read again if it is older than a minute (`fresh`: read again now) */
@@ -773,6 +778,12 @@ export type ServerMessage =
   | { t: 'metrics'; metrics: MetricsFile | null }
   /** whether the numbers file changed since the page last showed it (the badge on the numbers object); sent at connection and when it flips */
   | { t: 'metricsStatus'; unread: boolean }
+  /** the automatons (shared/automata.ts): sent at connection and whenever a run, a task or a role changes */
+  | { t: 'automata'; state: AutomataState }
+  /** a run's thread read from its transcript, its last events only (`truncated`: older ones left out) */
+  | { t: 'automatonLog'; runId: string; events: LoggedEvent[]; truncated: boolean }
+  /** what a run at work did since, from the end of its transcript */
+  | { t: 'automatonEvents'; runId: string; events: LoggedEvent[] }
   /** the music apps the radio can drive, sent at connection (none outside macOS) */
   | { t: 'musicApps'; apps: MusicApp[] }
   | { t: 'music'; nowPlaying: NowPlaying }

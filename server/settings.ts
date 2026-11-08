@@ -7,6 +7,7 @@ import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
+import { isAutomataFolder } from '../shared/automata.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
@@ -19,6 +20,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   journalFolder: path.join(os.homedir(), 'Journal'),
   favoriteNotes: [],
   metricsFile: '',
+  automataFolder: '',
   copyOnSelect: false,
   autoPip: true,
   effort: '',
@@ -77,6 +79,10 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.metricsFile === 'string' && isMetricsPath(raw.metricsFile)) {
     const file = expandHomePath(raw.metricsFile.trim(), home);
     if (!file || path.isAbsolute(file)) found.metricsFile = file && path.resolve(file);
+  }
+  if (typeof raw.automataFolder === 'string' && isAutomataFolder(raw.automataFolder)) {
+    const folder = expandHomePath(raw.automataFolder.trim(), home);
+    if (!folder || path.isAbsolute(folder)) found.automataFolder = folder && path.resolve(folder);
   }
   return found;
 }

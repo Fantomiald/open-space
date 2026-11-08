@@ -2645,3 +2645,52 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 :root[data-tag-colors='true'] .cp-tag[data-hue='11'] { --tag-color: var(--tag-11); }
 :root[data-tag-colors='true'] .cp-tag[data-hue] { border-color: color-mix(in srgb, var(--tag-color) 45%, transparent); background: color-mix(in srgb, var(--tag-color) 20%, transparent); color: var(--tag-color); }
 :root[data-tag-colors='true'] button.cp-tag[data-hue]:hover { border-color: var(--tag-color); }
+
+/* The automatons (AutomataDialog.tsx): the runs on the left, the one picked on the right, its thread below its facts. Read only. */
+.cp-modal[data-wide]:has(.cp-automata) { width: min(68rem, calc(100vw - 2 * var(--space-4))); }
+.cp-automata__note { margin: 0; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-automata { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: var(--space-4); min-height: 0; height: min(70vh, 44rem); }
+.cp-automata__runs { overflow-y: auto; min-height: 0; padding-right: var(--space-1); }
+.cp-automata__runs h3 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.cp-automata__runs h3:first-child { margin-top: 0; }
+.cp-automata__runs ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.cp-automata__run {
+  display: grid; gap: 2px; width: 100%; padding: var(--space-2); border: var(--border-width) solid transparent; border-radius: var(--radius-md);
+  background: none; color: var(--color-text); text-align: left; font-size: var(--text-sm);
+}
+.cp-automata__run:hover { background: var(--color-surface-raised); }
+.cp-automata__run[aria-current='true'] { border-color: var(--color-border-strong); background: var(--color-surface-raised); }
+.cp-automata__run-role { display: flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-medium); }
+.cp-automata__run-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); font-size: var(--text-xs); }
+.cp-automata__run-when { font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-automata__run[data-status='running'] .cp-automata__run-role .cp-icon { color: var(--tone-work); }
+.cp-automata__run:is([data-status='failed'], [data-status='interrupted']) .cp-automata__run-when { color: var(--tone-error); }
+.cp-automata__detail { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; }
+.cp-automata__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cp-automata__head h3 { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--text-md); }
+.cp-automata__status, .cp-automata__task-status {
+  padding: 0 var(--space-2); border-radius: 999px; font-size: var(--text-xs); background: var(--tone-idle-soft); color: var(--tone-idle);
+}
+:is(.cp-automata__status, .cp-automata__task-status)[data-status='running'] { background: var(--tone-work-soft); color: var(--tone-work); }
+:is(.cp-automata__status, .cp-automata__task-status):is([data-status='failed'], [data-status='interrupted']) { background: var(--tone-error-soft); color: var(--tone-error); }
+.cp-automata__task-status[data-status='waiting'] { background: var(--tone-permission-soft); color: var(--tone-permission); }
+.cp-automata__facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; font-size: var(--text-sm); }
+.cp-automata__facts dt { color: var(--color-text-muted); }
+.cp-automata__facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.cp-automata__meta { display: block; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-automata__helpers { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cp-automata__chip { padding: 0 var(--space-2); border: var(--border-width) solid var(--color-border-strong); border-radius: 999px; background: none; color: var(--color-text); font-size: var(--text-xs); }
+.cp-automata__tabs { display: flex; gap: var(--space-1); overflow-x: auto; scrollbar-width: none; border-bottom: var(--border-width) solid var(--color-border); }
+.cp-automata__tabs button {
+  padding: var(--space-1) var(--space-2); border: 0; border-bottom: 2px solid transparent; background: none; color: var(--color-text-muted);
+  font-size: var(--text-xs); white-space: nowrap; max-width: 16rem; overflow: hidden; text-overflow: ellipsis;
+}
+.cp-automata__tabs button[aria-selected='true'] { color: var(--color-text); border-bottom-color: var(--color-accent); }
+.cp-automata__thread { flex: 1 1 0; min-height: 8rem; display: flex; flex-direction: column; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); }
+.cp-automata__thread > .cp-thread { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.cp-automata__thread > .cp-muted { padding: var(--space-3); }
+@media (max-width: 40rem) {
+  .cp-automata { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .cp-automata__runs { max-height: 30vh; }
+  .cp-automata__thread { min-height: 50vh; }
+}

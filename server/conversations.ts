@@ -31,7 +31,7 @@ export function agentLaunch(cwd: string, conversationId: string, agentId: string
   try {
     const meta = asJson(JSON.parse(readFileSync(path.join(projectFolder(cwd, home), conversationId, 'subagents', `agent-${agentId}.meta.json`), 'utf8')));
     const call = asString(meta.toolUseId);
-    return call ? { call, type: asString(meta.agentType) } : null;
+    return call ? { call, type: asString(meta.agentType), description: asString(meta.description) } : null;
   } catch {
     return null;
   }

@@ -48,6 +48,8 @@ export const settings: Dictionary['settings'] = {
     metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
     metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
     metricsFileInvalid: `The numbers file must be a full path to a .md file (${FULL_PATH}), or stay empty.`,
+    automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\ops' : '~/ops',
+    automataFolderInvalid: `The automata folder must be a full path (${FULL_PATH}), or stay empty.`,
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   prefs: {
@@ -152,6 +154,7 @@ export const settings: Dictionary['settings'] = {
       crew: { title: 'You, your crew and your pet', hint: 'Names, looks, birthdays and jobs.', action: 'Open crew' },
       journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too. The folder is created with the first note.' },
       metricsFile: { title: 'Numbers file', hint: 'A Markdown file kept up to date by your scripts or a session. Empty: no object.' },
+      automataFolder: { title: 'Automata folder', hint: 'The folder of your orchestrator of headless agents (state/runs, state/tasks, .claude/agents). Open Space reads it and never writes there. Empty: nothing.' },
       version: { title: 'Open Space', hint: 'The app downloads new versions and restarts on them as soon as no session is working.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Not found on this computer.' },
       account: {

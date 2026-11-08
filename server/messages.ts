@@ -1,5 +1,6 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
+import { RUN_ID } from '../shared/automata.ts';
 import { ACCOUNTS_BROWSERS, BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_SESSION_FILE, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type FileAction, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
@@ -381,6 +382,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return query !== null ? { t: 'searchNotes', query } : null;
     }
     case 'metrics': return { t: 'metrics' };
+    case 'automatonLog': return typeof raw.runId === 'string' && RUN_ID.test(raw.runId) ? { t: 'automatonLog', runId: raw.runId } : null;
     case 'search': {
       const query = boundedString(raw.query, MAX_QUERY);
       const id = asNumber(raw.id, -1);

@@ -1,6 +1,8 @@
 // Who is in each room and on which seat. The office: the sessions at work or waiting, those waiting for the user
 // first, then the working ones, then the idle ones. The break room: the sessions put to rest and the closed ones,
 // until a message calls them back. Sub-agents do not take a seat: they show above the head of whoever runs them.
+// The user's automatons at work (shared/automata.ts) take the office seats the sessions leave, after them.
+import { automatonPersonId, roleLabel, type AutomatonRun } from '../../shared/automata.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { attentionKind, attentionQueue, isWorking, type AttentionKind, type SeenSequences } from '../state/queue.ts';
@@ -26,6 +28,8 @@ export interface Person {
   tags: string[];
   /** the session works on a branch of its own: a little branch after its name */
   branch: boolean;
+  /** an automaton of the user's orchestrator, not a session: its run id (it wears the automatons' look and tag) */
+  automaton?: string;
 }
 
 export interface RoomPlan {
@@ -78,14 +82,29 @@ function seatedFirst<T>(group: readonly T[], isSeated: (item: T) => boolean): T[
   return [...group.filter(isSeated), ...group.filter((item) => !isSeated(item))];
 }
 
-/** `previousSeats`: who sits where now (people walking out excluded). `reserved`: seats nobody gets (the user's). */
+/** An automaton at work in the office: its role for a name, at work, the runs it started as faces on its tag. */
+export function automatonPerson(run: AutomatonRun, helpers: readonly AutomatonRun[]): Person {
+  const id = automatonPersonId(run.id);
+  return {
+    id, sessionId: id, name: roleLabel(run.role || run.id), title: roleLabel(run.role || run.id), status: 'working',
+    agents: helpers.map((helper) => ({ id: helper.id, name: roleLabel(helper.role), type: helper.role })), tags: [], branch: false, automaton: run.id,
+  };
+}
+
+/**
+ * `previousSeats`: who sits where now (people walking out excluded). `reserved`: seats nobody gets (the user's).
+ * `automata`: the automatons at work, with the runs each started (src/state/automata.ts seatedRuns), office only.
+ */
 export function planRoom(
   sessions: readonly SessionInfo[], seen: SeenSequences, previousSeats: ReadonlyMap<string, number>, seatCount: number,
   room: RoomKind = 'office', reserved: ReadonlySet<number> = new Set(),
+  automata: readonly { run: AutomatonRun; helpers: readonly AutomatonRun[] }[] = [],
 ): RoomPlan {
   const isSeated = (id: string) => previousSeats.has(id);
   const eligible = roomSessions(sessions, seen, room).flatMap((group) => seatedFirst(group, (session) => isSeated(session.id)));
   const admitted = eligible.slice(0, seatCount - reserved.size);
+  const left = seatCount - reserved.size - admitted.length;
+  const bots = room === 'office' ? seatedFirst(automata, ({ run }) => isSeated(automatonPersonId(run.id))).slice(0, Math.max(0, left)) : [];
 
   const people: Person[] = admitted.map((session) => ({
     id: session.id, sessionId: session.id, name: session.name,
@@ -94,6 +113,7 @@ export function planRoom(
     tags: session.tags ?? [],
     branch: !!session.worktree,
   }));
+  people.push(...bots.map(({ run, helpers }) => automatonPerson(run, helpers)));
   return {
     people,
     seats: assignSeats(people.map(({ id }) => ({ id })), previousSeats, seatCount, reserved),

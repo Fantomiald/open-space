@@ -28,3 +28,16 @@ export const BRANCH_GLYPH_HEIGHT = 7;
 /** Working is three dots on the middle row, one lifted at a time, each for WORKING_STEP_MS. */
 export const WORKING_DOTS = [0, 2, 4] as const;
 export const WORKING_STEP_MS = 300;
+
+/**
+ * A little robot's head on a 7 x 7 grid, before the role of an automaton (shared/automata.ts): its antenna, a square
+ * head, two eyes and a mouth, so an automaton's tag never reads as a session's.
+ */
+export const BOT_GLYPH: Glyph = [
+  [3, 0],
+  [0, 1], [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1],
+  [0, 2], [6, 2], [0, 3], [2, 3], [4, 3], [6, 3], [0, 4], [6, 4],
+  [0, 5], [2, 5], [3, 5], [4, 5], [6, 5],
+  [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 6], [6, 6],
+];
+export const BOT_GLYPH_SIZE = 7;

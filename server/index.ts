@@ -40,6 +40,7 @@ import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
+import { AutomataWatch } from './automata-watch.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
@@ -194,6 +195,9 @@ async function checkMetrics() {
   broadcast({ t: 'metricsStatus', unread });
 }
 setInterval(() => { checkMetrics().catch((error: unknown) => log('numbers file', error)); }, METRICS_CHECK_MS).unref();
+/** the user's automatons, watched read-only from the folder of the settings (server/automata-watch.ts) */
+const automata = new AutomataWatch({ folder: () => settings.preferences.automataFolder, broadcast, log });
+automata.start();
 /** The Claude Code installed now: its updater replaces it in the background, the next launches start the new one */
 let installedClaude = claude?.version ?? '';
 /** a `claude update` is running: a second click waits for it */
@@ -273,6 +277,7 @@ function onConnection(socket: WebSocket) {
     broadcast(preferencesMessage());
   }).catch((error: unknown) => log('cannot read the Claude Code settings', error));
   send({ t: 'metricsStatus', unread: metricsUnread });
+  send({ t: 'automata', state: automata.state });
   send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
     if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
@@ -334,6 +339,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await sessions.applySettings(changedSettings(before, settings.preferences.claude));
       if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
       await checkMetrics();
+      await automata.poll();
       break;
     }
     case 'onboard': {
@@ -497,6 +503,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await checkMetrics();
       break;
     }
+    case 'automatonLog': send({ t: 'automatonLog', runId: message.runId, ...await automata.thread(message.runId) }); break;
     case 'search': send({ t: 'searchResults', id: message.id, query: message.query, hits: sessions.search(message.query) }); break;
     case 'costs': {
       // the first reading of the transcripts is long: what is known goes out at once, the finished report follows
@@ -566,6 +573,7 @@ async function shutdown() {
   const deadline = setTimeout(() => process.exit(1), 10_000);
   deadline.unref();
   browsers.shutdown();
+  automata.stop();
   await sessions.shutdown();
   process.exit(0);
 }

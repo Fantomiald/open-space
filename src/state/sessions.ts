@@ -1,5 +1,7 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
+import { NO_AUTOMATA, type AutomataState } from '../../shared/automata.ts';
+import { appendRunEvents, type RunLog } from './automata.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
@@ -107,6 +109,13 @@ interface CommandPostState {
   metrics: MetricsFile | null | undefined;
   /** the numbers file changed since the page last showed it: a badge on the numbers object */
   metricsUnread: boolean;
+  /** the user's automatons, as the server last told them (shared/automata.ts) */
+  automata: AutomataState;
+  /** the automatons' panel is open, on a run (null: the first at work, or the last ended) */
+  automataOpen: boolean;
+  automatonId: string | null;
+  /** the threads of the runs the page asked for, by run id */
+  automatonLogs: Record<string, RunLog>;
   /** the music apps of the computer the radio can drive (none outside macOS) */
   musicApps: MusicApp[];
   /** what the music app the radio drives plays, as last asked for */
@@ -305,6 +314,8 @@ interface CommandPostState {
   openBoard: (open: boolean) => void;
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
+  /** opens the automatons' panel (on a run, whose thread is then asked for) or closes it */
+  openAutomata: (open: boolean, runId?: string | null) => void;
   /** false when the message could not leave (not connected) */
   /** `birthday`: "MM-DD", or undefined for none */
   saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
@@ -375,6 +386,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   metricsOpen: false,
   metrics: undefined,
   metricsUnread: false,
+  automata: NO_AUTOMATA,
+  automataOpen: false,
+  automatonId: null,
+  automatonLogs: {},
   musicApps: [],
   nowPlaying: null,
   musicLibrary: null,
@@ -419,7 +434,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   enteredThroughDoor: false,
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -588,6 +603,14 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'noteMatches': set({ noteMatches: { query: message.query, matches: message.matches } }); break;
       case 'metrics': set({ metrics: message.metrics }); break;
       case 'metricsStatus': set({ metricsUnread: message.unread }); break;
+      case 'automata': set({ automata: message.state }); break;
+      case 'automatonLog': set({ automatonLogs: { ...s.automatonLogs, [message.runId]: { events: message.events, truncated: message.truncated } } }); break;
+      // a run's events only count once its thread was read: they follow it
+      case 'automatonEvents': {
+        const log = s.automatonLogs[message.runId];
+        if (log) set({ automatonLogs: { ...s.automatonLogs, [message.runId]: appendRunEvents(log, message.events) } });
+        break;
+      }
       case 'musicApps': set({ musicApps: message.apps }); break;
       case 'music': set({ nowPlaying: message.nowPlaying }); break;
       case 'musicLibrary': set({ musicLibrary: { query: message.query, playlists: message.playlists, tracks: message.tracks } }); break;
@@ -836,6 +859,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openMetrics: (open) => {
     set({ metricsOpen: open, metrics: undefined });
     if (open) get().send({ t: 'metrics' });
+  },
+  openAutomata: (open, runId = null) => {
+    // a thread is read again each time it is shown: what was kept may have missed events while the page was away
+    set((state) => ({ automataOpen: open, automatonId: open ? runId : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));
+    if (open && runId) get().send({ t: 'automatonLog', runId });
   },
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),

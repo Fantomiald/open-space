@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
+import { isAutomataFolder } from '../../shared/automata.ts';
 import { isFullPath } from '../../shared/paths.ts';
 import type { TerminalKind } from '../../shared/terminal.ts';
 import { applyGlassOpacity } from '../design/glass.ts';
@@ -15,7 +16,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -49,7 +50,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
   office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
-  notes: [['files', ['journalFolder', 'metricsFile']]],
+  notes: [['files', ['journalFolder', 'metricsFile', 'automataFolder']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
 
@@ -149,7 +150,7 @@ function SettingsEditor() {
   const content = useRef<HTMLDivElement>(null);
   // the notes folder and the numbers file as the page shows paths ("~/Journal"): the server expands "~"
   const [draft, setDraft] = useState<Preferences>(() => ({
-    ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), metricsFile: homeRelative(preferences.metricsFile),
+    ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), metricsFile: homeRelative(preferences.metricsFile), automataFolder: homeRelative(preferences.automataFolder),
   }));
   const terminal = draft.terminal ?? 'cmd';
   const change = (changes: Partial<Preferences>) => setDraft((current) => ({ ...current, ...changes }));
@@ -162,6 +163,7 @@ function SettingsEditor() {
     if (!next.roots.length) return t.settings.dialog.noFolder;
     if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
+    if (!isAutomataFolder(next.automataFolder)) return t.settings.dialog.automataFolderInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });
 
@@ -431,6 +433,11 @@ function SettingsEditor() {
       case 'metricsFile': return (
         <Row key={id} id={id} flash={flash} wide icon={<ChartIcon />} title={rows.metricsFile.title} hint={rows.metricsFile.hint}>
           <input aria-labelledby={`setting-${id}-title`} title={preferences.metricsFile || undefined} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
+        </Row>
+      );
+      case 'automataFolder': return (
+        <Row key={id} id={id} flash={flash} wide icon={<AutomatonIcon />} title={rows.automataFolder.title} hint={rows.automataFolder.hint}>
+          <input aria-labelledby={`setting-${id}-title`} title={preferences.automataFolder || undefined} value={draft.automataFolder} onChange={(e) => change({ automataFolder: e.target.value })} placeholder={t.settings.dialog.automataFolderPlaceholder} spellCheck={false} />
         </Row>
       );
       case 'version': return (

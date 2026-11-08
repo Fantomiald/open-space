@@ -10,7 +10,7 @@ import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
 import { metricsBadgeAt } from './metrics.ts';
-import { BRANCH_GLYPH, BRANCH_GLYPH_HEIGHT, BRANCH_GLYPH_WIDTH, STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
+import { BOT_GLYPH, BOT_GLYPH_SIZE, BRANCH_GLYPH, BRANCH_GLYPH_HEIGHT, BRANCH_GLYPH_WIDTH, STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { roomTheme, themeKit } from './themes/index.ts';
@@ -435,6 +435,8 @@ interface NameTag {
   moreTags: number;
   /** on a branch of its own: a little branch after the name */
   branch?: boolean;
+  /** an automaton, not a session: a teal pill with a little robot before its role */
+  automaton?: boolean;
   /** whose sub-agents they are, for their faces */
   sessionId: string;
   agents: readonly Agent[];
@@ -466,6 +468,7 @@ const extraAgents = (tag: NameTag) => Math.max(0, tag.agents.length - SHOWN_AGEN
 
 function tagWidth(context: Context, tag: NameTag): number {
   let width = (tag.status ? 2 + ICON_SIZE + TAG_GAP : TAG_PADDING) + textWidthOf(context, tag.name) + TAG_PADDING;
+  if (tag.automaton) width += BOT_GLYPH_SIZE + TAG_GAP;
   if (tag.branch) width += TAG_GAP + BRANCH_GLYPH_WIDTH;
   for (const { text } of tag.tags) width += SEPARATED + textWidthOf(context, text);
   if (tag.moreTags) width += TAG_GAP + textWidthOf(context, `+${tag.moreTags}`);
@@ -538,18 +541,23 @@ function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, lef
     context.roundRect(left - 1.5, top - 1.5, width + 3, TAG_HEIGHT + 3, TAG_HEIGHT / 2 + 1.5);
     context.stroke();
   }
-  context.fillStyle = asking ? P.askingTag : P.tag;
+  context.fillStyle = asking ? P.askingTag : tag.automaton ? P.automatonTag : P.tag;
   context.beginPath();
   context.roundRect(left, top, width, TAG_HEIGHT, TAG_HEIGHT / 2);
   context.fill();
-  context.strokeStyle = tag.framed ? P.selection : asking ? P.askingTagEdge : tag.status === 'error' ? P.errorTagEdge : P.tagEdge;
-  context.lineWidth = tag.framed ? 1 : asking ? 0.75 : 0.5;
+  context.strokeStyle = tag.framed ? P.selection : asking ? P.askingTagEdge : tag.status === 'error' ? P.errorTagEdge : tag.automaton ? P.automatonTagEdge : P.tagEdge;
+  context.lineWidth = tag.framed || tag.automaton ? 1 : asking ? 0.75 : 0.5;
   context.stroke();
 
   let x = left + TAG_PADDING;
   if (tag.status) {
     paintTagIcon(context, tag.status, left + 2, top + 2, time, reducedMotion);
     x = left + 2 + ICON_SIZE + TAG_GAP;
+  }
+  if (tag.automaton) {
+    const glyphTop = top + Math.floor((TAG_HEIGHT - BOT_GLYPH_SIZE) / 2);
+    for (const [dx, dy] of BOT_GLYPH) rect(context, x + dx, glyphTop + dy, 1, 1, P.automatonGlyph);
+    x += BOT_GLYPH_SIZE + TAG_GAP;
   }
   context.fillStyle = tag.colour;
   context.fillText(tag.name, x, top + 10);
@@ -751,7 +759,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch,
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch, automaton: character.person.automaton !== undefined,
         tags: shownTags.shown.map((text, index) => ({ text, color: options.tagColors ? sessionTagColors(character.person.tags)[index] : null })), moreTags: shownTags.more,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },

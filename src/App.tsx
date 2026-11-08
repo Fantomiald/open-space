@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
 import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { MetricsDialog } from './command/MetricsDialog.tsx';
+import { AutomataDialog } from './command/AutomataDialog.tsx';
 import { BrowserPip } from './command/BrowserPip.tsx';
 import { SearchPalette } from './command/SearchPalette.tsx';
 import { CopyOnSelect } from './command/CopyOnSelect.tsx';
@@ -210,6 +211,7 @@ export function App() {
       <BoardDialog />
       <BranchesDialog />
       <MetricsDialog />
+      <AutomataDialog />
       <TrustDialog />
       <Toasts />
       <AttentionAnnouncer />

@@ -15,7 +15,9 @@ import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
 import { NO_GEAR, parseLook, randomLook } from '../../shared/look.ts';
-import { DEFAULT_LOOK } from '../design/people-palette.ts';
+import { AUTOMATON_LOOK, DEFAULT_LOOK } from '../design/people-palette.ts';
+import { automatonPersonId, type AutomataState, type AutomatonRun } from '../../shared/automata.ts';
+import { appendRunEvents, seatedRuns } from '../state/automata.ts';
 import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
 import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
@@ -759,5 +761,47 @@ describe('name tags', () => {
     assert.equal(tops[1], 100, 'the front one keeps its place');
     assert.equal(tops[0], 100 - 1 - 13);
     assert.equal(tops[2], tops[0] - 1 - 13);
+  });
+});
+
+describe('automatons in the room', () => {
+  const bot = (id: string, extra: Partial<AutomatonRun> = {}): AutomatonRun => ({
+    id, role: 'code-reviewer', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null, ...extra,
+  });
+  const state = (running: AutomatonRun[]): AutomataState => ({ folder: 'ok', running, recent: [], tasks: [], roles: [] });
+
+  it('seats the automatons after the sessions, on the seats they leave, never in the break room', () => {
+    const sessions = Array.from({ length: SEAT_COUNT - 2 }, (_, index) => session(`s${index}`, 'work'));
+    const plan = planRoom(sessions, {}, NOBODY, SEAT_COUNT, 'office', new Set([0]), seatedRuns(state([bot('a'), bot('b'), bot('c')])));
+    const bots = plan.people.filter((person) => person.automaton);
+    // one seat is the user's, the sessions take all but one of the rest: one automaton finds a seat
+    assert.deepEqual(bots.map((person) => person.id), [automatonPersonId('a')]);
+    assert.equal(bots[0].name, 'Code reviewer');
+    assert.equal(bots[0].status, 'working');
+    assert.equal(plan.seats.size, SEAT_COUNT - 1);
+    assert.equal(plan.hiddenSessions, 0);
+    assert.deepEqual(planRoom([], {}, NOBODY, LOUNGE_FLOOR.seatCount, 'lounge', new Set(), seatedRuns(state([bot('a')]))).people, []);
+  });
+
+  it('shows the runs a coordinator started as faces on its tag', () => {
+    const seated = seatedRuns(state([bot('lead', { role: 'coordinator' }), bot('helper', { parent: 'lead' }), bot('orphan', { parent: 'gone' })]));
+    assert.deepEqual(seated.map(({ run }) => run.id), ['lead', 'orphan']);
+    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'office', new Set(), seated);
+    assert.deepEqual(plan.people[0].agents.map((agent) => agent.id), ['helper']);
+  });
+
+  it('dresses every automaton alike, unlike a session', () => {
+    assert.notEqual(AUTOMATON_LOOK.skin, DEFAULT_LOOK.skin);
+    assert.deepEqual(parseLook(AUTOMATON_LOOK), AUTOMATON_LOOK);
+  });
+
+  it('adds what the server sends to a run\'s thread once, the last ones kept', () => {
+    const event = (seq: number) => ({ seq, at: seq, ev: { k: 'say' as const, who: 'chef', text: `${seq}` } });
+    const log = appendRunEvents({ events: [event(1), event(2)], truncated: false }, [event(2), event(3)]);
+    assert.deepEqual(log.events.map((e) => e.seq), [1, 2, 3]);
+    const short = appendRunEvents(log, [event(4), event(5)], 3);
+    assert.deepEqual(short.events.map((e) => e.seq), [3, 4, 5]);
+    assert.equal(short.truncated, true);
+    assert.equal(appendRunEvents(log, [event(1)]), log);
   });
 });

@@ -202,6 +202,10 @@ export const ROOM_PALETTE = {
   /** the little branch after the name of a session on a branch of its own (the page's accent, like its branch pill) */
   branch: '#9aa8ff',
   playerTagText: '#ffd6e2',
+  /** an automaton's tag (shared/automata.ts): a teal pill and edge, a little robot before its role, so none passes for a session */
+  automatonTag: 'rgba(10, 42, 48, 0.86)',
+  automatonTagEdge: '#5fd3c4',
+  automatonGlyph: '#5fd3c4',
   /** the hairline around a name tag, like the edge of the glass panels */
   tagEdge: 'rgba(255, 255, 255, 0.18)',
   /** the outline of the door under the pointer */

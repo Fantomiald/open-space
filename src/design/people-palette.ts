@@ -36,6 +36,15 @@ export const DEFAULT_LOOK: Look = {
   eyeGear: 'none', faceGear: 'none', neckGear: 'none', shoulderGear: 'none', backGear: 'none', waistGear: 'none', handGear: 'none', backColor: DEFAULT_BACK_COLOR,
 };
 
+/**
+ * Every automaton of the user's orchestrator (shared/automata.ts) wears this: a grey metal skin, a visor and headphones,
+ * a teal work suit. No one of the crew can be taken for one, and a session never wears it.
+ */
+export const AUTOMATON_LOOK: Look = {
+  ...DEFAULT_LOOK, skin: '#b8bcc6', eyes: 'round', hair: 'none', headphones: true, eyeGear: 'visor',
+  top: 'tracksuit', topColor: '#2a8a9a', accentColor: '#9fdccf', bottom: 'tracksuit', bottomColor: '#1f2a4a', shoes: 'boots', shoesColor: '#2a2d36',
+};
+
 /** The colours of the anime pieces (src/room/costumes.ts), fixed like the characters'. */
 export const COSTUME_COLORS = {
   orange: '#f08a24', black: '#26272f', zipper: '#d5d8de', swirl: '#d0402e', band: '#26304f', bandage: '#ecebe4',

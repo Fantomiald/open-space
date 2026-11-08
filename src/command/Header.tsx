@@ -4,7 +4,7 @@ import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions } from '../room/cast.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { AutomatonIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
@@ -22,6 +22,10 @@ export function Header() {
   const openPalette = useSessions((s) => s.openPalette);
   const openSettings = useSessions((s) => s.openSettings);
   const openCrew = useSessions((s) => s.openCrew);
+  // the automatons' button, while the settings name their folder
+  const automataOn = useSessions((s) => s.preferences.automataFolder !== '');
+  const automataAtWork = useSessions((s) => s.automata.running.length);
+  const openAutomata = useSessions((s) => s.openAutomata);
   const outdated = useSessions(selectOutdatedCount);
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
@@ -68,6 +72,12 @@ export function Header() {
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
+        {automataOn && (
+          <button type="button" className="cp-button" data-variant="quiet" onClick={() => openAutomata(true)} title={t.automata.buttonCount(automataAtWork)}>
+            <AutomatonIcon /><span className="cp-header__label">{t.automata.button}</span>
+            {automataAtWork > 0 && <span className="cp-header__room-count">{automataAtWork}</span>}
+          </button>
+        )}
         <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} title={words.crewTitle}>
           <CrewIcon /><span className="cp-header__label">{words.crew}</span>
         </button>

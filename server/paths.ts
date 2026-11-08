@@ -36,6 +36,21 @@ export function resolveFileWith(file: string, extension: string): string | null 
   }
 }
 
+/**
+ * The real path of an existing directory named by a full path from the settings ("~" is the home), otherwise null.
+ * For folders the user picks outside the session roots (the automatons'), which Open Space only reads.
+ */
+export function resolveDirectory(directory: string, home = os.homedir()): string | null {
+  const expanded = expandHomePath(directory.trim(), home);
+  if (!expanded || !path.isAbsolute(expanded)) return null;
+  try {
+    const real = realpathSync(expanded);
+    return statSync(real).isDirectory() ? real : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The real path of an existing directory that lies inside one of the allowed roots, otherwise null. "~" is the home, as the page shows it. */
 export function resolveAllowedDirectory(directory: string, roots: readonly string[], home = os.homedir()): string | null {
   const expanded = expandHomePath(directory, home);

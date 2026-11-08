@@ -4,7 +4,9 @@
 import { inProject } from '../state/projects.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
-import { DEFAULT_LOOK } from '../design/people-palette.ts';
+import { AUTOMATON_LOOK, DEFAULT_LOOK } from '../design/people-palette.ts';
+import { runOfPerson } from '../../shared/automata.ts';
+import { seatedRuns } from '../state/automata.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
 import { availability } from '../state/availability.ts';
@@ -79,6 +81,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const show = useSessions((s) => s.show);
   /** a click opens the session alone; Shift+click adds it under the open ones (or takes it out) */
   const crew = useSessions((s) => s.crew);
+  // the user's automatons at work take the office seats the sessions leave (src/room/cast.ts)
+  const automata = useSessions((s) => s.automata);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const zoom = useRef<HTMLDivElement>(null);
@@ -110,6 +114,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   // the user wears their own look; a session, sub-agent or visitor named like a crew member wears that member's look
   const lookFor = useMemo(() => (personId: string): Look => {
     if (personId === PLAYER_ID) return crewRef.current.find((member) => member.self)?.look ?? DEFAULT_LOOK;
+    // an automaton, and the runs it started (their faces on its tag): never a look of the crew
+    if (runOfPerson(personId)) return AUTOMATON_LOOK;
     const name = scene.nameOf(personId);
     const member = crewRef.current.find((candidate) => !candidate.self && candidate.name === name);
     return member ? member.look ?? DEFAULT_LOOK : lookOfStranger(personId);
@@ -126,7 +132,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const list = useMemo(() => Object.values(sessions), [sessions]);
   const inRoom = useMemo(() => roomSessions(list, seen, room).flat(), [list, seen, room]);
   // the plan reads who sits where now: it changes with the sessions and with a move by hand (`moves`), and the scene follows it below
-  const plan = useMemo(() => planRoom(list, seen, new Map([...keptSeats.current, ...scene.seats()]), floor.seatCount, room, scene.playerSeats()), [list, seen, scene, floor, room, moves]);
+  const bots = useMemo(() => seatedRuns(automata), [automata]);
+  const plan = useMemo(() => planRoom(list, seen, new Map([...keptSeats.current, ...scene.seats()]), floor.seatCount, room, scene.playerSeats(), bots), [list, seen, scene, floor, room, moves, bots]);
   const hidden = useMemo(() => inRoom.filter((session) => !plan.seats.has(session.id)), [inRoom, plan]);
   const [showHidden, setShowHidden] = useState(false);
 
@@ -225,6 +232,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const point = roomPoint(event);
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
+    if (character?.person.automaton) { useSessions.getState().openAutomata(true, character.person.automaton); return; }
     if (character) { show(character.person.sessionId); return; }
     const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
@@ -251,7 +259,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       : floor.isDoorAt(point) ? 'door' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
-    const text = visitor ? words.startWith(visitor.name)
+    const automaton = person && person !== PLAYER_ID ? scene.characters.get(person)?.person : undefined;
+    const text = automaton?.automaton ? t.automata.hint(automaton.name) : visitor ? words.startWith(visitor.name)
       : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard
       : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
     setHintText(text);

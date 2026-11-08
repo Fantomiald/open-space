@@ -1,5 +1,9 @@
 # Versions
 
+## Pas encore publié
+
+- Automates, en lecture seule : un nouveau réglage « Dossier des automates » (Réglages > Notes et chiffres, vide par défaut) nomme le dossier d'un orchestrateur d'agents `claude -p` lancés hors d'Open Space. Ses runs au travail s'assoient aux postes que les sessions laissent libres, en tenue d'automate, avec une étiquette turquoise à petit robot et leur rôle. Un clic sur l'un d'eux, ou le bouton Automates de l'en-tête, ouvre leur panneau : runs au travail et terminés récemment (fini, échoué, interrompu), rôle et sa description du catalogue, tâche, sous-agents (chacun dans son onglet, nommé par son rôle) et le fil lu dans le transcript de Claude Code. Rien n'est piloté, rien n'est écrit dans ce dossier.
+
 ## 1.27.4
 
 - Récap de la semaine : la flèche « Semaine précédente » ne fait plus planter l'affichage.

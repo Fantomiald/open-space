@@ -51,7 +51,7 @@ export function chromeSight(content: unknown): ChromeSight | null {
 }
 
 /** The Agent call that first started a sub-agent, and the sub-agent's type. */
-export interface AgentLaunch { call: string; type: string }
+export interface AgentLaunch { call: string; type: string; description?: string }
 
 export interface NormalizerOptions {
   emit: (event: OfficeEvent) => void;

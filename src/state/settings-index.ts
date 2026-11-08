@@ -16,7 +16,7 @@ export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',
   theme: 'office', festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office',
-  journalFolder: 'notes', metricsFile: 'notes',
+  journalFolder: 'notes', metricsFile: 'notes', automataFolder: 'notes',
   version: 'about', claude: 'about', account: 'about', links: 'about', dockApp: 'about',
 };
 

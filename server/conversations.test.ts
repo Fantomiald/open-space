@@ -102,8 +102,8 @@ describe('How a sub-agent was launched', () => {
   writeFileSync(path.join(subagents, 'agent-af0bd0a530450e836.meta.json'), line({ agentType: 'opus', description: 'Vidéos', toolUseId: 'toolu_01XrkihB9qTwFQgufxpbKzLp', requestShape: 'background' }));
   writeFileSync(path.join(subagents, 'agent-a2c808b20819e745d.meta.json'), 'not json');
 
-  it('reads its Agent call and type from the record next to the transcript', () => {
-    assert.deepEqual(agentLaunch(cwd, A, 'af0bd0a530450e836', home), { call: 'toolu_01XrkihB9qTwFQgufxpbKzLp', type: 'opus' });
+  it('reads its Agent call, type and description from the record next to the transcript', () => {
+    assert.deepEqual(agentLaunch(cwd, A, 'af0bd0a530450e836', home), { call: 'toolu_01XrkihB9qTwFQgufxpbKzLp', type: 'opus', description: 'Vidéos' });
   });
 
   it('gives nothing for an unknown, unreadable or suspicious id', () => {
