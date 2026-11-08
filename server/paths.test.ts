@@ -115,4 +115,19 @@ describe('listProjectDirectories', () => {
     assert.ok(!listed.includes(outside));
     assert.ok(!listed.some((entry) => entry.endsWith('file.txt')));
   });
+
+  it('does not look inside a project, nor offer linked worktrees, but keeps submodules', () => {
+    const lists = path.join(base, 'lists');
+    mkdirSync(path.join(lists, 'app', '.git'), { recursive: true });
+    mkdirSync(path.join(lists, 'app', 'src'), { recursive: true });
+    mkdirSync(path.join(lists, 'app-feature'), { recursive: true });
+    writeFileSync(path.join(lists, 'app-feature', '.git'), `gitdir: ${path.join(lists, 'app', '.git', 'worktrees', 'app-feature')}\n`);
+    mkdirSync(path.join(lists, 'group', 'web'), { recursive: true });
+    mkdirSync(path.join(lists, 'group', 'web-fix'), { recursive: true });
+    writeFileSync(path.join(lists, 'group', 'web-fix', '.git'), 'gitdir: /repos/web.git/worktrees/web-fix\n');
+    mkdirSync(path.join(lists, 'group', 'vendored'), { recursive: true });
+    writeFileSync(path.join(lists, 'group', 'vendored', '.git'), 'gitdir: ../../app/.git/modules/vendored\n');
+    const listed = listProjectDirectories([lists]);
+    assert.deepEqual(listed.sort(), [path.join(lists, 'app'), path.join(lists, 'group'), path.join(lists, 'group', 'vendored'), path.join(lists, 'group', 'web')]);
+  });
 });

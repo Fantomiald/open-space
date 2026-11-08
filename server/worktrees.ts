@@ -7,7 +7,7 @@
 // What Open Space remembers of a branch lives in the repository's own config (branch.<name>.openspace-*, local, never
 // committed): who it is for, its base, the conversation that works on it. `git branch -D` takes it away with the branch.
 import { execFile } from 'node:child_process';
-import { accessSync, constants, existsSync, realpathSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { appendFile, cp, mkdir, readdir, readFile, rename, rm, rmdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,6 +82,33 @@ function isAlive(pid: number) {
 
 export async function worktreeList(cwd: string): Promise<WorktreeEntry[]> {
   return parseWorktreeList(await git(cwd, ['worktree', 'list', '--porcelain'])).map((entry) => ({ ...entry, path: real(entry.path) }));
+}
+
+/**
+ * The same place in the main checkout when `folder` is in a linked worktree (git worktree add): its .git is a file
+ * naming <repo>/.git/worktrees/<name>, which names the repository's common folder. Null in a main checkout, outside
+ * git, in a submodule (no commondir) or in a worktree of a bare repository (no main checkout). Reads files, runs no git.
+ */
+export function checkoutHome(folder: string): string | null {
+  const start = real(folder);
+  for (let top = start; ; top = path.dirname(top)) {
+    const dotGit = path.join(top, '.git');
+    let isFile: boolean;
+    try { isFile = statSync(dotGit).isFile(); } catch { if (path.dirname(top) === top) return null; continue; }
+    if (!isFile) return null;
+    try {
+      const gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, 'utf8'))?.[1];
+      if (!gitdir) return null;
+      const own = path.resolve(top, gitdir);
+      const common = path.resolve(own, readFileSync(path.join(own, 'commondir'), 'utf8').trim());
+      if (path.basename(common) !== '.git' || !statSync(common).isDirectory()) return null;
+      const main = real(path.dirname(common));
+      const home = path.join(main, path.relative(top, start));
+      return existsSync(home) ? real(home) : main;
+    } catch {
+      return null;
+    }
+  }
 }
 
 /** Files with changes not committed in a checkout ("M  a.ts", "?? b.ts"), by path. */

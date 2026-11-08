@@ -361,6 +361,11 @@ export interface SessionInfo {
   accountsBrowser?: AccountsBrowser;
   /** it works on a branch of its own, in a worktree */
   worktree?: WorktreeInfo;
+  /**
+   * its folder is in a worktree made outside Open Space (git worktree add): the same place in the repository's main
+   * checkout, the project it works for. Worked out from the folder, never stored.
+   */
+  checkout?: string;
   /** the folder its conversation was last told it works in (see Session.placeNote); absent for sessions older than worktrees */
   toldPlace?: string;
   /** its conversation knows the rules of the shared browser (system prompt or Session.sharedBrowserNote) */
