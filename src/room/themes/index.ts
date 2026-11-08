@@ -13,7 +13,11 @@ import { TOKYO } from './tokyo.ts';
 /** The office is the room as it is: no kit, everything drawn as usual. */
 const KITS: Readonly<Record<RoomTheme, ThemeKit | null>> = { office: null, space: SPACE, tokyo: TOKYO, dungeon: DUNGEON, beach: BEACH, pirate: PIRATE, forest: FOREST, cellar: CELLAR };
 
-export const themeKit = (): ThemeKit | null => KITS[roomTheme()];
+/** A room that keeps its own dress whatever the theme (the automatons' server room, themes/servers.ts), while it is shown. */
+let dressed: ThemeKit | null = null;
+export function dressRoom(kit: ThemeKit | null) { dressed = kit; }
+
+export const themeKit = (): ThemeKit | null => dressed ?? KITS[roomTheme()];
 /** The light of the hour as the theme sees it. */
 export const themedLighting = (lighting: Lighting): Lighting => themeKit()?.lighting?.(lighting) ?? lighting;
 export { roomTheme, setRoomTheme } from './kit.ts';

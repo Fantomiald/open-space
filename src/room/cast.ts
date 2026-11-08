@@ -1,7 +1,7 @@
 // Who is in each room and on which seat. The office: the sessions at work or waiting, those waiting for the user
 // first, then the working ones, then the idle ones. The break room: the sessions put to rest and the closed ones,
 // until a message calls them back. Sub-agents do not take a seat: they show above the head of whoever runs them.
-// The user's automatons at work (shared/automata.ts) take the office seats the sessions leave, after them.
+// The user's automatons at work (shared/automata.ts) stand in the capsules of their own room, the server room.
 import { automatonAgentPersonId, automatonPersonId, roleLabel } from '../../shared/automata.ts';
 import type { SeatedAutomaton } from '../state/automata.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
@@ -33,6 +33,8 @@ export interface Person {
   automaton?: string;
   /** an automaton that is a sub-agent of that run: the id of the Agent call that launched it */
   automatonAgent?: string;
+  /** an automaton's role (its run's, or its sub-agent's): drawn as a robot of that role (src/room/robot.ts) */
+  automatonRole?: string;
 }
 
 export interface RoomPlan {
@@ -64,7 +66,7 @@ export function sessionStatus(session: SessionInfo, seen: SeenSequences): Status
 /** The office, the break room, and the automatons' room (the office's plan, its desks for the automatons only). */
 export type RoomKind = 'office' | 'lounge' | 'automata';
 
-/** The room whose decor a room wears: the automatons' room is furnished like the office. */
+/** Which room's festival decorations a room takes (festivals.ts): the automatons' server room never has any, it counts as the office. */
 export const decorOf = (room: RoomKind): 'office' | 'lounge' => (room === 'lounge' ? 'lounge' : 'office');
 
 const STOPPED: ReadonlySet<SessionInfo['state']> = new Set(['closed', 'done', 'error']);
@@ -100,6 +102,7 @@ export function automatonPerson({ run, helpers, agent }: SeatedAutomaton): Perso
   return {
     id, sessionId: id, name, title: name, status: 'working',
     agents: helpers.map((helper) => ({ id: helper.id, name: roleLabel(helper.role), type: helper.role })), tags: [], branch: false, automaton: run.id,
+    automatonRole: agent ? agent.role : run.role || 'agent',
     ...(agent ? { automatonAgent: agent.id } : {}),
   };
 }

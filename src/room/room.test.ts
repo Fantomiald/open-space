@@ -5,17 +5,23 @@ import { earlySpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
 import { VISIBLE_ROWS, bubbleText, earlyBubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import type { SeenSequences } from '../state/queue.ts';
 import { decorOf, planRoom, roleTitle, roomSessions } from './cast.ts';
-import { LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ROOM, blockedTiles, isMetricsPiece, type MetricsKind } from '../../shared/room-layout.ts';
+import { LOUNGE, METRICS_KINDS, METRICS_OBJECT, METRICS_PIECES, OFFICE, ORB, ROOM, SERVER_ROOM, blockedTiles, facingToward, isMetricsPiece, layoutOn, type MetricsKind } from '../../shared/room-layout.ts';
 import { FESTIVALS, easterSunday, festivalDay, festivalOn } from '../../shared/festivals.ts';
 import { outfitFor } from './outfits.ts';
 import { Floor } from './floor.ts';
-import { distance, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
+import { depthOf, distance, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
 import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
 import { assignSeats } from './seats.ts';
 import { NO_GEAR, parseLook, randomLook } from '../../shared/look.ts';
-import { AUTOMATON_LOOK, DEFAULT_LOOK } from '../design/people-palette.ts';
+import { AUTOMATON_LOOK, DEFAULT_LOOK, ROBOT_ACCENTS } from '../design/people-palette.ts';
+import { furnitureDepth } from './pixel-furniture.ts';
+import { chestOf, cordPath, orbCenter, packetsOn, pulseRings } from './server-room.ts';
+import { ORB_SHAPE } from './server-furniture.ts';
+import { robotHeight, robotLook, robotRows, withRobots } from './robot.ts';
+import type { SpriteSource } from './sprites.ts';
+import { ART_SCALE } from './pixel-art.ts';
 import { automatonAgentPersonId, automatonPersonId, type AutomataState, type AutomatonRun } from '../../shared/automata.ts';
 import { appendRunEvents, seatedRuns } from '../state/automata.ts';
 import { lookOfStranger } from './chibi.ts';
@@ -792,7 +798,7 @@ describe('automatons in the room', () => {
     assert.equal(planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set([0]), many).people.length, SEAT_COUNT - 1);
   });
 
-  it('furnishes the automatons\' room like the office', () => {
+  it('counts the automatons\' room as the office for the festivals\' decorations (it never has any)', () => {
     assert.equal(decorOf('automata'), 'office');
     assert.equal(decorOf('office'), 'office');
     assert.equal(decorOf('lounge'), 'lounge');
@@ -835,5 +841,120 @@ describe('automatons in the room', () => {
     assert.deepEqual(short.events.map((e) => e.seq), [3, 4, 5]);
     assert.equal(short.truncated, true);
     assert.equal(appendRunEvents(log, [event(1)]), log);
+  });
+});
+
+describe('the automatons\' server room', () => {
+  const floor = new Floor(SERVER_ROOM);
+  const pieces = (kind: string) => SERVER_ROOM.furniture.filter((piece) => piece.kind === kind);
+
+  it('has a capsule for every place, where the automaton stands facing the orb, its glass drawn over it', () => {
+    assert.ok(SERVER_ROOM.seats.length >= 8);
+    for (const seat of SERVER_ROOM.seats) {
+      assert.equal(seat.standing, true);
+      assert.equal(seat.facing, facingToward(seat, ORB));
+      const back = pieces('pod').find((piece) => piece.x === seat.x && piece.y === seat.y)!;
+      const glass = pieces('podGlass').find((piece) => piece.x === seat.x && piece.y === seat.y)!;
+      assert.ok(back && glass, `a capsule at ${seat.x},${seat.y}`);
+      // the shell behind, the automaton, its glass, then whoever stands on the tile in front
+      const standing = depthOf(floor.seatPosition(SERVER_ROOM.seats.indexOf(seat)));
+      assert.ok(furnitureDepth(back) < standing && standing < furnitureDepth(glass));
+      assert.ok(furnitureDepth(glass) < depthOf({ x: seat.x + 1.5, y: seat.y + 0.5 }));
+    }
+    assert.equal(pieces('orb').length, 1);
+    assert.ok(pieces('serverRack').length > 10);
+  });
+
+  it('can be walked into: from the door to every capsule and to the user\'s console, which is not a capsule', () => {
+    for (let seat = 0; seat < floor.seatCount; seat++) assert.ok(floor.pathToSeat(floor.inside, seat).length > 0, `capsule ${seat}`);
+    const spot = SERVER_ROOM.playerSpots[0];
+    assert.ok(!SERVER_ROOM.seats.some((seat) => seat.x === spot.seat.x && seat.y === spot.seat.y));
+    assert.ok(floor.route(floor.inside, spot.at).length > 0);
+    // the orb and the racks block their tiles; nothing stands on the doorway
+    assert.ok(!floor.isFreeTile(ORB.x, ORB.y));
+    assert.ok(floor.isFreeTile(1, SERVER_ROOM.door.y));
+  });
+
+  it('keeps its look whatever the festival', () => {
+    assert.equal(layoutOn(SERVER_ROOM, 'christmas'), SERVER_ROOM);
+    assert.equal(new Floor(SERVER_ROOM, 'halloween').layout, SERVER_ROOM);
+  });
+
+  it('draws a cord from the orb\'s edge to each automaton\'s chest, sagging a little, one anchor per capsule', () => {
+    const orb = orbCenter();
+    const chests = SERVER_ROOM.seats.map((_seat, index) => chestOf(toScreen(floor.seatPosition(index)), 52));
+    assert.equal(new Set(chests.map(({ x, y }) => `${x},${y}`)).size, chests.length);
+    for (const chest of chests) {
+      const path = cordPath(orb, chest, ORB_SHAPE.radius * ART_SCALE);
+      assert.ok(path.length > 5);
+      const first = path[0], last = path.at(-1)!;
+      assert.ok(Math.abs(distance(first, orb) - ORB_SHAPE.radius * ART_SCALE) <= ART_SCALE * 1.5, 'from the orb\'s edge');
+      assert.ok(distance(last, chest) <= ART_SCALE, 'to the chest');
+      assert.equal(new Set(path.map(({ x, y }) => `${x},${y}`)).size, path.length, 'each pixel once');
+      // on the art grid, and lower in its middle than the straight line
+      assert.ok(path.every(({ x, y }) => x % ART_SCALE === 0 && y % ART_SCALE === 0));
+      const middle = path[Math.floor(path.length / 2)];
+      assert.ok(middle.y >= (first.y + last.y) / 2 - ART_SCALE);
+    }
+    assert.deepEqual(cordPath(orb, orb, 10), []);
+  });
+
+  it('runs the packets from the orb towards the automaton, and the orb\'s pulses spread as they fade', () => {
+    const at = (time: number) => packetsOn(40, time);
+    assert.equal(at(0).length, 3);
+    assert.ok(at(0).every((index) => index >= 0 && index < 40));
+    assert.ok(at(400)[0] > at(0)[0], 'a packet moves away from the orb');
+    assert.deepEqual(packetsOn(1, 0), []);
+    const rings = pulseRings(300);
+    for (const ring of rings) assert.ok(ring.alpha >= 0 && ring.alpha <= 0.6);
+    const [a, b] = [...rings].sort((x, y) => x.radius - y.radius);
+    assert.ok(a.alpha >= b.alpha, 'the wider, the fainter');
+  });
+});
+
+describe('the automatons as robots', () => {
+  it('gives each role its accent, the same every time, and the coordinator its crown', () => {
+    const roles = ['coordinator', 'sentry-triage', 'weekly-retro', 'backlog-groomer'];
+    const looks = roles.map(robotLook);
+    assert.deepEqual(roles.map(robotLook), looks);
+    assert.ok(looks.every((look) => (ROBOT_ACCENTS as readonly string[]).includes(look.accent)));
+    assert.equal(new Set(looks.map((look) => look.accent)).size, roles.length, 'four roles, four accents');
+    assert.deepEqual(looks.map((look) => look.coordinator), [true, false, false, false]);
+    assert.equal(robotLook(' Coordinator ').coordinator, true);
+  });
+
+  it('draws them a pixel a letter, the same width, the coordinator two rows taller', () => {
+    for (const look of [robotLook('coordinator'), robotLook('sentry-triage')]) for (const back of [false, true]) for (const step of [false, true]) {
+      const rows = robotRows(look, back, step);
+      assert.ok(rows.every((row) => row.length === 16), rows.find((row) => row.length !== 16));
+      assert.equal(rows.length * ART_SCALE, robotHeight(look));
+    }
+    assert.equal(robotHeight(robotLook('coordinator')) - robotHeight(robotLook('weekly-retro')), 2 * ART_SCALE);
+    // the face (visor, eyes) only from the front, the core on the chest too
+    assert.ok(robotRows(robotLook('x'), false, false).some((row) => row.includes('e')));
+    assert.ok(!robotRows(robotLook('x'), true, false).some((row) => row.includes('e') || row.includes('c')));
+  });
+
+  it('draws only the automatons as robots, everyone else as before', () => {
+    const calls: string[] = [];
+    const people: SpriteSource = {
+      height: () => 50, draw: (_c, id) => { calls.push(id); }, drawTypingHand: (_c, id) => { calls.push(`hand:${id}`); }, drawHead: (_c, id) => { calls.push(`head:${id}`); },
+    };
+    const sprites = withRobots(people, (id) => (id === 'bot' ? 'coordinator' : undefined));
+    const pose = { direction: 'down-right', posture: 'stand', step: 0, blinking: false, smiling: false, gesture: 'none' } as const;
+    assert.equal(sprites.height(pose, 'bot'), robotHeight(robotLook('coordinator')));
+    assert.equal(sprites.height(pose, 'someone'), 50);
+    assert.equal(sprites.height(pose), 50);
+    sprites.draw(null as never, 'someone', pose, 0, 0);
+    sprites.drawTypingHand(null as never, 'bot', { x: 0, y: 0 }, { x: 0, y: 0 }, 0);
+    sprites.drawTypingHand(null as never, 'someone', { x: 0, y: 0 }, { x: 0, y: 0 }, 0);
+    assert.deepEqual(calls, ['someone', 'hand:someone']);
+  });
+
+  it('tells the room each automaton\'s role, its run\'s or its sub-agent\'s', () => {
+    const run: AutomatonRun = { id: 'lead', role: 'coordinator', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null };
+    const state: AutomataState = { folder: 'ok', running: [run], recent: [], tasks: [], roles: [], agents: { lead: [{ id: 'c1', role: 'sentry-triage', task: '' }] } };
+    const plan = planRoom([], {}, NOBODY, SERVER_ROOM.seats.length, 'automata', new Set(), seatedRuns(state));
+    assert.deepEqual(plan.people.map((person) => person.automatonRole), ['coordinator', 'sentry-triage']);
   });
 });

@@ -37,13 +37,21 @@ export const DEFAULT_LOOK: Look = {
 };
 
 /**
- * Every automaton of the user's orchestrator (shared/automata.ts) wears this: a grey metal skin, a visor and headphones,
- * a teal work suit. No one of the crew can be taken for one, and a session never wears it.
+ * Every automaton of the user's orchestrator (shared/automata.ts) wears this where a person's look is asked for (its
+ * face in a list or a bubble): a grey metal skin, a visor and headphones, a teal work suit. In the room it is drawn as a
+ * robot instead (src/room/robot.ts). No one of the crew can be taken for one, and a session never wears it.
  */
 export const AUTOMATON_LOOK: Look = {
   ...DEFAULT_LOOK, skin: '#b8bcc6', eyes: 'round', hair: 'none', headphones: true, eyeGear: 'visor',
   top: 'tracksuit', topColor: '#2a8a9a', accentColor: '#9fdccf', bottom: 'tracksuit', bottomColor: '#1f2a4a', shoes: 'boots', shoesColor: '#2a2d36',
 };
+
+/**
+ * The automatons drawn as robots (src/room/robot.ts): their metal, from light to dark, the joints, the visor, and one
+ * accent per role (its eyes, its chest's core, its antenna's diode), picked from the role's name.
+ */
+export const ROBOT_METAL = { light: '#e6eaf0', base: '#c3cad6', shade: '#8e97a8', dark: '#5a6272', joint: '#373d49', visor: '#151b26', grille: '#4a5262' } as const;
+export const ROBOT_ACCENTS = ['#5ad1ff', '#ffb347', '#7fe39a', '#ff7aa8', '#b48cff', '#ffd84a', '#4de0c8', '#ff8a5a'] as const;
 
 /** The colours of the anime pieces (src/room/costumes.ts), fixed like the characters'. */
 export const COSTUME_COLORS = {

@@ -6,6 +6,7 @@ import { TOPS, type FurniturePiece, type PieceKind } from '../../shared/room-lay
 import { toScreen, type Point } from './geometry.ts';
 import { ART_SCALE, artCanvas, fillPolygon, outline, ring, shadedBall, tones } from './pixel-art.ts';
 import { themeKit } from './themes/index.ts';
+import { SERVER_DESIGNS } from './server-furniture.ts';
 import { glyphRows } from './wall-art.ts';
 import { BOARD, DOODLES, DOODLE_GAP, LINE_HEIGHT, doodlesWidth, textWidth, type BoardContent } from './whiteboard.ts';
 
@@ -309,6 +310,7 @@ const EGG = [
 const BALLOON_BUNCH = [[-5, 52, 0], [4, 56, 1], [-1, 62, 2], [6, 64, 3], [-7, 64, 4]] as const;
 
 const DESIGNS: Record<FurniturePiece['kind'], Design> = {
+  ...SERVER_DESIGNS,
   desk: { height: 22, paint(p) {
     for (const [x, y] of [[0.06, 0.08], [1.84, 0.08], [0.06, 0.82], [1.84, 0.82]]) p.box(x, y, 0.1, 0.1, 0, 9, C.metal);
     p.box(1.25, 0.12, 0.65, 0.7, 2, 7, C.darkWood);
@@ -753,5 +755,7 @@ export function furnitureDepth(piece: FurniturePiece): number {
   // on the wall: behind everything in the room
   if (piece.wall) return -1;
   if (piece.behind) return piece.x + piece.y - 0.1;
+  // over whoever stands on its tiles (they are at its middle), before anyone on the tiles in front
+  if (piece.front) return piece.x + piece.width / 2 + piece.y + piece.depth / 2 + 0.05;
   return (piece.x + piece.width - 0.5) + (piece.y + piece.depth - 0.5) - 0.1;
 }

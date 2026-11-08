@@ -3,6 +3,7 @@
 // with the lamps, screens and the corridor shining through the dark), the status icons and the name tags.
 // Everything is laid out in room coordinates; the canvas itself has RENDER_SCALE times more pixels.
 import { ROOM_PALETTE as P } from '../design/room-palette.ts';
+import { SERVERS_FURNITURE as SF } from '../design/theme-servers.ts';
 import { t } from '../i18n/index.ts';
 import type { Agent, Status } from './cast.ts';
 import { PET_HEIGHT, drawHearts, drawPet, isSpeaking, petWords } from './pet.ts';
@@ -18,7 +19,9 @@ import type { ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
-import { furnitureDepth, type FurnitureSprites } from './pixel-furniture.ts';
+import { bobOf, furnitureDepth, type FurnitureSprites } from './pixel-furniture.ts';
+import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
+import { chestOf, cordPath, orbCenter, packetsOn } from './server-room.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
@@ -348,13 +351,15 @@ function poseOf(walker: Walker, seated: boolean, smiling: boolean, gesture: Gest
 }
 
 /** Seated, someone types while their session works and raises an arm when it waits for a permission or an answer. */
-function characterPose(character: Character, options: FrameOptions): Pose {
+function characterPose(character: Character, options: FrameOptions, standing = false): Pose {
   // held up by the user: legs and arms going, fast
   if (character.phase === 'carried') return { ...poseOf(character, false, false, 'none', options), posture: 'walk', step: !options.reducedMotion && Math.floor(options.time / 90) % 2 === 1 ? 1 : 0 };
   const { status } = character.person;
   const seated = character.phase === 'seated';
   const gesture: Gesture = !seated || options.dozing ? 'none' : status === 'working' ? 'typing' : status === 'permission' || status === 'question' ? 'raising' : 'none';
   const pose = poseOf(character, seated, status === 'finished', gesture, options);
+  // no seat at all where they work: an automaton stands in its capsule (still at work, its step going)
+  if (seated && standing) return { ...pose, posture: 'stand' };
   // dozing on a sofa of the break room: eyes closed
   return seated && options.dozing ? { ...pose, blinking: true, smiling: false } : pose;
 }
@@ -647,6 +652,41 @@ function paintZzz(context: Context, x: number, y: number, time: number, seed: nu
 }
 
 /** A canvas with RENDER_SCALE times more pixels, drawn in room coordinates. */
+/* The server room's cords of light */
+
+/** A cord's packets light the pixels around them too, a little less. */
+const PACKET_GLOW = [[0, -1], [-1, 0], [1, 0], [0, 1]] as const;
+
+/**
+ * A cord of light from the orb (the server room's, if the room has one) to each automaton standing in its capsule, with
+ * the packets of data it pulls along: drawn after the light, hidden by whatever stands in front of the automaton.
+ */
+function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: (character: Character) => { feet: Point; height: number; depth: number }, options: FrameOptions): ThemeEffect[] {
+  const orb = layout.furniture.find((piece) => piece.kind === 'orb');
+  if (!orb || !automatons.length) return [];
+  const time = options.reducedMotion ? 0 : options.time;
+  const center = orbCenter(options.reducedMotion ? 0 : bobOf(orb, ORB_FLOAT, options.time));
+  const cell = (on: Context, point: Point, colour: string) => { on.fillStyle = colour; on.fillRect(point.x - ART_SCALE / 2, point.y - ART_SCALE / 2, ART_SCALE, ART_SCALE); };
+  return automatons.map((character) => {
+    const { feet, height, depth } = placeOf(character);
+    const path = cordPath(center, chestOf(feet, height), ORB_SHAPE.radius * ART_SCALE);
+    return {
+      // just after the capsule's glass: the light goes through it to the chest
+      depth: depth + 0.06,
+      paint(on) {
+        for (const point of path) cell(on, { x: point.x, y: point.y - ART_SCALE }, SF.cord);
+        for (const point of path) cell(on, point, SF.cordCore);
+        if (options.reducedMotion) return;
+        for (const index of packetsOn(path.length, time, character.blinkOffset)) {
+          const at = path[index];
+          for (const [dx, dy] of PACKET_GLOW) cell(on, { x: at.x + dx * ART_SCALE, y: at.y + dy * ART_SCALE }, SF.cord);
+          cell(on, at, SF.packet);
+        }
+      },
+    };
+  });
+}
+
 export function roomCanvas(): { canvas: HTMLCanvasElement; context: Context } {
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_WIDTH * RENDER_SCALE;
@@ -667,6 +707,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
 
   const characters = [...scene.characters.values()];
   const seated = characters.filter((character) => character.phase === 'seated');
+  const poseFor = (character: Character) => characterPose(character, options, character.phase === 'seated' && layout.seats[character.seat]?.standing === true);
   const occupied = new Set(seated.map((character) => character.seat));
   const isSelected = (character: Character) => options.openSessionIds.includes(character.person.sessionId);
   const isGhost = (character: Character) => options.ghostIds.has(character.person.sessionId);
@@ -683,7 +724,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   for (const piece of layout.furniture) layers.push({ depth: furnitureDepth(piece), paint: (on) => furniture.draw(on, piece) });
   for (const character of characters) {
     if (character === scene.carried) continue;
-    const pose = characterPose(character, options);
+    const pose = poseFor(character);
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
     layers.push({ depth: depthOf(character.position), paint: ghostly(character, (on) => paintPerson(on, sprites, character.person.id, character, pose, isSelected(character), lift)) });
   }
@@ -722,11 +763,17 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   const time = options.reducedMotion ? 0 : options.time;
   paintSteam(context, time, layout.furniture);
   const kit = themeKit();
-  if (kit?.effects) paintThemeEffects(context, kit.effects(layout, time, lighting, options.hour), layers);
+  // in the server room, the cord of light from the orb to each automaton at work in its capsule
+  const cords = cordEffects(layout, characters.filter((character) => character.phase === 'seated' && character.person.automaton !== undefined), (character) => {
+    const feet = raise(toScreen(character.position), scene.floor.seatLift(character.seat));
+    return { feet, height: sprites.height(poseFor(character), character.person.id), depth: depthOf(character.position) };
+  }, options);
+  const effects = [...(kit?.effects?.(layout, time, lighting, options.hour) ?? []), ...cords];
+  paintThemeEffects(context, effects, layers);
   // what the festival makes move stays bright in the dark: twinkling bulbs, candles, snow, fireworks, water
   if (options.festival) {
     const headOf = (walker: Walker, lift: number, height: number) => { const feet = raise(toScreen(walker.position), lift); return { x: feet.x, y: feet.y - height + 14 }; };
-    const heads = [headOf(scene.player, playerLift, sprites.height(playerPose)), ...characters.map((character) => headOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(characterPose(character, options))))];
+    const heads = [headOf(scene.player, playerLift, sprites.height(playerPose)), ...characters.map((character) => headOf(character, character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0, sprites.height(poseFor(character))))];
     paintFestivalEffects(context, { festival: options.festival, room: options.room, layout, time, lighting, heads });
   }
   if (options.hoveredThing === 'door') paintDoorOutline(context, layout);
@@ -748,7 +795,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     if (isGhost(character) && options.hoveredId !== character.person.id) continue;
     const lift = character.phase === 'seated' ? scene.floor.seatLift(character.seat) : 0;
     const feet = raise(toScreen(character.position), lift);
-    const head = feet.y - sprites.height(characterPose(character, options), character.person.id);
+    const head = feet.y - sprites.height(poseFor(character), character.person.id);
     if (options.dozing && character.phase === 'seated') paintZzz(context, feet.x, head - 4, options.reducedMotion ? 0 : options.time, character.blinkOffset);
     // the status and the sub-agents only once at the desk: walking in or out, it is just someone passing by
     const status = character.phase === 'seated' ? character.person.status : null;

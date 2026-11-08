@@ -1,7 +1,7 @@
-// The two rooms, in floor tiles (x along the back wall, y from the back wall towards the viewer): the office, laid out
+// The rooms, in floor tiles (x along the back wall, y from the back wall towards the viewer): the office, laid out
 // like the original Bureau des agents (windows on the city, groups of desks on coloured rugs, the user's desk in the
 // middle, a whiteboard on wheels, a reading corner and a coffee corner), and the break room, where sessions put to rest sit on sofas until
-// they are called back. Everything is drawn in code (src/room/pixel-furniture.ts). Shared because the tests read it.
+// they are called back, and the automatons' server room (racks, capsules around a floating orb). Everything is drawn in code (src/room/pixel-furniture.ts). Shared because the tests read it.
 import type { Festival } from './festivals.ts';
 
 /** Each room's floor: x from 0 to width along the back wall, y from 0 to depth along the wall with the door. */
@@ -10,6 +10,9 @@ export const ROOM = { width: 20, depth: 14 };
 export type PieceKind =
   | 'desk' | 'bossDesk' | 'chair' | 'plant' | 'bigPlant' | 'bookshelf' | 'sofa' | 'sofaArm' | 'couch' | 'couchArm' | 'lowTable'
   | 'floorLamp' | 'cooler' | 'whiteboard' | 'counter'
+  // the automatons' server room: racks along the walls, the capsules they stand in (their back, then their glass drawn
+  // over whoever stands in it), and the orb floating in the middle
+  | 'serverRack' | 'pod' | 'podGlass' | 'orb'
   // the numbers object, one of these (see METRICS_OBJECT)
   | MetricsKind
   // the festivals' (see FESTIVAL_PIECES): standing on the floor
@@ -32,6 +35,8 @@ export interface FurniturePiece {
   top?: number;
   /** hangs on the wall its footprint is against: nothing on the floor, and drawn before whoever and whatever stands in the room */
   wall?: true;
+  /** drawn just after whoever stands on its tiles (a capsule's glass, in front of the automaton in it) */
+  front?: true;
 }
 
 /**
@@ -47,8 +52,9 @@ export const isMetricsPiece = (piece: FurniturePiece) => (METRICS_KINDS as reado
 /**
  * A place to sit, and the direction a seated person faces (2: +x, 4: +y, towards the viewer). On a sofa, the person
  * sits off the middle of the tile (`at`, against its back) and higher than on a chair (`lift`, in room pixels).
+ * `standing`: no seat at all, whoever is there stands (an automaton in its capsule).
  */
-export interface Seat { x: number; y: number; facing: number; at?: { x: number; y: number }; lift?: number }
+export interface Seat { x: number; y: number; facing: number; at?: { x: number; y: number }; lift?: number; standing?: true }
 
 /** A coloured rug, drawn with the floor. */
 export interface Rug { x: number; y: number; width: number; depth: number; colour: 'blue' | 'green' | 'purple' | 'amber' }
@@ -250,6 +256,48 @@ export const LOUNGE: Layout = {
   playerSpots: sofaSpots([...ARMCHAIR.seats, ...COUCHES.flatMap((item) => item.seats), ...LOUNGE_WALL_SOFA.seats]),
 };
 
+/* The automatons' server room */
+
+/** The orb floating in the middle of the server room: the tile under its centre, and how high it floats (art pixels). */
+export const ORB = { x: 10, y: 7, z: 30 };
+
+/** The direction (see Seat) closest to the one from a tile's middle to a floor point. */
+export function facingToward(from: { x: number; y: number }, to: { x: number; y: number }): number {
+  const angle = Math.atan2(to.y - from.y - 0.5, to.x - from.x - 0.5);
+  return ((Math.round(angle / (Math.PI / 4)) + 2) % 8 + 8) % 8;
+}
+
+/**
+ * The capsules, in a ring around the orb, in the order they are taken: the far ones first (their cord of light runs
+ * towards the viewer, in plain sight), then the sides, the near ones last.
+ */
+const PODS: readonly (readonly [number, number])[] = [
+  [10, 2], [6, 3], [14, 3], [4, 6], [16, 6], [8, 2], [12, 2], [5, 9], [15, 9], [7, 11], [13, 11], [10, 12],
+];
+/** How high an automaton stands in its capsule, on its base, in room pixels. */
+export const POD_LIFT = 4;
+const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: facingToward({ x, y }, ORB), lift: POD_LIFT, standing: true }));
+
+/** A rack of servers against the back wall (facing +y) or the left wall (facing +x). */
+const rack = (x: number, y: number, alongLeft = false) => (alongLeft ? piece('serverRack', x, y, 0.9, 1) : piece('serverRack', x, y, 1, 0.9));
+
+export const SERVER_ROOM: Layout = {
+  furniture: [
+    ...[1, 2, 3, 5, 6, 7, 13, 14, 15, 17, 18].map((x) => rack(x, 0)),
+    ...[1, 2, 3, 4, 5, 6, 12].map((y) => rack(0, y, true)),
+    ...POD_SEATS.flatMap((seat) => [piece('pod', seat.x, seat.y, 1, 1, false, { behind: true }), piece('podGlass', seat.x, seat.y, 1, 1, false, { front: true })]),
+    piece('orb', ORB.x - 0.5, ORB.y - 0.5),
+    // the operator's console, front left, where the user sits to watch them
+    piece('desk', 2, 12, 2),
+    piece('chair', 2, 11, 1, 1, false),
+  ],
+  seats: POD_SEATS,
+  rugs: [],
+  wallItems: [],
+  door: { x: 0, y: 9 },
+  playerSpots: [{ seat: { x: 2, y: 11, facing: 4, lift: DESK_SEAT_LIFT }, at: { x: 2.5, y: 11.5 }, lift: DESK_SEAT_LIFT, area: { fromX: 2, toX: 4, fromY: 11, toY: 13 }, atDesk: false }],
+};
+
 type Support = Pick<FurniturePiece, 'x' | 'y' | 'width' | 'depth'> & { top: number };
 /** A prop on a piece of furniture: drawn on its top, right after it (see furnitureDepth). */
 const on = (kind: PieceKind, support: Support) => piece(kind, support.x, support.y, support.width, support.depth, false, { top: support.top });
@@ -308,7 +356,8 @@ export const withMetrics = (layout: Layout): Layout => (layout === OFFICE ? { ..
 
 /** A room as it is for a festival (or none): its furniture, plus the festival's, and the festival's places to drop by. */
 export function layoutOn(layout: Layout, festival: Festival | null): Layout {
-  if (!festival) return layout;
+  // the server room keeps its own look, festival or not
+  if (!festival || layout === SERVER_ROOM) return layout;
   const office = layout !== LOUNGE;
   return {
     ...layout,

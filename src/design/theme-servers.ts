@@ -1,0 +1,80 @@
+// The colours of the automatons' server room (src/room/themes/servers.ts, src/room/server-furniture.ts): dark metal
+// walls and a raised floor of grey tiles, racks of servers with their diodes, the capsules the automatons stand in,
+// and the orb of light floating in the middle, with the cords of light it feeds them through.
+
+export const SERVERS_PALETTE = {
+  planks: ['#2c3240', '#293040'],
+  plankSeam: '#1b1f29',
+  plankLight: '#3a4254',
+  floorEdge: '#1c212c',
+  floorEdgeDark: '#161a23',
+  slab: '#4a5163',
+  slabDark: '#3a4050',
+  slabLight: '#626a7e',
+  slabSeam: '#2f3542',
+  slabUnder: '#22262f',
+  wall: '#262b38',
+  wallStripe: '#1f2330',
+  wallSide: '#212532',
+  wallSideStripe: '#1b1f2a',
+  wainscot: '#1d212c',
+  wainscotSide: '#191d27',
+  wainscotLine: '#13161e',
+  rail: '#3f4659',
+  baseboard: '#101319',
+  wallTop: '#4a5163',
+  wallTopSide: '#3c4252',
+  wallEnd: '#1a1e28',
+  wallTopEdge: '#6a7286',
+  doorFrame: '#3f4659',
+  doorway: '#06080c',
+  doorLight: '#5ad1ff',
+  windowFrame: '#3f4659',
+  windowSill: '#262b38',
+  clock: '#0b1220',
+  clockHands: '#5ad1ff',
+  tvFrame: '#16141f',
+  tvScreen: '#1b3350',
+  rugs: { blue: '#22344f', green: '#1f3b36', purple: '#33284a', amber: '#3d3020' },
+  /** the perforated tiles of the raised floor, and the cable trays along the top of the walls */
+  vent: '#20252f',
+  tray: '#343a4a',
+  trayCable: '#1a5f78',
+  /** the status lights along the walls */
+  wallLed: '#3fd6a0',
+  /** the light the room gets: the orb's cold glow */
+  orbLight: '#7fe3ff',
+  podLight: '#5ad1ff',
+};
+
+export const SERVERS_FURNITURE = {
+  /** the racks: their cabinet, the server faces, the diodes */
+  cabinet: '#2a2f3c',
+  cabinetEdge: '#3c4354',
+  server: '#1b1f28',
+  serverLine: '#343a48',
+  diodes: ['#3fd6a0', '#3fd6a0', '#5ad1ff', '#ffc44a', '#3fd6a0', '#ff6a6a'],
+  diodeOff: '#26402f',
+  /** the capsules: their shell, the light inside, the glass (translucent), its edge and a shine */
+  podShell: '#4a5266',
+  podTrim: '#7d889e',
+  podBack: '#18202c',
+  podInside: '#2b6f8a',
+  podBase: '#5ad1ff',
+  glassFill: '#9fe8ff22',
+  glassEdge: '#c9f3ff80',
+  glassShine: '#ffffffaa',
+  /** the orb: its pedestal of light on the floor, its core, its rings, and the glow it casts (translucent) */
+  orbCore: '#f2fdff',
+  orbInner: '#9fe8ff',
+  orbOuter: '#3fb8e0',
+  orbRing: '#7fe3ffb0',
+  orbHalo: '#5ad1ff30',
+  orbHaloFar: '#5ad1ff18',
+  orbPad: '#2a3a4c',
+  orbPadLight: '#5ad1ff',
+  /** a cord of light, its bright core, and the packets of data running along it */
+  cord: '#5ad1ff80',
+  cordCore: '#c9f3ff',
+  packet: '#ffffff',
+} as const;

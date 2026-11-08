@@ -1,7 +1,8 @@
 // A room of the office, drawn on a canvas: the office itself (the default view), where the sessions work at their
-// desks, the break room, where the sessions put to rest doze on sofas, or the automatons' room, the office's plan where
-// only the automatons of the user's orchestrator sit (src/room/cast.ts). People come and go through the door, what is
-// said rises in speech bubbles, and clicking someone (or their bubble) opens their session in the detail panel.
+// desks, the break room, where the sessions put to rest doze on sofas, or the automatons' server room, where the
+// automatons of the user's orchestrator stand in capsules around a floating orb, as robots (themes/servers.ts,
+// robot.ts). People come and go through the door, what is said rises in speech bubbles, and clicking someone (or their
+// bubble) opens their session in the detail panel.
 import { inProject } from '../state/projects.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
@@ -17,7 +18,7 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { USER_SPEAKER, onSpeech } from '../state/speech.ts';
 import type { FestivalDay } from '../../shared/festivals.ts';
 import type { Look } from '../../shared/look.ts';
-import { LOUNGE, OFFICE } from '../../shared/room-layout.ts';
+import { LOUNGE, OFFICE, SERVER_ROOM } from '../../shared/room-layout.ts';
 import { paintBackdrop } from './backdrop.ts';
 import { BUBBLE_LANE, BUBBLE_ROW_HEIGHT, VISIBLE_ROWS, bubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import { decorOf, planRoom, roomSessions, type RoomKind } from './cast.ts';
@@ -27,7 +28,9 @@ import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
 import { Floor } from './floor.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
-import { themedLighting } from './themes/index.ts';
+import { dressRoom, themedLighting } from './themes/index.ts';
+import { SERVERS } from './themes/servers.ts';
+import { withRobots } from './robot.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName, type Character } from './scene.ts';
 import type { Pose } from './sprites.ts';
@@ -73,7 +76,8 @@ function showSky(document: Document, lighting: Lighting) {
 /** Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. */
 export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const reducedMotion = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
-  const { festival, guests } = day;
+  // the server room keeps its own look, festival or not (themes/servers.ts)
+  const { festival, guests } = room === 'automata' ? { festival: null, guests: [] as string[] } : day;
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
   const ready = useSessions((s) => s.claude !== null);
@@ -93,7 +97,13 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   crewRef.current = crew;
   const synced = useRef(false);
   // the numbers object is there while the settings name a numbers file (App mounts the room again when that changes)
-  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : OFFICE, festival, room === 'office' && useSessions.getState().preferences.metricsFile !== ''));
+  // the automatons' room is a room of servers, whatever the theme: it is dressed so while it is shown
+  useLayoutEffect(() => {
+    if (room !== 'automata') return;
+    dressRoom(SERVERS);
+    return () => dressRoom(null);
+  }, [room]);
+  const [floor] = useState(() => new Floor(room === 'lounge' ? LOUNGE : room === 'automata' ? SERVER_ROOM : OFFICE, festival, room === 'office' && useSessions.getState().preferences.metricsFile !== ''));
   const [scene] = useState(() => new Scene(floor, { withPet: room === 'office', withVisitors: room === 'office', atDoor: useSessions.getState().enteredThroughDoor }));
   // the seats the user put people on, by session, kept for when they come back (and across reloads)
   const keptSeats = useRef(new Map(Object.entries(readPreference<Record<string, number>>(`seats:${room}`, {})).filter(([, seat]) => seat < floor.seatCount)));
@@ -122,9 +132,10 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     return member ? member.look ?? DEFAULT_LOOK : lookOfStranger(personId);
   }, [scene]);
   // what the festival puts on everyone (a sub-agent's head, in a tag, is drawn without it)
-  const [sprites] = useState(() => chibiSprites(lookFor, (personId) => personId === PLAYER_ID
+  // the automatons are robots of their role (robot.ts), everyone else a chibi in the festival's outfit
+  const [sprites] = useState(() => withRobots(chibiSprites(lookFor, (personId) => personId === PLAYER_ID
     ? outfitFor(festival, selfName(crewRef.current), true, guests)
-    : outfitFor(festival, scene.nameOf(personId), false, guests)));
+    : outfitFor(festival, scene.nameOf(personId), false, guests)), (personId) => scene.characters.get(personId)?.person.automatonRole));
   // a click reaches someone up to the top of their hat
   useEffect(() => { scene.heightOf = (personId) => sprites.height(STANDING, personId); }, [scene, sprites]);
   const [furniture] = useState(() => pixelFurniture(boardContent(festival, guests)));
