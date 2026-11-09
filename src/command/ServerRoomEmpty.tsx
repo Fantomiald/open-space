@@ -4,7 +4,8 @@ import { useSessions } from '../state/sessions.ts';
 import { AutomatonIcon, PlusIcon } from './Icons.tsx';
 
 export function ServerRoomEmpty() {
-  const empty = useSessions((s) => s.triggers.triggers.length === 0);
+  // the external runs' folder counts as automatons too: their robots stand in the room (AutomataDialog's `external`)
+  const empty = useSessions((s) => s.triggers.triggers.length === 0 && s.preferences.automataFolder === '' && s.automata.running.length + s.automata.recent.length === 0);
   const openAutomata = useSessions((s) => s.openAutomata);
   if (!empty) return null;
   const words = t.automata.room;
