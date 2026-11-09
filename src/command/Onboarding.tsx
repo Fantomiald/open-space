@@ -37,6 +37,7 @@ export function Onboarding() {
     favoriteNotes: [],
     metricsFile: '',
     automataFolder: '',
+    hooksAddress: '',
     copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, remoteByDefault: false, idleCompact: 0, accountsBrowser: 'shared',
   });
 

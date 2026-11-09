@@ -111,7 +111,7 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
   const triggers = useSessions((s) => s.triggers);
   const serverError = useSessions((s) => s.triggerError);
   const agentRoles = useSessions((s) => s.agentRoles);
-  const { saveTrigger, deleteTrigger, runTrigger, cancelTriggerRun, askAgentRoles, show, openAutomata, send: sendMessage } = useSessions.getState();
+  const { saveTrigger, deleteTrigger, runTrigger, cancelTriggerRun, askAgentRoles, show, openAutomata, openSettings, send: sendMessage } = useSessions.getState();
   const [draft, setDraft] = useState<TriggerInput>(() => trigger ? inputOf(trigger) : { ...DEFAULT_TRIGGER, cwd: defaults.defaultFolder || roots[0] || '', model: defaults.model, permissionMode: defaults.permissionMode });
   const [problem, setProblem] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -234,7 +234,13 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
             )}
             {draft.kind === 'webhook' && trigger?.kind === 'webhook' && (
               <Row id="trigger-hook" wide icon={<LinkIcon />} title={words.hookUrl} hint={words.hookHint}>
-                <Copyable text={hookUrl(triggers.hookBase, trigger)} />
+                <Copyable text={hookUrl(defaults.hooksAddress ? `${defaults.hooksAddress}/hooks` : triggers.hookBase, trigger)} />
+                {!defaults.hooksAddress && (
+                  <p className="cp-trigger__note">
+                    {words.hookLocalOnly}
+                    <button type="button" className="cp-link" onClick={() => { openAutomata(false); openSettings(true, 'office', 'hooksAddress'); }}>{words.hookGoPublic}</button>.
+                  </p>
+                )}
               </Row>
             )}
             {draft.kind === 'webhook' && trigger?.kind === 'webhook' && (

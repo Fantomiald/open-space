@@ -286,9 +286,11 @@ triggers.start();
 messengers.start();
 /** the open-space MCP access of another program of this computer (server/mcp.ts) */
 const externalKey = new ExternalKey(path.join(config.dataDir, 'mcp-key'));
+/** the port that only answers webhooks, once it listens (config.hooksPort) */
+let hooksPort: number | null = null;
 const triggersMessage = (): ServerMessage => {
   const state: TriggersState = {
-    triggers: triggers.list(), runs: triggers.recentRuns(), messengers: messengers.list(), keys: triggerKeys.all(), hookBase: `http://${HOST}:${config.port}/hooks`,
+    triggers: triggers.list(), runs: triggers.recentRuns(), messengers: messengers.list(), keys: triggerKeys.all(), hookBase: `http://${HOST}:${config.port}/hooks`, hooksPort,
     externalMcp: externalKey.current ? `http://${HOST}:${config.port}/mcp/external/${externalKey.current}` : null,
   };
   return { t: 'triggers', state };
@@ -401,7 +403,7 @@ setInterval(() => { checkClaudeVersion().catch((error: unknown) => log('cannot r
 let claudeDefaults = await readClaudeDefaults(os.homedir());
 const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded, claudeDefaults });
 prepareSounds(config.dataDir, log);
-const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+const { server, hooksServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
@@ -731,7 +733,14 @@ server.once('error', (error: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
+// a port taken there only leaves the webhooks without their tunnel's door: Open Space runs on
+hooksServer.on('error', (error) => log(`webhooks port ${config.hooksPort}`, error));
+
 server.listen(config.port, HOST, () => {
+  hooksServer.listen(config.hooksPort, HOST, () => {
+    hooksPort = config.hooksPort;
+    broadcast(triggersMessage());
+  });
   const address = `http://${HOST}:${DEV ? DEV_PORT : config.port}`;
   const pairLink = `${address}/pair?secret=${secret}`;
   console.log('');

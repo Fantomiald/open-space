@@ -507,6 +507,8 @@ export interface Preferences {
   metricsFile: string;
   /** the folder of the user's orchestrator of headless agents, watched read-only (shared/automata.ts; absolute; '' by default: off) */
   automataFolder: string;
+  /** the public address a tunnel gives the webhooks' port (shared/triggers.ts hooksAddressOf; '' by default: reachable from this computer only) */
+  hooksAddress: string;
   /** the language of the page, the server's messages and new agents' instructions; absent until chosen (the browser's then) */
   language?: Language;
   /** text selected in the page is copied at once, like in a terminal */

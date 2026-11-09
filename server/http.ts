@@ -415,6 +415,17 @@ export function createWebServer(options: WebServerOptions) {
     });
   });
 
+  // the webhooks alone, for a tunnel to point at: Jira reaches the triggers without reaching the rest of Open Space
+  const hooksServer = http.createServer((req, res) => {
+    const url = parseRequestUrl(req.url);
+    if (!url?.pathname.startsWith('/hooks/')) { res.writeHead(404).end(); req.resume(); return; }
+    serveHook(req, res, url).catch((error: unknown) => {
+      log('webhook failed', error);
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
+  });
+
   // room for a message with its pictures (MAX_IMAGES, shrunk by the page before they are sent)
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32_000_000 });
   // an owner's Playwright and the shared Chrome: CDP messages, a page's picture among them
@@ -449,5 +460,5 @@ export function createWebServer(options: WebServerOptions) {
   // a malformed request or a reset socket must never take the bridge down
   server.on('clientError', (_error, socket) => { socket.destroy(); });
 
-  return { server, wss };
+  return { server, wss, hooksServer };
 }

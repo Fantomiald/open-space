@@ -10,6 +10,7 @@ after(() => rmSync(folder, { recursive: true, force: true }));
 
 describe('settings', () => {
   it('keeps only what is valid from the page: absolute folders, known modes, a short note', () => {
+    assert.deepEqual(parsePreferences({ roots: ['~/radar', '~'] }, '/home/me'), { roots: [path.resolve('/home/me/radar'), path.resolve('/home/me')] });
     assert.deepEqual(parsePreferences({ roots: ['/a/b', 'relative', '/a/b/', 3], permissionMode: 'bypassPermissions', model: 'opus; rm -rf', agentNote: ` ${'x'.repeat(700)} `, festivals: 'yes' }), {
       roots: [path.resolve('/a/b')], agentNote: 'x'.repeat(600),
     });

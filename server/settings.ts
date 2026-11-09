@@ -8,6 +8,7 @@ import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { isAutomataFolder } from '../shared/automata.ts';
+import { hooksAddressOf } from '../shared/triggers.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
@@ -21,6 +22,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   favoriteNotes: [],
   metricsFile: '',
   automataFolder: '',
+  hooksAddress: '',
   copyOnSelect: false,
   autoPip: true,
   effort: '',
@@ -62,7 +64,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (ISOLATE_MODES.some((mode) => mode === raw.isolate)) found.isolate = raw.isolate as Preferences['isolate'];
   if (ACCOUNTS_BROWSERS.some((browser) => browser === raw.accountsBrowser)) found.accountsBrowser = raw.accountsBrowser as Preferences['accountsBrowser'];
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
-  if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && path.isAbsolute(root)).map((root) => path.resolve(root)))].slice(0, MAX_ROOTS);
+  if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && isFullPath(root)).map((root) => path.resolve(expandHomePath(root, home))))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
   if (isPermissionMode(raw.permissionMode)) found.permissionMode = raw.permissionMode;
@@ -84,6 +86,8 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
     const folder = expandHomePath(raw.automataFolder.trim(), home);
     if (!folder || path.isAbsolute(folder)) found.automataFolder = folder && path.resolve(folder);
   }
+  const hooksAddress = typeof raw.hooksAddress === 'string' ? hooksAddressOf(raw.hooksAddress) : null;
+  if (hooksAddress !== null) found.hooksAddress = hooksAddress;
   return found;
 }
 

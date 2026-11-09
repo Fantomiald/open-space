@@ -3,6 +3,7 @@ import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { isMetricsPath } from '../../shared/metrics.ts';
 import { isAutomataFolder } from '../../shared/automata.ts';
 import { isFullPath } from '../../shared/paths.ts';
+import { hooksAddressOf } from '../../shared/triggers.ts';
 import type { TerminalKind } from '../../shared/terminal.ts';
 import { applyGlassOpacity } from '../design/glass.ts';
 import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
@@ -18,8 +19,9 @@ import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/setting
 import {
   ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
-  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WorkflowIcon,
+  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WebhookIcon, WorkflowIcon,
 } from './Icons.tsx';
+import { Copyable } from './Copyable.tsx';
 import { AccountAction } from './AccountAction.tsx';
 import { AppUpdateAction, CheckButton } from './AppUpdateAction.tsx';
 import { Modal } from './Modal.tsx';
@@ -50,7 +52,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
-  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']], ['automata', ['automata']]],
+  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']], ['automata', ['automata', 'hooksAddress']]],
   notes: [['files', ['journalFolder', 'metricsFile', 'automataFolder']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
@@ -129,6 +131,7 @@ function SettingsEditor() {
   const flashRow = useSessions((s) => s.settingsRow);
   const language = useSessions((s) => s.language);
   const terminals = useSessions((s) => s.terminals);
+  const hooksPort = useSessions((s) => s.triggers.hooksPort);
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
@@ -148,6 +151,7 @@ function SettingsEditor() {
     if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     if (!isAutomataFolder(next.automataFolder)) return t.settings.dialog.automataFolderInvalid;
+    if (hooksAddressOf(next.hooksAddress) === null) return t.settings.dialog.hooksAddressInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });
 
@@ -412,6 +416,29 @@ function SettingsEditor() {
       case 'automata': return (
         <Row key={id} id={id} flash={flash} icon={<AutomatonIcon />} title={rows.automata.title} hint={rows.automata.hint}>
           <button type="button" className="cp-button" onClick={() => { close(); store().openAutomata(true); }}>{rows.automata.action}</button>
+        </Row>
+      );
+      case 'hooksAddress': return (
+        <Row key={id} id={id} flash={flash} wide icon={<WebhookIcon />} title={rows.hooksAddress.title} hint={rows.hooksAddress.hint}>
+          <input aria-labelledby={`setting-${id}-title`} value={draft.hooksAddress} onChange={(e) => change({ hooksAddress: e.target.value })} placeholder="https://hooks.example.com" spellCheck={false} />
+          {hooksPort === null ? <p className="cp-trigger__note">{rows.hooksAddress.closed}</p> : (
+            <div className="cp-hooks-guide">
+              <p className="cp-trigger__note">{rows.hooksAddress.guide(hooksPort)}</p>
+              <ul className="cp-hooks-guide__options">
+                <li>
+                  <p className="cp-trigger__note"><strong>ngrok</strong> · {rows.hooksAddress.ngrok}</p>
+                  <Copyable text={`ngrok http --url=${rows.hooksAddress.ngrokDomain} ${hooksPort}`} />
+                </li>
+                <li>
+                  <p className="cp-trigger__note"><strong>Cloudflare</strong> · {rows.hooksAddress.cloudflare} <code>http://localhost:{hooksPort}</code></p>
+                </li>
+                <li>
+                  <p className="cp-trigger__note"><strong>{rows.hooksAddress.quickName}</strong> · {rows.hooksAddress.quick}</p>
+                  <Copyable text={`cloudflared tunnel --url http://localhost:${hooksPort}`} />
+                </li>
+              </ul>
+            </div>
+          )}
         </Row>
       );
       case 'journalFolder': return (

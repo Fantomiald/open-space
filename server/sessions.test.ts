@@ -90,7 +90,7 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
     processes.push(fake);
     return fake;
   };
-  const config: Config = { port: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [], ...overrides };
+  const config: Config = { port: 0, hooksPort: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [], ...overrides };
   const attention: [string, string][] = [];
   const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, now, home, probeCatalog, graceMs: 40, runShell: (command, cwd, signal) => new Promise((resolve) => {
     const result = { code: command.startsWith('false') ? 1 : 0, stdout: `ran ${command} in ${path.basename(cwd)}`, stderr: '', ms: 5, timedOut: false, stopped: false };

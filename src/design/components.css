@@ -2792,11 +2792,15 @@ a.cp-button { text-decoration: none; }
 
 /* ── An empty server room: what it is for, and its first automaton, in the middle of the room ── */
 .cp-server-empty {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: min(20rem, calc(100% - 2 * var(--gutter)));
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1; width: min(20rem, calc(100% - 2 * var(--gutter)));
   display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-5) var(--space-4); border-radius: var(--radius-lg); text-align: center;
 }
 .cp-server-empty > .cp-icon { width: 1.5rem; height: 1.5rem; color: var(--color-text-muted); }
 .cp-server-empty p { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+.cp-hooks-guide { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.cp-hooks-guide__options { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.cp-hooks-guide__options > li { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); }
+.cp-hooks-guide__options strong { color: var(--color-text); }
 .cp-trigger__schedule { display: flex; flex-direction: column; gap: var(--space-2); }
 .cp-trigger__schedule-line { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cp-trigger__schedule-line > select { flex: 1 1 12rem; }

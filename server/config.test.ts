@@ -10,6 +10,7 @@ describe('loadConfig', () => {
     assert.equal(config.rootsLocked, false);
     assert.equal(config.dataDir, path.resolve('/home/max/.open-space'));
     assert.equal(config.port, 4848);
+    assert.equal(config.hooksPort, 4849);
     assert.equal(config.maxLive, 8);
     assert.equal(config.idleMs, 30 * 60_000);
     assert.deepEqual(config.passthrough, []);

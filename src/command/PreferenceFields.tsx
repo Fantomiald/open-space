@@ -3,7 +3,7 @@ import { DROID_COLORS, FUR_COLORS, PET_EYE_COLORS } from '../design/people-palet
 import { CAT_PATTERNS, DOG_BREEDS, DROID_MODELS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
 import { droidPreview, type DroidLook } from '../room/droid-art.ts';
 import { droidOf, furOf, petSprite } from '../room/pet.ts';
-import { isAbsolutePath } from '../../shared/paths.ts';
+import { isFullPath } from '../../shared/paths.ts';
 import { homeRelative } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
 import { PERMISSION_MODES, type Preferences, type RootSuggestion } from '../../shared/protocol.ts';
@@ -37,7 +37,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
   const add = () => {
     // a trailing separator would make the same folder twice; a drive root or "/" keeps its own
     const folder = other.trim().replace(/(?<=[^\\/:])[\\/]+$/, '');
-    if (!isAbsolutePath(folder)) return;
+    if (!isFullPath(folder)) return;
     addFolder(folder);
     setOther('');
   };
@@ -66,7 +66,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
           <div className="cp-onboarding__other">
             <input value={other} onChange={(e) => setOther(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder={t.settings.folders.otherPlaceholder} aria-label={t.settings.folders.otherLabel} />
             {nativePicker && <button type="button" className="cp-button" onClick={() => { void browse(); }}>{t.settings.folders.browse}</button>}
-            <button type="button" className="cp-button" disabled={!isAbsolutePath(other.trim())} onClick={add}>{t.settings.folders.add}</button>
+            <button type="button" className="cp-button" disabled={!isFullPath(other.trim())} onClick={add}>{t.settings.folders.add}</button>
           </div>
           {pickFailed && <p className="cp-detail__error" role="alert">{t.settings.folders.browseFailed}</p>}
         </>

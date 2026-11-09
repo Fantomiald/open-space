@@ -78,11 +78,13 @@ export interface TriggersState {
   keys: Record<string, string[]>;
   /** the address webhooks are posted to, without the trigger's id and token: http://127.0.0.1:<port>/hooks */
   hookBase: string;
+  /** the port that only answers webhooks, for a tunnel to point at (null when it could not be opened) */
+  hooksPort: number | null;
   /** the MCP address another program of this computer uses, with its key; null while that access is off */
   externalMcp: string | null;
 }
 
-export const NO_TRIGGERS: TriggersState = { triggers: [], runs: [], messengers: [], keys: {}, hookBase: '', externalMcp: null };
+export const NO_TRIGGERS: TriggersState = { triggers: [], runs: [], messengers: [], keys: {}, hookBase: '', hooksPort: null, externalMcp: null };
 
 export const MAX_TRIGGERS = 50;
 export const MAX_TRIGGER_NAME = 60;
@@ -173,6 +175,20 @@ export type TriggerError = 'invalid' | 'name' | 'folder' | 'prompt' | 'cron' | '
 
 /** The input part of a trigger (to edit it). */
 export const inputOf = ({ id: _id, token: _token, createdAt: _createdAt, ...input }: Trigger): TriggerInput => input;
+
+/**
+ * The public address of the webhooks (Preferences.hooksAddress) as typed: '' (none), or an http(s) address without
+ * query, fragment or trailing slash; null when it is not one.
+ */
+export function hooksAddressOf(value: string): string | null {
+  const typed = value.trim();
+  if (!typed) return '';
+  if (typed.length > 300 || !/^https?:\/\//i.test(typed)) return null;
+  try {
+    const url = new URL(typed);
+    return url.search || url.hash || url.username || url.password ? null : `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch { return null; }
+}
 
 /** The webhook address of a trigger. */
 export const hookUrl = (base: string, trigger: Pick<Trigger, 'id' | 'token'>) => `${base}/${trigger.id}/${trigger.token}`;

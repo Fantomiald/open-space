@@ -73,7 +73,7 @@ function setup(dataDir = path.join(scratch, `data-${++count}`)) {
   const processes: FakeProcess[] = [];
   const messages: ServerMessage[] = [];
   const spawnProcess: ProcessFactory = (launch, handlers) => { const fake = new FakeProcess(launch, handlers); processes.push(fake); return fake; };
-  const config: Config = { port: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [] };
+  const config: Config = { port: 0, hooksPort: 0, roots: [root], rootsLocked: false, dataDir, maxLive: 8, idleMs: 60_000, passthrough: [] };
   const manager = new SessionManager({ config, spawnProcess, broadcast: (message) => messages.push(message), log: () => {}, home, graceMs: 20 });
   const find = (id: string): SessionInfo => { const found = manager.list().find((session) => session.id === id); assert.ok(found); return found; };
   const events = (id: string): OfficeEvent[] => messages.flatMap((message) => (message.t === 'ev' && message.sessionId === id ? [message.ev] : []));
@@ -592,7 +592,7 @@ describe('an isolated session never loses work, nor touches what it should not',
     git(outer, 'add', '.');
     git(outer, 'commit', '-q', '-m', 'init');
     const processes: FakeProcess[] = [];
-    const config: Config = { port: 0, roots: [path.join(outer, 'apps')], rootsLocked: false, dataDir: path.join(scratch, `data-${++count}`), maxLive: 8, idleMs: 60_000, passthrough: [] };
+    const config: Config = { port: 0, hooksPort: 0, roots: [path.join(outer, 'apps')], rootsLocked: false, dataDir: path.join(scratch, `data-${++count}`), maxLive: 8, idleMs: 60_000, passthrough: [] };
     const manager = new SessionManager({ config, spawnProcess: (launch, handlers) => { const fake = new FakeProcess(launch, handlers); processes.push(fake); return fake; }, broadcast: () => {}, log: () => {}, home, graceMs: 20 });
     await manager.init();
     const web = path.join(outer, 'apps', 'web');

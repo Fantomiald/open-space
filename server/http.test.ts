@@ -13,7 +13,9 @@ const SECRET = 'test-secret';
 const COOKIE = `poste_session=${SECRET}`;
 let base: string;
 let server: ReturnType<typeof createWebServer>['server'];
+let hooksServer: ReturnType<typeof createWebServer>['hooksServer'];
 let port: number;
+let hooksPort: number;
 let connections = 0;
 const HOOK_ID = 'abcdef1234';
 const HOOK_TOKEN = 't'.repeat(43);
@@ -21,9 +23,9 @@ const hooked: string[] = [];
 let externalKey: string | null = null;
 
 /** A raw POST, with the Host and headers given (a tunnel passes its own public name as Host). */
-function rawPost(target: string, body: string, headers: Record<string, string> = {}, host = `127.0.0.1:${port}`): Promise<{ status: number; body: string }> {
+function rawPost(target: string, body: string, headers: Record<string, string> = {}, host = `127.0.0.1:${port}`, to = port): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, '127.0.0.1');
+    const socket = net.connect(to, '127.0.0.1');
     let data = '';
     socket.on('data', (chunk) => { data += chunk; });
     socket.on('close', () => resolve({ status: Number(data.slice(9, 12)), body: data.split('\r\n\r\n')[1] ?? '' }));
@@ -43,9 +45,9 @@ function freePort(): Promise<number> {
 }
 
 /** Sends a raw HTTP request, so the request target reaches the server exactly as written (fetch would normalise it). */
-function rawRequest(target: string, host = `127.0.0.1:${port}`): Promise<{ status: number; body: string }> {
+function rawRequest(target: string, host = `127.0.0.1:${port}`, to = port): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, '127.0.0.1');
+    const socket = net.connect(to, '127.0.0.1');
     let data = '';
     socket.on('data', (chunk) => { data += chunk; });
     socket.on('close', () => resolve({ status: Number(data.slice(9, 12)), body: data.split('\r\n\r\n')[1] ?? '' }));
@@ -86,7 +88,8 @@ before(async () => {
   writeFileSync(path.join(base, 'attachments', `${'e'.repeat(64)}.md`), '# Énigmes\n<script>alert(1)</script>');
   writeFileSync(path.join(base, 'attachments', `${'c'.repeat(64)}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
   port = await freePort();
-  server = createWebServer({
+  hooksPort = await freePort();
+  const created = createWebServer({
     policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
     sessionFile: (sessionId, relative) => (sessionId === 's1' ? resolveInside(distDir, relative) : null),
@@ -100,13 +103,16 @@ before(async () => {
       messenger: (botId) => (botId === 'bot00001' ? 'bot-key' : null),
       handle: async (caller, body) => ({ status: 200, json: { caller, body } }),
     },
-  }).server;
+  });
+  ({ server, hooksServer } = created);
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => hooksServer.listen(hooksPort, '127.0.0.1', resolve));
 });
 
 after(() => {
   server.close();
   server.closeAllConnections();
+  hooksServer.close();
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -373,6 +379,15 @@ describe('the triggers\' webhooks and the open-space MCP server', () => {
     assert.equal(hooked.length, 1);
     // everything else still needs our Host
     assert.equal((await rawRequest('/', 'tunnel.example.com')).status, 403);
+  });
+
+  it('opens a port with the webhooks alone, for a tunnel', async () => {
+    const tunnel = 'hooks.example.com';
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"EX-2"}', {}, tunnel, hooksPort)).status, 202);
+    assert.equal(hooked.at(-1), '{"issue":"EX-2"}');
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${'u'.repeat(43)}`, '{}', {}, tunnel, hooksPort)).status, 404);
+    assert.equal((await rawRequest('/', `127.0.0.1:${hooksPort}`, hooksPort)).status, 404, 'not the page');
+    assert.equal((await rawPost('/mcp/s1/key-of-s1', '{}', {}, `127.0.0.1:${hooksPort}`, hooksPort)).status, 404, 'not the MCP server');
   });
 
   it('answers a session with its key, the external program once its access is on, and never a page', async () => {

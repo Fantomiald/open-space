@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import type { SessionInfo } from '../shared/protocol.ts';
-import { DEFAULT_TRIGGER, parseAllowRules, parseTriggerInput, type Trigger, type TriggerInput } from '../shared/triggers.ts';
+import { DEFAULT_TRIGGER, hooksAddressOf, parseAllowRules, parseTriggerInput, type Trigger, type TriggerInput } from '../shared/triggers.ts';
 import { parseClientMessage } from './messages.ts';
 import { runPrompt, stillBusy, Triggers } from './triggers.ts';
 
@@ -34,6 +34,15 @@ function setup(now = new Date(2026, 10, 9, 8, 0, 5).getTime()) {
   });
   return { triggers, started, states, setNow: (next: number) => { now = next; } };
 }
+
+describe('the webhooks\' public address', () => {
+  it('keeps an http(s) address without its trailing slash, empty for none, and refuses anything else', () => {
+    assert.equal(hooksAddressOf(' https://hooks.example.com/ '), 'https://hooks.example.com');
+    assert.equal(hooksAddressOf('https://x.ngrok-free.app/open-space'), 'https://x.ngrok-free.app/open-space');
+    assert.equal(hooksAddressOf(''), '');
+    for (const bad of ['hooks.example.com', 'ftp://x.com', 'https://x.com/?a=1', 'https://x.com/#a', 'https://me:pw@x.com', 'javascript:alert(1)']) assert.equal(hooksAddressOf(bad), null, bad);
+  });
+});
 
 describe('the triggers', () => {
   it('checks what a trigger says: a name, a folder, a prompt, a valid schedule, no unsafe mode', () => {
