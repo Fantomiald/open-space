@@ -37,6 +37,12 @@ const CHROME_TOOL = /^mcp__claude-in-chrome__/;
 const MAX_SUGGESTION = 2000;
 
 /**
+ * What starts a command the field runs in the session's folder without Claude nor any permission (shell mode): a
+ * suggestion starting with it is dropped, as Tab would write it there and Enter run it.
+ */
+const SHELL_PREFIX = '!';
+
+/**
  * What a claude-in-chrome result says of the tab it worked on (checked with 2.1.318): its text ends with a "Tab Context"
  * that names the tab ("- Executed on tabId: N") among the group's (`• tabId N: "<title>" ("<url>")`); a screenshot comes
  * as an image block. Null for a call on no tab (a closed one), or a tab still blank.
@@ -186,7 +192,7 @@ export class Normalizer {
       }
       case 'prompt_suggestion': {
         const suggestion = asString(message.suggestion).trim();
-        if (suggestion) this.options.onSuggestion?.(suggestion.slice(0, MAX_SUGGESTION));
+        if (suggestion && !suggestion.startsWith(SHELL_PREFIX)) this.options.onSuggestion?.(suggestion.slice(0, MAX_SUGGESTION));
         break;
       }
       case 'control_request': return this.controlRequest(message);
