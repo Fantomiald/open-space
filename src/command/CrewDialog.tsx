@@ -8,10 +8,11 @@ import { GEAR_PARTS, HAT_ROWS, chibiHead, chibiPiece, chibiSprite, type BodyPart
 import type { Pose } from '../room/sprites.ts';
 import { FIXED_COLOUR } from '../room/wardrobe.ts';
 import { useSessions } from '../state/sessions.ts';
-import { CheckIcon, ChevronDownIcon, CloseIcon, CrewIcon, DroidIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, ShuffleIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
+import { CheckIcon, ChevronDownIcon, CrewIcon, ItsMeIcon, PetIcon, PlusIcon, RemoveIcon, ShuffleIcon, TurnLeftIcon, TurnRightIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
+import { PageHead } from './PageHead.tsx';
 import { reducedMotion } from '../lib/motion.ts';
-import { DroidPicker, PetPicker } from './PreferenceFields.tsx';
+import { PetPicker } from './PreferenceFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
 import { useAutosave } from './useAutosave.ts';
 import { useDismiss } from './useDismiss.ts';
@@ -39,10 +40,10 @@ export function CrewDialog() {
 }
 
 /**
- * What the crew editor shows: a person (null: a new one being made), or the office pet. `visit` counts the picks from
+ * What the crew editor shows: a person (null: a new one being made), or the pet. `visit` counts the picks from
  * the side, so a pick opens the page afresh while a rename only moves it.
  */
-type Page = { person: string | null; visit: number } | 'pet' | 'droid';
+type Page = { person: string | null; visit: number } | 'pet';
 
 /**
  * The crew laid out like the settings: the people (the user first) and the pet down the side, with a new person always
@@ -86,13 +87,11 @@ function CrewEditor() {
           </nav>
           <nav className="cp-prefs__menu cp-team__pet" aria-label={words.pet}>
             <button type="button" aria-current={page === 'pet' ? 'page' : undefined} aria-label={words.pet} onClick={() => setPage('pet')}><PetIcon /><span className="cp-team__label">{words.pet}</span></button>
-            <button type="button" aria-current={page === 'droid' ? 'page' : undefined} aria-label={words.droid} onClick={() => setPage('droid')}><DroidIcon /><span className="cp-team__label">{words.droid}</span></button>
           </nav>
         </aside>
         <div className="cp-prefs__main">
           {page === 'pet'
             ? <PetPage close={close} />
-            : page === 'droid' ? <DroidPage close={close} />
             : <PersonPage key={page.visit} name={page.person} onRename={follow} onRemoved={open} close={close} />}
         </div>
       </div>
@@ -100,21 +99,7 @@ function CrewEditor() {
   );
 }
 
-/** The page's header, like a settings section's: its picture, its title and what it is, then its actions. */
-function PageHead({ picture, title, intro, children, close }: { picture: ReactNode; title: string; intro: string; children?: ReactNode; close: () => void }) {
-  return (
-    <header className="cp-prefs__head cp-team__head">
-      <span className="cp-prefs__head-icon cp-team__face">{picture}</span>
-      <div><h3>{title}</h3><p>{intro}</p></div>
-      <div className="cp-team__actions">
-        {children}
-        <button type="button" className="cp-icon-button" aria-label={t.settings.close} title={t.settings.close} onClick={close}><CloseIcon /></button>
-      </div>
-    </header>
-  );
-}
-
-/** The office pet, saved with the settings (Preferences.pet) as soon as it changes. */
+/** The pet, saved with the settings (Preferences.pet) as soon as it changes. */
 function PetPage({ close }: { close: () => void }) {
   const saved = useSessions((s) => s.preferences.pet);
   const setPreferences = useSessions((s) => s.setPreferences);
@@ -124,20 +109,6 @@ function PetPage({ close }: { close: () => void }) {
     <>
       <PageHead picture={<PetIcon />} title={t.settings.crew.pet} intro={t.settings.crew.petIntro} close={close}><SaveNote status={status} /></PageHead>
       <div className="cp-prefs__content"><div className="cp-prefs__card cp-team__card"><PetPicker pet={pet} onPet={setPet} /></div></div>
-    </>
-  );
-}
-
-/** The automatons' droid, saved with the settings (Preferences.droid) as soon as it changes. */
-function DroidPage({ close }: { close: () => void }) {
-  const saved = useSessions((s) => s.preferences.droid);
-  const setPreferences = useSessions((s) => s.setPreferences);
-  const [droid, setDroid] = useState(saved);
-  const { status } = useAutosave(droid, (next) => (setPreferences({ droid: next }) ? null : t.settings.noServer));
-  return (
-    <>
-      <PageHead picture={<DroidIcon />} title={t.settings.crew.droid} intro={t.settings.crew.droidIntro} close={close}><SaveNote status={status} /></PageHead>
-      <div className="cp-prefs__content"><div className="cp-prefs__card cp-team__card"><DroidPicker droid={droid} onDroid={setDroid} /></div></div>
     </>
   );
 }

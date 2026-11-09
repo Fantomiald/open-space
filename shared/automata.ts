@@ -1,6 +1,7 @@
-// The automatons: headless `claude -p` runs that a local orchestrator of the user's launches on its own (launchd, cron…),
-// outside Open Space. Open Space only watches them, read-only, from the folder named in the settings
-// (Preferences.automataFolder): what runs, in which role, on which task, and what it does. See server/automata.ts.
+// The external runs: headless `claude -p` that another program of the user's launches on its own (launchd, cron, a
+// script), outside Open Space. Open Space only watches them, read-only, from the folder named in the settings
+// (Preferences.automataFolder), through a small generic contract (AutomatonRun). See server/automata.ts.
+// The sessions Open Space starts itself from a trigger (shared/triggers.ts) are ordinary sessions, not these.
 import { isFullPath } from './paths.ts';
 
 /** The setting as typed: a full path (or from the home, "~/…") to a folder, or nothing (the feature is off). */
@@ -10,46 +11,28 @@ export const isAutomataFolder = (folder: string) => folder.trim() === '' || isFu
 export const RUN_STATUSES = ['running', 'done', 'failed', 'interrupted'] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
-/** A run of the orchestrator (<folder>/state/runs/<id>.json). Times in ms; `endedAt` null while it runs. */
+/**
+ * A run of another program (<folder>/runs/<id>.json, or <folder>/state/runs/<id>.json): a `claude -p` it launched with
+ * `--session-id`, so that its transcript can be read. Times in ms; `endedAt` null while it runs. `role` (a name of
+ * .claude/agents) and `task` (a few words) are optional.
+ */
 export interface AutomatonRun {
   id: string;
-  role: string;
-  task: string;
-  project: string;
   sessionId: string;
   cwd: string;
-  startedAt: number;
-  endedAt: number | null;
   status: RunStatus;
   pid: number | null;
-  /** the run that started this one, or null */
-  parent: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  role: string;
+  task: string;
 }
 
-export const TASK_STATUSES = ['todo', 'running', 'waiting', 'done', 'failed'] as const;
-export type AutomatonTaskStatus = (typeof TASK_STATUSES)[number];
-
-/** A task of the orchestrator (<folder>/state/tasks/<id>.json), when it keeps them. */
-export interface AutomatonTask {
-  id: string;
-  title: string;
-  project: string;
-  status: AutomatonTaskStatus;
-  /** what it may cost at most, as the orchestrator writes it */
-  ceiling: string;
-  source: string;
-  createdAt: number;
-  updatedAt: number;
-  runs: string[];
-}
-
-/** A role of the catalogue (<folder>/.claude/agents/<name>.md, its frontmatter). */
-export interface AutomatonRole {
+/** A role of Claude Code (.claude/agents/<name>.md, its frontmatter): what it is for, and its model when it says. */
+export interface AgentRole {
   name: string;
   description: string;
   model: string;
-  tools: string;
-  authority: string;
 }
 
 /** A sub-agent at work in a run: the id of the Agent call that launched it, its role, its task. */
@@ -60,22 +43,22 @@ export interface AutomatonAgent {
 }
 
 /**
- * What the page is told: `folder` says whether the feature is off (no folder set), the folder missing (or unreadable),
- * or watched. `running`: the runs at work, oldest first; `recent`: the ended ones (done, failed, interrupted), newest first.
+ * What the page is told: `folder` says whether the external runs are off (no folder set), the folder missing (or
+ * unreadable), or watched. `running`: the runs at work, oldest first; `recent`: the ended ones, newest first.
  */
 export interface AutomataState {
   folder: 'off' | 'missing' | 'ok';
   running: AutomatonRun[];
   recent: AutomatonRun[];
-  tasks: AutomatonTask[];
-  roles: AutomatonRole[];
+  /** the roles of <folder>/.claude/agents */
+  roles: AgentRole[];
   /** the sub-agents at work, by the run that launched them (read from its transcript) */
   agents: Record<string, AutomatonAgent[]>;
 }
 
-export const NO_AUTOMATA: AutomataState = { folder: 'off', running: [], recent: [], tasks: [], roles: [], agents: {} };
+export const NO_AUTOMATA: AutomataState = { folder: 'off', running: [], recent: [], roles: [], agents: {} };
 
-/** A run's id as the orchestrator names its file: letters, digits, ".", "_", "-", nothing that leaves the folder. */
+/** A run's id as its program names its file: letters, digits, ".", "_", "-", nothing that leaves the folder. */
 export const RUN_ID = /^[\w][\w.-]{0,127}$/;
 
 /** The id the room and the page give an automaton, apart from the sessions'. */

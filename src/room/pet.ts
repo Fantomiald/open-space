@@ -1,16 +1,22 @@
-// The office pet (Preferences.pet): a cat, a dog or Rocky. It wanders from one free tile to another, sits, washes (or
-// pants, or tinkers), sleeps, and says something now and then (or when it is clicked), each in its own way. The logic
-// is pure and steps with the room; the pet is drawn in pixel art like the people.
+// The pet (Preferences.pet): a cat, a dog, a droid, Rocky… It wanders from one free tile to another, sits, washes (or
+// pants, or tinkers), sleeps, and says something now and then (or when it is clicked), each in its own way; after a
+// while it heads for a way out and goes to another room (src/room/pet-trip.ts), in the teleporter's beam or through
+// the door. The logic is pure and steps with the room; the pet is drawn in pixel art like the people.
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
 import type { CatPattern, DogBreed, PetChoice, PetColors } from '../../shared/pets.ts';
+import { droidColour, droidHeight, drawDroid, type DroidLook } from './droid-art.ts';
 import { speciesPainters } from './pet-species.ts';
 import type { Floor } from './floor.ts';
 import { ROOM, tileCenter, type Point } from './geometry.ts';
 import { advanceAlong, type Mover } from './paths.ts';
+import type { Passage } from './pet-trip.ts';
+import { BEAM_MS, beamProgress } from './portal.ts';
 import { ART_SCALE, artCanvas, outline, tones, type Tones } from './pixel-art.ts';
 
 export type PetActivity = 'walk' | 'sit' | 'wash' | 'sleep';
+/** On its way in or out: out of the teleporter's ring, walking to a way out, in the beam going out, or gone. */
+export type PetPassing = 'arriving' | 'exiting' | 'leaving' | 'gone';
 
 export interface Pet extends Mover {
   activity: PetActivity;
@@ -24,15 +30,19 @@ export interface Pet extends Mover {
   line: number;
   /** when each heart floating up from a cuddle was born (pet time) */
   hearts: number[];
+  /** coming in or going out, or null while it lives in the room */
+  passing: PetPassing | null;
+  /** when it heads for a way out, on its clock */
+  leaveAt: number;
+  /** the way it goes out by, once heading for it */
+  exit: Passage | null;
+  /** when its beam started (going out through the teleporter) */
+  beamAt: number;
 }
 
 /** Tiles per second: a pet strolls. */
 const PET_SPEED = 1.5;
 const SPEECH_MS = 1800;
-
-export function createPet(start: Point = { x: 7.5, y: 10.5 }): Pet {
-  return { position: start, heading: { x: 1, y: 0 }, path: [], activity: 'sit', time: 0, until: 4000, speakUntil: 0, nextSpeech: 9000, line: 0, hearts: [] };
-}
 
 /** A free tile somewhere in the room (not a seat), to stroll to. */
 function somewhereFree(floor: Floor, random: () => number): Point {
@@ -41,8 +51,22 @@ function somewhereFree(floor: Floor, random: () => number): Point {
     const x = Math.floor(random() * ROOM.width), y = Math.floor(random() * ROOM.depth);
     if (floor.isFreeTile(x, y) && !seats.has(`${x},${y}`) && x > 0) return tileCenter({ x, y });
   }
-  return { x: 7.5, y: 10.5 };
+  return floor.inside;
 }
+
+/**
+ * The pet as the room opens: coming in by `via` (through the door, or in the teleporter's beam), or already there
+ * (somewhere free). `stayLeft`: how long it still means to stay, in ms.
+ */
+export function createPet(floor: Floor, via: Passage | null = null, stayLeft = Infinity, random: () => number = Math.random): Pet {
+  const base = { heading: { x: 1, y: 0 }, path: [], activity: 'sit' as PetActivity, time: 0, until: 4000, speakUntil: 0, nextSpeech: 9000, line: 0, hearts: [], passing: null, leaveAt: Math.max(4000, stayLeft), exit: null, beamAt: 0 };
+  if (via === 'portal' && floor.portal) return { ...base, position: { ...floor.portal }, heading: { x: 1, y: 1 }, passing: 'arriving' };
+  if (via === 'door') return { ...base, position: { ...floor.door }, path: [floor.inside], activity: 'walk' };
+  return { ...base, position: somewhereFree(floor, random) };
+}
+
+/** True while it can be seen and clicked. */
+export const petHere = (pet: Pet) => pet.passing !== 'gone';
 
 /** What the pet says now, for its kind. */
 export function petWords(pet: Pet, kind: Exclude<PetChoice['kind'], 'none'>): string {
@@ -57,31 +81,66 @@ export function speak(pet: Pet, random: () => number = Math.random) {
 }
 
 const HEART_MS = 1600;
-/** A cuddle: it speaks, stops to enjoy it, and little hearts float up. */
+/** A cuddle: it speaks, stops to enjoy it (unless it is on its way out), and little hearts float up. */
 export function cuddle(pet: Pet) {
   speak(pet);
-  if (pet.activity === 'walk') { pet.path = []; pet.activity = 'sit'; }
-  pet.until = Math.max(pet.until, pet.time + 4000);
+  if (!pet.passing) {
+    if (pet.activity === 'walk') { pet.path = []; pet.activity = 'sit'; }
+    pet.until = Math.max(pet.until, pet.time + 4000);
+  }
   pet.hearts.push(...[0, 180, 360, 540].map((delay) => pet.time + delay));
 }
 
-export function stepPet(pet: Pet, ms: number, floor: Floor, random: () => number = Math.random) {
+/**
+ * Steps the pet. Once its stay is over it heads for a way out of the room (`exits`), and goes: by the door, it is gone
+ * once there; by the teleporter, in a beam. Returns the passage it left by, once, or null.
+ */
+export function stepPet(pet: Pet, ms: number, floor: Floor, exits: readonly Passage[] = [], random: () => number = Math.random): Passage | null {
   pet.time += ms;
+  pet.hearts = pet.hearts.filter((born) => pet.time - born < HEART_MS);
+  const walk = () => advanceAlong(pet, PET_SPEED * ms / 1000) || !pet.path.length;
+  switch (pet.passing) {
+    case 'gone': return null;
+    case 'arriving':
+      // out of the ring, onto the floor before it
+      if (pet.time >= BEAM_MS) Object.assign(pet, { passing: null, activity: 'walk', path: floor.portalFront ? [{ ...floor.portalFront }] : [] });
+      return null;
+    case 'leaving':
+      if (pet.time < pet.beamAt + BEAM_MS) return null;
+      pet.passing = 'gone';
+      return 'portal';
+    case 'exiting':
+      if (!walk()) return null;
+      if (pet.exit === 'portal') { Object.assign(pet, { passing: 'leaving', activity: 'sit', beamAt: pet.time, heading: { x: 1, y: 1 } }); return null; }
+      pet.passing = 'gone';
+      return 'door';
+  }
   if (pet.activity === 'walk') {
-    if (advanceAlong(pet, PET_SPEED * ms / 1000) || !pet.path.length) {
+    if (walk()) {
       const roll = random();
       pet.activity = roll < 0.55 ? 'sit' : roll < 0.8 ? 'wash' : 'sleep';
       pet.until = pet.time + (pet.activity === 'sleep' ? 14000 + random() * 16000 : 3000 + random() * 6000);
     }
   } else if (pet.time >= pet.until) {
+    const usable = exits.filter((via) => via === 'door' || floor.portal !== null);
     pet.activity = 'walk';
-    pet.path = floor.route(pet.position, somewhereFree(floor, random));
+    if (pet.time >= pet.leaveAt && usable.length) {
+      const exit = usable[Math.min(usable.length - 1, Math.floor(random() * usable.length))];
+      Object.assign(pet, { passing: 'exiting', exit, path: exit === 'door' ? floor.pathToDoor(pet.position) : floor.pathIntoPortal(pet.position) });
+    } else pet.path = floor.route(pet.position, somewhereFree(floor, random));
   }
-  pet.hearts = pet.hearts.filter((born) => pet.time - born < HEART_MS);
   if (pet.activity !== 'sleep' && pet.time >= pet.nextSpeech) {
     speak(pet, random);
     pet.nextSpeech = pet.time + 18000 + random() * 22000;
   }
+  return null;
+}
+
+/** Where its beam is (coming in or going out through the teleporter), or null. */
+export function petBeam(pet: Pet): { kind: 'out' | 'in'; progress: number } | null {
+  if (pet.passing === 'arriving') return { kind: 'in', progress: beamProgress(0, pet.time) };
+  if (pet.passing === 'leaving') return { kind: 'out', progress: beamProgress(pet.beamAt, pet.time) };
+  return null;
 }
 
 export const isSpeaking = (pet: Pet) => pet.time < pet.speakUntil;
@@ -96,6 +155,11 @@ const FEET = { x: 10, y: 15 };
 export type Paint = (x: number, y: number, width: number, height: number, colour: string) => void;
 export type Dot = (x: number, y: number, colour: string) => void;
 type Drawn = Exclude<PetChoice, { kind: 'none' }>;
+/** The pets drawn like animals (a droid has its own drawing, droid-art.ts). */
+type Animal = Exclude<Drawn, { kind: 'droid' }>;
+
+/** A droid pet as droid-art.ts draws it. */
+export const droidOf = (choice: Extract<Drawn, { kind: 'droid' }>): DroidLook => ({ model: choice.variant, color: choice.colors?.fur });
 
 /** The fur a pet is drawn in: the one the user picked, else its pattern's, breed's or kind's. */
 export function furOf(choice: Drawn): string {
@@ -103,6 +167,7 @@ export function furOf(choice: Drawn): string {
   switch (choice.kind) {
     case 'cat': return C.cats[choice.variant];
     case 'dog': return C.dogs[choice.variant];
+    case 'droid': return droidColour(droidOf(choice));
     case 'rocky': return C.rocky.shell;
     case 'duck': case 'capybara': case 'axolotl': case 'clawd': return C[choice.kind];
     default: return C.species[choice.kind];
@@ -292,7 +357,7 @@ function paintClawd(R: Paint, P: Dot, fur: Tones, activity: PetActivity, frame: 
 
 const SPECIES = speciesPainters((R, P, fur, activity, frame) => paintCat(R, P, 'calico', {}, fur, activity, frame));
 
-function paint(choice: Drawn, activity: PetActivity, frame: 0 | 1): HTMLCanvasElement {
+function paint(choice: Animal, activity: PetActivity, frame: 0 | 1): HTMLCanvasElement {
   const { canvas, context } = artCanvas(CANVAS.width, CANVAS.height);
   const R: Paint = (x, y, width, height, colour) => { context.fillStyle = colour; context.fillRect(x + 3, y + 4, width, height); };
   const P: Dot = (x, y, colour) => R(x, y, 1, 1, colour);
@@ -322,7 +387,7 @@ function mirrored(source: HTMLCanvasElement): HTMLCanvasElement {
 const sprites = new Map<string, HTMLCanvasElement>();
 
 /** A pet's picture in an activity, facing right (for the settings' preview, and the room). */
-export function petSprite(choice: Drawn, activity: PetActivity, frame: 0 | 1, left = false): HTMLCanvasElement {
+export function petSprite(choice: Animal, activity: PetActivity, frame: 0 | 1, left = false): HTMLCanvasElement {
   const key = `${JSON.stringify(choice)}|${activity}|${frame}|${left}`;
   let sprite = sprites.get(key);
   if (!sprite) {
@@ -335,6 +400,10 @@ export function petSprite(choice: Drawn, activity: PetActivity, frame: 0 | 1, le
 
 /** Draws the pet with its paws at (x, y) in room pixels. `time`: the room's clock, for the walking and the tail. */
 export function drawPet(context: CanvasRenderingContext2D, pet: Pet, choice: Drawn, x: number, y: number, time: number) {
+  if (choice.kind === 'droid') {
+    drawDroid(context, droidOf(choice), x, y, { moving: pet.activity === 'walk', back: pet.heading.x + pet.heading.y < 0, left: pet.heading.x - pet.heading.y < 0, time });
+    return;
+  }
   const frame: 0 | 1 = Math.floor(time / (pet.activity === 'walk' ? 160 : 900)) % 2 ? 1 : 0;
   const sprite = petSprite(choice, pet.activity, frame, pet.heading.x - pet.heading.y < 0);
   context.drawImage(sprite, Math.round(x - FEET.x * ART_SCALE), Math.round(y - FEET.y * ART_SCALE), sprite.width * ART_SCALE, sprite.height * ART_SCALE);
@@ -357,3 +426,4 @@ export function drawHearts(context: CanvasRenderingContext2D, pet: Pet, x: numbe
 
 /** How far above its paws the top of the pet is, in room pixels (its bubble goes above). */
 export const PET_HEIGHT = 28;
+export const petHeight = (choice: Drawn) => (choice.kind === 'droid' ? droidHeight(choice.variant) : PET_HEIGHT);

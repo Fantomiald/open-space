@@ -331,8 +331,8 @@ export const session: Dictionary['session'] = {
   list: {
     title: 'Sessions',
     new: 'New session',
-    groups: { waiting: 'To see', working: 'At work', ready: 'Ready', resting: 'Resting' },
-    hints: { waiting: '', working: '', ready: 'read', resting: 'stopped' },
+    groups: { waiting: 'To see', working: 'At work', ready: 'Ready', resting: 'Resting', automata: 'Automatons' },
+    hints: { waiting: '', working: '', ready: 'read', resting: 'stopped', automata: '' },
     open: 'Click: open it beside the others, or go to it when open',
     collapse: (group: string) => `Fold or unfold: ${group}`,
     fold: 'Fold the list',
@@ -344,6 +344,7 @@ export const session: Dictionary['session'] = {
     waiting: 'For you',
     working: 'At work',
     ready: 'Ready',
+    automata: 'Automatons',
     starting: 'starting',
     compacting: { auto: 'auto-compacting', manual: 'compacting' },
     subagents: (count: number) => (count === 1 ? '1 sub-agent' : `${count} sub-agents`),

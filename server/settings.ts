@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
-import { DEFAULT_DROID, parseDroid } from '../shared/droids.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
 import { isMetricsPath } from '../shared/metrics.ts';
 import { isAutomataFolder } from '../shared/automata.ts';
@@ -17,7 +16,7 @@ import { expandHomePath, isFullPath } from '../shared/paths.ts';
 import { TERMINALS, type TerminalKind } from '../shared/terminal.ts';
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, droid: DEFAULT_DROID, theme: DEFAULT_ROOM_THEME,
+  notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
   journalFolder: path.join(os.homedir(), 'Journal'),
   favoriteNotes: [],
   metricsFile: '',
@@ -71,8 +70,6 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (isRoomTheme(raw.theme)) found.theme = raw.theme;
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;
-  const droid = parseDroid(raw.droid);
-  if (droid) found.droid = droid;
   if (isLanguage(raw.language)) found.language = raw.language;
   if (typeof raw.journalFolder === 'string' && isFullPath(raw.journalFolder.trim())) {
     const folder = expandHomePath(raw.journalFolder.trim(), home);

@@ -14,6 +14,8 @@ import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
 import { TESTERS } from './browser.ts';
+import { MAX_HOOK_BODY, type TriggerRunOutcome } from '../shared/triggers.ts';
+import { MAX_MCP_BODY, type Caller } from './mcp.ts';
 
 /** The file types served: the compiled UI's, and what sessions send or publish. */
 const TYPES: Record<string, string> = {
@@ -47,6 +49,19 @@ export interface WebServerOptions {
     key: (sessionId: string) => string;
     known: (sessionId: string) => boolean;
     answer: (sessionId: string, action: string, form: URLSearchParams) => Promise<{ status: number; text: string }>;
+  };
+  /** the triggers' webhooks (server/triggers.ts): fires the trigger whose id and token match, with the body as data */
+  hooks?: (id: string, token: string, body: string) => Promise<TriggerRunOutcome | 'unknown'>;
+  /** the open-space MCP server (server/mcp.ts) */
+  mcp?: {
+    /** a session's key, and whether the session exists */
+    key: (sessionId: string) => string;
+    known: (sessionId: string) => boolean;
+    /** the external program's key, null while that access is off */
+    external: () => string | null;
+    /** a messenger's agent's key, null for an unknown bot */
+    messenger: (botId: string) => string | null;
+    handle: (caller: Caller, body: string) => Promise<{ status: number; json: unknown }>;
   };
   browser?: {
     watch: (sessionId: string, lane: number, res: http.ServerResponse) => Promise<void>;
@@ -94,6 +109,24 @@ const PAGE_SKELETON = '<!doctype html><meta charset="utf-8"><meta name="viewport
  * viewer closes on it, Viewer.tsx).
  */
 const ESCAPE_RELAY = "<script>addEventListener('keydown',function(e){if(e.key==='Escape')parent.postMessage('open-space:escape','*')})</script>";
+
+type McpOptions = NonNullable<WebServerOptions['mcp']>;
+
+/** Who an MCP address is for, when its key matches: /<session>/<key>, /external/<key> or /messenger/<bot>/<key>. */
+function mcpCaller(mcp: McpOptions, parts: readonly string[]): Caller | null {
+  const [who = '', first = '', second, ...rest] = parts;
+  if (rest.length) return null;
+  if (who === 'messenger') {
+    const key = second === undefined ? null : mcp.messenger(first);
+    return key && secretsMatch(key, second ?? '') ? { messenger: first } : null;
+  }
+  if (second !== undefined) return null;
+  if (who === 'external') {
+    const key = mcp.external();
+    return key && secretsMatch(key, first) ? { external: true } : null;
+  }
+  return /^[\w-]{1,100}$/.test(who) && mcp.known(who) && secretsMatch(mcp.key(who), first) ? { session: who } : null;
+}
 
 export function createWebServer(options: WebServerOptions) {
   const { policy, port, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
@@ -249,10 +282,66 @@ export function createWebServer(options: WebServerOptions) {
     res.writeHead(reply.status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end(reply.text);
   }
 
+  /** A request's body as text, or null once it grows past `max` (answered 413). */
+  async function readBody(req: http.IncomingMessage, res: http.ServerResponse, max: number): Promise<string | null> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+      size += chunk.length;
+      if (size > max) { res.writeHead(413).end(); req.destroy(); return null; }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+
+  /**
+   * POST /hooks/<trigger>/<token>: a webhook starting a trigger's run (server/triggers.ts). The only request let in
+   * without the cookie nor our Host: a service (Jira) reaches it through a tunnel the user runs, which may pass its own
+   * public name as Host. The DNS-rebinding guard the Host check is for protects what a page could read or drive; here a
+   * caller learns nothing (202 or 404, no data back) and does nothing without the trigger's long random token, compared
+   * in constant time. A browser's request (it carries an Origin) is refused, the body is bounded and handed to the
+   * session as data, never as instructions.
+   */
+  async function serveHook(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const [id = '', token = '', ...rest] = url.pathname.slice('/hooks/'.length).split('/');
+    if (!options.hooks || req.method !== 'POST' || rest.length || req.headers.origin !== undefined || !/^[a-z0-9]{8,32}$/.test(id) || !/^[\w-]{32,100}$/.test(token)) { res.writeHead(404).end(); req.resume(); return; }
+    const declared = Number(req.headers['content-length'] ?? 0);
+    if (declared > MAX_HOOK_BODY) { res.writeHead(413).end(); req.resume(); return; }
+    const body = await readBody(req, res, MAX_HOOK_BODY);
+    if (body === null) return;
+    const outcome = await options.hooks(id, token, body);
+    if (outcome === 'unknown') { res.writeHead(404).end(); return; }
+    res.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ outcome }));
+  }
+
+  /**
+   * POST /mcp/<session>/<key>, /mcp/external/<key> or /mcp/messenger/<bot>/<key>: the open-space MCP server
+   * (server/mcp.ts). No cookie: the key, in the session's --mcp-config, given to the user's program or to a messenger's
+   * agent, lets it in; never a page's request (no Origin).
+   */
+  async function serveMcp(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const parts = url.pathname.slice('/mcp/'.length).split('/');
+    const mcp = options.mcp;
+    const caller = mcp && req.headers.origin === undefined ? mcpCaller(mcp, parts) : null;
+    const allowed = !!caller;
+    if (!allowed) { res.writeHead(404).end(); req.resume(); return; }
+    // no stream from the server, no session to end: a POST per message
+    if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); req.resume(); return; }
+    const body = await readBody(req, res, MAX_MCP_BODY);
+    if (body === null) return;
+    const reply = await mcp!.handle(caller!, body);
+    if (reply.json === null) { res.writeHead(reply.status).end(); return; }
+    const payload = JSON.stringify(reply.json);
+    res.writeHead(reply.status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), 'Cache-Control': 'no-store' }).end(payload);
+  }
+
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
-    if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     const url = parseRequestUrl(req.url);
+    // a webhook comes through the user's tunnel, under another Host (see serveHook)
+    if (url?.pathname.startsWith('/hooks/')) { await serveHook(req, res, url); return; }
+    if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     if (!url) { res.writeHead(400).end('Bad request.'); return; }
+    if (url.pathname.startsWith('/mcp/')) { await serveMcp(req, res, url); return; }
     if (url.pathname === '/pair') { pair(req, res, url); return; }
     if (url.pathname === '/upload') { await upload(req, res, url); return; }
     if (url.pathname.startsWith('/attachments/')) {

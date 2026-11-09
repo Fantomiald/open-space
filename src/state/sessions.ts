@@ -1,8 +1,10 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
-import { NO_AUTOMATA, type AutomataState } from '../../shared/automata.ts';
+import { NO_AUTOMATA, type AgentRole, type AutomataState } from '../../shared/automata.ts';
+import { NO_TRIGGERS, type TriggerError, type TriggerInput, type TriggersState } from '../../shared/triggers.ts';
 import { appendRunEvents, type RunLog } from './automata.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
+import type { MessengerInput } from '../../shared/messengers.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
 import { browserId, type BrowserState } from '../../shared/browser.ts';
@@ -15,8 +17,7 @@ import { languageOf, type Language } from '../../shared/i18n.ts';
 import type { Job } from '../../shared/jobs.ts';
 import type { TerminalChoice } from '../../shared/terminal.ts';
 import { DEFAULT_PET } from '../../shared/pets.ts';
-import { DEFAULT_DROID } from '../../shared/droids.ts';
-import { startTrip, type DroidTrip } from '../room/droid.ts';
+import { startTrip, type PetTrip } from '../room/pet-trip.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
 import { GLASS_OPACITY } from '../../shared/protocol.ts';
@@ -115,11 +116,19 @@ interface CommandPostState {
   automata: AutomataState;
   /** the automatons' panel is open, on a run (null: the first at work, or the last ended) */
   automataOpen: boolean;
+  /** the panel opened on a new trigger's page */
+  automataFresh: boolean;
   automatonId: string | null;
   /** the sub-agent of that run whose thread to show first (its Agent call), or null for the run's own */
   automatonAgent: string | null;
   /** the threads of the runs the page asked for, by run id */
   automatonLogs: Record<string, RunLog>;
+  /** the triggers and their last firings, as the server last told them (shared/triggers.ts) */
+  triggers: TriggersState;
+  /** why the last trigger sent could not be saved (shared/triggers.ts TriggerError), until the next one */
+  triggerError: TriggerError | null;
+  /** the roles a session of a folder can run as, as last asked for (null: not asked yet) */
+  agentRoles: { cwd: string; roles: AgentRole[] } | null;
   /** the music apps of the computer the radio can drive (none outside macOS) */
   musicApps: MusicApp[];
   /** what the music app the radio drives plays, as last asked for */
@@ -200,8 +209,8 @@ interface CommandPostState {
   enteredThroughDoor: boolean;
   /** the user came into the room shown through the teleporter (src/room/portal.ts), in its column of light */
   arrivedByPortal: boolean;
-  /** where the automatons' droid is, from room to room (src/room/droid.ts) */
-  droidTrip: DroidTrip;
+  /** where the pet is, from room to room (src/room/pet-trip.ts) */
+  petTrip: PetTrip;
   /** the user's settings (kept by the server) */
   preferences: Preferences;
   /** the language the page is shown in: the one chosen in the settings, else the browser's (the App is mounted again when it changes) */
@@ -299,8 +308,8 @@ interface CommandPostState {
   setView: (view: View) => void;
   /** to the other room through the teleporter: the user comes in on its twin */
   teleport: (view: View) => void;
-  /** the droid went on to another room (or the room shown moved it on by the clock) */
-  moveDroid: (trip: DroidTrip) => void;
+  /** the pet went on to another room (or the room shown moved it on by the clock) */
+  movePet: (trip: PetTrip) => void;
   setProject: (project: string) => void;
   toggleNotifications: () => void;
   toggleSound: () => void;
@@ -327,7 +336,23 @@ interface CommandPostState {
   /** opening it reads the numbers file, which clears the badge */
   openMetrics: (open: boolean) => void;
   /** opens the automatons' panel (on a run, whose thread is then asked for) or closes it */
-  openAutomata: (open: boolean, runId?: string | null, agent?: string | null) => void;
+  /** `fresh`: on the page of a new trigger */
+  openAutomata: (open: boolean, runId?: string | null, agent?: string | null, fresh?: boolean) => void;
+  /** adds a trigger (no id) or changes one; false when it could not leave */
+  saveTrigger: (id: string | null, trigger: TriggerInput) => boolean;
+  deleteTrigger: (id: string) => void;
+  /** `test`: in plan mode, nothing changed; `body`: posing as a webhook's */
+  runTrigger: (id: string, run?: { test?: boolean; body?: string }) => void;
+  cancelTriggerRun: (id: string) => void;
+  /** adds a chat bot (null) or changes one; false when it could not leave */
+  saveMessenger: (id: string | null, messenger: MessengerInput) => boolean;
+  deleteMessenger: (id: string) => void;
+  /** keys a trigger hands each of its runs, added or replaced by name; false when they could not leave */
+  setTriggerKeys: (id: string, entries: SecretEntry[]) => boolean;
+  forgetTriggerKey: (id: string, name: string) => void;
+  askAgentRoles: (cwd: string) => void;
+  /** the open-space MCP access for other programs: on with a new key, or off */
+  setExternalMcp: (enabled: boolean) => void;
   /** false when the message could not leave (not connected) */
   /** `birthday`: "MM-DD", or undefined for none */
   saveMember: (previousName: string | null, name: string, look: Look, birthday?: string, jobs?: readonly Job[]) => boolean;
@@ -400,9 +425,13 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   metricsUnread: false,
   automata: NO_AUTOMATA,
   automataOpen: false,
+  automataFresh: false,
   automatonId: null,
   automatonAgent: null,
   automatonLogs: {},
+  triggers: NO_TRIGGERS,
+  triggerError: null,
+  agentRoles: null,
   musicApps: [],
   nowPlaying: null,
   musicLibrary: null,
@@ -446,10 +475,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   project: readPreference('project', ''),
   enteredThroughDoor: false,
   arrivedByPortal: false,
-  droidTrip: startTrip(Date.now()),
+  petTrip: startTrip(Date.now()),
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, droid: DEFAULT_DROID, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -619,6 +648,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'metrics': set({ metrics: message.metrics }); break;
       case 'metricsStatus': set({ metricsUnread: message.unread }); break;
       case 'automata': set({ automata: message.state }); break;
+      case 'triggers': set({ triggers: message.state }); break;
+      case 'triggerError': set({ triggerError: message.error as TriggerError }); break;
+      case 'agentRoles': set({ agentRoles: { cwd: message.cwd, roles: message.roles } }); break;
       case 'automatonLog': set({ automatonLogs: { ...s.automatonLogs, [message.runId]: { events: message.events, truncated: message.truncated } } }); break;
       // a run's events only count once its thread was read: they follow it
       case 'automatonEvents': {
@@ -831,7 +863,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     get().setView(view);
     set({ arrivedByPortal: true });
   },
-  moveDroid: (droidTrip) => set({ droidTrip }),
+  movePet: (petTrip) => set({ petTrip }),
   setView: (view) => {
     const s = get();
     writePreference('view', view);
@@ -880,11 +912,24 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ metricsOpen: open, metrics: undefined });
     if (open) get().send({ t: 'metrics' });
   },
-  openAutomata: (open, runId = null, agent = null) => {
+  openAutomata: (open, runId = null, agent = null, fresh = false) => {
     // a thread is read again each time it is shown: what was kept may have missed events while the page was away
-    set((state) => ({ automataOpen: open, automatonId: open ? runId : null, automatonAgent: open && runId ? agent : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));
+    set((state) => ({ automataOpen: open, automataFresh: open && fresh, automatonId: open ? runId : null, automatonAgent: open && runId ? agent : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));
     if (open && runId) get().send({ t: 'automatonLog', runId });
   },
+  saveTrigger: (id, trigger) => {
+    set({ triggerError: null });
+    return get().send({ t: 'saveTrigger', ...(id ? { id } : {}), trigger });
+  },
+  deleteTrigger: (id) => get().send({ t: 'deleteTrigger', id }),
+  runTrigger: (id, run) => get().send({ t: 'runTrigger', id, ...run }),
+  cancelTriggerRun: (id) => get().send({ t: 'cancelTriggerRun', id }),
+  saveMessenger: (id, messenger) => get().send({ t: 'saveMessenger', ...(id ? { id } : {}), messenger }),
+  deleteMessenger: (id) => get().send({ t: 'deleteMessenger', id }),
+  setTriggerKeys: (id, entries) => get().send({ t: 'triggerKeys', id, entries }),
+  forgetTriggerKey: (id, name) => get().send({ t: 'forgetTriggerKey', id, name }),
+  askAgentRoles: (cwd) => get().send({ t: 'agentRoles', cwd }),
+  setExternalMcp: (enabled) => get().send({ t: 'externalMcp', enabled }),
   saveMember: (previousName, name, look, birthday, jobs = []) => get().send({ t: 'saveMember', previousName, name, look, ...(birthday ? { birthday } : {}), ...(jobs.length ? { jobs: [...jobs] } : {}) }),
   removeMember: (name) => get().send({ t: 'removeMember', name }),
   becomeSelf: (name) => get().send({ t: 'becomeSelf', name }),

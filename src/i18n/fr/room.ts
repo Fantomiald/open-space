@@ -32,9 +32,8 @@ export const room = {
   /** before someone's words in a speech bubble */
   speaker: (label: string) => `${label} :`,
   /** what each pet says: a cat meows, a dog barks, the rubber duck listens to your bug, Rocky speaks in chords */
-  /** what the automatons' droid bleeps now and then */
-  droidLines: ['Bip !', 'Bip-bouup !', 'Bidou-bip ?', 'Brrrip !', 'Bip bip.'],
   petLines: {
+    droid: ['Bip !', 'Bip-bouup !', 'Bidou-bip ?', 'Brrrip !', 'Bip bip.'],
     cat: ['Miaou !', 'Mrrrr…', 'Miaou ?', 'Mraou !'],
     dog: ['Ouaf ouaf !', 'Wouf !', 'Ouaf ?', 'Ouaf ouaf ouaf !'],
     duck: ['Coin coin !', 'Coin ?', 'Coin.', 'Coin coin coin !'],

@@ -9,7 +9,7 @@ import { AutomatonIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
-/** The rooms, the automatons' only while the settings name their folder. */
+/** The rooms; the server room is always there, as the triggers are made from it (ServerRoomEmpty when it is empty, its orb after). */
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['automates', AutomatonIcon, 'automata']] as const satisfies readonly (readonly [View, () => unknown, RoomKind])[];
 /** The search opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both); focus mode, with Cmd+. or Ctrl+. */
 const PALETTE_KEYS = `${MODIFIER} K`;
@@ -24,11 +24,7 @@ export function Header() {
   const openPalette = useSessions((s) => s.openPalette);
   const openSettings = useSessions((s) => s.openSettings);
   const openCrew = useSessions((s) => s.openCrew);
-  // the automatons' button, while the settings name their folder
-  const automataOn = useSessions((s) => s.preferences.automataFolder !== '');
-  const automataAtWork = useSessions((s) => s.automata.running.length);
   const automata = useSessions((s) => s.automata);
-  const openAutomata = useSessions((s) => s.openAutomata);
   const outdated = useSessions(selectOutdatedCount);
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
@@ -38,8 +34,8 @@ export function Header() {
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
-    // the automatons' room: every automaton at work, with or without a capsule, and the runs another run started
-    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: seatedRuns(automata).reduce((count, bot) => count + 1 + bot.helpers.length, 0) };
+    // the server room: the triggers' runs, and every external run at work, with or without a capsule
+    return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: roomSessions(list, seen, 'automata').flat().length + seatedRuns(automata).length };
   }, [sessions, seen, automata]);
 
   const words = t.common.header;
@@ -50,7 +46,7 @@ export function Header() {
         {connection !== 'live' && <span className="cp-header__signal" data-connection={connection} title={words.disconnected} />}
         <h1 className="cp-sr-only">Open Space</h1>
         <nav className="cp-segmented" data-icons aria-label={words.rooms}>
-          {VIEWS.filter(([, , room]) => room !== 'automata' || automataOn).map(([id, ViewIcon, room]) => (
+          {VIEWS.map(([id, ViewIcon, room]) => (
             <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
               <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
             </button>
@@ -76,17 +72,11 @@ export function Header() {
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
-        {automataOn && (
-          <button type="button" className="cp-button" data-variant="quiet" onClick={() => openAutomata(true)} title={t.automata.buttonCount(automataAtWork)}>
-            <AutomatonIcon /><span className="cp-header__label">{t.automata.button}</span>
-            {automataAtWork > 0 && <span className="cp-header__room-count">{automataAtWork}</span>}
-          </button>
-        )}
-        <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} title={words.crewTitle}>
-          <CrewIcon /><span className="cp-header__label">{words.crew}</span>
+        <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} aria-label={words.crew} title={words.crewTitle}>
+          <CrewIcon />
         </button>
-        <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} title={words.searchTitle}>
-          <SearchIcon /><span className="cp-header__label">{words.search}</span><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
+        <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} aria-label={words.search} title={words.searchTitle}>
+          <SearchIcon /><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
         </button>
         <button
           type="button" className="cp-icon-button cp-header__settings" data-alert={appReady || outdated > 0} onClick={() => openSettings(true)}

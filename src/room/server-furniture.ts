@@ -114,6 +114,8 @@ export const SERVER_DESIGNS: Readonly<Record<'serverRack' | 'pod' | 'podGlass' |
   // the orb floats and bobs; its pad of light stays on the floor (its glow and pulse are drawn every frame)
   orb: {
     height: ORB.z + ORB_SHAPE.radius + 4, float: ORB_FLOAT,
+    // outlined under the pointer: a click opens the automatons
+    clickable: (p) => p.ball(0.5, 0.5, ORB.z, ORB_SHAPE.radius, ORB_SHAPE.radius, S.orbOuter),
     paint(p) {
       p.ball(0.5, 0.5, ORB.z, ORB_SHAPE.radius, ORB_SHAPE.radius, S.orbOuter);
       p.ball(0.45, 0.45, ORB.z + 1, ORB_SHAPE.radius - 2, ORB_SHAPE.radius - 2, S.orbInner);

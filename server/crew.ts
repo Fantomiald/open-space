@@ -62,7 +62,7 @@ export class Crew {
   list(): CrewMember[] { return this.members.map((member) => ({ ...member })); }
 
   /** Adds a member, or updates the one called `previousName` (the user's own avatar can be renamed, not removed). */
-  async save(previousName: string | null, name: string, look: Look, birthday?: string, jobs: readonly Job[] = []) {
+  async save(previousName: string | null, name: string, look: Look | null, birthday?: string, jobs: readonly Job[] = []) {
     const clean = name.trim().slice(0, MAX_NAME);
     if (!clean) throw new Error(st.crew.giveName);
     const existing = previousName === null ? -1 : this.members.findIndex((member) => member.name === previousName);

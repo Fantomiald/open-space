@@ -6,11 +6,18 @@ import { toScreen, type Point } from './geometry.ts';
 import { glyphRows } from './wall-art.ts';
 import { BOT_GLYPH, BOT_GLYPH_SIZE } from './status-glyphs.ts';
 import { ART_SCALE } from './pixel-art.ts';
+import { ORB_SHAPE } from './server-furniture.ts';
 
 /** The orb's centre on screen, raised by its bob (room pixels, see bobOf). */
 export function orbCenter(bob = 0): Point {
   const floor = toScreen({ x: ORB.x, y: ORB.y });
   return { x: floor.x, y: floor.y - ORB.z * ART_SCALE - bob };
+}
+
+/** True for a canvas point on the orb, or close enough to it (the bob left out: it moves by a few pixels only). */
+export function isOrbAt(point: Point): boolean {
+  const center = orbCenter();
+  return Math.hypot(point.x - center.x, point.y - center.y) <= (ORB_SHAPE.radius + 4) * ART_SCALE;
 }
 
 /** How long a pulse takes to spread and fade, in ms, and how many are out at once. */

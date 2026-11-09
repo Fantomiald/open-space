@@ -12,7 +12,7 @@ import { Floor } from './floor.ts';
 import { boxOutline, depthOf, distance, facingVector, insideConvex, isInRoom, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { Scene, directionOf, type Character } from './scene.ts';
 import { Visits, visitorId } from './visitors.ts';
-import { createPet, isSpeaking, petWords, stepPet } from './pet.ts';
+import { createPet, isSpeaking, petBeam, petWords, stepPet, type Pet } from './pet.ts';
 import { assignSeats } from './seats.ts';
 import { NO_GEAR, parseLook, randomLook } from '../../shared/look.ts';
 import { AUTOMATON_LOOK, DEFAULT_LOOK, ROBOT_ACCENTS } from '../design/people-palette.ts';
@@ -30,7 +30,7 @@ import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
 import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
 import { stackLabels } from './labels.ts';
 import { BEAM_MS, beamGlow, beamProgress, ellipseDistance, hiddenInBeam, portalMotes, vortex } from './portal.ts';
-import { advanceTrip, createDroid, droidBeam, exitsOf, pickExit, startTrip, stepDroid, through, type Droid } from './droid.ts';
+import { advanceTrip, exitsOf, pickExit, startTrip, through } from './pet-trip.ts';
 import { PORTAL, pieceHeight } from './pixel-furniture.ts';
 import { WALL_EFFECT } from './themes/kit.ts';
 import { ROOM_THEMES } from '../../shared/room-themes.ts';
@@ -47,7 +47,11 @@ const SEAT_COUNT = OFFICE_FLOOR.seatCount;
 const DOOR = OFFICE_FLOOR.door;
 const BLOCKED = blockedTiles(OFFICE_FLOOR.layout.furniture);
 const planOffice = (sessions: readonly SessionInfo[], seen: SeenSequences, previous: ReadonlyMap<string, number>) => planRoom(sessions, seen, previous, SEAT_COUNT);
-const officeScene = () => new Scene(OFFICE_FLOOR, { withPet: true });
+const officeScene = () => {
+  const scene = new Scene(OFFICE_FLOOR);
+  scene.bringPet(null, Infinity, []);
+  return scene;
+};
 /** No step lands on furniture (the doorway, outside the grid, is the only point off a tile). */
 const offFurniture = (path: readonly Point[]) => path.every((point) => !BLOCKED.has(`${Math.floor(point.x)},${Math.floor(point.y)}`));
 
@@ -106,7 +110,7 @@ describe('the break room', () => {
 
   it('lets the user sit on any sofa, and keeps their seat free of sessions', () => {
     assert.equal(LOUNGE_FLOOR.layout.playerSpots.length, LOUNGE_FLOOR.seatCount);
-    const scene = new Scene(LOUNGE_FLOOR, { withPet: false });
+    const scene = new Scene(LOUNGE_FLOOR, {});
     const first = LOUNGE_FLOOR.layout.seats[0];
     scene.sitPlayerAt(LOUNGE_FLOOR.spotAt({ x: first.x + 0.5, y: first.y + 0.5 })!);
     assert.deepEqual([...scene.playerSeats()], [0]);
@@ -359,11 +363,11 @@ describe('scene', () => {
   });
 
   it('lets the pet wander on free tiles, rest, and speak in its own way when poked', () => {
-    const pet = createPet();
+    const pet = createPet(OFFICE_FLOOR);
     let seed = 1;
     const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     for (let elapsed = 0; elapsed < 120_000; elapsed += 66) {
-      stepPet(pet, 66, OFFICE_FLOOR, random);
+      stepPet(pet, 66, OFFICE_FLOOR, [], random);
       assert.ok(OFFICE_FLOOR.isWalkable(pet.position), 'never on furniture');
     }
     assert.match(petWords(pet, 'cat'), /Miaou|Mrr|Mraou/);
@@ -404,7 +408,7 @@ describe('scene', () => {
     walkFor(scene, 15_000);
     assert.equal(scene.playerWentOut, true);
     assert.ok(close(scene.player.position, OFFICE_FLOOR.door));
-    const arriving = new Scene(LOUNGE_FLOOR, { withPet: false, atDoor: true });
+    const arriving = new Scene(LOUNGE_FLOOR, { atDoor: true });
     assert.equal(arriving.playerSpot, null);
     walkFor(arriving, 3_000);
     assert.ok(close(arriving.player.position, LOUNGE_FLOOR.inside));
@@ -423,7 +427,7 @@ describe('scene', () => {
   });
 
   it('has no cat in the break room', () => {
-    const scene = new Scene(LOUNGE_FLOOR, { withPet: false });
+    const scene = new Scene(LOUNGE_FLOOR, {});
     assert.equal(scene.pet, null);
     assert.equal(scene.pokePet({ x: 100, y: 300 }), false);
   });
@@ -778,9 +782,9 @@ describe('name tags', () => {
 
 describe('automatons in the room', () => {
   const bot = (id: string, extra: Partial<AutomatonRun> = {}): AutomatonRun => ({
-    id, role: 'code-reviewer', task: '', project: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, parent: null, ...extra,
+    id, role: 'code-reviewer', task: '', sessionId: '', cwd: '', startedAt: 1, endedAt: null, status: 'running', pid: 1, ...extra,
   });
-  const state = (running: AutomatonRun[], agents: AutomataState['agents'] = {}): AutomataState => ({ folder: 'ok', running, recent: [], tasks: [], roles: [], agents });
+  const state = (running: AutomatonRun[], agents: AutomataState['agents'] = {}): AutomataState => ({ folder: 'ok', running, recent: [], roles: [], agents });
 
   it('seats the automatons in their own room only: never at a session\'s desk, never in the break room', () => {
     const sessions = Array.from({ length: SEAT_COUNT - 2 }, (_, index) => session(`s${index}`, 'work'));
@@ -798,7 +802,7 @@ describe('automatons in the room', () => {
     assert.equal(room.seats.size, 3);
     assert.ok(![...room.seats.values()].includes(0), 'the user\'s seat stays theirs');
     assert.equal(room.hiddenSessions, 0);
-    assert.deepEqual(roomSessions(sessions, {}, 'automata'), []);
+    assert.deepEqual(roomSessions(sessions, {}, 'automata').flat(), []);
     // more automatons than desks: the oldest sit
     const many = seatedRuns(state(Array.from({ length: SEAT_COUNT + 2 }, (_, index) => bot(`r${index}`))));
     assert.equal(planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set([0]), many).people.length, SEAT_COUNT - 1);
@@ -810,11 +814,22 @@ describe('automatons in the room', () => {
     assert.equal(decorOf('lounge'), 'lounge');
   });
 
-  it('shows the runs a run started as faces on its tag', () => {
-    const seated = seatedRuns(state([bot('lead', { role: 'planner' }), bot('helper', { parent: 'lead' }), bot('orphan', { parent: 'gone' })]));
-    assert.deepEqual(seated.map(({ run }) => run.id), ['lead', 'orphan']);
-    const plan = planRoom([], {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seated);
-    assert.deepEqual(plan.people[0].agents.map((agent) => agent.id), ['helper']);
+  it('puts the sessions a trigger started in the server room, as robots, before the external runs', () => {
+    const fromTrigger = { ...session('t1', 'work'), trigger: { id: 'abcdef12', name: 'Morning recap' } };
+    const withRole = { ...session('t2', 'wait'), trigger: { id: 'abcdef13', name: 'Watch', role: 'security-reviewer' } };
+    const plain = session('s1', 'work');
+    const all = [fromTrigger, withRole, plain];
+    assert.deepEqual(roomSessions(all, {}, 'office').flat().map((each) => each.id), ['s1']);
+    // waiting for the user first, like in the office
+    assert.deepEqual(roomSessions(all, {}, 'automata').flat().map((each) => each.id), ['t2', 't1']);
+    const plan = planRoom(all, {}, NOBODY, SEAT_COUNT, 'automata', new Set(), seatedRuns(state([bot('ext')])));
+    assert.deepEqual(plan.people.map((person) => [person.sessionId, person.automatonRole, person.automaton]), [
+      ['t2', 'security-reviewer', undefined], ['t1', 'Morning recap', undefined], [automatonPersonId('ext'), 'code-reviewer', 'ext'],
+    ]);
+    // once seen and closed, a trigger's run is in no room: not among the sessions resting in the break room
+    const ended = { ...fromTrigger, state: 'closed' as const, resting: true };
+    assert.deepEqual(roomSessions([ended], {}, 'lounge').flat(), []);
+    assert.deepEqual(roomSessions([ended], {}, 'automata').flat(), []);
   });
 
   it('seats each sub-agent at work at a desk of its own, after its run, named after its role', () => {
@@ -922,7 +937,7 @@ describe('going through the teleporter', () => {
     assert.equal(hiddenInBeam('out', 0.6), true);
     assert.equal(hiddenInBeam('in', 0.4), true);
     assert.equal(beamGlow(0.5), 1);
-    const scene = new Scene(new Floor(OFFICE, null, false, true), { withPet: false });
+    const scene = new Scene(new Floor(OFFICE, null, false, true), {});
     scene.walkPlayerToPortal();
     assert.ok(scene.player.path.length > 0);
     for (let step = 0; step < 400 && !scene.playerTeleported; step++) scene.step(50);
@@ -932,7 +947,7 @@ describe('going through the teleporter', () => {
 
   it('brings them in on the twin, in its light', () => {
     const floor = new Floor(SERVER_ROOM);
-    const scene = new Scene(floor, { withPet: false, atPortal: true });
+    const scene = new Scene(floor, { atPortal: true });
     assert.deepEqual(scene.player.position, floor.portal);
     assert.equal(scene.playerHidden(), true);
     scene.step(BEAM_MS / 2 + 50);
@@ -946,44 +961,44 @@ describe('going through the teleporter', () => {
   });
 });
 
-describe('the automatons\' droid', () => {
+describe('the pet, from room to room', () => {
   const office = new Floor(OFFICE, null, false, true);
-  const run = (droid: Droid, floor: Floor, exits: Parameters<typeof stepDroid>[3], ms = 120_000) => {
+  const run = (pet: Pet, floor: Floor, exits: Parameters<typeof stepPet>[3], ms = 120_000) => {
     let random = 0.37;
     const next = () => { random = (random * 9301 + 49297) % 233280 / 233280; return random; };
-    for (let time = 0; time < ms; time += 50) { const left = stepDroid(droid, 50, floor, exits, next); if (left) return left; }
+    for (let time = 0; time < ms; time += 50) { const left = stepPet(pet, 50, floor, exits, next); if (left) return left; }
     return null;
   };
 
   it('comes in through the door, the teleporter, or is already there', () => {
-    const byDoor = createDroid(office, 'door', 60_000, () => 0.5);
+    const byDoor = createPet(office, 'door', 60_000, () => 0.5);
     assert.deepEqual(byDoor.position, office.door);
-    assert.equal(byDoor.activity, 'rolling');
-    const byPortal = createDroid(office, 'portal', 60_000, () => 0.5);
+    assert.equal(byDoor.activity, 'walk');
+    const byPortal = createPet(office, 'portal', 60_000, () => 0.5);
     assert.deepEqual(byPortal.position, office.portal);
-    assert.equal(droidBeam(byPortal)?.kind, 'in');
-    const there = createDroid(office, null, 60_000, () => 0.5);
-    assert.equal(there.activity, 'idle');
+    assert.equal(petBeam(byPortal)?.kind, 'in');
+    const there = createPet(office, null, 60_000, () => 0.5);
+    assert.equal(there.passing, null);
     assert.ok(office.isWalkable(there.position));
   });
 
-  it('rolls about, then goes out by the way it picked, once', () => {
-    const byDoor = createDroid(office, null, 8000, () => 0.3);
+  it('wanders about, then goes out by the way it picked, once', () => {
+    const byDoor = createPet(office, null, 8000, () => 0.3);
     assert.equal(run(byDoor, office, ['door']), 'door');
-    assert.equal(byDoor.activity, 'gone');
-    assert.equal(stepDroid(byDoor, 50, office, ['door']), null, 'told once');
-    const byPortal = createDroid(office, null, 8000, () => 0.3);
+    assert.equal(byDoor.passing, 'gone');
+    assert.equal(stepPet(byDoor, 50, office, ['door']), null, 'told once');
+    const byPortal = createPet(office, null, 8000, () => 0.3);
     assert.equal(run(byPortal, office, ['portal']), 'portal');
     assert.deepEqual(byPortal.position, office.portal);
     // never out by the teleporter of a room without one
     const lounge = new Floor(LOUNGE);
-    assert.equal(run(createDroid(lounge, null, 8000, () => 0.3), lounge, ['portal'], 40_000), null);
+    assert.equal(run(createPet(lounge, null, 8000, () => 0.3), lounge, ['portal'], 40_000), null);
   });
 
   it('goes from room to room: the door to the break room, the teleporter to the automatons\' room', () => {
     assert.deepEqual(exitsOf('office').map((exit) => [exit.via, exit.to]), [['door', 'lounge'], ['portal', 'automata']]);
     assert.deepEqual(exitsOf('lounge').map((exit) => exit.to), ['office']);
-    assert.deepEqual(exitsOf('automata').map((exit) => exit.to), ['office', 'office']);
+    assert.deepEqual(exitsOf('automata').map((exit) => [exit.via, exit.to]), [['portal', 'office']]);
     const trip = startTrip(1000, () => 0);
     assert.equal(trip.room, 'office');
     assert.equal(trip.via, null);
@@ -1025,14 +1040,16 @@ describe('the automatons\' server room', () => {
     assert.ok(pieces('serverRack').length > 10);
   });
 
-  it('can be walked into: from the door to every capsule and to the user\'s console, which is not a capsule', () => {
-    for (let seat = 0; seat < floor.seatCount; seat++) assert.ok(floor.pathToSeat(floor.inside, seat).length > 0, `capsule ${seat}`);
-    const spot = SERVER_ROOM.playerSpots[0];
-    assert.ok(!SERVER_ROOM.seats.some((seat) => seat.x === spot.seat.x && seat.y === spot.seat.y));
-    assert.ok(floor.route(floor.inside, spot.at).length > 0);
-    // the orb and the racks block their tiles; nothing stands on the doorway
+  it('has no door: everyone comes out of the teleporter to a capsule, and goes back into it', () => {
+    assert.deepEqual(floor.door, floor.portal);
+    assert.deepEqual(floor.inside, floor.portalFront);
+    for (let seat = 0; seat < floor.seatCount; seat++) {
+      const path = floor.pathToSeat(floor.door, seat);
+      assert.deepEqual(path[0], floor.portalFront, `capsule ${seat}`);
+      assert.deepEqual(floor.pathToDoor(floor.seatPosition(seat)).at(-1), floor.portal);
+    }
+    assert.equal(floor.isDoorAt(toScreen({ x: 0, y: SERVER_ROOM.door.y + 0.5 })), false);
     assert.ok(!floor.isFreeTile(ORB.x, ORB.y));
-    assert.ok(floor.isFreeTile(1, SERVER_ROOM.door.y));
   });
 
   it('keeps its look whatever the festival', () => {

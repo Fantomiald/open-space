@@ -1,6 +1,8 @@
 // Runtime validation of what a WebSocket client sends. Nothing from the network is trusted: unknown or
 // malformed messages are dropped (null), strings are bounded.
+import { MESSENGER_ID, parseMessengerInput } from '../shared/messengers.ts';
 import { RUN_ID } from '../shared/automata.ts';
+import { MAX_HOOK_BODY, parseTriggerInput, TRIGGER_ID } from '../shared/triggers.ts';
 import { ACCOUNTS_BROWSERS, BRANCH_ACTIONS, EFFORTS, isPermissionMode, MAX_SESSION_FILE, MAX_TEXT, type BranchAction, type CleanedBranch, type ClientMessage, type Effort, type FileAction, type ImageUpload, type InspectView, type McpAction, type PermissionDecision, type SessionOptions } from '../shared/protocol.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { MAX_FILES, UPLOAD_ID } from './uploads.ts';
@@ -383,6 +385,38 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'metrics': return { t: 'metrics' };
     case 'automatonLog': return typeof raw.runId === 'string' && RUN_ID.test(raw.runId) ? { t: 'automatonLog', runId: raw.runId } : null;
+    case 'saveTrigger': {
+      const id = raw.id === undefined ? undefined : typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) ? raw.id : null;
+      // the page checks the same rules first (shared/triggers.ts) and says what does not fit
+      const parsed = parseTriggerInput(raw.trigger);
+      return id !== null && 'input' in parsed ? { t: 'saveTrigger', ...(id ? { id } : {}), trigger: parsed.input } : null;
+    }
+    case 'deleteTrigger': return typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) ? { t: raw.t, id: raw.id } : null;
+    case 'triggerKeys': {
+      if (typeof raw.id !== 'string' || !TRIGGER_ID.test(raw.id)) return null;
+      const entries = Array.isArray(raw.entries) && raw.entries.length <= MAX_SECRETS ? raw.entries.map(parseSecret) : null;
+      return entries?.length && entries.every((entry) => entry) ? { t: raw.t, id: raw.id, entries: entries as SecretEntry[] } : null;
+    }
+    case 'saveMessenger': {
+      const id = raw.id === undefined ? undefined : typeof raw.id === 'string' && MESSENGER_ID.test(raw.id) ? raw.id : null;
+      const parsed = id === null ? null : parseMessengerInput(raw.messenger, id === undefined);
+      return parsed && 'input' in parsed ? { t: raw.t, ...(id ? { id } : {}), messenger: parsed.input } : null;
+    }
+    case 'testMessenger': case 'relinkMessenger':
+    case 'deleteMessenger': return typeof raw.id === 'string' && MESSENGER_ID.test(raw.id) ? { t: raw.t, id: raw.id } : null;
+    case 'forgetTriggerKey':
+      return typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) && typeof raw.name === 'string' && isSecretName(raw.name) ? { t: raw.t, id: raw.id, name: raw.name } : null;
+    case 'runTrigger': {
+      if (typeof raw.id !== 'string' || !TRIGGER_ID.test(raw.id)) return null;
+      const body = typeof raw.body === 'string' ? raw.body.slice(0, MAX_HOOK_BODY) : undefined;
+      return { t: raw.t, id: raw.id, ...(raw.test === true ? { test: true } : {}), ...(body !== undefined ? { body } : {}) };
+    }
+    case 'cancelTriggerRun': return typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) ? { t: raw.t, id: raw.id } : null;
+    case 'agentRoles': {
+      const cwd = boundedString(raw.cwd, 1000);
+      return cwd ? { t: 'agentRoles', cwd } : null;
+    }
+    case 'externalMcp': return typeof raw.enabled === 'boolean' ? { t: 'externalMcp', enabled: raw.enabled } : null;
     case 'search': {
       const query = boundedString(raw.query, MAX_QUERY);
       const id = asNumber(raw.id, -1);

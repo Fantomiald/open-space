@@ -126,6 +126,10 @@
   --tone-work: #8cc2ff;
   --tone-work-soft: #12263d;
   --tone-error: #ff8f8a;
+  /* the chat apps' own colours, behind their marks (Icons.tsx BrandIcon) */
+  --brand-telegram: #26a5e4;
+  --brand-slack: #4a154b;
+  --brand-discord: #5865f2;
   --tone-error-soft: #3a1614;
   --tone-idle: #a0a5b3;
   --tone-idle-soft: #1d2333;

@@ -4,7 +4,7 @@ import { quotaWindowName, resetLabel, usageLevel } from '../lib/format.ts';
 
 const percent = (utilization: number) => Math.round(utilization * 100);
 
-/** The five-hour usage in the header; hovering or focusing it shows every usage window and when each frees up. */
+/** The five-hour usage in the header, as a ring that fills up; hovering or focusing it shows every usage window and when each frees up. */
 export function QuotaMeter({ quota }: { quota: Quota }) {
   const windows = quota.windows.length ? quota.windows : [{ name: 'five_hour', utilization: quota.fiveHour, resetsAt: quota.resetsAt }];
   const now = new Date();
@@ -12,9 +12,14 @@ export function QuotaMeter({ quota }: { quota: Quota }) {
   return (
     <div className="cp-quota">
       <button type="button" className="cp-quota__trigger" aria-describedby="quota-details">
-        <span className="cp-quota__label">{words.fiveHours}</span>
-        <progress className="cp-meter" data-level={usageLevel(quota.fiveHour)} value={percent(quota.fiveHour)} max={100} />
-        <span className="cp-quota__value">{t.common.percent(percent(quota.fiveHour))}</span>
+        <span className="cp-sr-only">{words.fiveHours}</span>
+        <span className="cp-quota__ring" data-level={usageLevel(quota.fiveHour)}>
+          <svg viewBox="0 0 36 36" aria-hidden="true">
+            <circle cx="18" cy="18" r="15.5" pathLength={100} />
+            <circle cx="18" cy="18" r="15.5" pathLength={100} strokeDasharray={`${percent(quota.fiveHour)} 100`} />
+          </svg>
+          <span className="cp-quota__value">{percent(quota.fiveHour)}<span className="cp-sr-only"> %</span></span>
+        </span>
       </button>
       <div className="cp-quota__details" id="quota-details" role="tooltip">
         <p className="cp-quota__heading">{words.heading}</p>

@@ -1,6 +1,6 @@
-// The automatons on the page's side (shared/automata.ts): who of them goes into the room, and their threads as the
+// The external runs on the page's side (shared/automata.ts): who of them goes into the room, and their threads as the
 // server tells them. Pure functions, tested without a DOM.
-import type { AutomataState, AutomatonAgent, AutomatonRole, AutomatonRun, AutomatonTask } from '../../shared/automata.ts';
+import type { AgentRole, AutomataState, AutomatonAgent, AutomatonRun } from '../../shared/automata.ts';
 import type { LoggedEvent } from '../../shared/protocol.ts';
 
 /** A run's thread as the page has it. */
@@ -18,31 +18,15 @@ export function appendRunEvents(log: RunLog, events: readonly LoggedEvent[], max
   return all.length > max ? { events: all.slice(-max), truncated: true } : { events: all, truncated: log.truncated };
 }
 
-/** Who of the automatons takes a seat: a run at work, or one of its sub-agents at work (`agent`). */
-export interface SeatedAutomaton { run: AutomatonRun; helpers: AutomatonRun[]; agent: AutomatonAgent | null }
+/** Who of the external runs takes a seat: a run at work, or one of its sub-agents at work (`agent`). */
+export interface SeatedAutomaton { run: AutomatonRun; agent: AutomatonAgent | null }
 
-/**
- * The automatons that take a seat in the room, oldest first: each run at work with the runs at work it started (a
- * run whose parent run is at work too shows as a face on its parent's tag), then its sub-agents at work, each
- * at a desk of its own.
- */
+/** The external runs that take a seat in the server room, oldest first: each run at work, then its sub-agents at work, each in a capsule of its own. */
 export function seatedRuns(state: AutomataState): SeatedAutomaton[] {
-  const running = new Set(state.running.map((run) => run.id));
-  const top = state.running.filter((run) => !run.parent || !running.has(run.parent));
-  return top.flatMap((run) => [
-    { run, helpers: state.running.filter((other) => other.parent === run.id), agent: null },
-    ...(state.agents[run.id] ?? []).map((agent) => ({ run, helpers: [], agent })),
-  ]);
+  return state.running.flatMap((run) => [{ run, agent: null }, ...(state.agents[run.id] ?? []).map((agent) => ({ run, agent }))]);
 }
 
 /** Every run the page knows, at work first. */
 export const allRuns = (state: AutomataState): AutomatonRun[] => [...state.running, ...state.recent];
 
-export const roleOf = (state: AutomataState, role: string): AutomatonRole | undefined => state.roles.find((candidate) => candidate.name === role);
-
-/** The task a run works on: by its id, else by a task that lists the run. */
-export const taskOf = (state: AutomataState, run: AutomatonRun): AutomatonTask | undefined =>
-  state.tasks.find((task) => task.id === run.task) ?? state.tasks.find((task) => task.runs.includes(run.id));
-
-/** The runs a run started, at work or ended. */
-export const childrenOf = (state: AutomataState, runId: string): AutomatonRun[] => allRuns(state).filter((run) => run.parent === runId);
+export const roleOf = (state: AutomataState, role: string): AgentRole | undefined => state.roles.find((candidate) => candidate.name === role);

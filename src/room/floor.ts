@@ -41,8 +41,10 @@ const grown = (box: Box, across: number, up: number): Box => ({
 
 export class Floor {
   readonly layout: Layout;
-  /** where people stand in the doorway, coming in or going out */
+  /** where people stand in the doorway, coming in or going out: in the teleporter's ring in a room without a door */
   readonly door: Point;
+  /** no door: everyone comes and goes through the teleporter */
+  private readonly throughPortal: boolean;
   private readonly blocked: Set<string>;
   /** what can be walked on but not walked across: chairs, sofas, things on the floor (only where someone goes or leaves from) */
   private readonly avoided: Set<string>;
@@ -67,7 +69,6 @@ export class Floor {
   constructor(layout: Layout, festival: Festival | null = null, numbers = false, automata = false) {
     const furnished = numbers ? withMetrics(layout) : layout;
     this.layout = layoutOn(automata ? withAutomataAccess(furnished) : furnished, festival);
-    this.door = { x: 0.4, y: layout.door.y + 0.6 };
     this.blocked = blockedTiles(this.layout.furniture);
     this.avoided = blockedTiles(this.layout.furniture.filter((piece) => !piece.blocks && piece.top === undefined && !piece.wall).map((piece) => ({ ...piece, blocks: true })));
     const desk = this.layout.furniture.find((piece) => piece.kind === 'bossDesk');
@@ -83,6 +84,8 @@ export class Floor {
     this.portal = portal ? { x: portal.x + portal.width / 2, y: portal.y + IN_RING } : null;
     this.portalFront = portal ? { x: portal.x + portal.width / 2, y: portal.y - BEFORE_RING } : null;
     this.portalBox = portal ? { fromX: portal.x, toX: portal.x + portal.width, fromY: portal.y, toY: portal.y + portal.depth, low: 0, high: PORTAL_HEIGHT } : null;
+    this.throughPortal = !!layout.doorless && this.portal !== null;
+    this.door = this.throughPortal ? { ...this.portal! } : { x: 0.4, y: layout.door.y + 0.6 };
   }
 
   get seatCount() { return this.layout.seats.length; }
@@ -110,17 +113,20 @@ export class Floor {
   /** From anywhere (the door, or halfway out) to a seat, sitting down at its own spot. */
   pathToSeat(from: Point, seat: number): Point[] {
     const place = this.layout.seats[seat];
-    const path = this.route(from, place);
+    // out of the ring the way one went in, by the spot before it
+    const start = this.throughPortal && from.x === this.door.x && from.y === this.door.y ? this.portalFront! : null;
+    const path = start ? [{ ...start }, ...this.route(start, place)] : this.route(from, place);
     return place.at ? [...path, { ...place.at }] : path;
   }
   /** From anywhere (usually a seat) out through the door. */
-  pathToDoor(from: Point): Point[] { return [...this.route(from, this.layout.door), this.door]; }
+  pathToDoor(from: Point): Point[] { return this.throughPortal ? this.pathIntoPortal(from) : [...this.route(from, this.layout.door), this.door]; }
 
   /** Where someone coming in through the door stands, one step inside, facing the room. */
-  get inside(): Point { return { x: 1.5, y: this.layout.door.y + 0.5 }; }
+  get inside(): Point { return this.throughPortal ? { ...this.portalFront! } : { x: 1.5, y: this.layout.door.y + 0.5 }; }
 
   /** True for a canvas point on the door or its frame. */
   isDoorAt(screen: Point): boolean {
+    if (this.throughPortal) return false;
     const { along, height } = onLeftWall(screen);
     const from = this.layout.door.y - 0.15;
     return along >= from && along <= from + DOOR_SIZE.width + 0.3 && height >= 0 && height <= DOOR_SIZE.height + 4;

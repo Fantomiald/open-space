@@ -25,9 +25,8 @@ export const room: Dictionary['room'] = {
     list: 'Sessions without a seat',
   },
   speaker: (label) => `${label}:`,
-  /** what the automatons' droid bleeps now and then */
-  droidLines: ['Beep!', 'Beep-boop!', 'Bwee-oop?', 'Brrrip!', 'Beep beep.'],
   petLines: {
+    droid: ['Beep!', 'Beep-boop!', 'Bwee-oop?', 'Brrrip!', 'Beep beep.'],
     cat: ['Meow!', 'Purrr…', 'Meow?', 'Mrrow!'],
     dog: ['Woof woof!', 'Arf!', 'Woof?', 'Woof woof woof!'],
     duck: ['Quack quack!', 'Quack?', 'Quack.', 'Quack quack quack!'],

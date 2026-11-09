@@ -6,13 +6,13 @@
 //   node server/index.ts --open     ... and opens it in the browser, unless a tab reconnects within a few seconds
 //   node server/index.ts --dev      only the bridge (the UI is served by Vite, port 5174)
 import { execFile } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import type { AccountsBrowser, AppUpdate, ClaudeAccount, ClaudeInfo, ClientMessage, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import { isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
@@ -25,14 +25,16 @@ import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
-import { resolveAllowedDirectory, suggestRoots } from './paths.ts';
+import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { windowsKnownFolders } from './system-folders.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { UsageLedger } from './usage.ts';
 import { prepareSounds, soundsFolder } from './sounds.ts';
 import { attachmentsFolder } from './attachments.ts';
-import { uploadsFolder } from './uploads.ts';
+import { saveUpload, uploadsFolder } from './uploads.ts';
+import { Messengers } from './messengers.ts';
+import { createMessengerAgent } from './messenger-agent.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
@@ -41,6 +43,12 @@ import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { AutomataWatch } from './automata-watch.ts';
+import { rolesFor } from './agent-roles.ts';
+import { Triggers } from './triggers.ts';
+import { TriggerKeys } from './trigger-keys.ts';
+import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi } from './mcp.ts';
+import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
+import { parsePreferences } from './settings.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
 import { saveAvatar } from './crew.ts';
@@ -142,6 +150,9 @@ function secretsEnv(sessionId: string): Record<string, string> {
   };
 }
 
+/** Open Space's keys: no session's file tools reach them (claude-process.ts hiddenRules) */
+const HIDDEN_FILES = ['secret', 'mcp-key', 'trigger-keys.json', 'messengers.json'].map((file) => path.join(config.dataDir, file));
+
 const crew = new Crew(path.join(config.dataDir, 'crew.json'));
 await crew.load();
 
@@ -157,12 +168,16 @@ const sessions = new SessionManager({
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,
+  hidden: HIDDEN_FILES,
   broadcast,
   log,
   onAttention: (kind, session) => {
     if (settings.notifications && ![...presence.values()].some(Boolean)) notify(session, kind, log);
   },
   browserMcp,
+  // the open-space MCP server (server/mcp.ts), for the sessions whose folder was trusted: a restricted one could
+  // otherwise start sessions or triggers elsewhere
+  openSpaceMcp: (sessionId, untrusted) => (untrusted ? undefined : openSpaceMcpConfig(`http://${HOST}:${config.port}/mcp/${sessionId}/${sessionMcpKey(secret, sessionId)}`)),
   secrets: { store: secretStore, env: secretsEnv },
   // a tester is done (its report given, or stopped): its browser goes with it, rather than staying in the views
   onSubagentLeft: (sessionId, type) => {
@@ -198,6 +213,162 @@ setInterval(() => { checkMetrics().catch((error: unknown) => log('numbers file',
 /** the user's automatons, watched read-only from the folder of the settings (server/automata-watch.ts) */
 const automata = new AutomataWatch({ folder: () => settings.preferences.automataFolder, broadcast, log });
 automata.start();
+
+/**
+ * Starts a session the way the page does: someone of the crew without a session (the one asked for when free, else one
+ * whose job fits the first message, else a name of the pool), in an allowed folder, under the folder's trust rules
+ * (sessions.create). `started`: what a trigger adds (server/triggers.ts). Returns the session and the name asked for
+ * when it was taken.
+ */
+async function startSession(options: SessionOptions, started: Parameters<typeof sessions.create>[1] = {}) {
+  const taken = new Set(sessions.list().map((session) => session.name));
+  const asked = options.name?.trim();
+  const name = asked && !taken.has(asked) ? asked : crew.freeNameFor(options.text ?? '', taken);
+  const session = await sessions.create({ ...options, name: name || undefined }, started);
+  return { session, takenName: asked && taken.has(asked) ? asked : null };
+}
+
+/** The user's chat bots (server/messengers.ts): Open Space's only outgoing connection, to Telegram, once one is added. */
+const messengers = new Messengers({
+  file: path.join(config.dataDir, 'messengers.json'),
+  sessions: () => sessions.list(),
+  events: (sessionId, after) => sessions.logSince(sessionId, after).events,
+  lastWords: (sessionId) => mcpApi.lastWords(sessionId).slice(0, 3000),
+  triggers: () => triggers.list(),
+  answer: (sessionId, requestId, decision) => sessions.answer(sessionId, requestId, decision),
+  reply: (sessionId, requestId, answers) => sessions.reply(sessionId, requestId, answers),
+  send: (sessionId, text, files) => sessions.send(sessionId, text, [], files),
+  interrupt: (sessionId) => sessions.interrupt(sessionId),
+  remote: (sessionId, enabled) => mcpApi.remote(sessionId, enabled),
+  fire: (triggerId, payload) => triggers.fire(triggerId, 'manual', payload),
+  startSession: (cwd, prompt) => mcpApi.startSession({ cwd, prompt, remote: true }),
+  folders: () => listProjectDirectories(config.roots),
+  saveUpload: (name, bytes) => saveUpload(uploadsFolder(config.dataDir), name, bytes),
+  attachment: (stored) => resolveInside(attachmentsFolder(config.dataDir), path.basename(stored)),
+  agent: claude
+    ? createMessengerAgent(claude, buildClaudeEnvironment(process.env, config.passthrough), {
+      folder: path.join(config.dataDir, 'messenger-agent'), hidden: HIDDEN_FILES, failed: st.messengers.agentFailed,
+      mcpUrl: (botId) => `http://${HOST}:${config.port}/mcp/messenger/${botId}/${messengerMcpKey(secret, botId)}`,
+    })
+    : async (_bot, _text, conversation) => ({ text: st.messengers.agentFailed, conversation }),
+  onChange: () => broadcast(triggersMessage()),
+  log,
+});
+
+/** the keys each trigger hands its runs (server/trigger-keys.ts) */
+const triggerKeys = new TriggerKeys(path.join(config.dataDir, 'trigger-keys.json'));
+
+/** The triggers (server/triggers.ts): their runs are sessions started by startSession, in Remote Control when they say so, with their trigger's keys. */
+const triggers = new Triggers({
+  file: path.join(config.dataDir, 'triggers.json'),
+  start: async (trigger, prompt) => {
+    try {
+      const { session } = await startSession(
+        { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
+        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote },
+      );
+      const keys = triggerKeys.entries(trigger.id);
+      if (keys.length) sessions.giveSecrets(session.id, undefined, keys);
+      return session;
+    } catch (error) {
+      // nobody is there to answer the trust question: the folder must be approved once from the page
+      if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
+      throw error;
+    }
+  },
+  sessionState: (sessionId) => sessions.list().find((session) => session.id === sessionId)?.state ?? null,
+  allowedFolder: (cwd) => resolveAllowedDirectory(cwd, config.roots),
+  onChange: () => broadcast(triggersMessage()),
+  log,
+});
+await triggers.load();
+triggers.start();
+messengers.start();
+/** the open-space MCP access of another program of this computer (server/mcp.ts) */
+const externalKey = new ExternalKey(path.join(config.dataDir, 'mcp-key'));
+const triggersMessage = (): ServerMessage => {
+  const state: TriggersState = {
+    triggers: triggers.list(), runs: triggers.recentRuns(), messengers: messengers.list(), keys: triggerKeys.all(), hookBase: `http://${HOST}:${config.port}/hooks`,
+    externalMcp: externalKey.current ? `http://${HOST}:${config.port}/mcp/external/${externalKey.current}` : null,
+  };
+  return { t: 'triggers', state };
+};
+
+/** Changes settings the page or the MCP server sent (already checked), and tells every page. */
+async function applyPreferences(changes: Partial<typeof settings.preferences>) {
+  const { roots, ...rest } = changes;
+  const before = settings.preferences.claude;
+  const accountsBefore = settings.preferences.accountsBrowser;
+  await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
+  setServerLanguage(settings.preferences.language ?? 'fr');
+  applyRoots();
+  broadcast(preferencesMessage());
+  await sessions.applySettings(changedSettings(before, settings.preferences.claude));
+  if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
+  await checkMetrics();
+  await automata.poll();
+}
+
+const VERSION = (() => { try { return String(JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version); } catch { return '0'; } })();
+/** What the open-space MCP server reaches (server/mcp.ts). */
+const mcpApi: OpenSpaceApi = {
+  triggers: () => triggers.list(),
+  lastRuns: () => triggers.recentRuns(),
+  saveTrigger: async (id, raw) => {
+    const base = id ? triggers.get(id) : undefined;
+    if (id && !base) return { error: 'unknown' };
+    const parsed = parseTriggerInput(raw, base);
+    if ('error' in parsed) return parsed;
+    // an agent never sets bypassPermissions or dontAsk: parseTriggerInput only knows the modes Open Space offers
+    return triggers.save(id, parsed.input);
+  },
+  runTrigger: (id) => triggers.fire(id, 'agent'),
+  startSession: async ({ cwd, prompt, name, model, permissionMode, role, remote }) => {
+    const mode = permissionMode === undefined ? settings.preferences.permissionMode : isPermissionMode(permissionMode) ? permissionMode : null;
+    if (!mode) throw new Error(st.triggers.errors.mode);
+    if (role && !ROLE_NAME.test(role)) throw new Error(st.triggers.errors.role);
+    try {
+      const { session } = await startSession({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote });
+      return session;
+    } catch (error) {
+      if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
+      throw error;
+    }
+  },
+  addMember: async (name, jobs) => {
+    await crew.save(null, name, null, undefined, jobs);
+    broadcast({ t: 'crew', crew: crew.list() });
+  },
+  crew: () => crew.list().filter((member) => !member.self).map((member) => ({ name: member.name, jobs: member.jobs ?? [] })),
+  roles: async (cwd) => {
+    const folder = resolveAllowedDirectory(cwd, config.roots);
+    return folder ? rolesFor(folder) : [];
+  },
+  settings: () => settings.preferences,
+  changeSettings: async (changes) => {
+    const allowed = Object.fromEntries(Object.entries(changes).filter(([key]) => (MCP_SETTINGS as readonly string[]).includes(key)));
+    await applyPreferences(parsePreferences(allowed));
+  },
+  callerFolder: (caller) => ('session' in caller ? sessions.folderOf(caller.session) ?? null : null),
+  sessions: () => sessions.list(),
+  lastWords: (sessionId) => {
+    const said = sessions.logSince(sessionId, 0).events.findLast(({ ev }) => ev.k === 'say');
+    return said?.ev.k === 'say' ? said.ev.text : '';
+  },
+  send: (sessionId, text) => sessions.send(sessionId, text),
+  answer: (sessionId, requestId, decision) => sessions.answer(sessionId, requestId, decision),
+  reply: (sessionId, requestId, answers) => sessions.reply(sessionId, requestId, answers),
+  interrupt: (sessionId) => sessions.interrupt(sessionId),
+  remote: (sessionId, enabled) => { void sessions.remoteControl(sessionId, enabled); },
+  sendFile: async (botId, file, caption) => {
+    const allowed = [...config.roots, attachmentsFolder(config.dataDir), uploadsFolder(config.dataDir)];
+    const found = path.isAbsolute(file) ? allowed.map((root) => resolveInside(root, file)).find(Boolean) : null;
+    if (!found || HIDDEN_FILES.includes(found) || !statSync(found).isFile()) throw new Error(st.messengers.fileRefused);
+    await messengers.sendFile(botId, found, caption);
+  },
+};
+
+
 /** The Claude Code installed now: its updater replaces it in the background, the next launches start the new one */
 let installedClaude = claude?.version ?? '';
 /** a `claude update` is running: a second click waits for it */
@@ -246,6 +417,18 @@ const { server } = createWebServer({ policy, port: config.port, distDir: DIST, s
       },
     }),
   },
+  hooks: async (id, token, body) => {
+    const trigger = triggers.hook(id, token);
+    if (!trigger) return 'unknown';
+    return (await triggers.fire(trigger.id, 'webhook', body)).outcome;
+  },
+  mcp: {
+    key: (sessionId) => sessionMcpKey(secret, sessionId),
+    known: (sessionId) => sessions.list().some((session) => session.id === sessionId && !session.untrusted),
+    external: () => externalKey.current,
+    messenger: (botId) => (messengers.has(botId) ? messengerMcpKey(secret, botId) : null),
+    handle: (caller, body) => handleMcp(mcpApi, caller, body, VERSION),
+  },
 });
 
 function onConnection(socket: WebSocket) {
@@ -278,6 +461,7 @@ function onConnection(socket: WebSocket) {
   }).catch((error: unknown) => log('cannot read the Claude Code settings', error));
   send({ t: 'metricsStatus', unread: metricsUnread });
   send({ t: 'automata', state: automata.state });
+  send(triggersMessage());
   send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
     if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
@@ -304,18 +488,14 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       // unnamed sessions take someone of the crew without a session, whose job fits the first message if possible;
       // someone asked for by name who already has a session (at work or resting) is not free: another free one comes
       // instead, and once the crew is all taken, a stranger with a name drawn from the pool (and a look of their own)
-      const taken = new Set(sessions.list().map((session) => session.name));
-      const asked = message.options.name?.trim();
-      const name = asked && !taken.has(asked) ? asked : crew.freeNameFor(message.options.text ?? '', taken);
-      let session: SessionInfo;
       try {
-        session = await sessions.create(name ? { ...message.options, name } : { ...message.options, name: undefined });
+        const { session, takenName } = await startSession(message.options);
+        if (takenName) send({ t: 'toast', kind: 'info', text: st.server.nameTaken(takenName, session.name) });
       } catch (error) {
         // the page asks the user, then asks again with their answer (SessionOptions.trust)
         if (error instanceof TrustNeeded) { send({ t: 'trustNeeded', cwd: error.cwd, code: error.code }); return; }
         throw error;
       }
-      if (asked && taken.has(asked)) send({ t: 'toast', kind: 'info', text: st.server.nameTaken(asked, session.name) });
       break;
     }
     case 'send': sessions.send(message.sessionId, message.text, message.images, message.files); break;
@@ -328,20 +508,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'sendNow': sessions.sendNow(message.sessionId); break;
     case 'aside': sessions.aside(message.sessionId, message.question); break;
     case 'asideClose': sessions.closeAside(message.sessionId); break;
-    case 'preferences': {
-      const { roots, ...rest } = message.preferences;
-      const before = settings.preferences.claude;
-      const accountsBefore = settings.preferences.accountsBrowser;
-      await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
-      setServerLanguage(settings.preferences.language ?? 'fr');
-      applyRoots();
-      broadcast(preferencesMessage());
-      await sessions.applySettings(changedSettings(before, settings.preferences.claude));
-      if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
-      await checkMetrics();
-      await automata.poll();
-      break;
-    }
+    case 'preferences': await applyPreferences(message.preferences); break;
     case 'onboard': {
       await crew.setSelf(message.self.name, message.self.look, message.self.birthday);
       const { roots, ...rest } = message.preferences;
@@ -504,6 +671,40 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       break;
     }
     case 'automatonLog': send({ t: 'automatonLog', runId: message.runId, ...await automata.thread(message.runId) }); break;
+    case 'saveTrigger': {
+      const saved = await triggers.save(message.id, message.trigger);
+      if ('error' in saved) send({ t: 'triggerError', error: saved.error });
+      break;
+    }
+    case 'deleteTrigger':
+      await triggers.remove(message.id);
+      triggerKeys.drop(message.id);
+      break;
+    case 'triggerKeys':
+      if (!triggers.list().some((trigger) => trigger.id === message.id)) break;
+      triggerKeys.set(message.id, message.entries);
+      broadcast(triggersMessage());
+      break;
+    case 'saveMessenger': messengers.save(message.id, message.messenger); break;
+    case 'deleteMessenger': messengers.remove(message.id); break;
+    case 'testMessenger': await messengers.test(message.id); break;
+    case 'relinkMessenger': messengers.relink(message.id); break;
+    case 'forgetTriggerKey':
+      triggerKeys.drop(message.id, message.name);
+      broadcast(triggersMessage());
+      break;
+    case 'runTrigger': await triggers.fire(message.id, message.test ? 'test' : 'manual', message.body ?? null); break;
+    case 'cancelTriggerRun': await triggers.cancel(message.id); break;
+    case 'agentRoles': {
+      const folder = resolveAllowedDirectory(message.cwd, config.roots);
+      send({ t: 'agentRoles', cwd: message.cwd, roles: folder ? await rolesFor(folder) : [] });
+      break;
+    }
+    case 'externalMcp':
+      if (message.enabled) externalKey.renew();
+      else externalKey.disable();
+      broadcast(triggersMessage());
+      break;
     case 'search': send({ t: 'searchResults', id: message.id, query: message.query, hits: sessions.search(message.query) }); break;
     case 'costs': {
       // the first reading of the transcripts is long: what is known goes out at once, the finished report follows
@@ -574,6 +775,7 @@ async function shutdown() {
   deadline.unref();
   browsers.shutdown();
   automata.stop();
+  triggers.stop();
   await sessions.shutdown();
   process.exit(0);
 }

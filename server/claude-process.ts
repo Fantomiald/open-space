@@ -132,6 +132,14 @@ export interface LaunchOptions {
   mcpConfig?: string;
   /** its sub-agents with a browser of their own (server/browser.ts testerAgents) */
   agents?: string;
+  /** the open-space MCP server (server/mcp.ts), a second --mcp-config apart from the browser's */
+  openSpaceMcp?: string;
+  /** the role of Claude Code it runs as (.claude/agents/<role>.md), --agent */
+  agent?: string;
+  /** permission rules it uses without asking (a trigger's), --allowedTools */
+  allowedTools?: readonly string[];
+  /** files it may not read nor change (Open Space's keys), --disallowedTools */
+  hidden?: readonly string[];
   /** the user's own Chrome through the Claude in Chrome extension, for their accounts (Preferences.accountsBrowser) */
   chrome?: boolean;
   /** variables of this session only, on top of the shared environment (os-secret's address: server/secrets.ts) */
@@ -159,7 +167,7 @@ export interface LaunchOptions {
  * - `--chrome` connects the claude-in-chrome server to the Claude in Chrome extension in `-p` too (checked with 2.1.318:
  *   two sessions at once, each in a tab group of its own, and no site permission asked by the extension).
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -174,13 +182,30 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (Object.keys(settings).length) args.push('--settings', JSON.stringify(settings));
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // a server of the same name in the user's settings gives way to this one (checked with 2.1.306)
-  if (options.mcpConfig) args.push('--mcp-config', options.mcpConfig);
+  // --mcp-config takes several configurations after it
+  const mcpConfigs = [options.mcpConfig, options.openSpaceMcp].filter((config): config is string => !!config);
+  if (mcpConfigs.length) args.push('--mcp-config', ...mcpConfigs);
+  if (options.agent) args.push('--agent', options.agent);
+  if (options.allowedTools?.length) args.push('--allowedTools', options.allowedTools.join(','));
+  if (options.hidden?.length) args.push('--disallowedTools', hiddenRules(options.hidden).join(','));
   if (options.agents) args.push('--agents', options.agents);
   if (options.chrome) args.push('--chrome');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
   if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome));
   return args;
+}
+
+/**
+ * The rules keeping a session's file tools off some files (Read covers Grep and Glob too). A shell command can still
+ * reach them: this keeps an agent from stumbling on them, it does not stop one set on them. `//` starts an absolute
+ * path in Claude Code's rules.
+ */
+export function hiddenRules(files: readonly string[]): string[] {
+  return files.flatMap((file) => {
+    const absolute = `//${file.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+    return [`Read(${absolute})`, `Edit(${absolute})`];
+  });
 }
 
 /**

@@ -1,5 +1,5 @@
 // The teleporter between the office and the automatons' room: the light rising from its ring, and the column of light
-// that takes someone away or brings them in (the user, the droid). Pure logic, no clock of its own: it steps with the room.
+// that takes someone away or brings them in (the user, the pet). Pure logic, no clock of its own: it steps with the room.
 
 /** How long the column of light takes to take someone away, or to bring them in, in ms. */
 export const BEAM_MS = 900;

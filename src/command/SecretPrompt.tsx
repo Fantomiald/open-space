@@ -112,3 +112,30 @@ export function SecretsDialog({ session, name = '', onClose }: { session: Sessio
     </Modal>
   );
 }
+
+/** The keys a trigger hands each run (names only, never shown again once saved): forgotten one by one, added or replaced by name. */
+export function TriggerKeys({ triggerId }: { triggerId: string }) {
+  const held = useSessions((s) => s.triggers.keys[triggerId]) ?? [];
+  const { setTriggerKeys, forgetTriggerKey } = useSessions.getState();
+  const [rows, setRows] = useState<SecretEntry[]>([emptyRow()]);
+  const words = t.composer.secrets;
+  const save = () => {
+    if (valid(rows) && setTriggerKeys(triggerId, filled(rows).map((row) => ({ name: row.name.trim(), value: row.value })))) setRows([emptyRow()]);
+  };
+  return (
+    <div className="cp-secrets">
+      {held.length > 0 && (
+        <ul className="cp-secrets__held" aria-label={words.held}>
+          {held.map((name) => (
+            <li key={name}>
+              <code>{name}</code>
+              <button type="button" className="cp-icon-button" data-size="small" aria-label={words.forget(name)} title={words.forget(name)} onClick={() => forgetTriggerKey(triggerId, name)}><RemoveIcon /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <SecretRows rows={rows} setRows={setRows} />
+      <button type="button" className="cp-button cp-secrets__save" data-size="small" disabled={!valid(rows)} onClick={save}>{t.automata.triggers.fields.keysSave}</button>
+    </div>
+  );
+}

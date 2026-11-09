@@ -8,6 +8,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type SearchHit, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
+import { parseAllowRules, ROLE_NAME, TRIGGER_ID, type TriggerTag } from '../shared/triggers.ts';
 import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
@@ -67,6 +68,7 @@ export interface SessionManagerDeps {
   /** the user's first name and their note for every agent */
   identity?: SessionDeps['identity'];
   claudeSettings?: SessionDeps['claudeSettings'];
+  hidden?: SessionDeps['hidden'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
   /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
@@ -85,6 +87,8 @@ export interface SessionManagerDeps {
   browserMcp?: (sessionId: string, untrusted: boolean, accounts: AccountsBrowser) => BrowserLaunch;
   /** Preferences.accountsBrowser: the browser of the user's accounts of the sessions without a choice of their own */
   accountsBrowser?: () => AccountsBrowser;
+  /** the --mcp-config of the open-space MCP server for a session (server/mcp.ts); nothing for one whose folder was not trusted */
+  openSpaceMcp?: (sessionId: string, untrusted: boolean) => string | undefined;
   /** the keys the user gives the sessions, and the variables that let a session's os-secret reach them (server/secrets.ts) */
   secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
 }
@@ -314,7 +318,8 @@ export class SessionManager {
         const env = this.deps.secrets?.env(info.id);
         const browsers = this.browserLaunch(info.id);
         this.launchedBrowsers.set(info.id, browsers);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...browsers, ...(env ? { env } : {}) }, handlers);
+        const openSpaceMcp = this.deps.openSpaceMcp?.(info.id, !!this.sessions.get(info.id)?.snapshot().untrusted);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...browsers, ...(openSpaceMcp ? { openSpaceMcp } : {}), ...(env ? { env } : {}) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -336,6 +341,7 @@ export class SessionManager {
       ...(this.deps.secrets ? { secretNames: () => this.deps.secrets?.store.names(info.id) ?? [] } : {}),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
+      hidden: this.deps.hidden,
       peerName: (address) => this.peerName(address),
       liveCount: () => [...this.sessions.values()].filter((session) => session.alive).length,
       maxLive: this.deps.config.maxLive,
@@ -545,7 +551,11 @@ export class SessionManager {
   }
 
   // ── commands from clients ──
-  async create(options: SessionOptions): Promise<SessionInfo> {
+  /**
+   * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
+   * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
+   */
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.deps.config.roots);
@@ -570,6 +580,9 @@ export class SessionManager {
     if (options.effort) info.effort = options.effort;
     if (options.ultracode) info.ultracode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
+    if (started.trigger) info.trigger = started.trigger;
+    if (started.role) info.role = started.role;
+    if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
     this.logs.set(info.id, log);
@@ -597,10 +610,17 @@ export class SessionManager {
       }
     }
     // Remote Control needs the process, which waits for the worktree
-    if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base).then(() => this.remoteByDefault(session));
-    else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '').then(() => this.remoteByDefault(session));
-    else this.remoteByDefault(session);
+    const remote = () => (started.remote ? this.remoteOn(session) : this.remoteByDefault(session));
+    if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base).then(remote);
+    else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '').then(remote);
+    else remote();
     return session.snapshot();
+  }
+
+  /** A trigger's run in Remote Control, so that it can be followed and answered from the phone. */
+  private remoteOn(session: Session) {
+    if (!this.sessions.has(session.snapshot().id)) return;
+    session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control on for ${session.snapshot().name}`, error));
   }
 
   /** A new session in Remote Control when the settings say so; past the slots it keeps free, it stays off (its button still turns it on). */
@@ -915,7 +935,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1137,10 +1157,20 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     toldChrome: raw.toldChrome === true || undefined,
     accountsBrowser: raw.accountsBrowser === 'chrome' || raw.accountsBrowser === 'shared' ? raw.accountsBrowser : undefined,
     toldSecrets: raw.toldSecrets === true || undefined,
+    trigger: parseTriggerTag(raw.trigger),
+    role: ROLE_NAME.test(asString(raw.role)) ? asString(raw.role) : undefined,
+    allowedTools: parseAllowRules(raw.allowedTools)?.length ? parseAllowRules(raw.allowedTools)! : undefined,
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,
   };
+}
+
+/** What a saved session keeps of the trigger that started it. */
+function parseTriggerTag(raw: unknown): TriggerTag | undefined {
+  if (!isJson(raw) || !TRIGGER_ID.test(asString(raw.id))) return undefined;
+  const role = asString(raw.role);
+  return { id: asString(raw.id), name: asString(raw.name).slice(0, 60), ...(ROLE_NAME.test(role) ? { role } : {}) };
 }
 
 const MERGE_PROBLEMS: ReadonlySet<string> = new Set(['dirty', 'behind', 'overlap', 'elsewhere', 'git', 'stopped']);

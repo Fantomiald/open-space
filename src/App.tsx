@@ -14,6 +14,7 @@ import { Launcher } from './command/Launcher.tsx';
 import { AttentionAnnouncer, ConnectionBanner, Toasts } from './command/Notices.tsx';
 import { activeProject, projectsOf } from './state/projects.ts';
 import { RoomView } from './room/RoomView.tsx';
+import { ServerRoomEmpty } from './command/ServerRoomEmpty.tsx';
 import { SessionList } from './command/SessionList.tsx';
 import { Sky, refreshFrost } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
@@ -40,9 +41,8 @@ export function App() {
   useAltKey();
   const view = useSessions((s) => s.view);
   const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
-  // the automatons' room exists while the settings name their folder; without it, the view falls back on the office
-  const automataOn = useSessions((s) => s.preferences.automataFolder !== '');
-  const room = view === 'repos' ? 'lounge' : view === 'automates' && automataOn ? 'automata' : 'office';
+  // the server room is always there to go to; it fills up once there is a trigger or the external runs' folder
+  const room = view === 'repos' ? 'lounge' : view === 'automates' ? 'automata' : 'office';
   const day = useFestival();
   // the room and the sky read the theme as they paint: set before they mount again for it (their keys)
   const theme = useSessions((s) => s.preferences.theme);
@@ -201,7 +201,8 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}:${automataOn}`} room={room} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={room} day={day}/>}
+          {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>

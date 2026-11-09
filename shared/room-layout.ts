@@ -13,8 +13,6 @@ export type PieceKind =
   // the automatons' server room: racks along the walls, the capsules they stand in (their back, then their glass drawn
   // over whoever stands in it), and the orb floating in the middle
   | 'serverRack' | 'pod' | 'podGlass' | 'orb'
-  // the operator's console of the server room
-  | 'automataConsole'
   // a teleporter on the floor between the office and the automatons' room, a twin in each
   | 'portal'
   // the numbers object, one of these (see METRICS_OBJECT)
@@ -94,6 +92,8 @@ export interface Layout {
   wallItems: readonly WallItem[];
   /** the door, on the left wall: people come in on this tile */
   door: { x: number; y: number };
+  /** no door drawn: everyone comes and goes through the teleporter (the server room) */
+  doorless?: true;
   playerSpots: readonly PlayerSpot[];
   /** where the crew without a session drops by (the office only) */
   visitSpots?: readonly VisitSpot[];
@@ -286,8 +286,8 @@ const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: podFaci
 /** A rack of servers against the back wall (facing +y) or the left wall (facing +x). */
 const rack = (x: number, y: number, alongLeft = false) => (alongLeft ? piece('serverRack', x, y, 0.9, 1) : piece('serverRack', x, y, 1, 0.9));
 
-/** The server room's teleporter, back to the office: at the front, right of the capsules, clear of them. */
-export const SERVER_PORTAL: FurniturePiece = piece('portal', 16.8, 13.2, 3, 0.5);
+/** The server room's teleporter, back to the office: where a door would be, by the left wall, clear of the capsules. */
+export const SERVER_PORTAL: FurniturePiece = piece('portal', 0.3, 9, 3, 0.5);
 
 export const SERVER_ROOM: Layout = {
   furniture: [
@@ -295,16 +295,15 @@ export const SERVER_ROOM: Layout = {
     ...[1, 2, 3, 4, 5, 6, 12].map((y) => rack(0, y, true)),
     ...POD_SEATS.flatMap((seat) => [piece('pod', seat.x, seat.y, 1, 1, false, { behind: true }), piece('podGlass', seat.x, seat.y, 1, 1, false, { front: true })]),
     piece('orb', ORB.x - 0.5, ORB.y - 0.5),
-    // the operator's console, front left, where the user sits to watch them
-    piece('automataConsole', 2, 12, 2),
     SERVER_PORTAL,
-    piece('chair', 2, 11, 1, 1, false),
   ],
   seats: POD_SEATS,
   rugs: [],
   wallItems: [],
   door: { x: 0, y: 9 },
-  playerSpots: [{ seat: { x: 2, y: 11, facing: 4, lift: DESK_SEAT_LIFT }, at: { x: 2.5, y: 11.5 }, lift: DESK_SEAT_LIFT, area: { fromX: 2, toX: 4, fromY: 11, toY: 13 }, atDesk: false }],
+  doorless: true,
+  // no seat for the user: they always come in through the teleporter (RoomView)
+  playerSpots: [],
 };
 
 type Support = Pick<FurniturePiece, 'x' | 'y' | 'width' | 'depth'> & { top: number };

@@ -1,21 +1,22 @@
-// Watches the automatons' folder (Preferences.automataFolder), read-only: every few seconds the runs, tasks and roles
-// whose files changed are read again (server/automata.ts makes sense of them), and the end of the transcript of each
+// Watches the external runs' folder (Preferences.automataFolder), read-only: every few seconds the run files that
+// changed are read again (server/automata.ts makes sense of them), and the end of the transcript of each
 // run at work is followed, its sub-agents' too. Nothing is ever written there, no process is started: a run's process
 // is only asked whether it still exists (signal 0). Memory stays bounded: a transcript is read from its last
 // TAIL_BYTES, then by pieces, and only a run's last events are kept (RunThread).
 import { open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { NO_AUTOMATA, RUN_ID, type AutomataState, type AutomatonRole, type AutomatonRun, type AutomatonTask } from '../shared/automata.ts';
+import { NO_AUTOMATA, RUN_ID, type AutomataState, type AutomatonRun } from '../shared/automata.ts';
 import type { LoggedEvent, ServerMessage } from '../shared/protocol.ts';
-import { agentsAtWork, automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, withLiveness } from './automata.ts';
+import { readRoles } from './agent-roles.ts';
+import { agentsAtWork, automataState, parseRun, recordsOf, RunThread, withLiveness } from './automata.ts';
 import { agentLaunch, CONVERSATION_ID, projectFolder } from './conversations.ts';
 import { resolveDirectory } from './paths.ts';
 
 const POLL_MS = 2000;
-/** The largest run, task or role file read. */
+/** The largest run file read. */
 const MAX_FILE = 64 * 1024;
-/** The most files of a kind looked at (the newest names first): an orchestrator's history may grow for ever. */
+/** The most run files looked at (the newest names first): a program's history may grow for ever. */
 const MAX_FILES = 2000;
 /** Where a transcript is first read from its end, then how much of what was added is read at a time. */
 const TAIL_BYTES = 512 * 1024;
@@ -171,12 +172,16 @@ export class AutomataWatch {
     const root = resolveDirectory(setting, this.home);
     if (!root) return { ...NO_AUTOMATA, folder: 'missing' };
     const seen = new Set<string>();
-    const runs = await this.readKind<AutomatonRun>(path.join(root, 'state', 'runs'), '.json', seen, (text, id) => parseRun(JSON.parse(text), id));
-    const tasks = await this.readKind<AutomatonTask>(path.join(root, 'state', 'tasks'), '.json', seen, (text, id) => parseTask(JSON.parse(text), id));
-    const roles = await this.readKind<AutomatonRole>(path.join(root, '.claude', 'agents'), '.md', seen, (text, id) => parseRole(text, `${id}.md`));
+    const parse = (text: string, id: string) => parseRun(JSON.parse(text), id);
+    // runs/ at the root, or state/runs/ (the layout of the first program that used it)
+    const runs = [
+      ...await this.readKind<AutomatonRun>(path.join(root, 'runs'), '.json', seen, parse),
+      ...await this.readKind<AutomatonRun>(path.join(root, 'state', 'runs'), '.json', seen, parse),
+    ];
     for (const file of this.files.keys()) if (!seen.has(file)) this.files.delete(file);
     const alive = this.options.alive ?? processAlive;
-    return automataState(runs.map((run) => withLiveness(run, alive)), tasks, roles);
+    const unique = [...new Map(runs.map((run) => [run.id, run])).values()];
+    return automataState(unique.map((run) => withLiveness(run, alive)), await readRoles(path.join(root, '.claude', 'agents')));
   }
 
   /** The files of one kind in a folder, each read again only when its size or change time moved. */

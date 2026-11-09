@@ -42,8 +42,10 @@ export function SessionList() {
     const all = Object.values(sessions).filter((session) => inProject(session, project));
     const [waiting, working, ready] = roomSessions(all, seen, 'office');
     const [resting] = roomSessions(all, seen, 'lounge');
+    // the triggers' runs, apart and last: what waits for an answer first
+    const automata = roomSessions(all, seen, 'automata').flat();
     const latestFirst = (list: SessionInfo[]) => [...list].sort((a, b) => b.stateSince - a.stateSince);
-    return ([['waiting', waiting], ['working', working], ['ready', latestFirst(ready)], ['resting', latestFirst(resting)]] as const).filter(([, list]) => list.length > 0);
+    return ([['waiting', waiting], ['working', working], ['ready', latestFirst(ready)], ['resting', latestFirst(resting)], ['automata', automata]] as const).filter(([, list]) => list.length > 0);
   }, [sessions, seen, project]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);

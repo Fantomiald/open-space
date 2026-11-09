@@ -1,4 +1,5 @@
-// The office pet the user chose (Preferences.pet): its kind, a pattern (a cat) or a breed (a dog), and its colours.
+// The pet the user chose (Preferences.pet): its kind, a pattern (a cat), a breed (a dog) or a model (a droid), and its
+// colours.
 // Shared so the server can check what it stores; src/room/pet.ts draws them.
 import { OLDER_PET_FURS } from '../src/design/people-palette.ts';
 
@@ -7,23 +8,27 @@ export const PLAIN_PET_KINDS = [
   'duck', 'capybara', 'axolotl', 'rocky', 'clawd', 'fox', 'redPanda', 'rabbit', 'hedgehog', 'owl', 'parrot', 'penguin', 'turtle', 'crab',
   'octopus', 'firefly', 'ghostCat', 'manekiNeko', 'robotDog', 'alien', 'dragon', 'slime', 'golem',
 ] as const;
-export const PET_KINDS = ['cat', 'dog', ...PLAIN_PET_KINDS, 'none'] as const;
+export const PET_KINDS = ['cat', 'dog', 'droid', ...PLAIN_PET_KINDS, 'none'] as const;
 /** A cat's coat pattern; its colour is chosen apart. */
 export const CAT_PATTERNS = ['plain', 'tabby', 'calico', 'tuxedo'] as const;
 /** A dog's breed: its shape, ears, tail and markings; its colour starts as the breed's and can be changed. */
 export const DOG_BREEDS = ['labrador', 'dalmatian', 'husky', 'shiba', 'corgi', 'dachshund', 'pug'] as const;
+/** A droid's model: a round dome on a barrel (an astromech), a square head on a barrel, or a ball rolling under a dome. */
+export const DROID_MODELS = ['dome', 'square', 'sphere'] as const;
 
 export type PetKind = (typeof PET_KINDS)[number];
 export type PlainPetKind = (typeof PLAIN_PET_KINDS)[number];
 export type CatPattern = (typeof CAT_PATTERNS)[number];
 export type DogBreed = (typeof DOG_BREEDS)[number];
+export type DroidModel = (typeof DROID_MODELS)[number];
 
-/** Colours chosen over the defaults: the fur (a shell, a duck's rubber, an axolotl's skin, a firefly's light), a cat's eyes. "#rrggbb". */
+/** Colours chosen over the defaults: the fur (a shell, a duck's rubber, a droid's panels, a firefly's light), a cat's eyes. "#rrggbb". */
 export interface PetColors { fur?: string; eyes?: string }
 
 export type PetChoice =
   | { kind: 'cat'; variant: CatPattern; colors?: PetColors }
   | { kind: 'dog'; variant: DogBreed; colors?: PetColors }
+  | { kind: 'droid'; variant: DroidModel; colors?: PetColors }
   | { kind: PlainPetKind; colors?: PetColors }
   | { kind: 'none' };
 
@@ -59,6 +64,7 @@ export function parsePet(raw: unknown): PetChoice | undefined {
   const painted = Object.keys(colors).length ? { colors } : {};
   if (kind === 'cat' && oneOf(CAT_PATTERNS, variant)) return { kind, variant, ...painted };
   if (kind === 'dog' && oneOf(DOG_BREEDS, variant)) return { kind, variant, ...painted };
+  if (kind === 'droid' && oneOf(DROID_MODELS, variant)) return { kind, variant, ...painted };
   if (oneOf(PLAIN_PET_KINDS, kind)) return { kind, ...painted };
   if (kind === 'none') return { kind };
   return undefined;

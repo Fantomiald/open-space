@@ -25,6 +25,7 @@ import { decorOf, planRoom, roomSessions, type RoomKind } from './cast.ts';
 import { chibiHead, chibiSprites, lookOfStranger } from './chibi.ts';
 import { outfitFor } from './outfits.ts';
 import { TAG_FONT, paintFrame, type HoveredThing } from './draw.ts';
+import { isOrbAt } from './server-room.ts';
 import { Floor } from './floor.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, RENDER_SCALE, isInRoom, toTile } from './geometry.ts';
 import { css, currentHour, lightingAt, type Lighting } from './lighting.ts';
@@ -38,9 +39,7 @@ import { showsMetricsBadge } from './metrics.ts';
 import { useRoomFrame } from './useRoomFrame.ts';
 import { ArrangeHint } from './ArrangeHint.tsx';
 import { boardContent } from './whiteboard.ts';
-import { advanceTrip, exitsOf, through } from './droid.ts';
-import { droidHeight } from './droid-art.ts';
-import type { DroidChoice } from '../../shared/droids.ts';
+import { advanceTrip, exitsOf, through } from './pet-trip.ts';
 
 const FRAME_MS = 1000 / 15;
 
@@ -85,30 +84,28 @@ function automatonLookOf(scene: Scene, personId: string): RobotLook | undefined 
   if (own) return own.automatonRole === undefined ? undefined : robotLook(own.automatonRole, own.automatonAgent === undefined);
   const cut = personId.lastIndexOf('/');
   const owner = cut > 0 ? scene.characters.get(personId.slice(0, cut))?.person : undefined;
-  const role = owner?.automaton === undefined ? undefined : owner.agents.find((agent) => agent.id === personId.slice(cut + 1))?.type;
+  const role = owner?.automatonRole === undefined ? undefined : owner.agents.find((agent) => agent.id === personId.slice(cut + 1))?.type;
   return role === undefined ? undefined : robotLook(role);
 }
 
 /**
- * The droid and this room, each frame: it shows while the automatons' folder is set and a droid is picked. Elsewhere,
- * its trip moves on by the clock; here, it comes in (by the passage it took, if just now) and the room steps it; gone
- * out by a passage, it goes on to the room on the other side. Returns how it looks, or null when it is not here.
+ * The pet and this room, each frame, while one is picked. Elsewhere, its trip moves on by the clock; here, it comes in
+ * (by the passage it took, if just now) and the room steps it; gone out by a passage, it goes on to the room on the
+ * other side.
  */
-function followDroid(scene: Scene, room: RoomKind, state: ReturnType<typeof useSessions.getState>): Exclude<DroidChoice, { kind: 'none' }> | null {
-  const look = state.preferences.droid;
-  if (look.kind === 'none' || state.preferences.automataFolder === '') { scene.droid = null; return null; }
+function followPet(scene: Scene, room: RoomKind, state: ReturnType<typeof useSessions.getState>) {
+  if (state.preferences.pet.kind === 'none') { scene.pet = null; return; }
   const now = Date.now();
-  if (scene.droidLeftBy) {
-    state.moveDroid(through(state.droidTrip, scene.droidLeftBy, now));
-    scene.droid = null;
-    scene.droidLeftBy = null;
-    return look;
+  if (scene.petLeftBy) {
+    state.movePet(through(state.petTrip, scene.petLeftBy, now));
+    scene.pet = null;
+    scene.petLeftBy = null;
+    return;
   }
-  const trip = advanceTrip(state.droidTrip, now, room);
-  if (trip !== state.droidTrip) state.moveDroid(trip);
-  if (trip.room !== room) { scene.droid = null; return look; }
-  if (!scene.droid) scene.bringDroid(now - trip.since < 3000 ? trip.via : null, trip.since + trip.stay - now, exitsOf(room).map((exit) => exit.via));
-  return look;
+  const trip = advanceTrip(state.petTrip, now, room);
+  if (trip !== state.petTrip) state.movePet(trip);
+  if (trip.room !== room) { scene.pet = null; return; }
+  if (!scene.pet) scene.bringPet(now - trip.since < 3000 ? trip.via : null, trip.since + trip.stay - now, exitsOf(room).map((exit) => exit.via));
 }
 
 /** Mounted again (a new `key`) when the room or the festival changes; `day`: the festival and who it is for. */
@@ -141,19 +138,16 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     dressRoom(SERVERS);
     return () => dressRoom(null);
   }, [room]);
-  // the office has the numbers object while the settings name a numbers file, and the teleporter to the automatons'
-  // room while they name their folder (App mounts the room again when either changes)
+  // the office has the numbers object while the settings name a numbers file (App mounts the room again when it
+  // changes), and always the teleporter to the automatons' room
   const [floor] = useState(() => {
-    const { metricsFile, automataFolder } = useSessions.getState().preferences;
-    return new Floor(room === 'lounge' ? LOUNGE : room === 'automata' ? SERVER_ROOM : OFFICE, festival, room === 'office' && metricsFile !== '', room === 'office' && automataFolder !== '');
+    const state = useSessions.getState();
+    return new Floor(room === 'lounge' ? LOUNGE : room === 'automata' ? SERVER_ROOM : OFFICE, festival, room === 'office' && state.preferences.metricsFile !== '', room === 'office');
   });
   const [scene] = useState(() => {
     const { enteredThroughDoor, arrivedByPortal } = useSessions.getState();
-    return new Scene(floor, { withPet: room === 'office', withVisitors: room === 'office', atDoor: enteredThroughDoor && !arrivedByPortal, atPortal: arrivedByPortal });
+    return new Scene(floor, { withVisitors: room === 'office', atDoor: enteredThroughDoor && !arrivedByPortal, atPortal: arrivedByPortal || room === 'automata' });
   });
-  // the droid under the pointer: a white line around it
-  const droidHovered = useRef(false);
-  const droidSize = () => { const droid = useSessions.getState().preferences.droid; return droid.kind === 'none' ? 0 : droidHeight(droid.kind); };
   // the seats the user put people on, by session, kept for when they come back (and across reloads)
   const keptSeats = useRef(new Map(Object.entries(readPreference<Record<string, number>>(`seats:${room}`, {})).filter(([, seat]) => seat < floor.seatCount)));
   // counts the moves by hand: the plan is drawn again from the seats they leave
@@ -232,8 +226,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       const lighting = themedLighting(lightingAt(hour));
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
-      const droidLook = followDroid(scene, room, state);
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current, droid: droidLook, droidHovered: droidHovered.current });
+      followPet(scene, room, state);
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
       // through the teleporter: the other room opens, the user coming in on its twin
@@ -306,7 +300,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open
     if (!isInRoom(point)) { leave(); return; }
-    if (scene.droidAt(point, droidSize())) { scene.pokeDroid(); useSessions.getState().openAutomata(true); return; }
+    if (room === 'automata' && isOrbAt(point)) { useSessions.getState().openAutomata(true); return; }
     if (floor.isDoorAt(point)) { scene.walkPlayerOut(); return; }
     if (floor.isPortalAt(point)) { scene.walkPlayerToPortal(); return; }
     if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
@@ -325,16 +319,14 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     // a session in front of a visitor, the door or the desk takes the click (the user, seated behind their laptop, does not)
     const visitor = person && person !== PLAYER_ID ? null : scene.visitorAt(point);
     hoveredId.current = visitor?.id ?? person;
-    const droid = !(person && person !== PLAYER_ID) && !visitor && scene.droidAt(point, droidSize());
-    droidHovered.current = droid;
-    const thing: HoveredThing = (person && person !== PLAYER_ID) || visitor || droid ? null
-      : floor.isDoorAt(point) ? 'door' : floor.isPortalAt(point) ? 'portal' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
+    const thing: HoveredThing = (person && person !== PLAYER_ID) || visitor ? null
+      : floor.isDoorAt(point) ? 'door' : floor.isPortalAt(point) ? 'portal' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : room === 'automata' && isOrbAt(point) ? 'orb' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
     const automaton = person && person !== PLAYER_ID ? scene.characters.get(person)?.person : undefined;
-    const text = automaton?.automaton ? t.automata.hint(automaton.name) : visitor ? words.startWith(visitor.name) : droid ? words.openAutomata
+    const text = automaton?.automaton ? t.automata.hint(automaton.name) : automaton?.automatonRole ? t.automata.triggerHint(automaton.name) : visitor ? words.startWith(visitor.name)
       : thing === 'portal' ? (room === 'office' ? words.toAutomata : words.portalToOffice)
-      : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard
+      : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard : thing === 'orb' ? words.openAutomata
       : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
     setHintText(text);
     const card = hint.current;
@@ -394,7 +386,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const onBackdropClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target instanceof Element && BACKDROP_CLASSES.some((name) => (event.target as Element).classList.contains(name))) leave();
   };
-  const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; droidHovered.current = false; setHintText(null); };
+  const onMouseLeave = () => { hoveredThing.current = null; hoveredId.current = null; setHintText(null); };
 
   const seated = plan.people.length;
   const description = t.room.description[room](seated, plan.waitingAutomata);

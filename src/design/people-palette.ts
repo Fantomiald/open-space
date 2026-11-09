@@ -51,7 +51,7 @@ export const AUTOMATON_LOOK: Look = {
  * accent per role (its eyes, its chest's core, its antenna's diode), picked from the role's name.
  */
 export const ROBOT_METAL = { light: '#e6eaf0', base: '#c3cad6', shade: '#8e97a8', dark: '#5a6272', joint: '#373d49', visor: '#151b26', grille: '#4a5262' } as const;
-/** The automatons' droid (src/room/droid-art.ts): its white plates and their shade, its lens, its eye's light, its wheels. */
+/** The droid pet (src/room/droid-art.ts): its white plates and their shade, its lens, its eye's light, its wheels. */
 export const DROID_PARTS = { white: '#eef1f5', shade: '#a9b2c1', dark: '#4a5262', lens: '#151b26', eye: '#ff5a5a', glint: '#ffffff', wheel: '#2c313c' } as const;
 /** The colours its panels can take, the first one each model's own (an astromech's blue, a ball's orange…). */
 export const DROID_COLORS = ['#3d7bd9', '#e8742c', '#d6453d', '#2fa36b', '#8a5cd6', '#3a3f4b', '#e3b23c'] as const;

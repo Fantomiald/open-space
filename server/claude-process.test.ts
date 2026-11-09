@@ -25,6 +25,21 @@ describe('buildClaudeArgs', () => {
     assert.ok(!identityPrompt('Iris', 'Max').includes('demande à tous'));
   });
 
+  it('gives the open-space MCP server after the browser\'s, and the role with --agent', () => {
+    const browser = JSON.stringify({ mcpServers: { playwright: { command: 'npx' } } });
+    const openSpace = JSON.stringify({ mcpServers: { 'open-space': { type: 'http', url: 'http://127.0.0.1:1/mcp/s/k' } } });
+    const args = buildClaudeArgs({ ...base, mcpConfig: browser, openSpaceMcp: openSpace, agent: 'security-reviewer' });
+    const at = args.indexOf('--mcp-config');
+    assert.deepEqual(args.slice(at, at + 3), ['--mcp-config', browser, openSpace]);
+    assert.equal(args[args.indexOf('--agent') + 1], 'security-reviewer');
+    const allowed = buildClaudeArgs({ ...base, allowedTools: ['Edit', 'Bash(git push *)'] });
+    assert.equal(allowed[allowed.indexOf('--allowedTools') + 1], 'Edit,Bash(git push *)');
+    assert.ok(!args.includes('--allowedTools'));
+    // the open-space server alone does not tell the session it has a browser
+    const alone = buildClaudeArgs({ ...base, openSpaceMcp: openSpace });
+    assert.equal(alone[alone.indexOf('--append-system-prompt') + 1], identityPrompt('Iris'));
+  });
+
   it('tells a session with the shared browser what it is for, and only then', () => {
     const withShared = identityPrompt('Iris', 'Max', '', undefined, true, true);
     assert.match(withShared, /shared-browser/);

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { DROID_COLORS, FUR_COLORS, PET_EYE_COLORS } from '../design/people-palette.ts';
-import { CAT_PATTERNS, DOG_BREEDS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
-import { DROID_KINDS, type DroidChoice } from '../../shared/droids.ts';
-import { droidColour, droidPreview } from '../room/droid-art.ts';
-import { furOf, petSprite } from '../room/pet.ts';
+import { CAT_PATTERNS, DOG_BREEDS, DROID_MODELS, PET_KINDS, type PetChoice, type PetColors } from '../../shared/pets.ts';
+import { droidPreview, type DroidLook } from '../room/droid-art.ts';
+import { droidOf, furOf, petSprite } from '../room/pet.ts';
 import { isAbsolutePath } from '../../shared/paths.ts';
 import { homeRelative } from '../lib/format.ts';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
@@ -88,7 +87,7 @@ type Habits = Pick<Preferences, 'model' | 'permissionMode' | 'notifications' | '
 
 
 /** A pet drawn at three screen pixels per art pixel: walking when it is the one picked, sitting otherwise. */
-function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>; moving: boolean }) {
+function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' | 'droid' }>; moving: boolean }) {
   const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -113,7 +112,7 @@ function PetSprite({ pet, moving }: { pet: Exclude<PetChoice, { kind: 'none' }>;
 function PetTile({ pet, label, picked, onPick }: { pet: PetChoice; label: string; picked: boolean; onPick: () => void }) {
   return (
     <button type="button" className="cp-pet__tile" aria-pressed={picked} title={label} onClick={onPick}>
-      {pet.kind === 'none' ? <span className="cp-pet__empty" aria-hidden="true" /> : <PetSprite pet={pet} moving={picked} />}
+      {pet.kind === 'none' ? <span className="cp-pet__empty" aria-hidden="true" /> : pet.kind === 'droid' ? <DroidSprite droid={droidOf(pet)} moving={picked} /> : <PetSprite pet={pet} moving={picked} />}
       <span className="cp-pet__name">{label}</span>
     </button>
   );
@@ -130,16 +129,16 @@ function PetTiles({ label, children }: { label: string; children: ReactNode }) {
 
 /** What the one colour of a pet is called, when it is not its fur. */
 const COLOUR_PART: Partial<Record<PetChoice['kind'], 'shell' | 'colour' | 'skin' | 'feathers' | 'scales' | 'spines' | 'light'>> = {
-  rocky: 'shell', turtle: 'shell', crab: 'shell', duck: 'colour', clawd: 'colour', robotDog: 'colour', slime: 'colour', golem: 'colour',
+  rocky: 'shell', turtle: 'shell', crab: 'shell', duck: 'colour', clawd: 'colour', droid: 'colour', robotDog: 'colour', slime: 'colour', golem: 'colour',
   axolotl: 'skin', octopus: 'skin', alien: 'skin', parrot: 'feathers', owl: 'feathers', penguin: 'feathers', dragon: 'scales', hedgehog: 'spines',
   firefly: 'light',
 };
 
 /** A kind of pet as it comes, before any colour is picked. */
 const defaultOf = (kind: PetChoice['kind']): PetChoice =>
-  kind === 'cat' ? { kind, variant: 'plain' } : kind === 'dog' ? { kind, variant: 'labrador' } : { kind } as PetChoice;
+  kind === 'cat' ? { kind, variant: 'plain' } : kind === 'dog' ? { kind, variant: 'labrador' } : kind === 'droid' ? { kind, variant: 'dome' } : { kind } as PetChoice;
 
-/** The office pet: one colour (shown as it is now) and a cat's eyes, then its kind and a cat's pattern or a dog's breed. */
+/** The pet: one colour (shown as it is now) and a cat's eyes, then its kind and a cat's pattern, a dog's breed or a droid's model. */
 export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoice) => void }) {
   const paint = (part: keyof PetColors, colour: string) => { if (pet.kind !== 'none') onPet({ ...pet, colors: { ...pet.colors, [part]: colour } }); };
   return (
@@ -147,7 +146,7 @@ export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoi
       {/* the colours first, as in a person's wardrobe: in sight whatever the pet */}
       {pet.kind !== 'none' && (
         <div className="cp-pet__colours">
-          <ColourRow label={t.settings.pet[COLOUR_PART[pet.kind] ?? 'fur']} colours={withCurrent(FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
+          <ColourRow label={t.settings.pet[COLOUR_PART[pet.kind] ?? 'fur']} colours={withCurrent(pet.kind === 'droid' ? DROID_COLORS : FUR_COLORS, furOf(pet))} value={furOf(pet)} onPick={(colour) => paint('fur', colour)} />
           {pet.kind === 'cat' && <ColourRow label={t.settings.pet.eyes} colours={PET_EYE_COLORS} value={pet.colors?.eyes ?? PET_EYE_COLORS[0]} onPick={(colour) => paint('eyes', colour)} />}
         </div>
       )}
@@ -163,6 +162,15 @@ export function PetPicker({ pet, onPet }: { pet: PetChoice; onPet: (pet: PetChoi
           {CAT_PATTERNS.map((pattern) => {
             const choice: PetChoice = { kind: 'cat', variant: pattern, ...(pet.colors?.eyes ? { colors: { eyes: pet.colors.eyes } } : {}) };
             return <PetTile key={pattern} pet={pet.variant === pattern ? pet : choice} label={t.settings.pet.patterns[pattern]} picked={pet.variant === pattern} onPick={() => pet.variant !== pattern && onPet(choice)} />;
+          })}
+        </PetTiles>
+      )}
+      {/* a droid keeps its colour from one model to the next */}
+      {pet.kind === 'droid' && (
+        <PetTiles label={t.settings.pet.model}>
+          {DROID_MODELS.map((model) => {
+            const choice: PetChoice = { kind: 'droid', variant: model, ...(pet.colors ? { colors: pet.colors } : {}) };
+            return <PetTile key={model} pet={choice} label={t.settings.pet.models[model]} picked={pet.variant === model} onPick={() => pet.variant !== model && onPet(choice)} />;
           })}
         </PetTiles>
       )}
@@ -241,7 +249,7 @@ export function LanguagePicker({ language, onLanguage }: { language: Language; o
 }
 
 /** A droid drawn at three screen pixels per art pixel: its wheels turning when it is the one picked. */
-function DroidSprite({ droid, moving }: { droid: Exclude<DroidChoice, { kind: 'none' }>; moving: boolean }) {
+function DroidSprite({ droid, moving }: { droid: DroidLook; moving: boolean }) {
   const still = useReducedMotion(useSessions((s) => s.preferences.reduceMotion));
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -263,32 +271,5 @@ function DroidSprite({ droid, moving }: { droid: Exclude<DroidChoice, { kind: 'n
   }, [droid, moving, still]);
   // the size of a pet's tile, so the droids line up with them
   return <canvas ref={canvas} width={22 * 3} height={17 * 3} />;
-}
-
-/** The automatons' droid: its colour (shown as it is now), then its model, or none. */
-export function DroidPicker({ droid, onDroid }: { droid: DroidChoice; onDroid: (droid: DroidChoice) => void }) {
-  const words = t.settings.droid;
-  return (
-    <div className="cp-pet">
-      {droid.kind !== 'none' && (
-        <div className="cp-pet__colours">
-          <ColourRow label={words.colour} colours={withCurrent(DROID_COLORS, droidColour(droid))} value={droidColour(droid)} onPick={(color) => onDroid({ ...droid, color })} />
-        </div>
-      )}
-      <PetTiles label={words.model}>
-        {DROID_KINDS.map((kind) => {
-          // the droid picked is drawn with its colour; another model keeps that colour when picked
-          const choice: DroidChoice = kind === 'none' ? { kind } : { kind, ...(droid.kind !== 'none' && droid.color ? { color: droid.color } : {}) };
-          const picked = droid.kind === kind;
-          return (
-            <button key={kind} type="button" className="cp-pet__tile" aria-pressed={picked} title={words.kinds[kind]} onClick={() => !picked && onDroid(choice)}>
-              {choice.kind === 'none' ? <span className="cp-pet__empty" aria-hidden="true" /> : <DroidSprite droid={picked && droid.kind !== 'none' ? droid : choice} moving={picked} />}
-              <span className="cp-pet__name">{words.kinds[kind]}</span>
-            </button>
-          );
-        })}
-      </PetTiles>
-    </div>
-  );
 }
 

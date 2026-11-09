@@ -1,7 +1,8 @@
 // Who is in each room and on which seat. The office: the sessions at work or waiting, those waiting for the user
 // first, then the working ones, then the idle ones. The break room: the sessions put to rest and the closed ones,
 // until a message calls them back. Sub-agents do not take a seat: they show above the head of whoever runs them.
-// The user's automatons at work (shared/automata.ts) stand in the capsules of their own room, the server room.
+// The sessions a trigger started (shared/triggers.ts) and the external runs at work (shared/automata.ts) stand in the
+// capsules of their own room, the server room, as robots.
 import { automatonAgentPersonId, automatonPersonId, roleLabel } from '../../shared/automata.ts';
 import type { SeatedAutomaton } from '../state/automata.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
@@ -29,11 +30,11 @@ export interface Person {
   tags: string[];
   /** the session works on a branch of its own: a little branch after its name */
   branch: boolean;
-  /** an automaton of the user's orchestrator, not a session: its run id (it wears the automatons' look and tag) */
+  /** an external run, not a session: its run id (a click opens the Automates panel on it) */
   automaton?: string;
   /** an automaton that is a sub-agent of that run: the id of the Agent call that launched it */
   automatonAgent?: string;
-  /** an automaton's role (its run's, or its sub-agent's): drawn as a robot of that role (src/room/robot.ts) */
+  /** a robot of this role (src/room/robot.ts), with the automatons' tag and cord: an external run (its role, or its sub-agent's) or a session a trigger started (its role, or its trigger's name) */
   automatonRole?: string;
 }
 
@@ -65,7 +66,7 @@ export function sessionStatus(session: SessionInfo, seen: SeenSequences): Status
   return isWorking(session) ? 'working' : null;
 }
 
-/** The office, the break room, and the automatons' room (the office's plan, its desks for the automatons only). */
+/** The office, the break room, and the server room (the automatons': the sessions started by a trigger, and the external runs). */
 export type RoomKind = 'office' | 'lounge' | 'automata';
 
 /** Which room's festival decorations a room takes (festivals.ts): the automatons' server room never has any, it counts as the office. */
@@ -76,9 +77,10 @@ const STOPPED: ReadonlySet<SessionInfo['state']> = new Set(['closed', 'done', 'e
 /** Sessions that belong in a room, by priority (in the office: waiting for the user, then working, then idle; oldest first in each group). */
 export function roomSessions(all: readonly SessionInfo[], seen: SeenSequences, room: RoomKind = 'office'): SessionInfo[][] {
   const inLounge = (session: SessionInfo) => session.resting === true || (STOPPED.has(session.state) && attentionKind(session, seen) === null);
-  if (room === 'automata') return [];
-  if (room === 'lounge') return [all.filter(inLounge).sort((a, b) => a.createdAt - b.createdAt)];
-  const sessions = all.filter((session) => !inLounge(session));
+  // a trigger's run stands in the server room while it works or has something to show, and is in no room after
+  const own = all.filter((session) => (room === 'automata') === !!session.trigger);
+  if (room === 'lounge') return [own.filter(inLounge).sort((a, b) => a.createdAt - b.createdAt)];
+  const sessions = own.filter((session) => !inLounge(session));
   const queue = attentionQueue(sessions, seen).map(({ session }) => session);
   const queued = new Set(queue.map((session) => session.id));
   const rest = sessions.filter((session) => !queued.has(session.id)).sort((a, b) => a.createdAt - b.createdAt);
@@ -95,15 +97,15 @@ function seatedFirst<T>(group: readonly T[], isSeated: (item: T) => boolean): T[
 }
 
 /**
- * An automaton at work in the office: its role for a name, at work, the runs it started as faces on its tag. A run's
- * sub-agent sits as an automaton of its own, named after its role.
+ * An external run at work in the server room: its role for a name, at work. A run's sub-agent stands as an automaton
+ * of its own, named after its role.
  */
-export function automatonPerson({ run, helpers, agent }: SeatedAutomaton): Person {
+export function automatonPerson({ run, agent }: SeatedAutomaton): Person {
   const id = agent ? automatonAgentPersonId(run.id, agent.id) : automatonPersonId(run.id);
-  const name = roleLabel(agent ? agent.role : run.role || run.id);
+  const name = roleLabel(agent ? agent.role : run.role || run.task || run.id);
   return {
     id, sessionId: id, name, title: name, status: 'working',
-    agents: helpers.map((helper) => ({ id: helper.id, name: roleLabel(helper.role), type: helper.role })), tags: [], branch: false, automaton: run.id,
+    agents: [], tags: [], branch: false, automaton: run.id,
     automatonRole: agent ? agent.role : run.role || 'agent',
     ...(agent ? { automatonAgent: agent.id } : {}),
   };
@@ -111,8 +113,8 @@ export function automatonPerson({ run, helpers, agent }: SeatedAutomaton): Perso
 
 /**
  * `previousSeats`: who sits where now (people walking out excluded). `reserved`: seats nobody gets (the user's).
- * `automata`: the automatons at work, with the runs each started (src/state/automata.ts seatedRuns): only in their own
- * room, which holds no session, so they never take a session's desk.
+ * `automata`: the external runs at work (src/state/automata.ts seatedRuns), in the server room only, after the
+ * sessions started by a trigger.
  */
 export function planRoom(
   sessions: readonly SessionInfo[], seen: SeenSequences, previousSeats: ReadonlyMap<string, number>, seatCount: number,
@@ -131,6 +133,8 @@ export function planRoom(
     agents: session.subagents.map(({ id, name, type }) => ({ id, name, type: type || t.room.subagent })),
     tags: session.tags ?? [],
     branch: !!session.worktree,
+    // a trigger's run is a robot of its role, else of its trigger (src/room/robot.ts)
+    ...(session.trigger ? { automatonRole: session.trigger.role || session.trigger.name } : {}),
   }));
   people.push(...bots.map(automatonPerson));
   return {

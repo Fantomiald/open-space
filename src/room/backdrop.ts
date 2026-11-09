@@ -153,7 +153,7 @@ export function paintBackdrop(layout: Layout, festival: Festival | null, room: R
   if (festival) paintFestivalWalls(context, festival, room, guests);
   paintFloor(context, layout);
   if (festival) paintFestivalFloor(context, festival);
-  paintDoor(context, layout);
+  if (!layout.doorless) paintDoor(context, layout);
   return canvas;
 }
 

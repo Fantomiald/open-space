@@ -6,7 +6,7 @@ import { ROOM_PALETTE as P } from '../design/room-palette.ts';
 import { SERVERS_FURNITURE as SF } from '../design/theme-servers.ts';
 import { t } from '../i18n/index.ts';
 import type { Agent, Status } from './cast.ts';
-import { PET_HEIGHT, drawHearts, drawPet, isSpeaking, petWords } from './pet.ts';
+import { drawHearts, drawPet, isSpeaking, petBeam, petHeight, petHere, petWords } from './pet.ts';
 import type { PetChoice } from '../../shared/pets.ts';
 import type { Festival } from '../../shared/festivals.ts';
 import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../shared/room-layout.ts';
@@ -23,9 +23,6 @@ import { PORTAL, bobOf, furnitureDepth, portalMiddle, type FurnitureSprites } fr
 import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
 import { cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, waitingSign } from './server-room.ts';
 import { beamGlow, hiddenInBeam, portalMotes, vortex } from './portal.ts';
-import { droidBeam, droidHere, isBleeping } from './droid.ts';
-import { droidHeight, drawDroid } from './droid-art.ts';
-import type { DroidChoice } from '../../shared/droids.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
@@ -42,7 +39,7 @@ const TAG_HEIGHT = 13;
 /** Room pixels per pixel of the light map: light is soft, it does not need the room's resolution. */
 const LIGHT_RESOLUTION = 4;
 
-export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | 'portal' | null;
+export type HoveredThing = 'door' | 'screen' | 'board' | 'metrics' | 'portal' | 'orb' | null;
 
 export interface FrameOptions {
   time: number;
@@ -71,12 +68,8 @@ export interface FrameOptions {
   room: Room;
   /** the user's first name, on their name tag */
   playerName: string;
-  /** the office pet the user chose */
+  /** the pet the user chose */
   pet: PetChoice;
-  /** the automatons' droid the user chose, while their folder is set (null: none) */
-  droid?: Exclude<DroidChoice, { kind: 'none' }> | null;
-  /** the droid is under the pointer: a white line around it */
-  droidHovered?: boolean;
   /** in the automatons' server room, how many wait without a capsule: shown over the door */
   waitingAutomata?: number;
 }
@@ -244,7 +237,6 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
     if (piece.kind === 'counter' && lamps) lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
     if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 68), radius: 80, colour: P.light.screen, strength: 0.7 });
-    if (piece.kind === 'automataConsole') lights.push({ at: above(x + 1.6, y + 0.5, 30), radius: 70, colour: P.light.screen, strength: 0.7 });
     if (piece.kind === 'ticker') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 78), radius: 70, colour: P.light.screenIdle, strength: 0.5 });
     if (piece.kind === 'cooler' && lamps) lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {
@@ -254,7 +246,7 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
     }
   }
   const door = themeKit()?.doorLight ?? P.light.corridor;
-  if (door) lights.push({ at: above(0.3, layout.door.y + 0.65, 26), radius: 120, colour: door, strength: 1 });
+  if (door && !layout.doorless) lights.push({ at: above(0.3, layout.door.y + 0.65, 26), radius: 120, colour: door, strength: 1 });
   for (const item of layout.wallItems) if (item.kind === 'tv') lights.push({ at: above(item.fromX + item.width / 2, 0.6, 34), radius: 130, colour: screen, strength: 0.8 });
   if (lamps) for (const glass of glasses) lights.push({ at: above((glass.fromX + glass.toX) / 2, 0.4, 50), radius: 120, colour: P.light.city, strength: 0.5 * lighting.stars });
   if (options.festival) lights.push(...festivalGlows(options.festival, options.room, layout));
@@ -705,7 +697,7 @@ function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: 
 /**
  * The teleporter's light: the vortex turning in its ring (behind the ring's band, which the effect stops at), the motes
  * coming out of it into the room, its light on the floor before it; and the column of light that takes the user (or
- * the droid) away or brings them in. Squares of light, no blur; the vortex still with motion reduced, no column.
+ * the pet) away or brings them in. Squares of light, no blur; the vortex still with motion reduced, no column.
  */
 function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): ThemeEffect[] {
   const portal = layout.furniture.find((piece) => piece.kind === 'portal');
@@ -773,18 +765,18 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
   const beams: { feet: Point; depth: number; glow: number }[] = [];
   const player = scene.playerBeam();
   if (player) beams.push({ feet: toScreen(scene.player.position), depth: depthOf(scene.player.position) + 0.01, glow: beamGlow(player.progress) });
-  const droid = scene.droid && droidBeam(scene.droid);
-  if (droid && scene.droid) beams.push({ feet: toScreen(scene.droid.position), depth: depthOf(scene.droid.position) + 0.01, glow: beamGlow(droid.progress) });
+  const pet = scene.pet && petBeam(scene.pet);
+  if (pet && scene.pet) beams.push({ feet: toScreen(scene.pet.position), depth: depthOf(scene.pet.position) + 0.01, glow: beamGlow(pet.progress) });
   if (!options.reducedMotion) for (const beam of beams) effects.push({ depth: beam.depth, paint(on) { column(on, beam.feet, beam.glow); on.globalAlpha = 1; } });
   return effects;
 }
 
-/** The display over the door of the server room, lit like a screen: how many automatons wait without a capsule. */
+/** The display on the left wall of the server room, over its teleporter, lit like a screen: how many automatons wait without a capsule. */
 function waitingEffect(layout: Layout, count: number): ThemeEffect[] {
   const rows = waitingSign(count);
   if (!rows.length || !layout.furniture.some((piece) => piece.kind === 'orb')) return [];
   const colours: Readonly<Record<string, string>> = { f: SF.signFrame, b: SF.signScreen, g: SF.signRobot, '#': SF.signInk };
-  // centred over the door, its bottom a little above the doorway
+  // where a door would be, its bottom a door's height up
   const from = layout.door.y + DOOR_SIZE.width / 2 - rows[0].length / 16;
   const bottom = DOOR_SIZE.height / ART_SCALE + 6;
   return [{
@@ -860,24 +852,14 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     layers.push({ depth: depthOf(visitor.position), paint: (on) => paintPerson(on, sprites, visitor.id, visitor, pose, false, lift) });
   }
   const playerPose = poseOf(scene.player, scene.playerSpot !== null, false, 'none', options);
-  const pet = scene.pet;
+  const pet = scene.pet && petHere(scene.pet) ? scene.pet : null;
   const choice = options.pet.kind === 'none' ? null : options.pet;
-  if (pet && choice) layers.push({ depth: depthOf(pet.position), paint: (on) => drawPet(on, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
+  const petBeaming = pet && petBeam(pet);
+  // like the user, hidden in the column of light while it takes it away or brings it in
+  if (pet && choice && !(petBeaming && hiddenInBeam(petBeaming.kind, petBeaming.progress))) layers.push({ depth: depthOf(pet.position), paint: (on) => drawPet(on, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
   const playerLift = scene.playerSpot?.lift ?? 0;
   // the column of light of the teleporter hides the user while it takes them away or brings them in
   if (!scene.playerHidden()) layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
-  const droid = scene.droid;
-  const look = options.droid;
-  if (droid && look && droidHere(droid)) {
-    const beam = droidBeam(droid);
-    if (!beam || !hiddenInBeam(beam.kind, beam.progress)) {
-      layers.push({ depth: depthOf(droid.position), paint: (on) => {
-        const feet = toScreen(droid.position);
-        const direction = directionOf(droid.heading);
-        drawDroid(on, look, feet.x, feet.y, { moving: droid.path.length > 0, back: direction.startsWith('up'), left: direction.endsWith('left'), time: options.reducedMotion ? 0 : options.time, outlined: options.droidHovered === true });
-      } });
-    }
-  }
   for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint(context);
   // someone carried goes over everything, above the free seats they can be put on
   const carried = scene.carried;
@@ -891,7 +873,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   paintSteam(context, time, layout.furniture);
   const kit = themeKit();
   // in the server room, the cord of light from the orb to each automaton at work in its capsule
-  const cords = cordEffects(layout, characters.filter((character) => character.phase === 'seated' && character.person.automaton !== undefined), (character) => {
+  const cords = cordEffects(layout, characters.filter((character) => character.phase === 'seated' && character.person.automatonRole !== undefined), (character) => {
     const feet = raise(toScreen(character.position), scene.floor.seatLift(character.seat));
     return { feet, height: sprites.height(poseFor(character), character.person.id), depth: depthOf(character.position) };
   }, options);
@@ -908,7 +890,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   // around the numbers object, or around the teleporter
   const hovered = options.hoveredThing;
   const clickable = hovered === 'metrics' ? layout.furniture.find(isMetricsPiece)
-    : hovered === 'portal' ? layout.furniture.find((piece) => piece.kind === 'portal')
+    : hovered === 'portal' || hovered === 'orb' ? layout.furniture.find((piece) => piece.kind === hovered)
     : hovered === 'screen' || hovered === 'board' ? layout.furniture.find((piece) => piece.kind === (hovered === 'screen' ? 'bossDesk' : 'whiteboard')) : undefined;
   if (clickable) paintHighlight(context, furniture, clickable, layers);
   const metrics = options.metricsBadge ? layout.furniture.find(isMetricsPiece) : undefined;
@@ -934,7 +916,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch, automaton: character.person.automaton !== undefined,
+        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch, automaton: character.person.automatonRole !== undefined,
         tags: shownTags.shown.map((text, index) => ({ text, color: options.tagColors ? sessionTagColors(character.person.tags)[index] : null })), moreTags: shownTags.more,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },
@@ -952,14 +934,10 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     paintNameTag(context, sprites, tags[index].tag, boxes[index].left, top, options.time, options.reducedMotion);
   });
   context.globalAlpha = 1;
-  if (droid && look && droidHere(droid) && isBleeping(droid)) {
-    const wheels = toScreen(droid.position);
-    paintSpeech(context, t.room.droidLines[droid.line % t.room.droidLines.length], wheels.x, wheels.y - droidHeight(look.kind));
-  }
   if (pet && choice) {
     const paws = toScreen(pet.position);
     drawHearts(context, pet, paws.x, paws.y);
-    if (isSpeaking(pet)) paintSpeech(context, petWords(pet, choice.kind), paws.x, paws.y - PET_HEIGHT);
+    if (isSpeaking(pet)) paintSpeech(context, petWords(pet, choice.kind), paws.x, paws.y - petHeight(choice));
   }
   // what a visitor does, in a bubble once they are there, and their name only under the pointer: they are not sessions
   for (const visitor of visitors) {

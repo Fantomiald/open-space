@@ -342,8 +342,8 @@ export const session = {
   list: {
     title: 'Sessions',
     new: 'Nouvelle session',
-    groups: { waiting: 'À voir', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos' },
-    hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées' },
+    groups: { waiting: 'À voir', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos', automata: 'Automates' },
+    hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées', automata: '' },
     open: 'Clic : l’ouvrir à côté des autres, ou y aller si elle est ouverte',
     collapse: (group: string) => `Replier ou déplier : ${group}`,
     fold: 'Replier la liste',
@@ -356,6 +356,7 @@ export const session = {
     waiting: 'À toi',
     working: 'Au travail',
     ready: 'Prêtes',
+    automata: 'Automates',
     starting: 'démarre',
     compacting: { auto: 'compactage auto', manual: 'compactage' },
     subagents: (count: number) => (count === 1 ? '1 sous-agent' : `${count} sous-agents`),

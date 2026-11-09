@@ -5,7 +5,8 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { automatonPersonId, isAutomataFolder, roleLabel, runOfPerson, type AutomataState } from '../shared/automata.ts';
 import type { LoggedEvent, ServerMessage } from '../shared/protocol.ts';
-import { agentsAtWork, automataState, parseRole, parseRun, parseTask, recordsOf, RunThread, taskNotification, withLiveness } from './automata.ts';
+import { parseRole } from './agent-roles.ts';
+import { agentsAtWork, automataState, parseRun, recordsOf, RunThread, taskNotification, withLiveness } from './automata.ts';
 import { AutomataWatch } from './automata-watch.ts';
 import { projectFolder } from './conversations.ts';
 import { parseClientMessage } from './messages.ts';
@@ -17,7 +18,7 @@ const AGENT_CALL = 'toolu_01PRib7S5wNZnufYJN7xyvu3';
 const SESSION = '11111111-2222-4333-8444-555555555555';
 
 const run = (fields: Record<string, unknown> = {}) => ({
-  id: 'r1', role: 'coder', task: 't1', project: 'demo', sessionId: SESSION, cwd: '/tmp/x', startedAt: '2026-11-08T10:00:00Z', endedAt: null, status: 'running', pid: 42, parent: null, ...fields,
+  id: 'r1', role: 'coder', task: 't1', sessionId: SESSION, cwd: '/tmp/x', startedAt: '2026-11-08T10:00:00Z', endedAt: null, status: 'running', pid: 42, ...fields,
 });
 
 describe('the automatons: what their files say', () => {
@@ -27,13 +28,13 @@ describe('the automatons: what their files say', () => {
     assert.equal(parsed?.startedAt, Date.parse('2026-11-08T10:00:00Z'));
     assert.equal(parsed?.endedAt, null);
     assert.equal(parsed?.pid, 42);
-    assert.deepEqual(parseRun({ status: 'done' }, 'bare'), { id: 'bare', role: '', task: '', project: '', sessionId: '', cwd: '', startedAt: 0, endedAt: null, status: 'done', pid: null, parent: null });
+    assert.deepEqual(parseRun({ status: 'done' }, 'bare'), { id: 'bare', sessionId: '', cwd: '', status: 'done', pid: null, startedAt: 0, endedAt: null, role: '', task: '' });
     assert.equal(parseRun({ status: 'weird' }, 'r2'), null);
     assert.equal(parseRun([], 'r2'), null);
     assert.equal(parseRun(run(), '../escape'), null);
-    // an id or a parent that would leave the folder is not taken
-    assert.equal(parseRun(run({ id: '../x', parent: '../y' }), 'r1')?.id, 'r1');
-    assert.equal(parseRun(run({ id: '../x', parent: '../y' }), 'r1')?.parent, null);
+    // an id that would leave the folder is not taken, and fields of another program's own are left out
+    assert.equal(parseRun(run({ id: '../x' }), 'r1')?.id, 'r1');
+    assert.equal('ceiling' in parseRun(run({ ceiling: 5 }), 'r1')!, false);
     assert.equal(parseRun(run({ sessionId: 'not-a-uuid' }), 'r1')?.sessionId, '');
   });
 
@@ -49,19 +50,14 @@ describe('the automatons: what their files say', () => {
     const b = parseRun(run({ id: 'b', startedAt: 500 }), 'b')!;
     const c = parseRun(run({ id: 'c', status: 'done', endedAt: 3000 }), 'c')!;
     const d = parseRun(run({ id: 'd', status: 'failed', endedAt: 4000 }), 'd')!;
-    const state = automataState([a, c, b, d], [], []);
+    const state = automataState([a, c, b, d], []);
     assert.deepEqual(state.running.map((r) => r.id), ['b', 'a']);
     assert.deepEqual(state.recent.map((r) => r.id), ['d', 'c']);
   });
 
-  it('reads a task, and a role from its frontmatter', () => {
-    const task = parseTask({ id: 't1', title: 'Fix the login', status: 'waiting', ceiling: 5, runs: ['r1', '../x'], createdAt: '2026-11-08T09:00:00Z' }, 't1');
-    assert.equal(task?.status, 'waiting');
-    assert.equal(task?.ceiling, '5');
-    assert.deepEqual(task?.runs, ['r1']);
-    assert.equal(task?.updatedAt, Date.parse('2026-11-08T09:00:00Z'));
+  it('reads a role from its frontmatter', () => {
     const role = parseRole('---\nname: code-reviewer\ndescription: "Reads a diff and says what is wrong."\nmodel: sonnet\ntools: [Read, Grep]\nauthority:\n  - read\n  - comment\n---\n\nYou review code.\n', 'code-reviewer.md');
-    assert.deepEqual(role, { name: 'code-reviewer', description: 'Reads a diff and says what is wrong.', model: 'sonnet', tools: 'Read, Grep', authority: 'read, comment' });
+    assert.deepEqual(role, { name: 'code-reviewer', description: 'Reads a diff and says what is wrong.', model: 'sonnet' });
     assert.equal(parseRole('no frontmatter', 'x.md'), null);
     assert.equal(parseRole('---\ndescription: >\n  Two lines\n  folded.\n---\n', 'planner.md')?.name, 'planner');
     assert.equal(parseRole('---\ndescription: >\n  Two lines\n  folded.\n---\n', 'planner.md')?.description, 'Two lines folded.');
@@ -168,13 +164,13 @@ describe('watching the automatons\' folder', () => {
     folder = path.join(base, 'ops');
     cwd = path.join(base, 'project');
     mkdirSync(path.join(folder, 'state', 'runs'), { recursive: true });
-    mkdirSync(path.join(folder, 'state', 'tasks'), { recursive: true });
+    mkdirSync(path.join(folder, 'runs'), { recursive: true });
     mkdirSync(path.join(folder, '.claude', 'agents'), { recursive: true });
     mkdirSync(cwd);
-    writeFileSync(path.join(folder, 'state', 'runs', 'r1.json'), JSON.stringify(run({ cwd, pid: 1234 })));
+    // runs/ at the root, or state/runs/: both are read
+    writeFileSync(path.join(folder, 'runs', 'r1.json'), JSON.stringify(run({ cwd, pid: 1234 })));
     writeFileSync(path.join(folder, 'state', 'runs', 'old.json'), JSON.stringify(run({ id: 'old', cwd, status: 'running', pid: 999_999 })));
     writeFileSync(path.join(folder, 'state', 'runs', 'broken.json'), '{ not json');
-    writeFileSync(path.join(folder, 'state', 'tasks', 't1.json'), JSON.stringify({ id: 't1', title: 'Count the words', status: 'running', runs: ['r1'] }));
     writeFileSync(path.join(folder, '.claude', 'agents', 'coder.md'), '---\nname: coder\ndescription: Writes the code.\n---\n');
     const conversations = projectFolder(cwd, home);
     mkdirSync(path.join(conversations, SESSION, 'subagents'), { recursive: true });
@@ -193,7 +189,6 @@ describe('watching the automatons\' folder', () => {
     assert.equal(state.folder, 'ok');
     assert.deepEqual(state.running.map((r) => r.id), ['r1']);
     assert.deepEqual(state.recent.map((r) => [r.id, r.status]), [['old', 'interrupted']]);
-    assert.equal(state.tasks[0].title, 'Count the words');
     assert.equal(state.roles[0].description, 'Writes the code.');
     const first = messages.filter((message) => message.t === 'automatonEvents').flatMap((message) => (message as { events: LoggedEvent[] }).events);
     assert.equal(first[0].ev.k, 'start');
@@ -210,7 +205,7 @@ describe('watching the automatons\' folder', () => {
     assert.deepEqual(all.map((event) => event.seq), all.map((_, index) => index + 1));
 
     // the run ends: its thread stays for the page
-    writeFileSync(path.join(folder, 'state', 'runs', 'r1.json'), JSON.stringify(run({ cwd, pid: 1234, status: 'done', endedAt: '2026-11-08T11:00:00Z' })));
+    writeFileSync(path.join(folder, 'runs', 'r1.json'), JSON.stringify(run({ cwd, pid: 1234, status: 'done', endedAt: '2026-11-08T11:00:00Z' })));
     const ending = listing();
     await watch.poll();
     assert.equal(watch.state.running.length, 0);

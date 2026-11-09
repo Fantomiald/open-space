@@ -9,7 +9,7 @@ import { FILTERS, filterCounts, isCommandQuery, searchResults, type Action, type
 import { commandsIn, useSessions } from '../state/sessions.ts';
 import { settingEntries } from '../state/settings-index.ts';
 import {
-  BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
+  AutomatonIcon, BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { runOwnCommand } from './ownCommands.ts';
@@ -22,12 +22,12 @@ import { TagChips } from './TagChips.tsx';
 const TYPING_PAUSE_MS = 140;
 
 /** Everything the palette can do on its own, in the order shown when nothing is typed. */
-const ACTION_IDS = ['newSession', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
+const ACTION_IDS = ['newSession', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'automata', 'newAutomaton', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
 type ActionId = (typeof ACTION_IDS)[number];
 
 const ACTION_ICONS: Record<ActionId, () => ReactNode> = {
   newSession: PlusIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon,
-  office: DeskIcon, lounge: SofaIcon, shortcuts: KeyboardIcon, terminal: TerminalIcon, branches: BranchIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
+  office: DeskIcon, lounge: SofaIcon, automata: AutomatonIcon, newAutomaton: PlusIcon, shortcuts: KeyboardIcon, terminal: TerminalIcon, branches: BranchIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
 };
 
 /** The search over everything (⌘K): sessions, what was said in their threads, commands, actions and settings. */
@@ -131,6 +131,8 @@ function PaletteContent() {
       case 'focus': s.setView('focus'); break;
       case 'office': s.setView('salle'); break;
       case 'lounge': s.setView('repos'); break;
+      case 'automata': s.openAutomata(true); break;
+      case 'newAutomaton': s.openAutomata(true, null, null, true); break;
       case 'shortcuts': s.openSettings(true, 'shortcuts'); break;
       case 'terminal': s.openTerminal(s.selectedId); break;
       // the project of the open session, else of the default folder

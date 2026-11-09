@@ -15,6 +15,23 @@ let base: string;
 let server: ReturnType<typeof createWebServer>['server'];
 let port: number;
 let connections = 0;
+const HOOK_ID = 'abcdef1234';
+const HOOK_TOKEN = 't'.repeat(43);
+const hooked: string[] = [];
+let externalKey: string | null = null;
+
+/** A raw POST, with the Host and headers given (a tunnel passes its own public name as Host). */
+function rawPost(target: string, body: string, headers: Record<string, string> = {}, host = `127.0.0.1:${port}`): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(port, '127.0.0.1');
+    let data = '';
+    socket.on('data', (chunk) => { data += chunk; });
+    socket.on('close', () => resolve({ status: Number(data.slice(9, 12)), body: data.split('\r\n\r\n')[1] ?? '' }));
+    socket.on('error', reject);
+    const extra = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join('');
+    socket.write(`POST ${target} HTTP/1.1\r\nHost: ${host}\r\nContent-Length: ${Buffer.byteLength(body)}\r\n${extra}Connection: close\r\n\r\n${body}`);
+  });
+}
 
 function freePort(): Promise<number> {
   return new Promise((resolve) => {
@@ -73,6 +90,16 @@ before(async () => {
     policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
     sessionFile: (sessionId, relative) => (sessionId === 's1' ? resolveInside(distDir, relative) : null),
+    hooks: async (id, token, body) => {
+      if (id !== HOOK_ID || token !== HOOK_TOKEN) return 'unknown';
+      hooked.push(body);
+      return 'started';
+    },
+    mcp: {
+      key: (sessionId) => `key-of-${sessionId}`, known: (sessionId) => sessionId === 's1', external: () => externalKey,
+      messenger: (botId) => (botId === 'bot00001' ? 'bot-key' : null),
+      handle: async (caller, body) => ({ status: 200, json: { caller, body } }),
+    },
   }).server;
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
 });
@@ -331,5 +358,40 @@ describe('the shared browser’s endpoints', () => {
     assert.equal(await open(`${key('s1')}/lane/99`), 'rejected');
     assert.equal(await open(key('s1'), 'http://evil.example'), 'rejected');
     assert.deepEqual(connected, [{ owner: 's1.2', upstream: 'ws://127.0.0.1:1/devtools/browser/x' }]);
+  });
+});
+
+describe('the triggers\' webhooks and the open-space MCP server', () => {
+  it('lets a webhook in under any Host with its token, and nothing else', async () => {
+    const ok = await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"EX-1"}', {}, 'tunnel.example.com');
+    assert.equal(ok.status, 202);
+    assert.deepEqual(hooked, ['{"issue":"EX-1"}']);
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${'u'.repeat(43)}`, '{}', {}, 'tunnel.example.com')).status, 404);
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{}', { Origin: 'https://evil.example' })).status, 404, 'never from a page');
+    assert.equal((await rawRequest(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`)).status, 404, 'POST only');
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, 'x'.repeat(70_000))).status, 413);
+    assert.equal(hooked.length, 1);
+    // everything else still needs our Host
+    assert.equal((await rawRequest('/', 'tunnel.example.com')).status, 403);
+  });
+
+  it('answers a session with its key, the external program once its access is on, and never a page', async () => {
+    const ok = await rawPost('/mcp/s1/key-of-s1', '{"jsonrpc":"2.0"}', { 'Content-Type': 'application/json' });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(JSON.parse(ok.body), { caller: { session: 's1' }, body: '{"jsonrpc":"2.0"}' });
+    assert.equal((await rawPost('/mcp/s1/key-of-s2', '{}')).status, 404);
+    assert.equal((await rawPost('/mcp/s2/key-of-s2', '{}')).status, 404, 'an unknown session');
+    assert.equal((await rawPost('/mcp/s1/key-of-s1', '{}', { Origin: `http://127.0.0.1:${port}` })).status, 404);
+    assert.equal((await rawPost('/mcp/s1/key-of-s1', '{}', {}, 'tunnel.example.com')).status, 403, 'our Host only');
+    assert.equal((await rawPost('/mcp/external/anything', '{}')).status, 404, 'off by default');
+    externalKey = 'k'.repeat(43);
+    const external = await rawPost(`/mcp/external/${externalKey}`, '{}');
+    assert.deepEqual(JSON.parse(external.body).caller, { external: true });
+    assert.equal((await rawPost(`/mcp/external/${'j'.repeat(43)}`, '{}')).status, 404);
+    externalKey = null;
+    assert.equal((await rawPost(`/mcp/external/${'k'.repeat(43)}`, '{}')).status, 404, 'revoked');
+    assert.deepEqual(JSON.parse((await rawPost('/mcp/messenger/bot00001/bot-key', '{}')).body).caller, { messenger: 'bot00001' });
+    assert.equal((await rawPost('/mcp/messenger/bot00001/wrong', '{}')).status, 404);
+    assert.equal((await rawPost('/mcp/messenger/bot00002/bot-key', '{}')).status, 404, 'an unknown bot');
   });
 });

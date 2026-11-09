@@ -110,23 +110,6 @@ function drawChart(p: Painter) {
   for (let column = 1; column < 6; column++) at(column, 12, C.screenGrid);
 }
 
-/** The server room's console: a desk of dark metal, a deck of glowing keys, and a small screen turned to the room. */
-const CONSOLE_SCREEN = { y: 0.36, fromX: 1.33, toX: 1.87, low: 12, high: 20 };
-function paintAutomataConsole(p: Painter) {
-  for (const [x, y] of [[0.06, 0.08], [1.84, 0.08], [0.06, 0.82], [1.84, 0.82]]) p.box(x, y, 0.1, 0.1, 0, 9, C.metal);
-  p.box(0, 0, 2, 0.95, 9, 2, C.automataFrame);
-  for (const x of [0.2, 0.45, 0.7, 0.95]) for (const y of [0.45, 0.7]) p.box(x, y, 0.15, 0.12, 11, 1, C.automataKeys);
-  p.box(1.3, 0.3, 0.6, 0.06, 11, 10, C.automataFrame);
-  p.onFront(CONSOLE_SCREEN.y, CONSOLE_SCREEN.fromX, CONSOLE_SCREEN.toX, CONSOLE_SCREEN.low, CONSOLE_SCREEN.high, C.automataFace);
-}
-/** A pulse of work across the console's screen, the height of each column. */
-const CONSOLE_PULSE = [3, 4, 2, 6] as const;
-function drawConsoleScreen(p: Painter) {
-  const at = (column: number, row: number, colour: string) => p.pixel(CONSOLE_SCREEN.fromX + (column + 0.5) / 8, CONSOLE_SCREEN.y, CONSOLE_SCREEN.low + row, colour);
-  for (const [index, height] of CONSOLE_PULSE.entries()) at(index, 1 + height, C.automataLine);
-  for (const x of [0.25, 0.75]) p.pixel(x, 0.57, 12, C.automataLine);
-}
-
 /**
  * The teleporter: a ring standing on a plinth with a step, its face to the viewer (+y), like a gate. Its band of metal
  * plates is lit by chevrons; its inside is empty here: the vortex turns in it every frame, its motes come out of it and
@@ -683,7 +666,6 @@ const DESIGNS: Record<FurniturePiece['kind'], Design> = {
   metricsTv: { height: 46, paint: paintMetricsTv, fine: drawChart },
   ticker: { height: 46, paint: paintTicker, fine: writeOnTicker },
   piggyBank: { height: 40, paint: paintPiggy },
-  automataConsole: { height: 24, paint: paintAutomataConsole, fine: drawConsoleScreen },
   portal: { height: PORTAL.plinth + PORTAL.up * 2 + 4, paint: paintPortal },
   counter: { height: 24, paint(p) {
     p.box(0, 0.1, 3, 0.85, 0, 11, C.counter);

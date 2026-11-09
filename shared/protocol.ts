@@ -1,14 +1,15 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
-import type { AutomataState } from './automata.ts';
+import type { AgentRole, AutomataState } from './automata.ts';
+import type { TriggerInput, TriggersState, TriggerTag } from './triggers.ts';
 import type { SecretEntry } from './secrets.ts';
+import type { MessengerInput } from './messengers.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
 import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
-import type { DroidChoice } from './droids.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
@@ -376,6 +377,12 @@ export interface SessionInfo {
   toldChrome?: true;
   /** its conversation knows os-secret (server/secrets.ts): in the system prompt of a new one, else told once in a message */
   toldSecrets?: true;
+  /** started by a trigger (shared/triggers.ts): it stands in the server room as a robot, instead of the office */
+  trigger?: TriggerTag;
+  /** runs as this role of Claude Code (.claude/agents/<role>.md), given with --agent at every launch */
+  role?: string;
+  /** what it does without asking, on top of its mode (its trigger's rules), given with --allowedTools at every launch */
+  allowedTools?: string[];
 }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
@@ -488,10 +495,8 @@ export interface Preferences {
   autoTag: boolean;
   /** Remote Control turned on for each new session, as long as live slots are left (server/sessions.ts) */
   remoteByDefault: boolean;
-  /** the office pet: a cat, a dog, Rocky, or none */
+  /** the pet, going from room to room: a cat, a dog, a droid, Rocky…, or none */
   pet: PetChoice;
-  /** the automatons' droid, rolling from room to room while their folder is set (shared/droids.ts), or none */
-  droid: DroidChoice;
   /** the place both rooms are dressed as (shared/room-themes.ts) */
   theme: RoomTheme;
   /** the folder of the whiteboard's notes, one Markdown file per project (absolute; ~/Journal by default) */
@@ -717,6 +722,28 @@ export type ClientMessage =
   | { t: 'metrics' }
   /** the thread of an automaton's run so far (answered with `automatonLog`) */
   | { t: 'automatonLog'; runId: string }
+  /** adds a trigger (no `id`) or changes one (answered with `triggers`, or a `triggerError`) */
+  | { t: 'saveTrigger'; id?: string; trigger: TriggerInput }
+  | { t: 'deleteTrigger'; id: string }
+  /** keys a trigger hands each of its runs' `os-secret` (server/trigger-keys.ts), added or replaced */
+  | { t: 'triggerKeys'; id: string; entries: SecretEntry[] }
+  /** adds a chat bot (no `id`) or changes one (shared/messengers.ts) */
+  | { t: 'saveMessenger'; id?: string; messenger: MessengerInput }
+  | { t: 'deleteMessenger'; id: string }
+  /** sends a test message to a bot's chat, or forgets its chat so that a new code links another */
+  | { t: 'testMessenger'; id: string }
+  | { t: 'relinkMessenger'; id: string }
+  /** forgets one of a trigger's keys */
+  | { t: 'forgetTriggerKey'; id: string; name: string }
+  /** starts a trigger's run now, whatever its kind and even turned off */
+  /** `test`: a run in plan mode (nothing changed), `body` posing as a webhook's for a webhook trigger */
+  | { t: 'runTrigger'; id: string; test?: boolean; body?: string }
+  /** takes a webhook call out of its trigger's queue before it starts */
+  | { t: 'cancelTriggerRun'; id: string }
+  /** the roles a session of this folder can run as (answered with `agentRoles`) */
+  | { t: 'agentRoles'; cwd: string }
+  /** the open-space MCP access for other programs of this computer: on with a new key (the old one stops working), or off */
+  | { t: 'externalMcp'; enabled: boolean }
   /** the threads of every session searched for `query` (answered with `searchResults` carrying the same `id`) */
   | { t: 'search'; id: number; query: string }
   /** what Claude Code spent on this computer, read again if it is older than a minute (`fresh`: read again now) */
@@ -787,6 +814,11 @@ export type ServerMessage =
   | { t: 'automatonLog'; runId: string; events: LoggedEvent[]; truncated: boolean }
   /** what a run at work did since, from the end of its transcript */
   | { t: 'automatonEvents'; runId: string; events: LoggedEvent[] }
+  /** the triggers and their last firings (shared/triggers.ts): sent at connection and whenever they change */
+  | { t: 'triggers'; state: TriggersState }
+  /** a trigger could not be saved: the reason's key (shared/triggers.ts TriggerError) */
+  | { t: 'triggerError'; error: string }
+  | { t: 'agentRoles'; cwd: string; roles: AgentRole[] }
   /** the music apps the radio can drive, sent at connection (none outside macOS) */
   | { t: 'musicApps'; apps: MusicApp[] }
   | { t: 'music'; nowPlaying: NowPlaying }

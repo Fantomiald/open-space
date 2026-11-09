@@ -30,6 +30,7 @@ import { Shortcuts } from './Shortcuts.tsx';
 import { Switch } from './Switch.tsx';
 import { UsagePanel } from './UsagePanel.tsx';
 import { useAutosave } from './useAutosave.ts';
+import { Row } from './PrefsRow.tsx';
 
 const REPOSITORY = 'https://github.com/Fantomiald/open-space';
 /** The page runs in the Mac app (its window is Electron's), not in a browser. */
@@ -49,7 +50,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
-  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
+  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']], ['automata', ['automata']]],
   notes: [['files', ['journalFolder', 'metricsFile', 'automataFolder']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
@@ -110,23 +111,6 @@ const capitalized = (text: string) => text.charAt(0).toLocaleUpperCase() + text.
 function withSetting<K extends keyof ClaudeSettings>(settings: ClaudeSettings, key: K, value: ClaudeSettings[K], inherited: ClaudeSettings[K]): ClaudeSettings {
   const { [key]: _, ...rest } = settings;
   return value === undefined || value === inherited ? rest : { ...rest, [key]: value };
-}
-
-/** One setting: its icon, title and what it does, and its control on the right (below it for a wide one). `config`: its name in Claude Code's /config. */
-function Row({ id, icon, title, hint, config, extra, wide, flash, children }: {
-  id: string; icon: ReactNode; title: string; hint?: ReactNode; config?: string; extra?: ReactNode; wide?: boolean; flash?: boolean; children: ReactNode;
-}) {
-  return (
-    <div className="cp-prefs__row" id={`setting-${id}`} data-wide={wide} data-flash={flash}>
-      <span className="cp-prefs__row-icon">{icon}</span>
-      <div className="cp-prefs__row-text">
-        <span className="cp-prefs__row-title" id={`setting-${id}-title`}>{title}{config && <code className="cp-prefs__config" title="/config">{config}</code>}</span>
-        {hint && <span className="cp-prefs__row-hint">{hint}</span>}
-        {extra}
-      </div>
-      <div className="cp-prefs__row-control">{children}</div>
-    </div>
-  );
 }
 
 /** The settings, in sections: changes are saved as they are made. */
@@ -423,6 +407,11 @@ function SettingsEditor() {
       case 'crew': return (
         <Row key={id} id={id} flash={flash} icon={<CrewIcon />} title={rows.crew.title} hint={rows.crew.hint}>
           <button type="button" className="cp-button" onClick={() => { close(); store().openCrew(true); }}>{rows.crew.action}</button>
+        </Row>
+      );
+      case 'automata': return (
+        <Row key={id} id={id} flash={flash} icon={<AutomatonIcon />} title={rows.automata.title} hint={rows.automata.hint}>
+          <button type="button" className="cp-button" onClick={() => { close(); store().openAutomata(true); }}>{rows.automata.action}</button>
         </Row>
       );
       case 'journalFolder': return (

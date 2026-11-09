@@ -17,7 +17,7 @@ Open Space pilote plusieurs sessions Claude Code depuis un bureau en pixel art, 
 - La salle : logique pure (`geometry`, `floor`, `paths`, `seats`, `cast`, `scene`, `bubbles`, `pet`, `visitors`, `outfits`, `shared/festivals.ts`) testée sans DOM dans `src/room/room.test.ts` ; le dessin des gens passe par `SpriteSource` (`src/room/sprites.ts`). ~15 images/s, pause quand l'onglet est caché, pas de flou animé.
 - Un look ou un réglage enregistré doit rester valable quand on en ajoute : un nouveau trait est facultatif dans le fichier, avec une valeur par défaut (`LATER_TRAITS` dans `shared/look.ts`).
 - La logique pure (états, file « à toi », fil d'événements) est testée sans DOM : `server/session-state.ts`, `src/state/*.ts`, `src/room/*.ts`.
-- Le serveur ne fait aucun appel réseau sortant (la salle est dessinée en code, sans image externe) ; garder ça.
+- Le serveur ne fait aucun appel réseau sortant (la salle est dessinée en code, sans image externe) ; garder ça. Seule exception : `api.telegram.org`, et seulement une fois que l'utilisateur a ajouté un bot (`server/telegram.ts`).
 - Les fixtures `server/fixtures/*.jsonl` sont de vraies sorties de `claude -p` (nettoyées) : les régénérer si le format du CLI change.
 
 ## L'app Mac (Electron)
