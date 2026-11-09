@@ -203,3 +203,25 @@ export const TOKYO_PALETTE = {
 } as const;
 
 export type Neon = (typeof TOKYO_PALETTE.neon)[keyof typeof TOKYO_PALETTE.neon];
+
+/** Tokyo's teleporter (src/room/themes/portals.ts): a vermilion torii with a black lintel round a ring of pink neon, a tunnel of cyan rings drawn in, cherry petals falling. */
+export const TOKYO_PORTAL = {
+  pillar: '#d2382c',
+  pillarLight: '#ee6247',
+  pillarDark: '#8e2119',
+  lintel: '#1d1a22',
+  lintelTop: '#7a7290',
+  foot: '#141218',
+  plaque: '#141218',
+  plaqueRim: '#ffd23f',
+  step: '#5c5866',
+  stepTop: '#77727f',
+  housing: '#24212b',
+  tube: '#ff4fa8',
+  tubeCore: '#ffe0f0',
+  tubeOff: '#5a2a45',
+  vortex: ['#150b2e', '#3ff0ff', '#ffe0f0'] as const,
+  light: '#ff4fa8',
+  core: '#ffe0f0',
+  petals: ['#ffb7d5', '#ff8fc0', '#ffe3ef'],
+};

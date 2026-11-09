@@ -6,7 +6,7 @@ import { t } from '../i18n/index.ts';
 import type { Person, RoomPlan } from './cast.ts';
 import { createPet, cuddle, petHere, stepPet, type Pet } from './pet.ts';
 import type { Passage } from './pet-trip.ts';
-import { BEAM_MS, beamProgress, hiddenInBeam } from './portal.ts';
+import { BEAM_MS, beamProgress } from './portal.ts';
 import type { Floor } from './floor.ts';
 import { depthOf, distance, facingVector, onFigure, tileCenter, toScreen, toTile, type Point } from './geometry.ts';
 import { advanceAlong } from './paths.ts';
@@ -67,11 +67,9 @@ export class Scene {
   readonly visits: Visits | null;
   /** the room's own clock, in ms */
   time = 0;
-  /** the column of light bringing the user in through the teleporter, and when it started (they leave at once, like by the door) */
+  /** the column of light round the user coming in through the teleporter, and when it started (no waiting in it, either way) */
   beam: { at: number } | null = null;
   private goingToPortal = false;
-  /** when the user, brought in by the teleporter, steps out of its ring (room time), or null */
-  private stepOutAt: number | null = null;
   /** set once the user went through the teleporter: the view moves to the other room */
   playerTeleported = false;
 
@@ -85,13 +83,13 @@ export class Scene {
     const portal = floor.portal;
     const beamedIn = atPortal && portal !== null;
     this.player = beamedIn
-      ? { position: { ...portal }, heading: { x: 1, y: 1 }, path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) }
+      ? { position: { ...portal }, heading: { x: 1, y: 1 }, path: floor.portalFront ? [{ ...floor.portalFront }] : [], blinkOffset: blinkOffsetOf(PLAYER_ID) }
       : atDoor
         ? { position: { ...floor.door }, heading: { x: 1, y: 0 }, path: [floor.inside], blinkOffset: blinkOffsetOf(PLAYER_ID) }
         : { position: { ...start.at }, heading: facingVector(start.seat.facing), path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) };
     this.playerSpot = atDoor || beamedIn ? null : start;
-    // they step out of the ring once the light has brought them in
-    if (beamedIn) { this.beam = { at: 0 }; this.stepOutAt = BEAM_MS; }
+    // they walk out of the ring at once, in its light, like through a door
+    if (beamedIn) this.beam = { at: 0 };
 
     this.visits = withVisitors ? new Visits(floor) : null;
   }
@@ -151,10 +149,6 @@ export class Scene {
   step(ms: number) {
     this.time += ms;
     if (this.beam && this.time - this.beam.at >= BEAM_MS) this.beam = null;
-    if (this.stepOutAt !== null && this.time >= this.stepOutAt) {
-      this.stepOutAt = null;
-      if (this.floor.portalFront && !this.player.path.length) this.player.path = [{ ...this.floor.portalFront }];
-    }
     for (const [id, character] of this.characters) {
       if (!advance(character, ms)) continue;
       if (character.phase === 'leaving') this.characters.delete(id);
@@ -316,12 +310,6 @@ export class Scene {
   /** Where the user's column of light is (0 to 1), or null. */
   playerBeam(): { progress: number } | null {
     return this.beam ? { progress: beamProgress(this.beam.at, this.time) } : null;
-  }
-
-  /** True while the column of light hides the user, not yet in. */
-  playerHidden(): boolean {
-    const beam = this.playerBeam();
-    return beam !== null && hiddenInBeam('in', beam.progress);
   }
 
   /** The pet comes into this room (by a passage, or already there), meaning to stay `stayLeft` ms. */

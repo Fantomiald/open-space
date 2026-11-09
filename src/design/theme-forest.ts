@@ -230,3 +230,24 @@ export const FOREST_FURNITURE = {
   lightFirefly: '#d8f27a',
   lightWater: '#7ec8e8',
 };
+
+/** The forest's teleporter (src/room/themes/portals.ts): a ring of two branches twisted together on a mossy stump, leaves and flowers growing on it, glowing mushrooms at its foot, a golden green swirl and fireflies. */
+export const FOREST_PORTAL = {
+  bark: '#7e5434',
+  barkLight: '#a87b4c',
+  barkDark: '#4e321c',
+  stump: '#6b4a2e',
+  stumpTop: '#c49a68',
+  ring: '#9c7046',
+  moss: ['#5c8a2e', '#6e9e36', '#4a7426'],
+  leaves: ['#3f7a34', '#559a3e', '#6fb84a'],
+  flower: '#f4a6c8',
+  flowerHeart: '#fff2a0',
+  cap: '#9ee6d8',
+  capDark: '#4a9a92',
+  capGlow: '#d8fff6',
+  vortex: ['#173a22', '#7fcf4a', '#f6f08a'] as const,
+  light: '#b8e86a',
+  core: '#f8f6c0',
+  fireflies: ['#f6f08a', '#c8f26a', '#fff8c0'],
+};

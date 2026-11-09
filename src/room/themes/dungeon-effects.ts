@@ -31,7 +31,7 @@ function px(context: Context, x: number, y: number, colour: string, size = ART_S
  * A flame standing on `base`: columns `half` art pixels each side of it, the middle ones the tallest, each licking up
  * and down on its own beat; white and yellow at its heart, orange, then red at its tips.
  */
-function fire(context: Context, base: Point, half: number, height: number, time: number, seed: number) {
+export function fire(context: Context, base: Point, half: number, height: number, time: number, seed: number) {
   const [red, orange, yellow, white] = D.flame;
   for (let across = -half; across <= half; across++) {
     const profile = 1 - (Math.abs(across) / (half + 1)) ** 2;

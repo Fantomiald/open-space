@@ -13,6 +13,7 @@ import { pick } from '../sky.ts';
 import { WALL_EFFECT, type ThemeEffect, type ThemeKit, type ThemeLight } from './kit.ts';
 import { WALL, line, onWallAt, roomPointOnWall, type Context, type Wall } from '../wall-art.ts';
 import { BEACH_FURNITURE, furnitureEffects, furnitureLights } from './beach-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { paintBeachSky, paintGulls } from './beach-sky.ts';
 
 /** The half walls' top, the sea seen over them (its horizon at `high`), the bottom of the thatch, in art pixels. */
@@ -577,7 +578,8 @@ export const BEACH: ThemeKit = {
   skyFrameMs: 250,
   // the walls are open above the half wall: a shaft of light from the openings would veil the sky behind
   wallBeam: false,
-  furniture: BEACH_FURNITURE,
+  furniture: { ...BEACH_FURNITURE, portal: THEME_PORTALS.beach.design },
+  portal: THEME_PORTALS.beach.style,
   lighting: beachLight,
   officeLamps: false,
   lights: (layout) => [...furnitureLights(layout), ...bulbLights()],

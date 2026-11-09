@@ -7,6 +7,7 @@ import type { ROOM_PALETTE } from '../../design/room-palette.ts';
 import type { Point } from '../geometry.ts';
 import type { Lighting } from '../lighting.ts';
 import type { Design } from '../pixel-furniture.ts';
+import type { ParticleKind, VortexForm } from '../portal.ts';
 
 
 type Context = CanvasRenderingContext2D;
@@ -25,6 +26,25 @@ export type Structure = { [key in keyof Omit<Office, 'planks' | 'rugs'>]: string
  */
 export interface ThemeEffect { depth: number; paint(context: Context): void }
 export const WALL_EFFECT = -1;
+
+/**
+ * How the teleporter's light looks in a theme (its frame is the theme's `furniture.portal`): what turns in its ring and
+ * in which tones (the deep, what moves, the bright heart), the light it lays on the floor and the column that takes
+ * someone away (its edge, its core), what comes out of it and in which colours, and what glows and moves on its frame.
+ */
+export interface PortalStyle {
+  vortex: VortexForm;
+  tones: readonly [string, string, string];
+  light: string;
+  core: string;
+  particles: ParticleKind;
+  colours: readonly string[];
+  /**
+   * painted every frame over the frame (so it shines at night); `at`: a point of the ring's plane in room pixels,
+   * `across` and `up` art pixels from its middle, `out` tiles before it
+   */
+  frame?(context: Context, at: (across: number, up: number, out?: number) => Point, time: number): void;
+}
 
 /** A light added to the room's light map: above floor point (x, y) in tiles, `height` in room pixels. */
 export interface ThemeLight { x: number; y: number; height: number; radius: number; colour: string; strength: number }
@@ -51,6 +71,8 @@ export interface ThemeKit {
   skyFrameMs?: number;
   /** false: no shaft of light from the windows on the walls (round or blind windows) */
   wallBeam?: boolean;
+  /** the teleporter's light, with the theme's `furniture.portal` */
+  portal?: PortalStyle;
   /** the theme's version of a piece (the props and festival pieces stay the office's unless given) */
   furniture?: Partial<Record<PieceKind, Design>>;
   /** the light of the hour in this place (an underground dungeon stays dim at noon); the room and the page's sky follow it */

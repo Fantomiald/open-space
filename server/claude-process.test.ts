@@ -20,6 +20,8 @@ describe('buildClaudeArgs', () => {
     const args = buildClaudeArgs(base);
     assert.deepEqual(args, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text', '--permission-prompt-tool', 'stdio', '--permission-mode', 'auto', '--session-id', base.sessionId, '--name', 'Iris', '--append-system-prompt', identityPrompt('Iris')]);
     assert.match(identityPrompt('Iris'), /« Iris »/);
+    assert.doesNotMatch(identityPrompt('Iris'), /finish_run/);
+    assert.match(identityPrompt('Iris', '', '', undefined, false, false, false, true), /rename_session[\s\S]*finish_run/, 'a trigger\'s run names itself and says when it is done');
     assert.match(identityPrompt('Iris'), /sois concis/);
     assert.match(identityPrompt('Iris', 'Max', 'tutoie-moi'), /Open Space de Max[\s\S]*Ce que Max demande à tous ses agents : tutoie-moi$/);
     assert.ok(!identityPrompt('Iris', 'Max').includes('demande à tous'));
@@ -35,6 +37,8 @@ describe('buildClaudeArgs', () => {
     const allowed = buildClaudeArgs({ ...base, allowedTools: ['Edit', 'Bash(git push *)'] });
     assert.equal(allowed[allowed.indexOf('--allowedTools') + 1], 'Edit,Bash(git push *)');
     assert.ok(!args.includes('--allowedTools'));
+    const run = buildClaudeArgs({ ...base, allowedTools: ['Edit'], run: true });
+    assert.equal(run[run.indexOf('--allowedTools') + 1], 'Edit,mcp__open-space__rename_session,mcp__open-space__finish_run');
     // the open-space server alone does not tell the session it has a browser
     const alone = buildClaudeArgs({ ...base, openSpaceMcp: openSpace });
     assert.equal(alone[alone.indexOf('--append-system-prompt') + 1], identityPrompt('Iris'));

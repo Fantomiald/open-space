@@ -11,6 +11,7 @@ import { fillPolygon, shadedBall, toArt, tones } from '../pixel-art.ts';
 import { pick } from '../sky.ts';
 import { WALL_EFFECT, type ThemeKit } from './kit.ts';
 import { SPACE_FURNITURE, furnitureLights, furnitureEffects } from './space-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { WALL, glyphRows, line, onWall, onWallAt, roomPointOnWall, type Context, type Wall } from '../wall-art.ts';
 
 const WAINSCOT = 12;
@@ -414,7 +415,8 @@ export const SPACE: ThemeKit = {
   paintSkyMotion: paintSpaceDrift,
   // the portholes are round: a straight shaft from their wall would veil them
   wallBeam: false,
-  furniture: SPACE_FURNITURE,
+  furniture: { ...SPACE_FURNITURE, portal: THEME_PORTALS.space.design },
+  portal: THEME_PORTALS.space.style,
   lights: (layout) => furnitureLights(layout),
   effects: (layout, time, lighting) => [
     { depth: WALL_EFFECT, paint: (context) => { runLights(context, time); sweepScreen(context, layout, time); } },

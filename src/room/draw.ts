@@ -15,14 +15,14 @@ import { BOT_GLYPH, BOT_GLYPH_SIZE, BRANCH_GLYPH, BRANCH_GLYPH_HEIGHT, BRANCH_GL
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
 import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
 import { roomTheme, themeKit } from './themes/index.ts';
-import type { ThemeEffect } from './themes/kit.ts';
+import type { PortalStyle, ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
 import { PORTAL, PORTAL_MIDDLE_UP, bobOf, furnitureDepth, portalFace, portalPoint, type FurnitureSprites } from './pixel-furniture.ts';
 import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
 import { cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, waitingSign } from './server-room.ts';
-import { beamGlow, hiddenInBeam, portalMotes, vortex } from './portal.ts';
+import { beamGlow, hiddenInBeam, portalParticles, vortex, type ParticleShape } from './portal.ts';
 import { PLAYER_ID, directionOf, type Character, type Scene, type Walker } from './scene.ts';
 import { hash, type Gesture, type Pose, type SpriteSource } from './sprites.ts';
 import { paintActivity } from './activity-icons.ts';
@@ -699,9 +699,24 @@ function cordEffects(layout: Layout, automatons: readonly Character[], placeOf: 
  * coming out of it into the room, its light on the floor before it; and the column of light that takes the user (or
  * the pet) away or brings them in. Squares of light, no blur; the vortex still with motion reduced, no column.
  */
+/** The office's teleporter, and any theme's that does not dress it: the orb's cold light turning in a spiral. */
+const OFFICE_PORTAL_STYLE: PortalStyle = {
+  vortex: 'spiral', tones: [SF.orbOuter, SF.orbInner, SF.orbCore], light: SF.orbInner, core: SF.orbCore, particles: 'motes', colours: [SF.orbCore, SF.orbInner],
+};
+/** The squares of each particle's shape around its point, and how much of its light each takes. */
+const SHAPES: Readonly<Record<ParticleShape, readonly (readonly [number, number, number])[]>> = {
+  dot: [[0, 0, 1]],
+  leaf: [[0, 0, 1], [1, 0, 1]],
+  bubble: [[-1, 0, 1], [1, 0, 1], [0, -1, 1], [0, 1, 0.6]],
+  star: [[0, 0, 1], [-1, 0, 0.45], [1, 0, 0.45], [0, -1, 0.45], [0, 1, 0.45]],
+  glow: [[0, 0, 1], [-1, 0, 0.3], [1, 0, 0.3], [0, -1, 0.3], [0, 1, 0.3]],
+};
+const LEAF_TURNED: readonly (readonly [number, number, number])[] = [[0, 0, 1], [1, -1, 1]];
+
 function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): ThemeEffect[] {
   const portal = layout.furniture.find((piece) => piece.kind === 'portal');
   if (!portal) return [];
+  const style = themeKit()?.portal ?? OFFICE_PORTAL_STYLE;
   const time = options.reducedMotion ? 0 : options.time;
   // a point of the ring's plane (or `out` tiles before its face), `across` and `high` art pixels from its middle
   const onRing = (across: number, high: number, out = 0): Point => {
@@ -717,10 +732,9 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
     if (glow <= 0) return;
     for (let up = 0; up < 64; up += ART_SCALE) for (const across of [-6, -4, -2, 0, 2, 4]) {
       const core = Math.abs(across + 1) <= 2;
-      cell(on, feet.x + across, feet.y - up, core ? SF.orbCore : SF.orbInner, glow * (core ? 0.9 : 0.45) * (1 - up / 80));
+      cell(on, feet.x + across, feet.y - up, core ? style.core : style.light, glow * (core ? 0.9 : 0.45) * (1 - up / 80));
     }
   };
-  const tones = [SF.orbOuter, SF.orbInner, SF.orbCore] as const;
   // the floor before its face
   const face = portalFace(portal);
   const front = portalPoint(portal, 0, face + 0.3);
@@ -734,7 +748,7 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
           const fade = 1 - out / 10 - Math.abs(across) / 16;
           if (fade <= 0) continue;
           const point = toScreen(portalPoint(portal, across / 8, face + out / 8));
-          cell(on, point.x, point.y, SF.orbInner, 0.28 * fade);
+          cell(on, point.x, point.y, style.light, 0.28 * fade);
         }
         on.globalAlpha = 1;
       },
@@ -743,9 +757,9 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
       // under whoever steps into the ring, and under the ring's band, drawn after it, over the vortex's edge
       depth: depthOf(inRing) - 0.05,
       paint(on) {
-        for (const pixel of vortex(time, PORTAL.across - PORTAL.band, PORTAL.up - PORTAL.band)) {
+        for (const pixel of vortex(time, PORTAL.across - PORTAL.band, PORTAL.up - PORTAL.band, style.vortex)) {
           const at = onRing(pixel.across, pixel.up);
-          cell(on, at.x, at.y, tones[pixel.tone], pixel.alpha);
+          cell(on, at.x, at.y, style.tones[pixel.tone], pixel.alpha);
         }
         on.globalAlpha = 1;
       },
@@ -754,14 +768,18 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
       depth: depthOf(front),
       paint(on) {
         if (options.reducedMotion) return;
-        for (const mote of portalMotes(time, PORTAL.up)) {
-          const at = onRing(mote.across, mote.up, mote.out);
-          cell(on, at.x, at.y, mote.alpha > 0.6 ? SF.orbCore : SF.orbInner, mote.alpha * 0.9);
+        for (const particle of portalParticles(style.particles, time, { wide: PORTAL.across, high: PORTAL.up, floor: -PORTAL_MIDDLE_UP })) {
+          const at = onRing(particle.across, particle.up, particle.out);
+          const colour = style.colours[particle.colour % style.colours.length];
+          const squares = particle.shape === 'leaf' && particle.flip ? LEAF_TURNED : SHAPES[particle.shape];
+          for (const [dx, dy, share] of squares) cell(on, at.x + dx * ART_SCALE, at.y + dy * ART_SCALE, colour, particle.alpha * 0.9 * share);
         }
         on.globalAlpha = 1;
       },
     },
   ];
+  const frame = style.frame;
+  if (frame) effects.push({ depth: furnitureDepth(portal) + 0.01, paint(on) { frame(on, onRing, time); on.globalAlpha = 1; } });
   const beams: { feet: Point; depth: number; glow: number }[] = [];
   const player = scene.playerBeam();
   if (player) beams.push({ feet: toScreen(scene.player.position), depth: depthOf(scene.player.position) + 0.01, glow: beamGlow(player.progress) });
@@ -859,7 +877,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   if (pet && choice && !(petBeaming && hiddenInBeam(petBeaming.kind, petBeaming.progress))) layers.push({ depth: depthOf(pet.position), paint: (on) => drawPet(on, pet, choice, toScreen(pet.position).x, toScreen(pet.position).y, options.reducedMotion ? 0 : options.time) });
   const playerLift = scene.playerSpot?.lift ?? 0;
   // the column of light of the teleporter hides the user while it takes them away or brings them in
-  if (!scene.playerHidden()) layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
+  layers.push({ depth: depthOf(scene.player.position), paint: (on) => paintPerson(on, sprites, PLAYER_ID, scene.player, playerPose, false, playerLift) });
   for (const layer of layers.sort((a, b) => a.depth - b.depth)) layer.paint(context);
   // someone carried goes over everything, above the free seats they can be put on
   const carried = scene.carried;
@@ -924,7 +942,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
   }
   const playerFeet = toScreen(scene.player.position);
   // gone in the teleporter's light, their name goes with them
-  if (!scene.playerHidden()) tags.push({
+  tags.push({
     x: playerFeet.x, bottom: playerFeet.y - playerLift - sprites.height(playerPose, PLAYER_ID) - TAG_LIFT, faint: options.hoveredId !== PLAYER_ID,
     tag: { name: options.playerName, colour: P.playerTagText, status: null, tags: [], moreTags: 0, sessionId: PLAYER_ID, agents: [], framed: false },
   });

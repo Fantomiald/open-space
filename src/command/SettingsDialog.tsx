@@ -151,7 +151,8 @@ function SettingsEditor() {
     if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
     if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     if (!isAutomataFolder(next.automataFolder)) return t.settings.dialog.automataFolderInvalid;
-    if (hooksAddressOf(next.hooksAddress) === null) return t.settings.dialog.hooksAddressInvalid;
+    // a server older than this page sends no hooksAddress
+    if (hooksAddressOf(next.hooksAddress ?? '') === null) return t.settings.dialog.hooksAddressInvalid;
     return store().setPreferences(next) ? null : t.settings.noServer;
   });
 
@@ -420,7 +421,7 @@ function SettingsEditor() {
       );
       case 'hooksAddress': return (
         <Row key={id} id={id} flash={flash} wide icon={<WebhookIcon />} title={rows.hooksAddress.title} hint={rows.hooksAddress.hint}>
-          <input aria-labelledby={`setting-${id}-title`} value={draft.hooksAddress} onChange={(e) => change({ hooksAddress: e.target.value })} placeholder="https://hooks.example.com" spellCheck={false} />
+          <input aria-labelledby={`setting-${id}-title`} value={draft.hooksAddress ?? ''} onChange={(e) => change({ hooksAddress: e.target.value })} placeholder="https://hooks.example.com" spellCheck={false} />
           {hooksPort === null ? <p className="cp-trigger__note">{rows.hooksAddress.closed}</p> : (
             <div className="cp-hooks-guide">
               <p className="cp-trigger__note">{rows.hooksAddress.guide(hooksPort)}</p>

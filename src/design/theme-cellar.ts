@@ -146,3 +146,25 @@ export const CELLAR_PALETTE = {
     fridge: '#cfe8ff',
   },
 };
+
+/** The cellar's teleporter (src/room/themes/portals.ts): a ring of bare steel pipe, rusted, wrapped in cables and duct tape, blinking diodes, on a steel case; green code raining inside, sparks off a frayed cable. */
+export const CELLAR_PORTAL = {
+  steel: '#7c7c74',
+  steelLight: '#aaa99e',
+  steelDark: '#45453f',
+  rust: '#7a4a30',
+  cables: ['#151716', '#2a4c68', '#7a2e2a'],
+  tape: '#9a9a90',
+  tapeLight: '#c2c2b6',
+  case: '#3e4347',
+  caseTop: '#565c61',
+  vent: '#1b1d1e',
+  copper: '#f0a050',
+  ledGreen: '#5cff8a',
+  ledRed: '#ff4a3a',
+  ledAmber: '#ffb43a',
+  vortex: ['#04100a', '#2fae5a', '#c8ffd6'] as const,
+  light: '#3fdc7a',
+  core: '#d6ffe2',
+  sparks: ['#fff2b0', '#ffb43a', '#ff7a2a'],
+};

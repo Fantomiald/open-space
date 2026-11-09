@@ -226,3 +226,23 @@ export const BEACH_FURNITURE = {
   lightLamp: '#ffc46b',
   lightBar: '#ffb35c',
 };
+
+/** The beach's teleporter (src/room/themes/portals.ts): a hoop of bamboo lashed with rope on a mound of sand with shells and a starfish, a garland of hibiscus and a palm frond on top, ripples of sea water, bubbles. */
+export const BEACH_PORTAL = {
+  sand: '#e2c890',
+  sandLight: '#f2dcae',
+  sandDark: '#c4a068',
+  bamboo: '#cfa85a',
+  bambooLight: '#ead08e',
+  bambooNode: '#8e6c32',
+  rope: '#e3cf9c',
+  shells: ['#f6e6d8', '#f2b8a0'],
+  starfish: '#f08a4a',
+  flowers: ['#ff5a6a', '#ff9ac0', '#ffd24a'],
+  flowerHeart: '#fff2a0',
+  frond: ['#4fa83a', '#3a8a2e', '#6cc44a'],
+  vortex: ['#1c6f8e', '#5fd8d0', '#ffffff'] as const,
+  light: '#7fe3dd',
+  core: '#e8fffd',
+  bubbles: ['#e8fffd', '#9fe8e4'],
+};

@@ -12,6 +12,7 @@ import { pick } from '../sky.ts';
 import { WALL, glyphRows, line, onWall, onWallAt, sagging, textLength, wallText, type Context, type Wall } from '../wall-art.ts';
 import { dot, noise, torchesOf, wallIsFree } from './dungeon-art.ts';
 import { CELLAR_FURNITURE } from './cellar-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { cellarEffects, cellarLights, screensOf, TV_SCREEN } from './cellar-effects.ts';
 import { paintCaveDark, paintTerminalText } from './cellar-sky.ts';
 import type { ThemeKit } from './kit.ts';
@@ -329,7 +330,8 @@ export const CELLAR: ThemeKit = {
   skyFrameMs: 400,
   wallBeam: false,
   officeLamps: false,
-  furniture: CELLAR_FURNITURE,
+  furniture: { ...CELLAR_FURNITURE, portal: THEME_PORTALS.cellar.design },
+  portal: THEME_PORTALS.cellar.style,
   lighting: cellarLighting,
   lights: cellarLights,
   effects: cellarEffects,

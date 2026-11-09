@@ -11,6 +11,7 @@ import { pick } from '../sky.ts';
 import { WALL_EFFECT, type ThemeEffect, type ThemeKit, type ThemeLight } from './kit.ts';
 import { furnitureDepth } from '../pixel-furniture.ts';
 import { TOKYO_FURNITURE } from './tokyo-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { PICTOS, boundsOf, glowPlaced, glowRows, glowSign, kana, letters, onWallRows, paintPlaced, paintSign, widthOf, type Placed, type Sign } from './tokyo-signs.ts';
 import { paintNeonSky, paintRain } from './tokyo-sky.ts';
 import { glyphRows, line, onWallAt, sagging, type Context, type Wall } from '../wall-art.ts';
@@ -607,7 +608,8 @@ export const TOKYO: ThemeKit = {
   paintSkyMotion: paintRain,
   // the light through the shop windows is the neon's, on the floor only
   wallBeam: false,
-  furniture: TOKYO_FURNITURE,
+  furniture: { ...TOKYO_FURNITURE, portal: THEME_PORTALS.tokyo.design },
+  portal: THEME_PORTALS.tokyo.style,
   lighting: tokyoLighting,
   lights: tokyoLights,
   effects: tokyoEffects,

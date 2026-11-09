@@ -29,7 +29,7 @@ import { lookOfStranger } from './chibi.ts';
 import { metricsBadgeAt, showsMetricsBadge } from './metrics.ts';
 import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth, lettersPerLine, textWidth } from './whiteboard.ts';
 import { stackLabels } from './labels.ts';
-import { BEAM_MS, beamGlow, beamProgress, ellipseDistance, hiddenInBeam, portalMotes, vortex } from './portal.ts';
+import { BEAM_MS, beamGlow, beamProgress, ellipseDistance, hiddenInBeam, portalMotes, portalParticles, vortex } from './portal.ts';
 import { advanceTrip, exitsOf, pickExit, startTrip, through } from './pet-trip.ts';
 import { PORTAL, pieceHeight, portalPoint } from './pixel-furniture.ts';
 import { WALL_EFFECT } from './themes/kit.ts';
@@ -928,6 +928,32 @@ describe('the teleporter, in every theme and festival', () => {
     assert.notDeepEqual(later.filter((pixel) => pixel.tone > 0), inside.filter((pixel) => pixel.tone > 0), 'it turns');
     assert.ok(portalMotes(800, PORTAL.up).every((mote) => mote.out >= 0 && mote.out <= 1.3 && mote.alpha >= 0 && mote.alpha <= 1));
   });
+
+  it('turns something of its own in each theme, inside the ring, and moving', () => {
+    const [wide, high] = [PORTAL.across - PORTAL.band, PORTAL.up - PORTAL.band];
+    for (const form of ['spiral', 'ripple', 'tunnel', 'rain', 'warp'] as const) {
+      const now = vortex(1000, wide, high, form);
+      assert.ok(now.every((pixel) => ellipseDistance(pixel.across, pixel.up, wide, high) <= 1 && pixel.alpha > 0 && pixel.alpha <= 1), form);
+      assert.ok(now.some((pixel) => pixel.tone === 0) && now.some((pixel) => pixel.tone > 0), `${form}: its deep and what moves in it`);
+      assert.notDeepEqual(vortex(1700, wide, high, form).filter((pixel) => pixel.tone > 0), now.filter((pixel) => pixel.tone > 0), `${form} moves`);
+    }
+  });
+
+  it('lets its theme\'s particles out before it, never behind it nor under the floor', () => {
+    const ring = { wide: PORTAL.across, high: PORTAL.up, floor: -(PORTAL.plinth + PORTAL.up) };
+    for (const kind of ['motes', 'stars', 'leaves', 'bubbles', 'spray', 'sparks', 'fireflies'] as const) {
+      const seen = new Set<string>();
+      for (let time = 0; time < 12000; time += 250) for (const particle of portalParticles(kind, time, ring)) {
+        assert.ok(particle.out >= 0 && particle.alpha >= 0 && particle.alpha <= 1, `${kind} at ${time}`);
+        assert.ok(particle.up >= ring.floor - 2, `${kind} under the floor at ${time}`);
+        seen.add(`${particle.across},${particle.up}`);
+      }
+      assert.ok(seen.size > 10, `${kind} moves`);
+    }
+    // the leaves fall from over the ring down to the floor
+    const leaves = Array.from({ length: 40 }, (_, step) => portalParticles('leaves', step * 140, ring)).flat();
+    assert.ok(leaves.some((leaf) => leaf.up > PORTAL.up) && leaves.some((leaf) => leaf.up <= ring.floor + 1));
+  });
 });
 
 describe('going through the teleporter', () => {
@@ -946,17 +972,15 @@ describe('going through the teleporter', () => {
     assert.equal(scene.playerBeam(), null, 'gone at once, like by the door');
   });
 
-  it('brings them in on the twin, in its light', () => {
+  it('brings them in on the twin, walking out of it at once in its light', () => {
     const floor = new Floor(SERVER_ROOM);
     const scene = new Scene(floor, { atPortal: true });
     assert.deepEqual(scene.player.position, floor.portal);
-    assert.equal(scene.playerHidden(), true);
-    scene.step(BEAM_MS / 2 + 50);
-    assert.equal(scene.playerHidden(), false);
-    scene.step(BEAM_MS);
+    assert.deepEqual(scene.player.path, [floor.portalFront], 'no standing still in the ring');
+    assert.ok(scene.playerBeam());
+    scene.step(BEAM_MS + 50);
     assert.equal(scene.playerBeam(), null);
     assert.equal(scene.playerTeleported, false);
-    // then out of the ring, onto the floor before it
     for (let step = 0; step < 40; step++) scene.step(50);
     assert.deepEqual(scene.player.position, floor.portalFront);
   });

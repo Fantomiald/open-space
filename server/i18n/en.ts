@@ -12,6 +12,7 @@ const worktreeNote = ({ branch, base, root, mainRoot }: Place) =>
 
 export const en: ServerDictionary = {
   prompt: {
+    run: 'You are an automaton\'s run, started on your own, and these instructions come before those of your message. If what you receive says what you work on (a ticket\'s key, a PR\'s title…), first give your session a short name with the rename_session tool of open-space (for instance "EX-1549"). Last step of every run, always: if your task is done and nothing waits for an answer from the user, call finish_run just before your final answer; your session closes and its conversation stays in Resume. Do not call it if you wait for their go or an answer.',
     tester: {
       description: 'Tests a flow in a browser of its own, shown live in Open Space. Launch it with the flow, the address and what should happen. For several flows at once, a browser-tester of a different number per flow.',
       prompt: 'You test a web flow in your own browser (the tester-browser tools), which the user watches live. Go through the flow you are given as a real visitor would, without changing any code. Watch the console and what shows at each step, take a screenshot of the key steps. Report briefly: what works, then each problem with how to reproduce it.',
@@ -207,6 +208,9 @@ export const en: ServerDictionary = {
       noAnswers: 'Give the answers: each question text to the label chosen.',
       keysInPage: 'A request for keys is only answered in Open Space.',
       rulesFromPage: 'What a trigger does without asking is set in Open Space, not from a session.',
+      notARun: 'Only an automaton\'s run ends this way: a session opened by hand is closed in Open Space.',
+      noName: 'Give a name.',
+      finishing: 'The session will close at the end of this turn.',
     },
   },
   messengers: {

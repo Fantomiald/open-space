@@ -13,6 +13,7 @@ import type { ThemeKit } from './kit.ts';
 import { WALL, line, onWall, onWallAt, type Context, type Wall } from '../wall-art.ts';
 import { bannersOf, dot, noise, torchesOf, type WallSpot } from './dungeon-art.ts';
 import { DUNGEON_FURNITURE } from './dungeon-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { dungeonEffects, dungeonLights } from './dungeon-effects.ts';
 import { paintCavern, paintEmbers } from './dungeon-sky.ts';
 
@@ -455,7 +456,8 @@ export const DUNGEON: ThemeKit = {
   paintSky: paintCavern,
   paintSkyMotion: paintEmbers,
   wallBeam: false,
-  furniture: DUNGEON_FURNITURE,
+  furniture: { ...DUNGEON_FURNITURE, portal: THEME_PORTALS.dungeon.design },
+  portal: THEME_PORTALS.dungeon.style,
   lighting: dungeonLighting,
   lights: dungeonLights,
   effects: dungeonEffects,

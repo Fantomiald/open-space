@@ -150,3 +150,21 @@ export const DUNGEON_PALETTE = {
     mushrooms: ['#3ae8dc', '#a46aff', '#ffa64a'],
   },
 };
+
+/** The dungeon's teleporter (src/room/themes/portals.ts): an arch of stone blocks under moss and ivy, a keystone with a rune, two torches, a violet spell turning, autumn leaves falling. */
+export const DUNGEON_PORTAL = {
+  stones: ['#a0959f', '#8c818e', '#ada2ab', '#958a96'],
+  stoneLight: '#cbc0c6',
+  mortar: '#2e2833',
+  keystone: '#b4a9b0',
+  rune: '#b98cff',
+  runeCore: '#f2e6ff',
+  moss: ['#4a6a34', '#62843f', '#3a5a2a'],
+  ivy: ['#3f7a34', '#559a3e', '#2e5e2a'],
+  torch: '#6a4428',
+  sconce: '#26222b',
+  vortex: ['#24143f', '#7f52d0', '#e9dcff'] as const,
+  light: '#9a6ae0',
+  core: '#f0e6ff',
+  leaves: ['#d9822b', '#e8b04a', '#b8452a', '#c9a23a'],
+};

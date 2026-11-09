@@ -91,6 +91,9 @@ interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; 
 /** Session fields that are computed, not stored. */
 export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout'>;
 
+/** How long a finished run stays after its last turn before closing (Session.finishAfterTurn), and one that never said so. */
+const FINISH_DELAY_MS = 5000;
+const RUN_LEFT_MS = 60 * 60_000;
 const LAST_MESSAGE_LENGTH = 400;
 const GRACE_MS = 3000;
 /** The text being written is sent at most this often: one message per chunk would flood the clients. */
@@ -114,6 +117,7 @@ export class Session {
   private stopRequest: StopRequest = null;
   private interrupted = false;
   /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
+  private finishing = false;
   private queuedImages = new Map<string, readonly ImageUpload[]>();
   /** the other files of the queued messages, by queue id, as their upload ids (same) */
   private queuedFiles = new Map<string, readonly string[]>();
@@ -464,7 +468,7 @@ export class Session {
       cwd,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -836,6 +840,9 @@ export class Session {
   }
 
   /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished; `how`: how it ended). */
+  /** A trigger's run that said it is done (finish_run): it closes once its turn ends. */
+  finishAfterTurn() { this.finishing = true; }
+
   private endTurn(tell: boolean, how: TurnEnd = 'done') {
     this.turnOutput = false;
     // a /compact that ended without compacting (nothing to compact, refused): it is not under way any more
@@ -848,6 +855,14 @@ export class Session {
     // a turn the user stopped themselves needs no telling either
     if (tell) this.deps.onAttention?.('finished', this.snapshot());
     this.deps.onTurnEnd?.(this.snapshot(), how);
+    // a trigger's run leaves the room: soon once it said it is done (a moment for the messengers, looking every 2 s,
+    // to tell it finished), else after an hour left alone; a turn since keeps it
+    const closeIn = this.finishing ? FINISH_DELAY_MS : this.info.trigger ? RUN_LEFT_MS : null;
+    if (closeIn !== null) {
+      const turns = this.info.turns;
+      const later = setTimeout(() => { if (this.info.turns === turns && this.context.state === 'wait' && !this.info.queued?.length) void this.close(); }, closeIn);
+      later.unref();
+    }
   }
 
   private pending(requestId: string): PendingRequest {

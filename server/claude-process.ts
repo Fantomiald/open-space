@@ -9,6 +9,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
+import { MCP_SERVER_NAME } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
@@ -136,6 +137,8 @@ export interface LaunchOptions {
   openSpaceMcp?: string;
   /** the role of Claude Code it runs as (.claude/agents/<role>.md), --agent */
   agent?: string;
+  /** a trigger's run: told to name itself and to say when it is done (st.prompt.run) */
+  run?: boolean;
   /** permission rules it uses without asking (a trigger's), --allowedTools */
   allowedTools?: readonly string[];
   /** files it may not read nor change (Open Space's keys), --disallowedTools */
@@ -167,7 +170,10 @@ export interface LaunchOptions {
  * - `--chrome` connects the claude-in-chrome server to the Claude in Chrome extension in `-p` too (checked with 2.1.318:
  *   two sessions at once, each in a tab group of its own, and no site permission asked by the extension).
  */
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden'>): string[] {
+/** What a trigger's run does to its own session without asking: name itself, say it is done (server/mcp.ts). */
+const RUN_TOOLS = ['rename_session', 'finish_run'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
+
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -186,13 +192,15 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   const mcpConfigs = [options.mcpConfig, options.openSpaceMcp].filter((config): config is string => !!config);
   if (mcpConfigs.length) args.push('--mcp-config', ...mcpConfigs);
   if (options.agent) args.push('--agent', options.agent);
-  if (options.allowedTools?.length) args.push('--allowedTools', options.allowedTools.join(','));
+  // a run names itself and says it is done without asking (st.prompt.run)
+  const allowed = [...(options.allowedTools ?? []), ...(options.run ? RUN_TOOLS : [])];
+  if (allowed.length) args.push('--allowedTools', allowed.join(','));
   if (options.hidden?.length) args.push('--disallowedTools', hiddenRules(options.hidden).join(','));
   if (options.agents) args.push('--agents', options.agents);
   if (options.chrome) args.push('--chrome');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run));
   return args;
 }
 
@@ -213,9 +221,9 @@ export function hiddenRules(files: readonly string[]): string[] {
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false): string {
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false, run = false): string {
   const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared, chrome);
-  return worktree ? `${identity}\n\n${st.prompt.worktree(worktree)}` : identity;
+  return [identity, ...(worktree ? [st.prompt.worktree(worktree)] : []), ...(run ? [st.prompt.run] : [])].join('\n\n');
 }
 
 /**

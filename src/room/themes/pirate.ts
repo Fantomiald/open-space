@@ -13,6 +13,7 @@ import type { ThemeKit } from './kit.ts';
 import { WALL, line, onWallAt, type Context, type Wall } from '../wall-art.ts';
 import { FLAG, FLAG_COLOURS, FLAG_ROWS, LANTERNS, MAP, dot, wallDot, wallQuad, wallSprite } from './pirate-art.ts';
 import { PIRATE_FURNITURE } from './pirate-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { pirateEffects, pirateLights, rememberHull } from './pirate-effects.ts';
 import { paintSeaAndSky, paintSeaMotion } from './pirate-sky.ts';
 
@@ -502,7 +503,8 @@ export const PIRATE: ThemeKit = {
   paintSkyMotion: paintSeaMotion,
   // the gulls flap their wings
   skyFrameMs: 250,
-  furniture: PIRATE_FURNITURE,
+  furniture: { ...PIRATE_FURNITURE, portal: THEME_PORTALS.pirate.design },
+  portal: THEME_PORTALS.pirate.style,
   lights: pirateLights,
   // its own lanterns and fires instead of the office's lamps (pirate-effects.ts)
   officeLamps: false,

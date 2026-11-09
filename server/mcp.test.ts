@@ -50,6 +50,8 @@ function fakeApi() {
     reply: (id, requestId, answers) => { done.push(`reply ${id} ${requestId} ${JSON.stringify(answers)}`); },
     interrupt: (id) => { done.push(`stop ${id}`); },
     remote: (id, enabled) => { done.push(`remote ${id} ${enabled}`); },
+    rename: (id, name) => { done.push(`rename ${id} ${name}`); },
+    finish: (id) => { done.push(`finish ${id}`); },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
   };
   return { api, triggers, sessions, crew, done, preferences: () => preferences };
@@ -73,7 +75,7 @@ describe('the open-space MCP server', () => {
   it('lets the external program alone follow the sessions and answer them, never a request for keys', async () => {
     const { api, done } = fakeApi();
     const external = (await call(api, 'tools/list', {}, EXTERNAL)).result!.tools as { name: string }[];
-    assert.equal(external.length, TOOLS.length - 1, 'all but send_file, for a chat');
+    assert.equal(external.length, TOOLS.length - 3, 'all but send_file, for a chat, and what a session does to itself');
     assert.ok(external.every((each) => !('for' in each)));
     assert.ok(!toolsFor(S1).some((each) => ['list_sessions', 'send_message', 'answer_permission', 'stop_session'].includes(each.name)));
     assert.equal((await tool(api, 'answer_permission', { sessionId: 's5', requestId: 'r1', decision: 'allow' })).isError, true, 'a session cannot approve');
@@ -105,6 +107,18 @@ describe('the open-space MCP server', () => {
     await tool(api, 'send_file', { path: '/work/app/shot.png' }, BOT);
     assert.equal((await tool(api, 'send_file', { path: '/work/app/shot.png' }, S1)).isError, true, 'a session has no chat');
     assert.deepEqual(done, ['remote s5 true', 'file bot00001 /work/app/shot.png']);
+  });
+
+  it('lets a session rename itself, and a trigger\'s run say it is done', async () => {
+    const { api, done } = fakeApi();
+    const RUN: Caller = { session: 's5' };
+    assert.ok(toolsFor(S1).some((each) => each.name === 'finish_run'));
+    assert.ok(!toolsFor(EXTERNAL).some((each) => ['rename_session', 'finish_run'].includes(each.name)));
+    await tool(api, 'rename_session', { name: ' EX-1549 ' }, RUN);
+    assert.equal((await tool(api, 'rename_session', { name: ' ' }, RUN)).isError, true);
+    assert.equal((await tool(api, 'finish_run', {}, S1)).isError, true, 'not a run');
+    assert.equal((await tool(api, 'finish_run', {}, RUN)).isError, false);
+    assert.deepEqual(done, ['rename s5 EX-1549', 'finish s5']);
   });
 
   it('speaks MCP: initialize, tools/list, notifications without an answer, unknown methods', async () => {

@@ -97,6 +97,9 @@ export interface OpenSpaceApi {
   reply: (sessionId: string, requestId: string, answers: Record<string, string>) => void;
   interrupt: (sessionId: string) => void;
   remote: (sessionId: string, enabled: boolean) => void;
+  rename: (sessionId: string, name: string) => void;
+  /** closes the session once its turn ends */
+  finish: (sessionId: string) => void;
   /** sends a file of an allowed folder to a bot's chat */
   sendFile: (botId: string, file: string, caption: string) => Promise<void>;
 }
@@ -154,6 +157,9 @@ export const TOOLS: Tool[] = [
   },
   { name: 'stop_session', for: FOLLOWERS, description: 'Interrupts what a session is doing (like Stop in Open Space); it stays open.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] }, annotations: write },
   { name: 'set_remote', for: FOLLOWERS, description: 'Turns Remote Control on or off for a session, to follow and answer it from the Claude app of the phone.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['sessionId', 'enabled'] }, annotations: write },
+  // what a session does to itself only, nothing of the user's: read-only to Claude Code, so that a run in plan mode may too
+  { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
+  { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'send_file', for: ['messenger'], description: 'Sends a file to the user\'s chat (a screenshot, a video, a PDF): its absolute path, inside the folders Open Space allows or a file a session sent.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, caption: { type: 'string' } }, required: ['path'] }, annotations: write },
   { name: 'get_settings', description: `Reads Open Space settings that are safe to change: ${MCP_SETTINGS.join(', ')}.`, inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'update_settings', description: `Changes some of these Open Space settings: ${MCP_SETTINGS.join(', ')}. Others are refused.`, inputSchema: { type: 'object', properties: { settings: { type: 'object' } }, required: ['settings'] }, annotations: write },
@@ -216,6 +222,18 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
     }
     case 'stop_session': api.interrupt(session().id); return text('stopped');
     case 'set_remote': api.remote(session().id, args.enabled === true); return text(args.enabled === true ? 'on' : 'off');
+    case 'rename_session': case 'finish_run': {
+      if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
+      if (name === 'rename_session') {
+        const named = asString(args.name).trim();
+        if (!named) return failure(st.triggers.mcp.noName);
+        api.rename(caller.session, named);
+        return text('renamed');
+      }
+      if (!api.sessions().find((each) => each.id === caller.session)?.trigger) return failure(st.triggers.mcp.notARun);
+      api.finish(caller.session);
+      return text(st.triggers.mcp.finishing);
+    }
     case 'send_file': {
       if (!('messenger' in caller)) return failure(st.triggers.mcp.unknownTool(name));
       await api.sendFile(caller.messenger, asString(args.path), asString(args.caption).slice(0, 1000));

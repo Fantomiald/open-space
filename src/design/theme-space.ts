@@ -147,3 +147,24 @@ export const SPACE_FURNITURE = {
   zoneSeam: '#343b4c',
   zoneEdges: { blue: '#3aa7d6', green: '#3fbf8a', purple: '#8a6cd8', amber: '#d89a3a' },
 };
+
+/** The shuttle's teleporter (src/room/themes/portals.ts): an airlock ring of white hull plates with clamps, a chasing blue light and beacons, on a plinth striped for danger; stars rushing out at warp speed, and twinkling round it. */
+export const SPACE_PORTAL = {
+  hull: '#d6dce6',
+  hullLight: '#f2f5f9',
+  hullDark: '#9aa3b4',
+  seam: '#7d889e',
+  clamp: '#2f5fc8',
+  clampLight: '#6f9cff',
+  hazard: '#f2c14e',
+  hazardDark: '#1a1b22',
+  led: '#5ad1ff',
+  ledCore: '#e9f8ff',
+  ledOff: '#2b5f7f',
+  beaconRed: '#ff6a6a',
+  beaconGreen: '#62f08e',
+  vortex: ['#070a1e', '#9fc3ff', '#ffffff'] as const,
+  light: '#7fd3ff',
+  core: '#e9f8ff',
+  stars: ['#e8eefc', '#ffd9a0', '#9fc3ff'],
+};

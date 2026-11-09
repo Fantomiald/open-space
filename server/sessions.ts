@@ -996,6 +996,7 @@ export class SessionManager {
   unqueue(id: string, queueId: string) { this.session(id).unqueue(queueId); }
   sendNow(id: string) { this.session(id).sendNow(); }
   close(id: string) { return this.session(id).close(); }
+  finishAfterTurn(id: string) { this.session(id).finishAfterTurn(); }
   tune(id: string, change: TuneChange) { return this.session(id).tune(change); }
 
   rename(id: string, name: string) {

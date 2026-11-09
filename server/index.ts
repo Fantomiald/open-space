@@ -223,7 +223,9 @@ automata.start();
 async function startSession(options: SessionOptions, started: Parameters<typeof sessions.create>[1] = {}) {
   const taken = new Set(sessions.list().map((session) => session.name));
   const asked = options.name?.trim();
-  const name = asked && !taken.has(asked) ? asked : crew.freeNameFor(options.text ?? '', taken);
+  // a name asked for and taken (a second run of the same trigger) gets a number: "Chiffres 2"
+  const free = (base: string) => { for (let count = 1; ; count++) { const name = count === 1 ? base : `${base} ${count}`; if (!taken.has(name)) return name; } };
+  const name = asked ? free(asked) : crew.freeNameFor(options.text ?? '', taken);
   const session = await sessions.create({ ...options, name: name || undefined }, started);
   return { session, takenName: asked && taken.has(asked) ? asked : null };
 }
@@ -362,6 +364,8 @@ const mcpApi: OpenSpaceApi = {
   reply: (sessionId, requestId, answers) => sessions.reply(sessionId, requestId, answers),
   interrupt: (sessionId) => sessions.interrupt(sessionId),
   remote: (sessionId, enabled) => { void sessions.remoteControl(sessionId, enabled); },
+  rename: (sessionId, name) => sessions.rename(sessionId, name),
+  finish: (sessionId) => sessions.finishAfterTurn(sessionId),
   sendFile: async (botId, file, caption) => {
     const allowed = [...config.roots, attachmentsFolder(config.dataDir), uploadsFolder(config.dataDir)];
     const found = path.isAbsolute(file) ? allowed.map((root) => resolveInside(root, file)).find(Boolean) : null;

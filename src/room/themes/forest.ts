@@ -9,6 +9,7 @@ import type { ThemeKit } from './kit.ts';
 import { forestEffects, forestLights } from './forest-effects.ts';
 import { paintFloatingEarth, paintForestFloor } from './forest-floor.ts';
 import { FOREST_FURNITURE } from './forest-furniture.ts';
+import { THEME_PORTALS } from './portals.ts';
 import { paintCuckooClock, paintRoundDoor, paintRoundWindow, paintStainedGlass } from './forest-openings.ts';
 import { paintForestSky, paintForestSkyMotion } from './forest-sky.ts';
 import { paintForestWalls } from './forest-walls.ts';
@@ -35,7 +36,8 @@ export const FOREST: ThemeKit = {
   skyFrameMs: 150,
   // the windows are round: a straight shaft from their wall would veil them
   wallBeam: false,
-  furniture: FOREST_FURNITURE,
+  furniture: { ...FOREST_FURNITURE, portal: THEME_PORTALS.forest.design },
+  portal: THEME_PORTALS.forest.style,
   lighting: forestLighting,
   lights: (layout) => forestLights(layout),
   effects: forestEffects,

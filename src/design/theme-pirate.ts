@@ -172,3 +172,22 @@ export const PIRATE_FURNITURE = {
   /** the glow of a lantern, translucent */
   halo: '#ffb45a',
 };
+
+/** The galleon's teleporter (src/room/themes/portals.ts): a ship's wheel, its spokes' handles round it and brass studs on its rim, on a deck with a coil of rope; a maelstrom turning, sea spray thrown out. */
+export const PIRATE_PORTAL = {
+  rim: '#7a4a26',
+  rimLight: '#a66c3c',
+  rimDark: '#4a2c16',
+  handle: '#8e5c30',
+  handleLight: '#b88048',
+  brass: '#d8a838',
+  brassLight: '#fff0b0',
+  deck: '#6a4428',
+  deckTop: '#8a6442',
+  rope: '#c8a46a',
+  ropeShade: '#8e7044',
+  vortex: ['#0b2836', '#2e8a92', '#d6f4f2'] as const,
+  light: '#5ac8c8',
+  core: '#e0fbfa',
+  spray: ['#e0fbfa', '#8ad8d8', '#ffffff'],
+};
