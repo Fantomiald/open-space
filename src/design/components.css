@@ -2804,5 +2804,13 @@ a.cp-button { text-decoration: none; }
 .cp-trigger__schedule { display: flex; flex-direction: column; gap: var(--space-2); }
 .cp-trigger__schedule-line { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cp-trigger__schedule-line > select { flex: 1 1 12rem; }
+.cp-trigger__schedule-line > :is(select, input), .cp-trigger__schedule > input { height: var(--control-height); padding-block: 0; }
+.cp-trigger__schedule > .cp-trigger__presets { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+/* the days picked stand out from the others (an outline alone reads like the opposite) */
+.cp-trigger__schedule > .cp-trigger__presets > .cp-button { color: var(--color-text-muted); }
+.cp-trigger__schedule > .cp-trigger__presets > .cp-button[aria-pressed='true'] { background: var(--color-accent-soft); color: var(--color-accent); }
+.cp-folder[data-field] { position: relative; width: 100%; }
+.cp-folder[data-field] > input { width: 100%; height: var(--control-height); padding-block: 0; }
+.cp-folder[data-field] > .cp-folder__panel { top: calc(100% + var(--space-2)); bottom: auto; width: 100%; max-width: none; }
 .cp-trigger__schedule-line > input[type='time'] { flex: 0 0 auto; width: 7rem; }
 .cp-trigger__schedule > input.cp-trigger__cron { font-family: var(--font-mono); font-size: var(--text-sm); }

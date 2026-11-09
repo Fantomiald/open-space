@@ -13,9 +13,10 @@ const valid = (rows: readonly SecretEntry[]) => filled(rows).length > 0 && fille
 
 /**
  * Name and value rows, as many as needed. A block of `NAME=value` lines pasted in any field fills the rows at once.
- * The values are password fields: nothing of them shows, nor goes anywhere but to Open Space's server.
+ * The values are password fields: nothing of them shows, nor goes anywhere but to Open Space's server. `focused`: the
+ * first empty field takes the focus when its dialog opens (not in a page where the rows are one setting among others).
  */
-function SecretRows({ rows, setRows, fixed }: { rows: SecretEntry[]; setRows: (rows: SecretEntry[]) => void; fixed?: readonly string[] }) {
+function SecretRows({ rows, setRows, fixed, focused = true }: { rows: SecretEntry[]; setRows: (rows: SecretEntry[]) => void; fixed?: readonly string[]; focused?: boolean }) {
   const words = t.composer.secrets;
   const change = (index: number, row: Partial<SecretEntry>) => setRows(rows.map((each, at) => (at === index ? { ...each, ...row } : each)));
   const paste = (index: number) => (event: ClipboardEvent<HTMLInputElement>) => {
@@ -35,11 +36,11 @@ function SecretRows({ rows, setRows, fixed }: { rows: SecretEntry[]; setRows: (r
           <div className="cp-secrets__row" key={index}>
             <input
               className="cp-secrets__name" value={row.name} readOnly={named} aria-invalid={wrongName} aria-label={words.name} placeholder={words.namePlaceholder}
-              spellCheck={false} autoComplete="off" autoCapitalize="off" data-autofocus={index === 0 && !row.name ? true : undefined} onChange={(e) => change(index, { name: e.target.value })} onPaste={paste(index)}
+              spellCheck={false} autoComplete="off" autoCapitalize="off" data-autofocus={focused && index === 0 && !row.name ? true : undefined} onChange={(e) => change(index, { name: e.target.value })} onPaste={paste(index)}
             />
             <input
               className="cp-secrets__value" type="password" value={row.value} aria-label={words.valueOf(row.name || words.name)} placeholder={words.valuePlaceholder}
-              autoComplete="new-password" spellCheck={false} data-autofocus={index === 0 && row.name ? true : undefined} onChange={(e) => change(index, { value: e.target.value })} onPaste={paste(index)}
+              autoComplete="new-password" spellCheck={false} data-autofocus={focused && index === 0 && row.name ? true : undefined} onChange={(e) => change(index, { value: e.target.value })} onPaste={paste(index)}
             />
             {!named && rows.length > 1 && (
               <button type="button" className="cp-icon-button" data-size="small" aria-label={words.removeRow} title={words.removeRow} onClick={() => setRows(rows.filter((_, at) => at !== index))}><RemoveIcon /></button>
@@ -134,7 +135,7 @@ export function TriggerKeys({ triggerId }: { triggerId: string }) {
           ))}
         </ul>
       )}
-      <SecretRows rows={rows} setRows={setRows} />
+      <SecretRows rows={rows} setRows={setRows} focused={false} />
       <button type="button" className="cp-button cp-secrets__save" data-size="small" disabled={!valid(rows)} onClick={save}>{t.automata.triggers.fields.keysSave}</button>
     </div>
   );

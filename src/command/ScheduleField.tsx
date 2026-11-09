@@ -21,7 +21,7 @@ export function ScheduleField({ cron, onCron }: { cron: string; onCron: (cron: s
   // kept once picked, even when what is typed reads like one of the list
   const [custom, setCustom] = useState(schedule.kind === 'custom');
   const frequency = custom ? 'custom' : frequencyOf(schedule);
-  const at = schedule.kind === 'days' ? schedule : { hour: 8, minute: 0 };
+  const at = schedule.kind === 'days' ? { hour: schedule.hour, minute: schedule.minute } : { hour: 8, minute: 0 };
   const days = schedule.kind === 'days' ? schedule.days : WEEKDAYS;
 
   const pick = (next: Frequency) => {

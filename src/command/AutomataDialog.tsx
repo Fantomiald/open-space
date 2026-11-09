@@ -14,6 +14,7 @@ import { claudeMcpCommand, externalMcpConfig, folderChoices, nextStart, runsOf }
 import { Copyable } from './Copyable.tsx';
 import { ConnectionsPage } from './ConnectionsPage.tsx';
 import { Feed } from './Feed.tsx';
+import { FolderPicker } from './FolderPicker.tsx';
 import {
   AutomatonIcon, BrandIcon, ClockIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
   PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TuneIcon, WebhookIcon,
@@ -122,7 +123,10 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
   const words = t.automata.triggers;
   const fields = words.fields;
   const change = (next: Partial<TriggerInput>) => { setDraft((before) => ({ ...before, ...next })); setProblem(null); };
-  const folders = useMemo(() => folderChoices(Object.values(sessions), roots), [sessions, roots]);
+  // the projects found under the roots, and the folders sessions already work in
+  const directories = useSessions((s) => s.directories);
+  useEffect(() => { sendMessage({ t: 'directories' }); }, [sendMessage]);
+  const folders = useMemo(() => [...new Set([...folderChoices(Object.values(sessions), roots), ...directories])], [sessions, roots, directories]);
   // the roles of the folder, asked again when it changes (a little after typing stops)
   useEffect(() => {
     if (!draft.cwd.trim()) return;
@@ -204,8 +208,7 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
               <input value={draft.name} maxLength={60} placeholder={fields.namePlaceholder} aria-label={fields.name} onChange={(e) => change({ name: e.target.value })} />
             </Row>
             <Row id="trigger-folder" wide icon={<FolderIcon />} title={fields.folder} hint={fields.folderHint}>
-              <input value={draft.cwd} list="cp-trigger-folders" spellCheck={false} aria-label={fields.folder} onChange={(e) => change({ cwd: e.target.value })} />
-              <datalist id="cp-trigger-folders">{folders.map((folder) => <option key={folder} value={folder}>{homeRelative(folder)}</option>)}</datalist>
+              <FolderPicker field directories={folders} value={draft.cwd} placeholder={homeRelative(roots[0] ?? '')} onChange={(cwd) => change({ cwd })} />
             </Row>
             <Row id="trigger-prompt" wide icon={<MessageIcon />} title={fields.prompt} hint={fields.promptHint}>
               <textarea rows={3} value={draft.prompt} placeholder={fields.promptPlaceholder} aria-label={fields.prompt} onChange={(e) => change({ prompt: e.target.value })} />
