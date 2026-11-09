@@ -4,6 +4,7 @@ import type { Festival } from '../../shared/festivals.ts';
 import { blockedTiles, isMetricsPiece, layoutOn, withAutomataAccess, withMetrics, type Layout, type MetricsKind, type PlayerSpot } from '../../shared/room-layout.ts';
 import { DOOR_SIZE, ROOM, boxOutline, facingVector, insideConvex, onLeftWall, tileCenter, type Box, type Point } from './geometry.ts';
 import { route } from './paths.ts';
+import { PORTAL, portalFace, portalPoint } from './pixel-furniture.ts';
 
 /** Clicks closer than this to the walls are ignored. */
 const WALL_MARGIN = 0.2;
@@ -81,8 +82,9 @@ export class Floor {
     const box = metrics && METRICS_BOXES[metrics.kind as MetricsKind];
     this.metrics = metrics && box ? { ...box, fromX: metrics.x + box.fromX, toX: metrics.x + box.toX, fromY: metrics.y + box.fromY, toY: metrics.y + box.toY } : null;
     const portal = this.layout.furniture.find((piece) => piece.kind === 'portal');
-    this.portal = portal ? { x: portal.x + portal.width / 2, y: portal.y + IN_RING } : null;
-    this.portalFront = portal ? { x: portal.x + portal.width / 2, y: portal.y - BEFORE_RING } : null;
+    this.portal = portal ? portalPoint(portal, 0, IN_RING - PORTAL.plane) : null;
+    // the office's is walked into from the room behind it; the one against a wall, from the room before its face
+    this.portalFront = !portal ? null : portal.turned ? portalPoint(portal, 0, portalFace(portal) + BEFORE_RING) : portalPoint(portal, 0, -BEFORE_RING - PORTAL.plane);
     this.portalBox = portal ? { fromX: portal.x, toX: portal.x + portal.width, fromY: portal.y, toY: portal.y + portal.depth, low: 0, high: PORTAL_HEIGHT } : null;
     this.throughPortal = !!layout.doorless && this.portal !== null;
     this.door = this.throughPortal ? { ...this.portal! } : { x: 0.4, y: layout.door.y + 0.6 };

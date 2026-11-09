@@ -67,8 +67,8 @@ export class Scene {
   readonly visits: Visits | null;
   /** the room's own clock, in ms */
   time = 0;
-  /** the column of light taking the user away through the teleporter, or bringing them in, and when it started */
-  beam: { kind: 'out' | 'in'; at: number } | null = null;
+  /** the column of light bringing the user in through the teleporter, and when it started (they leave at once, like by the door) */
+  beam: { at: number } | null = null;
   private goingToPortal = false;
   /** when the user, brought in by the teleporter, steps out of its ring (room time), or null */
   private stepOutAt: number | null = null;
@@ -91,7 +91,7 @@ export class Scene {
         : { position: { ...start.at }, heading: facingVector(start.seat.facing), path: [], blinkOffset: blinkOffsetOf(PLAYER_ID) };
     this.playerSpot = atDoor || beamedIn ? null : start;
     // they step out of the ring once the light has brought them in
-    if (beamedIn) { this.beam = { kind: 'in', at: 0 }; this.stepOutAt = BEAM_MS; }
+    if (beamedIn) { this.beam = { at: 0 }; this.stepOutAt = BEAM_MS; }
 
     this.visits = withVisitors ? new Visits(floor) : null;
   }
@@ -150,10 +150,7 @@ export class Scene {
 
   step(ms: number) {
     this.time += ms;
-    if (this.beam && this.time - this.beam.at >= BEAM_MS) {
-      if (this.beam.kind === 'out') this.playerTeleported = true;
-      this.beam = null;
-    }
+    if (this.beam && this.time - this.beam.at >= BEAM_MS) this.beam = null;
     if (this.stepOutAt !== null && this.time >= this.stepOutAt) {
       this.stepOutAt = null;
       if (this.floor.portalFront && !this.player.path.length) this.player.path = [{ ...this.floor.portalFront }];
@@ -169,7 +166,7 @@ export class Scene {
     if (advance(this.player, ms)) {
       if (this.headingFor) this.sit(this.headingFor);
       else if (this.goingOut) { this.goingOut = false; this.playerWentOut = true; }
-      else if (this.goingToPortal) { this.goingToPortal = false; this.beam = { kind: 'out', at: this.time }; }
+      else if (this.goingToPortal) { this.goingToPortal = false; this.playerTeleported = true; }
     }
     if (this.pet) {
       const left = stepPet(this.pet, ms, this.floor, this.petExits);
@@ -267,7 +264,7 @@ export class Scene {
   }
 
   walkPlayerTo(tile: Point) {
-    if (this.beam?.kind === 'out') return;
+    if (this.playerTeleported) return;
     this.playerSpot = null;
     this.headingFor = null;
     this.goingOut = false;
@@ -277,7 +274,7 @@ export class Scene {
 
   /** Sends the player to sit at a spot (the boss's chair, the sofa). */
   sitPlayerAt(spot: PlayerSpot) {
-    if (this.beam?.kind === 'out') return;
+    if (this.playerTeleported) return;
     this.playerSpot = null;
     this.headingFor = spot;
     this.goingOut = false;
@@ -296,7 +293,7 @@ export class Scene {
 
   /** Sends the user out through the door; `playerWentOut` tells when they reached it. */
   walkPlayerOut() {
-    if (this.beam?.kind === 'out') return;
+    if (this.playerTeleported) return;
     this.playerSpot = null;
     this.headingFor = null;
     this.goingToPortal = false;
@@ -305,11 +302,10 @@ export class Scene {
   }
 
   /**
-   * Sends the user into the teleporter's ring: once in, a column of light takes them away and `playerTeleported` tells
-   * the view to move to the other room.
+   * Sends the user into the teleporter's ring: once in, `playerTeleported` tells the view to move to the other room.
    */
   walkPlayerToPortal() {
-    if (!this.floor.portal || this.beam?.kind === 'out') return;
+    if (!this.floor.portal || this.playerTeleported) return;
     this.playerSpot = null;
     this.headingFor = null;
     this.goingOut = false;
@@ -318,14 +314,14 @@ export class Scene {
   }
 
   /** Where the user's column of light is (0 to 1), or null. */
-  playerBeam(): { kind: 'out' | 'in'; progress: number } | null {
-    return this.beam ? { kind: this.beam.kind, progress: beamProgress(this.beam.at, this.time) } : null;
+  playerBeam(): { progress: number } | null {
+    return this.beam ? { progress: beamProgress(this.beam.at, this.time) } : null;
   }
 
-  /** True while the column of light hides the user (going away, or not yet in). */
+  /** True while the column of light hides the user, not yet in. */
   playerHidden(): boolean {
     const beam = this.playerBeam();
-    return beam !== null && hiddenInBeam(beam.kind, beam.progress);
+    return beam !== null && hiddenInBeam('in', beam.progress);
   }
 
   /** The pet comes into this room (by a passage, or already there), meaning to stay `stayLeft` ms. */

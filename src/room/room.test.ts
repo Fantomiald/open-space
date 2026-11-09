@@ -31,7 +31,7 @@ import { BOARD, DOODLES, LINE_HEIGHT, birthdayLines, boardContent, doodlesWidth,
 import { stackLabels } from './labels.ts';
 import { BEAM_MS, beamGlow, beamProgress, ellipseDistance, hiddenInBeam, portalMotes, vortex } from './portal.ts';
 import { advanceTrip, exitsOf, pickExit, startTrip, through } from './pet-trip.ts';
-import { PORTAL, pieceHeight } from './pixel-furniture.ts';
+import { PORTAL, pieceHeight, portalPoint } from './pixel-furniture.ts';
 import { WALL_EFFECT } from './themes/kit.ts';
 import { ROOM_THEMES } from '../../shared/room-themes.ts';
 
@@ -873,7 +873,7 @@ describe('the teleporter, in every theme and festival', () => {
     const points: Point[] = [];
     for (let across = -PORTAL.across; across <= PORTAL.across; across += 2) for (let high = -PORTAL.up; high <= PORTAL.up; high += 2) {
       if (ellipseDistance(across, high, PORTAL.across, PORTAL.up) > 1) continue;
-      const floor = toScreen({ x: portal.x + portal.width / 2 + across / 8, y: portal.y + PORTAL.plane });
+      const floor = toScreen(portalPoint(portal, across / 8, 0));
       points.push({ x: floor.x, y: floor.y - (PORTAL.plinth + PORTAL.up + high) * ART_SCALE });
     }
     return points;
@@ -943,6 +943,7 @@ describe('going through the teleporter', () => {
     for (let step = 0; step < 400 && !scene.playerTeleported; step++) scene.step(50);
     assert.equal(scene.playerTeleported, true);
     assert.deepEqual(scene.player.position, new Floor(OFFICE, null, false, true).portal, 'in the ring');
+    assert.equal(scene.playerBeam(), null, 'gone at once, like by the door');
   });
 
   it('brings them in on the twin, in its light', () => {

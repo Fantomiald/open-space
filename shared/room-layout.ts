@@ -39,6 +39,8 @@ export interface FurniturePiece {
   wall?: true;
   /** drawn just after whoever stands on its tiles (a capsule's glass, in front of the automaton in it) */
   front?: true;
+  /** a teleporter against the left wall: its ring along y, its face to the room (+x), instead of across x facing +y */
+  turned?: true;
 }
 
 /**
@@ -286,8 +288,8 @@ const POD_SEATS: readonly Seat[] = PODS.map(([x, y]) => ({ x, y, facing: podFaci
 /** A rack of servers against the back wall (facing +y) or the left wall (facing +x). */
 const rack = (x: number, y: number, alongLeft = false) => (alongLeft ? piece('serverRack', x, y, 0.9, 1) : piece('serverRack', x, y, 1, 0.9));
 
-/** The server room's teleporter, back to the office: where a door would be, by the left wall, clear of the capsules. */
-export const SERVER_PORTAL: FurniturePiece = piece('portal', 0.3, 9, 3, 0.5);
+/** The server room's teleporter, back to the office: against the left wall where a door would be, facing the room. */
+export const SERVER_PORTAL: FurniturePiece = piece('portal', 0.3, 8, 0.5, 3, true, { turned: true });
 
 export const SERVER_ROOM: Layout = {
   furniture: [

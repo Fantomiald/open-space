@@ -19,7 +19,7 @@ import type { ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
 import { ART_SCALE } from './pixel-art.ts';
-import { PORTAL, bobOf, furnitureDepth, portalMiddle, type FurnitureSprites } from './pixel-furniture.ts';
+import { PORTAL, PORTAL_MIDDLE_UP, bobOf, furnitureDepth, portalFace, portalPoint, type FurnitureSprites } from './pixel-furniture.ts';
 import { ORB_FLOAT, ORB_SHAPE } from './server-furniture.ts';
 import { cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, waitingSign } from './server-room.ts';
 import { beamGlow, hiddenInBeam, portalMotes, vortex } from './portal.ts';
@@ -703,11 +703,10 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
   const portal = layout.furniture.find((piece) => piece.kind === 'portal');
   if (!portal) return [];
   const time = options.reducedMotion ? 0 : options.time;
-  const middle = portalMiddle(portal.width);
-  // a point of the ring's plane (or `out` tiles before it, towards the viewer), `across` and `high` art pixels from its middle
+  // a point of the ring's plane (or `out` tiles before its face), `across` and `high` art pixels from its middle
   const onRing = (across: number, high: number, out = 0): Point => {
-    const floor = toScreen({ x: portal.x + middle.across + across / 8, y: portal.y + PORTAL.plane + out });
-    return { x: floor.x, y: floor.y - (middle.up + high) * ART_SCALE };
+    const floor = toScreen(portalPoint(portal, across / 8, out));
+    return { x: floor.x, y: floor.y - (PORTAL_MIDDLE_UP + high) * ART_SCALE };
   };
   const cell = (on: Context, x: number, y: number, colour: string, alpha: number) => {
     on.globalAlpha = alpha;
@@ -722,9 +721,10 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
     }
   };
   const tones = [SF.orbOuter, SF.orbInner, SF.orbCore] as const;
-  // the floor before its face (towards the viewer)
-  const front = { x: portal.x + middle.across, y: portal.y + portal.depth + 0.3 };
-  const inRing = { x: portal.x + middle.across, y: portal.y + PORTAL.plane };
+  // the floor before its face
+  const face = portalFace(portal);
+  const front = portalPoint(portal, 0, face + 0.3);
+  const inRing = portalPoint(portal, 0, 0);
   const effects: ThemeEffect[] = [
     {
       // the floor before the ring, lit by it: drawn under whoever stands there
@@ -733,7 +733,7 @@ function portalEffects(layout: Layout, scene: Scene, options: FrameOptions): The
         for (let out = 0; out < 10; out++) for (let across = -12; across <= 12; across += 2) {
           const fade = 1 - out / 10 - Math.abs(across) / 16;
           if (fade <= 0) continue;
-          const point = toScreen({ x: portal.x + middle.across + across / 8, y: portal.y + portal.depth + out / 8 });
+          const point = toScreen(portalPoint(portal, across / 8, face + out / 8));
           cell(on, point.x, point.y, SF.orbInner, 0.28 * fade);
         }
         on.globalAlpha = 1;

@@ -116,27 +116,39 @@ function drawChart(p: Painter) {
  * its light lies on the floor before it (draw.ts, portal.ts). `across` and `up`: the ring's radii, in art pixels.
  */
 export const PORTAL = { plane: 0.22, across: 11, up: 13, plinth: 4, band: 3 } as const;
-/** The middle of the ring: across (tiles from the piece's corner) and up (art pixels above the floor). */
-export const portalMiddle = (width: number) => ({ across: width / 2, up: PORTAL.plinth + PORTAL.up });
+/** How high the middle of the ring is, in art pixels above the floor. */
+export const PORTAL_MIDDLE_UP = PORTAL.plinth + PORTAL.up;
+/** A point of a teleporter on the floor: `across` tiles from the middle of its ring along it, `out` tiles from its plane towards its face. */
+export const portalPoint = (piece: FurniturePiece, across: number, out: number): Point => piece.turned
+  ? { x: piece.x + PORTAL.plane + out, y: piece.y + piece.depth / 2 - across }
+  : { x: piece.x + piece.width / 2 + across, y: piece.y + PORTAL.plane + out };
+/** How far a teleporter's face is from its ring's plane, in tiles. */
+export const portalFace = (piece: FurniturePiece) => (piece.turned ? piece.width : piece.depth) - PORTAL.plane;
 function paintPortal(p: Painter, piece: FurniturePiece) {
   // the plinth, and its step up from the room behind
-  p.box(0.15, 0, piece.width - 0.3, piece.depth, 0, 2, C.portalStone, C.portalStoneLight);
-  p.box(0.4, 0.05, piece.width - 0.8, piece.depth - 0.1, 2, 2, C.portalStone, C.portalStoneLight);
-  const { across, up } = portalMiddle(piece.width);
-  const at = (shrink: number, angle: number, plane: number, colour: string) =>
-    p.pixel(across + (Math.cos(angle) * (PORTAL.across - shrink)) / 8, plane, up + Math.sin(angle) * (PORTAL.up - shrink), colour);
+  if (piece.turned) {
+    p.box(0, 0.15, piece.width, piece.depth - 0.3, 0, 2, C.portalStone, C.portalStoneLight);
+    p.box(0.05, 0.4, piece.width - 0.1, piece.depth - 0.8, 2, 2, C.portalStone, C.portalStoneLight);
+  } else {
+    p.box(0.15, 0, piece.width - 0.3, piece.depth, 0, 2, C.portalStone, C.portalStoneLight);
+    p.box(0.4, 0.05, piece.width - 0.8, piece.depth - 0.1, 2, 2, C.portalStone, C.portalStoneLight);
+  }
+  const at = (shrink: number, angle: number, out: number, colour: string) => {
+    const point = portalPoint(piece, (Math.cos(angle) * (PORTAL.across - shrink)) / 8, out);
+    p.pixel(point.x - piece.x, point.y - piece.y, PORTAL_MIDDLE_UP + Math.sin(angle) * (PORTAL.up - shrink), colour);
+  };
   // the band: its back edge in shade, then its plates, lit at the top and dark at the bottom
   for (let step = 0; step < 240; step++) {
     const angle = (step / 240) * Math.PI * 2;
     for (let band = 0; band < PORTAL.band; band++) {
-      at(band, angle, PORTAL.plane - 0.06, C.portalRingDark);
-      at(band, angle, PORTAL.plane, band === 0 ? C.portalRingDark : Math.sin(angle) > 0.3 ? C.portalRingLight : C.portalRing);
+      at(band, angle, -0.06, C.portalRingDark);
+      at(band, angle, 0, band === 0 ? C.portalRingDark : Math.sin(angle) > 0.3 ? C.portalRingLight : C.portalRing);
     }
   }
   // the chevrons, round the band but at its foot
   for (let chevron = 0; chevron < 7; chevron++) {
     const angle = -Math.PI / 2 + ((chevron + 1) / 8) * Math.PI * 2;
-    for (const [shrink, turn] of [[1, 0], [2, 0], [1, 0.07], [1, -0.07]] as const) at(shrink, angle + turn, PORTAL.plane + 0.02, shrink === 1 && turn === 0 ? C.portalChevronCore : C.portalChevron);
+    for (const [shrink, turn] of [[1, 0], [2, 0], [1, 0.07], [1, -0.07]] as const) at(shrink, angle + turn, 0.02, shrink === 1 && turn === 0 ? C.portalChevronCore : C.portalChevron);
   }
 }
 
