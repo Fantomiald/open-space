@@ -8,13 +8,14 @@ import { Normalizer, describeRequest, ruleText, type AgentLaunch, type ChromeSig
 
 function createNormalizer(peerName?: (address: string) => string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
   const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
-  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[], chrome: [] as ChromeSight[] };
+  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[], chrome: [] as ChromeSight[], suggestions: [] as string[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
     onQuota: (quota) => seen.quotas.push(quota), onResult: (result) => seen.results.push(result),
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
     onBackground: (tasks) => seen.background.push(tasks), onSchedule: (change) => seen.schedules.push(change), onChrome: (sight) => seen.chrome.push(sight),
+    onSuggestion: (suggestion) => { seen.suggestions.push(suggestion); seen.order.push('suggestion'); },
     names: new Set(), peerName, agentLaunch, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
@@ -56,6 +57,23 @@ describe('Normalizer on a real turn of commands, reads and searches (2.1.318)', 
     assert.deepEqual(outputs[0], { lines: ['ligne 1', 'ligne 2', 'ligne 3', 'ligne 4', 'ligne 5', 'ligne 6', 'ligne 7'], total: 7 });
     assert.deepEqual(outputs[1], { lines: [], total: 8, read: true });
     assert.match(outputs[2]?.lines[0] ?? '', /^cart\.js:1:/);
+  });
+});
+
+describe('Normalizer on a turn followed by a prompt suggestion (claude -p --prompt-suggestions, 2.1.319)', () => {
+  const { suggestions, results, order } = replay('prompt-suggestion');
+
+  it('hands over the next message Claude Code predicts, once the turn is over', () => {
+    assert.deepEqual(suggestions, ['Vérifie la disponibilité du nom']);
+    assert.equal(results.length, 1);
+    assert.equal(order.at(-1), 'suggestion');
+  });
+
+  it('ignores a suggestion with no words', () => {
+    const { normalizer, suggestions: none } = createNormalizer();
+    normalizer.handle({ type: 'prompt_suggestion', suggestion: '   ', uuid: 'u', session_id: 's' });
+    normalizer.handle({ type: 'prompt_suggestion', uuid: 'u', session_id: 's' });
+    assert.deepEqual(none, []);
   });
 });
 

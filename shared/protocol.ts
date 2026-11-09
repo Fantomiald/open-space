@@ -361,6 +361,8 @@ export interface SessionInfo {
   remote?: RemoteControl;
   /** the page its agent last had in the user's own Chrome (not kept when Open Space restarts) */
   chrome?: ChromeView;
+  /** the next message Claude Code predicts after a turn (Preferences.promptSuggestions), until one is sent (not kept when Open Space restarts) */
+  suggestion?: string;
   /** the browser of the user's accounts it uses, chosen for it in its Browser view; absent: the one of the settings */
   accountsBrowser?: AccountsBrowser;
   /** it works on a branch of its own, in a worktree */
@@ -530,6 +532,8 @@ export interface Preferences {
    * first lines), an Edit, MultiEdit or Write with its diff (off: gathered in a run of actions)
    */
   detailedActions: boolean;
+  /** after a turn, the next message Claude Code predicts, in grey in the empty field, taken with Tab (claude --prompt-suggestions) */
+  promptSuggestions: boolean;
   /** animations and transitions cut short, whatever the system says */
   reduceMotion: boolean;
   /** how much of what is behind the glass panes their tint hides, in percent (see GLASS_OPACITY) */

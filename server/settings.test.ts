@@ -37,6 +37,8 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ tagColors: true }), { tagColors: true });
     assert.deepEqual(parsePreferences({ detailedActions: true }), { detailedActions: true });
     assert.deepEqual(parsePreferences({ detailedActions: 'yes' }), {});
+    assert.deepEqual(parsePreferences({ promptSuggestions: false }), { promptSuggestions: false });
+    assert.deepEqual(parsePreferences({ promptSuggestions: 'no' }), {});
     assert.deepEqual(parsePreferences({ accountsBrowser: 'chrome' }), { accountsBrowser: 'chrome' });
     assert.deepEqual(parsePreferences({ accountsBrowser: 'firefox' }), {}, 'an unknown browser is left out');
     assert.equal(parsePreferences({ glassOpacity: 45 }).glassOpacity, 45);

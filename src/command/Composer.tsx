@@ -34,6 +34,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   // a small window (several open, this one not zoomed): icons beside a one-line field
   const stacked = useSessions((s) => s.openIds.length > 1 && s.zoomedId !== session.id);
   const people = useMentionable(session.id);
+  const suggesting = useSessions((s) => s.preferences.promptSuggestions);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const queued = session.queued ?? [];
@@ -89,6 +90,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
     <CommandField
       id={`composer-field-${session.id}`} label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
       onPaste={attachments.onPaste} shell cwd={session.cwd} own people={people}
+      suggestion={suggesting && !busy && !stopped && !note && !attachments.items.length ? session.suggestion : undefined}
     />
   );
   const tools = (

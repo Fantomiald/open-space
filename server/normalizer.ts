@@ -33,6 +33,9 @@ export interface ChromeSight { url: string; title: string; picture?: ImageUpload
 /** The tools `claude --chrome` gives, on the user's own Chrome (server/browser.ts CHROME_SERVER). */
 const CHROME_TOOL = /^mcp__claude-in-chrome__/;
 
+/** The longest prompt suggestion kept: Claude Code predicts a short message, a field's worth at most. */
+const MAX_SUGGESTION = 2000;
+
 /**
  * What a claude-in-chrome result says of the tab it worked on (checked with 2.1.318): its text ends with a "Tab Context"
  * that names the tab ("- Executed on tabId: N") among the group's (`• tabId N: "<title>" ("<url>")`); a screenshot comes
@@ -86,6 +89,8 @@ export interface NormalizerOptions {
   onSchedule?: (change: ScheduleChange) => void;
   /** a claude-in-chrome call worked on a page of the user's own Chrome (see chromeSight) */
   onChrome?: (sight: ChromeSight) => void;
+  /** the next message Claude Code predicts the user will send, after a turn (claude --prompt-suggestions) */
+  onSuggestion?: (suggestion: string) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
@@ -177,6 +182,11 @@ export class Normalizer {
         });
         const fiveHour = windows.find((window) => window.name === 'five_hour');
         if (fiveHour) this.options.onQuota({ fiveHour: fiveHour.utilization, resetsAt: fiveHour.resetsAt, windows });
+        break;
+      }
+      case 'prompt_suggestion': {
+        const suggestion = asString(message.suggestion).trim();
+        if (suggestion) this.options.onSuggestion?.(suggestion.slice(0, MAX_SUGGESTION));
         break;
       }
       case 'control_request': return this.controlRequest(message);

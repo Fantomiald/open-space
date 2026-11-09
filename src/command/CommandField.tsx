@@ -59,18 +59,22 @@ interface Props {
   own?: boolean;
   /** the sessions "@" names: suggested as it is typed, and marked in the text */
   people?: readonly Mentionable[];
+  /** the next message Claude Code predicts: shown in grey while the field is empty, written by Tab */
+  suggestion?: string;
 }
 
 /**
  * A message field that suggests the slash commands as soon as a word starts with "/", at the start or in the middle
  * of the message (Tab or Enter completes it where it is), and the sessions after an "@", marked once named. With
  * `shell`, like Claude Code's bash mode: a "!" typed first becomes a prompt in front of the field instead of text (the
- * value keeps it: "!ls"), and Backspace at the very start takes it away, back to a message.
+ * value keeps it: "!ls"), and Backspace at the very start takes it away, back to a message. Like Claude Code's prompt
+ * suggestions, an empty field shows `suggestion` in grey, and Tab writes it, ready to send or to change.
  */
-export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste, shell = false, cwd, own = false, people }, ref) {
+export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste, shell = false, cwd, own = false, people, suggestion }, ref) {
   const shellMode = shell && value.startsWith('!');
   // the space after the "!" is the prompt's, not the command's
   const shown = shellMode ? value.slice(1).replace(/^ +/, '') : value;
+  const offered = value === '' ? suggestion : undefined;
   const [active, setActive] = useState(0);
   /** the user closed the suggestions with Escape; they come back on the next keystroke */
   const [dismissed, setDismissed] = useState(false);
@@ -123,6 +127,12 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
+    if (offered && e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      edit(offered, offered.length);
+      requestAnimationFrame(() => area.current?.setSelectionRange(offered.length, offered.length));
+      return;
+    }
     if (current) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setActive((index) => Math.min(index + 1, suggestions.length - 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setActive((index) => Math.max(index - 1, 0)); return; }
@@ -157,7 +167,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
         <textarea
           id={id} ref={area} value={shown} rows={rows} data-composer data-command={value.startsWith('/')}
           aria-autocomplete="list" aria-controls={current ? listId : undefined} aria-activedescendant={current ? `${listId}-${suggestions.indexOf(current)}` : undefined}
-          placeholder={placeholder} onChange={(e) => edit(shellMode ? `!${e.target.value.replace(/^ +/, '')}` : e.target.value, e.target.selectionStart)} onKeyDown={onKeyDown} onPaste={onPaste}
+          placeholder={offered ?? placeholder} data-suggested={!!offered} onChange={(e) => edit(shellMode ? `!${e.target.value.replace(/^ +/, '')}` : e.target.value, e.target.selectionStart)} onKeyDown={onKeyDown} onPaste={onPaste}
           onSelect={track} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
           onScroll={(e) => { if (overlay.current) overlay.current.scrollTop = e.currentTarget.scrollTop; }}
         />
