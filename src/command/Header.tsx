@@ -6,6 +6,7 @@ import { seatedRuns } from '../state/automata.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { AutomatonIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
@@ -72,6 +73,7 @@ export function Header() {
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
+        <ModsButton />
         <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} aria-label={words.crew} title={words.crewTitle}>
           <CrewIcon />
         </button>

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
+import type { ModInfo } from '../shared/mods.ts';
 import type { Preferences, SessionInfo } from '../shared/protocol.ts';
 import { parseTriggerInput, type Trigger } from '../shared/triggers.ts';
 import { ExternalKey, handleMcp, MCP_SETTINGS, openSpaceMcpConfig, sessionMcpKey, TOOLS, toolsFor, type Caller, type OpenSpaceApi } from './mcp.ts';
@@ -17,6 +18,7 @@ function fakeApi() {
   const crew: { name: string; jobs: string[] }[] = [];
   const sessions: { cwd: string; prompt: string; remote: boolean }[] = [];
   const done: string[] = [];
+  const mods: ModInfo[] = [];
   const live = [{
     id: 's5', name: 'Hugo', cwd: '/work/app', state: 'perm', stateSince: 0, trigger: { id: 'abcdef1234', name: 'Jira' },
     permissions: [
@@ -54,6 +56,20 @@ function fakeApi() {
     finish: (id) => { done.push(`finish ${id}`); },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
     bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
+    mods: () => mods,
+    createMod: async (request) => {
+      const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
+      mods.push(mod);
+      done.push(`mod ${request}`);
+      return { mod, sessionId: 's9' };
+    },
+    editMod: async (id, request) => (mods.some((mod) => mod.id === id) ? (done.push(`change ${id} ${request}`), { sessionId: 's9' }) : null),
+    deleteMod: async (id) => {
+      const at = mods.findIndex((mod) => mod.id === id);
+      if (at < 0) return false;
+      mods.splice(at, 1);
+      return true;
+    },
   };
   return { api, triggers, sessions, crew, done, preferences: () => preferences };
 }
@@ -164,6 +180,18 @@ describe('the open-space MCP server', () => {
     assert.equal((await tool(api, 'create_agent', { name: ' ' })).isError, true);
     assert.match((await tool(api, 'list_roles')).text, /home-automation/);
     assert.equal((await tool(api, 'run_trigger', { id: 'abcdef1234' })).isError, false);
+  });
+
+  it('makes, changes and deletes mods', async () => {
+    const { api, done } = fakeApi();
+    assert.equal((await tool(api, 'create_mod', { request: ' ' })).isError, true);
+    assert.match((await tool(api, 'create_mod', { request: 'my Claude costs' }, EXTERNAL)).text, /"sessionId": "s9"/);
+    assert.match((await tool(api, 'list_mods')).text, /"id": "couts"/);
+    assert.equal((await tool(api, 'update_mod', { id: 'couts', request: 'in euros' })).isError, false);
+    assert.match((await tool(api, 'update_mod', { id: 'ventes', request: 'in euros' })).text, /couts/, 'an unknown mod names the known ones');
+    assert.deepEqual(done, ['mod my Claude costs', 'change couts in euros']);
+    assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, false);
+    assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, true);
   });
 
   it('reads and changes the harmless settings only', async () => {

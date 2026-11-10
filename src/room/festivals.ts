@@ -232,8 +232,9 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
     case 'halloween': paintHalloweenWalls(context, room); return;
     case 'christmas':
       if (office) {
-        onWall(context, WREATH, PAINT, 'left', 3.2, 22);
-        for (const [y, z] of [[1.4, 34], [6.2, 38], [7.6, 24]] as const) onWall(context, SNOWFLAKE, PAINT, 'left', y, z);
+        // the office's left wall decorations stay clear of the mods object, from 1.8 to 4.3 along it (METRICS_PIECES)
+        onWall(context, WREATH, PAINT, 'left', 5, 22);
+        for (const [y, z] of [[0.5, 34], [6.8, 38], [7.6, 22]] as const) onWall(context, SNOWFLAKE, PAINT, 'left', y, z);
       } else {
         // stockings hanging from a shelf above the sofa
         line(context, onWallAt('left', 1.6, 40), onWallAt('left', 7.6, 40), F.trunk);
@@ -244,15 +245,15 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
     case 'newYear':
       if (office) {
         banner(context, `BONNE ANNEE ${newYear()}`, 10, F.gold, F.black);
-        for (const [y, z] of [[2, 36], [5.4, 30], [7.4, 40]] as const) onWall(context, STAR, PAINT, 'left', y, z);
+        for (const [y, z] of [[0.6, 36], [5.4, 30], [7.4, 40]] as const) onWall(context, STAR, PAINT, 'left', y, z);
       } else {
         bunting(context, 'left', 0.5, 8.5, WALL - 3, [F.gold, F.silver, F.black], F.goldDark);
       }
       break;
     case 'epiphany':
       if (office) {
-        onWall(context, CROWN, PAINT, 'left', 4, 30);
-        for (const [y, z] of [[2, 38], [6.6, 40], [7.6, 22]] as const) onWall(context, STAR, PAINT, 'left', y, z);
+        onWall(context, CROWN, PAINT, 'left', 5.2, 30);
+        for (const [y, z] of [[0.6, 38], [6.8, 40], [7.6, 22]] as const) onWall(context, STAR, PAINT, 'left', y, z);
       } else {
         banner(context, 'VIVE LES ROIS', 10, F.gold, F.blue);
       }
@@ -269,7 +270,7 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
           context.fillStyle = (z % 6 === 3 && column > 0 && column < 3) ? F.gold : F.envelope;
           context.fillRect(Math.round(at.x), Math.round(at.y), 1, 1);
         }
-        onWall(context, FU, PAINT, 'left', 4, 24);
+        onWall(context, FU, PAINT, 'left', 5.4, 24);
       } else {
         // strings of firecrackers down the left wall
         for (const y of [2, 4.4, 6.8]) {
@@ -287,11 +288,11 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
         const points = sagging(context, 'back', 0.5, ROOM.width - 0.5, WALL - 3, 1.2, 2, F.rose);
         points.forEach((point, index) => { if (index % 2) onWall(context, HEART, { h: index % 4 === 1 ? F.heart : F.pink }, 'back', point.along - 3 / 8, point.z - 6); });
       } else {
-        for (const [y, z] of [[1.2, 40], [3.4, 42], [5.6, 40], [7.6, 42]] as const) onWall(context, HEART, { h: y > 3 && y < 6 ? F.heart : F.pink }, 'left', y, z);
+        for (const [y, z] of [[0.6, 40], [4.8, 42], [6.2, 40], [7.6, 42]] as const) onWall(context, HEART, { h: y > 3 && y < 6 ? F.heart : F.pink }, 'left', y, z);
       }
       break;
     case 'songkran':
-      if (office) { onWall(context, SUN, PAINT, 'left', 4, 30); bunting(context, 'back', 0.5, ROOM.width - 0.5, WALL - 3, [F.red, F.gold, F.blue, F.green, F.pink], F.white); }
+      if (office) { onWall(context, SUN, PAINT, 'left', 5.2, 30); bunting(context, 'back', 0.5, ROOM.width - 0.5, WALL - 3, [F.red, F.gold, F.blue, F.green, F.pink], F.white); }
       else bunting(context, 'left', 0.5, 8.5, WALL - 6, [F.red, F.gold, F.blue, F.green, F.pink], F.white);
       break;
     case 'easter':
@@ -302,24 +303,24 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
       }
       break;
     case 'mayDay':
-      if (office) onWall(context, LILY, PAINT, 'left', 4.2, 26);
+      if (office) onWall(context, LILY, PAINT, 'left', 5.4, 26);
       else for (const y of [1.2, 3.4, 5.6, 7.6]) onWall(context, LILY, PAINT, 'left', y, 38);
       break;
     case 'music':
       if (office) {
-        for (const [y, z, double] of [[1.6, 34, false], [3.0, 40, true], [6.6, 38, false], [7.4, 28, true]] as const) onWall(context, double ? DOUBLE_NOTE : NOTE, PAINT, 'left', y, z);
-        onWall(context, GUITAR, PAINT, 'left', 4.2, 20);
+        for (const [y, z, double] of [[0.6, 34, false], [5.0, 44, true], [6.8, 38, false], [7.6, 28, true]] as const) onWall(context, double ? DOUBLE_NOTE : NOTE, PAINT, 'left', y, z);
+        onWall(context, GUITAR, PAINT, 'left', 5.2, 20);
         for (const along of [6.0, 12.2]) { disc(context, 'back', along + 0.3, 30, 4, F.black); disc(context, 'back', along + 0.3, 30, 1, F.red); }
       } else {
         for (const [x, z] of [[3.2, 42], [9.8, 44], [16.4, 42]] as const) onWall(context, NOTE, PAINT, 'back', x, z);
       }
       break;
     case 'bastille':
-      if (office) { bunting(context, 'back', 0.5, ROOM.width - 0.5, WALL - 3, F.tricolor, F.white); onWall(context, FLAG, { b: F.tricolor[0], w: F.tricolor[1], r: F.tricolor[2] }, 'left', 4, 28); }
+      if (office) { bunting(context, 'back', 0.5, ROOM.width - 0.5, WALL - 3, F.tricolor, F.white); onWall(context, FLAG, { b: F.tricolor[0], w: F.tricolor[1], r: F.tricolor[2] }, 'left', 5.2, 28); }
       else bunting(context, 'left', 0.5, 8.5, WALL - 3, F.tricolor, F.white);
       break;
     case 'summer':
-      if (office) { onWall(context, SUN, PAINT, 'left', 2.4, 30); onWall(context, PALM, PAINT, 'left', 5.8, 18); }
+      if (office) { onWall(context, SUN, PAINT, 'left', 0.6, 30); onWall(context, PALM, PAINT, 'left', 5.8, 18); }
       else bunting(context, 'left', 0.5, 8.5, WALL - 3, [F.gold, F.blue, F.white, F.kumquat], F.white);
       break;
     case 'birthday':
@@ -328,7 +329,7 @@ export function paintFestivalWalls(context: Context, festival: Festival, room: R
         bunting(context, 'left', 0.5, 8.5, WALL - 3, F.balloons, F.white);
       } else {
         banner(context, birthdayWish(guests, 'BON ANNIV'), 10, F.gold, F.blue);
-        for (const [y, z, colour] of [[1.2, 42, 0], [2.6, 44, 1], [6.2, 42, 2], [7.6, 44, 3]] as const) { disc(context, 'left', y, z, 3, F.balloons[colour]); line(context, onWallAt('left', y, z - 3), onWallAt('left', y + 0.1, z - 9), F.white); }
+        for (const [y, z, colour] of [[0.6, 42, 0], [5.0, 44, 1], [6.2, 42, 2], [7.6, 44, 3]] as const) { disc(context, 'left', y, z, 3, F.balloons[colour]); line(context, onWallAt('left', y, z - 3), onWallAt('left', y + 0.1, z - 9), F.white); }
       }
       break;
   }

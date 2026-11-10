@@ -3,6 +3,7 @@
 // mats, a chunk of rock with cables for a slab, a steel door under a red exit sign, walls of old screens where the
 // windows would be, a red LED clock and a big terminal for the TV. Dim at every hour; what moves is in
 // cellar-effects.ts, the furniture in cellar-furniture.ts, the page behind in cellar-sky.ts.
+import { modsObject } from './mods-object.ts';
 import { CELLAR_PALETTE as K } from '../../design/theme-cellar.ts';
 import { ROOM, type Layout, type Rug, type WallItem } from '../../../shared/room-layout.ts';
 import type { Point } from '../geometry.ts';
@@ -330,7 +331,7 @@ export const CELLAR: ThemeKit = {
   skyFrameMs: 400,
   wallBeam: false,
   officeLamps: false,
-  furniture: { ...CELLAR_FURNITURE, portal: THEME_PORTALS.cellar.design },
+  furniture: { ...CELLAR_FURNITURE, portal: THEME_PORTALS.cellar.design, metricsTv: modsObject('cellar') },
   portal: THEME_PORTALS.cellar.style,
   lighting: cellarLighting,
   lights: cellarLights,

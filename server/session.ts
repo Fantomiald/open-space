@@ -51,6 +51,8 @@ export interface SessionDeps {
   bundlePage?: (page: string, files: Readonly<Record<string, string>>) => string | null;
   /** how many claude processes are alive across all sessions */
   liveCount: () => number;
+  /** the project a folder belongs to when it is not its own (a mod's folder: the mods folder), else null */
+  projectHome?: (cwd: string) => string | null;
   maxLive: number;
   idleMs: number;
   /** who the other sessions named in a message by "@" are, for Claude, woken up to be reached ('' : none named) */
@@ -152,7 +154,7 @@ export class Session {
     this.info = info;
     this.deps = deps;
     this.context = initialContext(info.state);
-    this.checkout = checkoutHome(info.cwd);
+    this.checkout = checkoutHome(info.cwd) ?? deps.projectHome?.(info.cwd) ?? null;
   }
 
   get id() { return this.info.id; }
@@ -302,7 +304,7 @@ export class Session {
     if (this.info.resumable || this.info.forkOf) this.info.toldPlace ??= this.info.cwd;
     this.info.cwd = cwd;
     this.info.worktree = worktree;
-    this.checkout = checkoutHome(cwd);
+    this.checkout = checkoutHome(cwd) ?? this.deps.projectHome?.(cwd) ?? null;
     this.publish();
   }
 

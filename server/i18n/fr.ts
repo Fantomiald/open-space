@@ -199,6 +199,14 @@ export const fr = {
     tooBig: 'Cette note est trop longue pour le tableau (1 Mo au plus).',
     taken: (name: string) => `Une note s’appelle déjà ${name}.`,
   },
+  mods: {
+    request: (text: string) => `Fabrique ce mod, en suivant le CLAUDE.md du dossier parent : ${text}`,
+    change: (text: string) => `Change ce mod, en suivant le CLAUDE.md du dossier parent : ${text}`,
+    mcp: {
+      noRequest: 'Dis ce que le mod doit montrer ou changer.',
+      unknown: (known: string[]) => `Pas de mod à ce nom. ${known.length ? `Les mods : ${known.join(', ')}.` : 'Aucun mod pour l’instant.'}`,
+    },
+  },
   metrics: {
     tooBig: 'Le fichier des chiffres est trop long pour l’écran (1 Mo au plus).',
   },

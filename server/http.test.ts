@@ -87,6 +87,13 @@ before(async () => {
   writeFileSync(path.join(base, 'attachments', `${'d'.repeat(64)}.mp4`), '0123456789');
   writeFileSync(path.join(base, 'attachments', `${'e'.repeat(64)}.md`), '# Énigmes\n<script>alert(1)</script>');
   writeFileSync(path.join(base, 'attachments', `${'c'.repeat(64)}.svg`), '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+  const kitDir = path.join(base, 'mod-kit');
+  mkdirSync(kitDir);
+  writeFileSync(path.join(kitDir, 'kit.css'), 'body{}');
+  const modDir = path.join(base, 'mods', 'ventes');
+  mkdirSync(path.join(modDir, 'data'), { recursive: true });
+  writeFileSync(path.join(modDir, 'index.html'), '<!doctype html><p>ventes</p>');
+  writeFileSync(path.join(modDir, 'data', 'today.json'), '[]');
   port = await freePort();
   hooksPort = await freePort();
   const created = createWebServer({
@@ -103,6 +110,7 @@ before(async () => {
       messenger: (botId) => (botId === 'bot00001' ? 'bot-key' : null),
       handle: async (caller, body) => ({ status: 200, json: { caller, body } }),
     },
+    mods: { kitDir, key: (id) => `key-of-${id}`, file: (id, relative) => (id === 'ventes' ? resolveInside(modDir, relative || 'index.html') : null) },
   });
   ({ server, hooksServer } = created);
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
@@ -245,6 +253,29 @@ describe('HTTP requests', () => {
   it('does not follow a symlink out of dist/', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/leak.txt`);
     assert.doesNotMatch(await res.text(), /top secret/);
+  });
+});
+
+describe('mods', () => {
+  it('serves a mod’s page to the key in its address only, sandboxed, with no cookie needed', async () => {
+    const page = await fetch(`http://127.0.0.1:${port}/mods/key-of-ventes/ventes/`);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /ventes/);
+    const csp = page.headers.get('content-security-policy') ?? '';
+    assert.match(csp, /^sandbox allow-scripts/);
+    assert.doesNotMatch(csp, /allow-same-origin/);
+    assert.match(csp, /frame-ancestors 'self'/);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/mods/key-of-ventes/ventes/data/today.json`)).headers.get('access-control-allow-origin'), '*');
+    for (const refused of ['/mods/wrong/ventes/', '/mods/key-of-other/other/', '/mods/key-of-ventes/ventes/missing.js', '/mods/key-of-ventes/../secret.txt']) {
+      assert.doesNotMatch((await rawRequest(refused)).body, /top secret|ventes/, refused);
+    }
+  });
+
+  it('serves the kit to every mod', async () => {
+    const kit = await fetch(`http://127.0.0.1:${port}/mod-kit/kit.css`);
+    assert.equal(kit.status, 200);
+    assert.equal(kit.headers.get('access-control-allow-origin'), '*');
+    assert.doesNotMatch((await rawRequest('/mod-kit/../secret.txt')).body, /top secret/, 'at most the app shell');
   });
 });
 

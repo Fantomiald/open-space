@@ -4,6 +4,7 @@
 // slab is the islet's edge, sand on rock, water falling from it. The openings show boats, an islet and the sun's path on
 // the sea; the clock is a life ring, the door a bamboo arch with a bead curtain, the lounge's screen plays a surf film.
 // The furniture is in beach-furniture.ts, the page behind in beach-sky.ts.
+import { modsObject } from './mods-object.ts';
 import { BEACH_PALETTE as B } from '../../design/theme-beach.ts';
 import { ROOM, type Layout, type Rug, type WallItem } from '../../../shared/room-layout.ts';
 import { depthOf, toScreen, toTile, type Point } from '../geometry.ts';
@@ -578,7 +579,7 @@ export const BEACH: ThemeKit = {
   skyFrameMs: 250,
   // the walls are open above the half wall: a shaft of light from the openings would veil the sky behind
   wallBeam: false,
-  furniture: { ...BEACH_FURNITURE, portal: THEME_PORTALS.beach.design },
+  furniture: { ...BEACH_FURNITURE, portal: THEME_PORTALS.beach.design, metricsTv: modsObject('beach') },
   portal: THEME_PORTALS.beach.style,
   lighting: beachLight,
   officeLamps: false,

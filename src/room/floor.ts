@@ -24,7 +24,7 @@ const BOARD_HEIGHT = 88;
 export const METRICS_BOXES: Readonly<Record<MetricsKind, Box>> = {
   // the notepad and the banknotes at the left end of the user's desk
   cash: { fromX: 0, toX: 0.8, fromY: 0.1, toY: 0.9, low: 22, high: 48 },
-  metricsTv: { fromX: 0, toX: 0.12, fromY: 0, toY: 2.5, low: 52, high: 84 },
+  metricsTv: { fromX: 0, toX: 0.7, fromY: 0, toY: 2.5, low: 30, high: 94 },
   ticker: { fromX: 0, toX: 0.1, fromY: 0, toY: 4.2, low: 70, high: 86 },
   piggyBank: { fromX: 0.6, toX: 1.4, fromY: 0, toY: 0.6, low: 48, high: 70 },
 };

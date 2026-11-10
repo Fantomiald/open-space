@@ -91,9 +91,9 @@ function paintCash(p: Painter) {
 }
 
 /** The dashboard screen on the left wall: its frame and its face (the chart is drawn on it, see drawChart). */
-const TV_FACE = { fromY: 0.12, toY: 2.38, low: 27, high: 41 };
+const TV_FACE = { fromY: 0.12, toY: 2.38, low: 23, high: 37 };
 function paintMetricsTv(p: Painter) {
-  p.box(0, 0, 0.12, 2.5, 26, 16, C.screenBezel);
+  p.box(0, 0, 0.12, 2.5, 22, 16, C.screenBezel);
   p.onSide(0.12, TV_FACE.fromY, TV_FACE.toY, TV_FACE.low, TV_FACE.high, C.screenFace);
 }
 

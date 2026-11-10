@@ -17,6 +17,7 @@ import path from 'node:path';
 import type { Job } from '../shared/jobs.ts';
 import type { PermissionDecision, PermissionPrompt, Preferences, SessionInfo } from '../shared/protocol.ts';
 import type { AgentRole } from '../shared/automata.ts';
+import { MAX_MOD_REQUEST, type ModInfo } from '../shared/mods.ts';
 import { MCP_SERVER_NAME, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
@@ -102,6 +103,13 @@ export interface OpenSpaceApi {
   finish: (sessionId: string) => void;
   /** the user's bots, to name in a trigger's `messengers` */
   bots: () => { id: string; name: string; username: string | null }[];
+  mods: () => ModInfo[];
+  /** a new mod's folder and the session that writes it, as the Mods panel makes them */
+  createMod: (request: string) => Promise<{ mod: ModInfo; sessionId: string }>;
+  /** the change asked of a mod, to its open session or a new one in its folder; null when there is no such mod */
+  editMod: (id: string, request: string) => Promise<{ sessionId: string } | null>;
+  /** puts the mod's folder in the Trash; false when there is no such mod */
+  deleteMod: (id: string) => Promise<boolean>;
   /** sends a file of an allowed folder to a bot's chat */
   sendFile: (botId: string, file: string, caption: string) => Promise<void>;
 }
@@ -165,6 +173,10 @@ export const TOOLS: Tool[] = [
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
   { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'send_file', for: ['messenger'], description: 'Sends a file to the user\'s chat (a screenshot, a video, a PDF): its absolute path, inside the folders Open Space allows or a file a session sent.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, caption: { type: 'string' } }, required: ['path'] }, annotations: write },
+  { name: 'list_mods', description: 'Lists the Open Space mods: small windows the user\'s agents make (a page in a folder), with their id, name and folder.', inputSchema: { type: 'object', properties: {} }, annotations: read },
+  { name: 'create_mod', description: 'Makes a new mod, like Mods > New mod: a session builds it in its own folder from what the user asked, e.g. "my Claude costs this week".', inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'What the mod should show or do, in the user\'s words' } }, required: ['request'] }, annotations: write },
+  { name: 'update_mod', description: 'Asks for a change to a mod: its session (or a new one in its folder) makes it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, request: { type: 'string', description: 'The change, in the user\'s words' } }, required: ['id', 'request'] }, annotations: write },
+  { name: 'delete_mod', description: 'Deletes a mod (its folder goes to the Trash).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
   { name: 'get_settings', description: `Reads Open Space settings that are safe to change: ${MCP_SETTINGS.join(', ')}.`, inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'update_settings', description: `Changes some of these Open Space settings: ${MCP_SETTINGS.join(', ')}. Others are refused.`, inputSchema: { type: 'object', properties: { settings: { type: 'object' } }, required: ['settings'] }, annotations: write },
 ];
@@ -296,6 +308,20 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       await api.addMember(member, asArray(args.jobs).filter((job): job is Job => typeof job === 'string') as Job[]);
       return text(api.crew().find((each) => each.name === member) ?? member);
     }
+    case 'list_mods': return text(api.mods().map(({ id, name, description, icon, folder, draft }) => ({ id, name, description, icon, folder, draft })));
+    case 'create_mod': {
+      const request = asString(args.request).trim().slice(0, MAX_MOD_REQUEST);
+      if (!request) return failure(st.mods.mcp.noRequest);
+      const { mod, sessionId } = await api.createMod(request);
+      return text({ id: mod.id, folder: mod.folder, sessionId });
+    }
+    case 'update_mod': {
+      const request = asString(args.request).trim().slice(0, MAX_MOD_REQUEST);
+      if (!request) return failure(st.mods.mcp.noRequest);
+      const edited = await api.editMod(asString(args.id), request);
+      return edited ? text(edited) : failure(st.mods.mcp.unknown(api.mods().map((mod) => mod.id)));
+    }
+    case 'delete_mod': return (await api.deleteMod(asString(args.id))) ? text('deleted') : failure(st.mods.mcp.unknown(api.mods().map((mod) => mod.id)));
     case 'get_settings': {
       const settings = api.settings();
       return text(Object.fromEntries(MCP_SETTINGS.map((key) => [key, settings[key]])));

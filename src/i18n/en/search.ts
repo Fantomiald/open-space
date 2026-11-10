@@ -22,6 +22,7 @@ export const search: Dictionary['search'] = {
   states: { work: 'Working', waiting: 'For you', ready: 'Ready', resting: 'Resting', closed: 'Closed', error: 'Error' },
   actions: {
     newSession: 'New session',
+    mods: 'Your mods',
     settings: 'Open settings',
     usage: 'Usage and costs',
     rewind: 'Weekly rewind',
@@ -42,6 +43,7 @@ export const search: Dictionary['search'] = {
   },
   actionWords: {
     newSession: 'launch create start agent',
+    mods: 'mod window widget chart panel',
     settings: 'preferences options',
     usage: 'cost price spend tokens bill dollars',
     rewind: 'week summary stats heatmap',

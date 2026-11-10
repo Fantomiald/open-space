@@ -15,6 +15,16 @@ Vient de Mouhrad, repris pour servir à tout le monde :
 - Runs externes, en option : le réglage « Dossier des runs externes » (Réglages > Notes et chiffres, vide par défaut) montre en lecture seule, dans la salle des serveurs, les `claude -p` qu'un autre programme lance hors d'Open Space. Contrat réduit au générique : un fichier `runs/<id>.json` (ou `state/runs/<id>.json`) par run avec `id`, `sessionId` (passé en `--session-id`), `cwd`, `status` (`running`, `done`, `failed`), `pid`, `startedAt`, `endedAt`, et `role` et `task` facultatifs ; les rôles sont lus dans `.claude/agents/*.md` du dossier. Le fil d'un run et de ses sous-agents se lit dans son transcript Claude Code.
 - Un portail relie l'open space et la salle des serveurs : un anneau dressé à l'avant de la salle, un vortex dedans ; un clic, une colonne de lumière, et on arrive dans l'anneau jumeau de l'autre salle.
 - Le droïde des automates roule de salle en salle (par la porte ou le portail), fait bip de temps en temps, et ouvre le panneau des automates au clic. Il se règle dans l'équipe, à côté de l'animal : dôme rond, tête carrée ou sphère, sa couleur, ou aucun.
+- Mods par le MCP : `list_mods`, `create_mod` (comme « Nouveau mod »), `update_mod` (la session du mod fait le changement) et `delete_mod` (à la Corbeille). Le bouton Mods de l'en-tête n'a plus que son icône, comme les autres.
+
+## 1.28.0
+
+- Mods : des petites fenêtres que tes agents fabriquent pour toi. Le bouton Mods, à côté d'Équipe, ouvre la liste de tes mods et un champ « Nouveau mod » : tu décris ce que tu veux (« mes coûts Claude de la semaine », « un minuteur pomodoro »), une session le fabrique dans son propre dossier et la fenêtre s'ouvre dès qu'il est prêt.
+- Une fenêtre de mod se déplace, se redimensionne, se replie, se recharge et se ferme ; elle prend le style, l'opacité et le contour de tes fenêtres, et la hauteur de son contenu. Le crayon rouvre la session qui l'écrit pour le modifier.
+- Les mods sont aussi dans ⌘K, et un point sur le bouton Mods (comme le « ! » de l'objet de la salle) dit quand les données d'un mod fermé ont changé.
+- Un kit pour les agents : des composants testés de 240 à 960 px (chiffres clés, courbes, barres, jauges, listes, tableaux, états vide, chargement et erreur), leur galerie, et un guide que chaque session de mod suit. Un mod peut lire tes sessions, ton quota et tes coûts.
+- Chaque page de mod tourne isolée, sans accès à Open Space ni à ses cookies.
+- Dans la salle, l'objet des chiffres devient celui des mods et ouvre leur fenêtre : la télé du bureau descend un peu, et chaque thème a le sien (hologramme, borne d'arcade, grimoire, planches de surf, carte au trésor, cabane à oiseaux, terminal). Les décorations de fête du mur gauche s'en écartent. Le fichier de chiffres des Réglages reste une carte de la fenêtre des mods.
 
 ## 1.27.4
 

@@ -90,6 +90,16 @@ export const ROOM_PALETTE = {
     // the teleporter: its plinth and steps of dark stone, its ring of metal plates, its chevrons lit (the orb's colours)
     portalStone: '#3a4356', portalStoneLight: '#56627a', portalRing: '#6f7a90', portalRingLight: '#a9b3c6', portalRingDark: '#2c3342', portalChevron: '#5ad1ff', portalChevronCore: '#f2fdff',
   },
+  /** the mods object of each theme (src/room/themes/mods-object.ts) */
+  mods: {
+    space: { metal: '#3b4256', metalTop: '#59627a', beam: '#4fd8ff', holo: '#1f6f8f', holoEdge: '#8ff3ff', text: '#d8fbff', bars: '#5fe1ff' },
+    tokyo: { cabinet: '#1a1430', neon: '#ff3fa4', marquee: '#3a1430', panel: '#2a2236', panelTop: '#463a5a', screen: '#0e0b1e', alien: '#5dff8a', ship: '#ff8a3d', score: '#ffe14a', button: '#ff4a5a', buttonBlue: '#4ac8ff' },
+    dungeon: { bracket: '#3a2a1c', shelf: '#6b4a2b', shelfTop: '#8a6440', cover: '#7a2a26', page: '#efe2bc', pageShade: '#c9b88f', wax: '#efe6d0', flame: '#ffb347' },
+    beach: { peg: '#8a5a30', teal: '#2fb5c8', tealTop: '#6fdbe8', coral: '#ff7a6a', coralTop: '#ffa999', white: '#ffffff', sun: '#ffd84a' },
+    pirate: { edge: '#8a5a2b', parchment: '#ecd9a8', island: '#5f9a35', path: '#c8342f', blade: '#c9ced8', hilt: '#5a3a1e', hiltTop: '#8a5a2b' },
+    forest: { wood: '#9a6e42', woodTop: '#b98a55', roof: '#8a3a28', roofTop: '#a8442f', hole: '#2a1a10', perch: '#6b4a2b', note: '#f4eed8', writing: '#8a7a5a' },
+    cellar: { casing: '#3a3f3b', casingTop: '#565c57', casingDark: '#232724', screen: '#0b2a14', text: '#5ff08f', cursor: '#d6f5df', led: '#ff5a5a' },
+  },
   /** Halloween's decorations (src/room/halloween.ts, and the pumpkins of pixel-furniture.ts) */
   halloween: {
     pumpkin: '#e8833a', pumpkinDark: '#b85a1e', stem: '#4a7a2a', stalk: '#6b4a2b', stalkLight: '#8a6440', leaf: '#5f9a35', carved: '#2a1a10', ghost: '#eef0f6', web: '#b9bccb',

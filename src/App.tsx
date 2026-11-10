@@ -3,6 +3,8 @@ import { BoardDialog } from './command/BoardDialog.tsx';
 import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { MetricsDialog } from './command/MetricsDialog.tsx';
 import { AutomataDialog } from './command/AutomataDialog.tsx';
+import { ModsDialog } from './command/ModsPanel.tsx';
+import { ModWindows } from './command/ModWindows.tsx';
 import { BrowserPip } from './command/BrowserPip.tsx';
 import { SearchPalette } from './command/SearchPalette.tsx';
 import { CopyOnSelect } from './command/CopyOnSelect.tsx';
@@ -40,7 +42,6 @@ export function App() {
   // Alt held shows the grab cursors over the room and the windows (drag.ts)
   useAltKey();
   const view = useSessions((s) => s.view);
-  const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
   // the server room is always there to go to; it fills up once there is a trigger or the external runs' folder
   const room = view === 'repos' ? 'lounge' : view === 'automates' ? 'automata' : 'office';
   const day = useFestival();
@@ -201,12 +202,13 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={room} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>
       {view !== 'focus' && <StatusPanel />}
+      <ModWindows />
       <BrowserPip />
       <SearchPalette />
       <CopyOnSelect />
@@ -216,6 +218,7 @@ export function App() {
       <BranchesDialog />
       <MetricsDialog />
       <AutomataDialog />
+      <ModsDialog />
       <TrustDialog />
       <Toasts />
       <AttentionAnnouncer />

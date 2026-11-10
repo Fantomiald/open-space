@@ -18,6 +18,8 @@ export interface Config {
   roots: string[];
   /** set by OFFICE_ROOTS: the page cannot change them */
   rootsLocked: boolean;
+  /** Open Space's own folders where sessions may run too, never offered among the user's (the mods, server/mods.ts) */
+  ownRoots?: string[];
   dataDir: string;
   maxLive: number;
   idleMs: number;

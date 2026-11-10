@@ -13,6 +13,7 @@ import { parseJobs } from '../shared/jobs.ts';
 import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
 import { storedTags } from '../shared/tags.ts';
+import { isModId, MAX_MOD_REQUEST } from '../shared/mods.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
@@ -417,6 +418,12 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return cwd ? { t: 'agentRoles', cwd } : null;
     }
     case 'externalMcp': return typeof raw.enabled === 'boolean' ? { t: 'externalMcp', enabled: raw.enabled } : null;
+    case 'createMod': {
+      const text = boundedString(raw.text, MAX_MOD_REQUEST)?.trim();
+      return text ? { t: 'createMod', text } : null;
+    }
+    case 'deleteMod': return isModId(raw.id) ? { t: 'deleteMod', id: raw.id } : null;
+    case 'modSeen': return isModId(raw.id) ? { t: 'modSeen', id: raw.id } : null;
     case 'search': {
       const query = boundedString(raw.query, MAX_QUERY);
       const id = asNumber(raw.id, -1);

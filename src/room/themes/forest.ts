@@ -3,6 +3,7 @@
 // (forest-floor.ts), a round door, round windows on the forest, a cuckoo clock and a stained glass of leaves
 // (forest-openings.ts), furniture of wood, moss and mushrooms (forest-furniture.ts), the treetops behind
 // (forest-sky.ts), and what glows and moves (forest-effects.ts). Warm under the leaves by day, green blue at night.
+import { modsObject } from './mods-object.ts';
 import { FOREST_PALETTE as F } from '../../design/theme-forest.ts';
 import { mix, rgb, type Lighting } from '../lighting.ts';
 import type { ThemeKit } from './kit.ts';
@@ -36,7 +37,7 @@ export const FOREST: ThemeKit = {
   skyFrameMs: 150,
   // the windows are round: a straight shaft from their wall would veil them
   wallBeam: false,
-  furniture: { ...FOREST_FURNITURE, portal: THEME_PORTALS.forest.design },
+  furniture: { ...FOREST_FURNITURE, portal: THEME_PORTALS.forest.design, metricsTv: modsObject('forest') },
   portal: THEME_PORTALS.forest.style,
   lighting: forestLighting,
   lights: (layout) => forestLights(layout),

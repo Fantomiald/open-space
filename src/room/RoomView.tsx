@@ -35,7 +35,7 @@ import { robotHead, robotLook, withRobots, type RobotLook } from './robot.ts';
 import { pixelFurniture } from './pixel-furniture.ts';
 import { PLAYER_ID, Scene, selfName, type Character } from './scene.ts';
 import type { Pose } from './sprites.ts';
-import { showsMetricsBadge } from './metrics.ts';
+import { modsNews, showsMetricsBadge } from './metrics.ts';
 import { useRoomFrame } from './useRoomFrame.ts';
 import { ArrangeHint } from './ArrangeHint.tsx';
 import { boardContent } from './whiteboard.ts';
@@ -131,7 +131,6 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const crewRef = useRef(crew);
   crewRef.current = crew;
   const synced = useRef(false);
-  // the numbers object is there while the settings name a numbers file (App mounts the room again when that changes)
   // the automatons' room is a room of servers, whatever the theme: it is dressed so while it is shown
   useLayoutEffect(() => {
     if (room !== 'automata') return;
@@ -227,7 +226,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
       followPet(scene, room, state);
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(state.metricsUnread, state.metricsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(modsNews(state), state.metricsOpen || state.modsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
       // through the teleporter: the other room opens, the user coming in on its twin
@@ -305,7 +304,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     if (floor.isPortalAt(point)) { scene.walkPlayerToPortal(); return; }
     if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
     if (floor.isBoardAt(point)) { useSessions.getState().openBoard(true); return; }
-    if (floor.isMetricsAt(point)) { useSessions.getState().openMetrics(true); return; }
+    if (floor.isMetricsAt(point)) { useSessions.getState().openModsPanel(true); return; }
     const tile = toTile(point);
     const spot = floor.spotAt(tile);
     if (spot) scene.sitPlayerAt(spot);
@@ -329,7 +328,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const text = automaton?.automaton ? t.automata.hint(automaton.name) : automaton?.automatonRole ? t.automata.triggerHint(automaton.name) : visitor ? words.startWith(visitor.name)
       : thing === 'portal' ? (room === 'office' ? words.toAutomata : words.portalToOffice)
       : thing === 'door' ? (room === 'office' ? words.toLounge : words.toOffice) : thing === 'screen' ? words.openTerminal : thing === 'board' ? words.openBoard : thing === 'orb' ? words.openAutomata
-      : thing === 'metrics' ? (useSessions.getState().metricsUnread ? words.newMetrics : words.openMetrics) : null;
+      : thing === 'metrics' ? (modsNews(useSessions.getState()) ? words.newMods : words.openMods) : null;
     setHintText(text);
     const card = hint.current;
     if (!card || !text) return;

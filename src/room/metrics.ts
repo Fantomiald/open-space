@@ -6,10 +6,14 @@ import { toScreen, type Point } from './geometry.ts';
 /** Where the badge's tail points, above each object: a floor point from the piece's corner (tiles), and how high (room pixels). */
 const BADGE_SPOTS: Readonly<Record<MetricsKind, { x: number; y: number; z: number }>> = {
   cash: { x: 0.3, y: 0.3, z: 50 },
-  metricsTv: { x: 0.12, y: 0.4, z: 82 },
+  metricsTv: { x: 0.3, y: 0.5, z: 96 },
   ticker: { x: 0.1, y: 0.4, z: 84 },
   piggyBank: { x: 1, y: 0.3, z: 76 },
 };
+
+/** Something new waits in a mod the user does not have open, or in the numbers file (the header's Mods button shows the same). */
+export const modsNews = (s: { metricsUnread: boolean; mods: readonly { id: string; unread: boolean }[] | null; openMods: readonly string[] }) =>
+  s.metricsUnread || !!s.mods?.some((mod) => mod.unread && !s.openMods.includes(mod.id));
 
 /** Something new waits in the numbers file, and the panel that shows them is closed (opening it clears the badge before the server says so). */
 export const showsMetricsBadge = (unread: boolean, panelOpen: boolean) => unread && !panelOpen;
