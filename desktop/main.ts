@@ -23,6 +23,8 @@ const UPDATE_CHECK_MS = 60 * 60 * 1000;
 const STEADY_AFTER_MS = 10_000;
 /** the room behind the page while it loads, so the window does not flash white */
 const BACKGROUND = ROOM_PALETTE.icon.bottom;
+/** the share of a macOS icon's width its squircle covers (824 of 1024 on Apple's grid), as the other Dock icons do */
+const MACOS_ICON_TILE = 824 / 1024;
 
 const config = loadConfig(process.env, os.homedir());
 const address = `http://127.0.0.1:${config.port}`;
@@ -203,6 +205,7 @@ function openSession(sessionId: string) {
 /**
  * The Dock icon: the user's bust (OFFICE_DIR/avatar.png, saved by the page from their look) on the squircle of the
  * room at night, as src/room/chibi.ts draws the favicon, at 18 screen pixels per art pixel so the pixels stay sharp.
+ * The squircle itself is cut at full size, smooth like the other Dock icons'; the bitmap is BGRA, like the bust's.
  */
 function dockIcon(avatar: string, scale = 18): NativeImage | null {
   const bust = nativeImage.createFromPath(avatar);
@@ -210,30 +213,41 @@ function dockIcon(avatar: string, scale = 18): NativeImage | null {
   const { width, height } = bust.getSize();
   const pixels = bust.toBitmap();
   const grid = 28;
-  const size = grid * scale;
-  const middle = (grid - 1) / 2;
-  const inside = (x: number, y: number) => Math.abs(x - middle) ** 4 + Math.abs(y - middle) ** 4 <= 11.5 ** 4;
+  const margin = 3;
+  const tile = (grid - 2 * margin) * scale;
+  const size = Math.round(tile / MACOS_ICON_TILE);
+  const offset = Math.floor((size - tile) / 2);
   const channels = (hex: string) => [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
   const [top, bottom] = [channels(ROOM_PALETTE.icon.top), channels(ROOM_PALETTE.icon.bottom)];
   const left = Math.floor((grid - width) / 2);
   const above = grid - height;
-  const image = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < grid; y++) for (let x = 0; x < grid; x++) {
-    if (!inside(x, y)) continue;
-    // the bitmap is BGRA, like the bust's
-    let colour = [2, 1, 0].map((channel) => Math.round(top[channel]! + (bottom[channel]! - top[channel]!) * y / (grid - 1)));
+  const artColour = (x: number, y: number) => {
     const bx = x - left;
     const by = y - above;
     if (bx >= 0 && bx < width && by >= 0 && by < height && pixels[(by * width + bx) * 4 + 3]! > 0) {
       const at = (by * width + bx) * 4;
-      colour = [pixels[at]!, pixels[at + 1]!, pixels[at + 2]!];
+      return [pixels[at]!, pixels[at + 1]!, pixels[at + 2]!];
     }
-    for (let dy = 0; dy < scale; dy++) for (let dx = 0; dx < scale; dx++) {
-      const at = ((y * scale + dy) * size + x * scale + dx) * 4;
-      image[at] = colour[0]!; image[at + 1] = colour[1]!; image[at + 2] = colour[2]!; image[at + 3] = 255;
-    }
+    return [2, 1, 0].map((channel) => top[channel]! + (bottom[channel]! - top[channel]!) * y / (grid - 1));
+  };
+  const image = Buffer.alloc(size * size * 4);
+  for (let py = 0; py < size; py++) for (let px = 0; px < size; px++) {
+    const coverage = squircleCoverage(px + 0.5 - size / 2, py + 0.5 - size / 2, tile / 2);
+    if (coverage === 0) continue;
+    const colour = artColour(margin + Math.floor((px - offset) / scale), margin + Math.floor((py - offset) / scale));
+    const at = (py * size + px) * 4;
+    image[at] = Math.round(colour[0]! * coverage);
+    image[at + 1] = Math.round(colour[1]! * coverage);
+    image[at + 2] = Math.round(colour[2]! * coverage);
+    image[at + 3] = Math.round(255 * coverage);
   }
   return nativeImage.createFromBitmap(image, { width: size, height: size });
+}
+
+/** How much of the pixel at (x, y) from the middle lies inside a macOS squircle of that radius, from 0 to 1. */
+function squircleCoverage(x: number, y: number, radius: number): number {
+  const reach = (Math.abs(x) ** 5 + Math.abs(y) ** 5) ** (1 / 5);
+  return Math.min(1, Math.max(0, radius - reach + 0.5));
 }
 
 /** The Dock icon follows the user's look: the page saves a new bust whenever it changes. */
