@@ -37,7 +37,8 @@ export type OfficeEvent =
   | { k: 'think'; who: string }
   | { k: 'say'; who: string; text: string }
   | { k: 'plan'; items: PlanItem[] }
-  | { k: 'hire'; id: string; type: string; name: string; task: string; prompt: string }
+  /** `workflow`: the workflow it works in, by its description (Claude Code's Workflow tool), absent for an Agent call */
+  | { k: 'hire'; id: string; type: string; name: string; task: string; prompt: string; workflow?: string }
   | { k: 'act'; who: string; id: string; tool: string; detail: string }
   /** `output`: what it gave back, kept short (server/actions.ts); absent in logs of older versions */
   | { k: 'act_done'; who: string; id: string; ok: boolean; output?: ToolOutput }

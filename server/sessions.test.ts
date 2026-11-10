@@ -952,6 +952,25 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
+  it("lists a workflow's agents as its sub-agents, and keeps waiting while the workflow starts more after the turn", async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'run the workflow' });
+    const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
+    const row = (index: number, state: string) => ({ type: 'workflow_agent', index, label: `step ${index}`, state, promptPreview: 'go' });
+    const progress = (...rows: Record<string, unknown>[]) => emit({ type: 'system', subtype: 'task_progress', tool_use_id: 'wf-1', summary: 'Checks', workflow_progress: rows });
+    emit({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'w1', task_type: 'local_workflow', description: 'Checks' }] });
+    progress(row(1, 'start'));
+    emit({ type: 'result', subtype: 'success', is_error: false, result: 'Launched.', duration_ms: 900 });
+    assert.equal(find(id).state, 'wait');
+    progress(row(1, 'done'), row(2, 'start'));
+    assert.equal(find(id).state, 'wait', 'its next agent starting is not the session at work');
+    assert.deepEqual(find(id).subagents.map((subagent) => subagent.id), ['wf-1:2']);
+    emit({ type: 'system', subtype: 'task_notification', tool_use_id: 'wf-1', status: 'completed', summary: 'done' });
+    assert.deepEqual(find(id).subagents, []);
+    await manager.shutdown();
+  });
+
   it('queues the messages sent during a turn, shows them, and sends them together when it ends', async () => {
     const { manager, processes, find } = setup();
     await manager.init();
