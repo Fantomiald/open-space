@@ -100,6 +100,8 @@ export interface OpenSpaceApi {
   rename: (sessionId: string, name: string) => void;
   /** closes the session once its turn ends */
   finish: (sessionId: string) => void;
+  /** the user's bots, to name in a trigger's `messengers` */
+  bots: () => { id: string; name: string; username: string | null }[];
   /** sends a file of an allowed folder to a bot's chat */
   sendFile: (botId: string, file: string, caption: string) => Promise<void>;
 }
@@ -121,6 +123,8 @@ const triggerFields: Json = {
   permissionMode: { type: 'string', enum: ['auto', 'acceptEdits', 'manual', 'plan'] },
   remote: { type: 'boolean', description: 'Remote Control on for each run (default true)' },
   allowedTools: { type: 'array', items: { type: 'string' }, description: 'Claude Code permission rules its runs use without asking, e.g. "Bash(git push *)". Only the external program sets them, never a session.' },
+  messengers: { type: 'array', items: { type: 'string' }, description: 'Bots told what its runs wait for and the files they send, by name or @username (the user\'s bots, Connections page in Open Space); [] for none' },
+  notifyDone: { type: 'boolean', description: 'Its bots are also told when a run finishes (default true)' },
 };
 
 const read = { readOnlyHint: true, openWorldHint: false };
@@ -166,7 +170,25 @@ export const TOOLS: Tool[] = [
 ];
 
 /** A trigger as an agent sees it: never its webhook token. */
-const shown = ({ token: _token, ...trigger }: Trigger, runs: TriggerRun[]) => ({ ...trigger, lastRuns: runs.filter((run) => run.triggerId === trigger.id).slice(0, 3) });
+const shown = (api: OpenSpaceApi, { token: _token, ...trigger }: Trigger, runs: TriggerRun[]) => {
+  const bots = api.bots();
+  const messengers = trigger.messengers.map((id) => bots.find((bot) => bot.id === id)?.name ?? id);
+  return { ...trigger, messengers, lastRuns: runs.filter((run) => run.triggerId === trigger.id).slice(0, 3) };
+};
+
+/** A trigger's bots, named as the user knows them (name, @username) or by id. */
+function botIds(api: OpenSpaceApi, names: unknown): { ids: unknown } | { unknown: string } {
+  if (!Array.isArray(names)) return { ids: names };
+  const bots = api.bots();
+  const ids: string[] = [];
+  for (const name of names) {
+    const wanted = typeof name === 'string' ? name.trim().replace(/^@/, '').toLowerCase() : '';
+    const bot = bots.find((each) => each.id === name || each.name.toLowerCase() === wanted || each.username?.toLowerCase() === wanted);
+    if (!bot) return { unknown: String(name) };
+    ids.push(bot.id);
+  }
+  return { ids };
+}
 
 const givenTo = (tool: Tool, caller: Caller) => !tool.for || tool.for.includes(audienceOf(caller));
 
@@ -239,14 +261,20 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       await api.sendFile(caller.messenger, asString(args.path), asString(args.caption).slice(0, 1000));
       return text('sent');
     }
-    case 'list_triggers': return text(api.triggers().map((trigger) => shown(trigger, api.lastRuns())));
+    case 'list_triggers': return text(api.triggers().map((trigger) => shown(api, trigger, api.lastRuns())));
     case 'create_trigger': case 'update_trigger': {
       const id = name === 'update_trigger' ? asString(args.id) : undefined;
-      const { id: _id, ...fields } = args;
+      const { id: _id, ...given } = args;
+      const fields: Record<string, unknown> = { ...given };
       // an agent would widen its own rights through a trigger it starts
       if (!('external' in caller) && fields.allowedTools !== undefined) return failure(st.triggers.mcp.rulesFromPage);
+      if (fields.messengers !== undefined) {
+        const bots = botIds(api, fields.messengers);
+        if ('unknown' in bots) return failure(st.triggers.mcp.unknownBot(bots.unknown, api.bots().map((bot) => bot.name)));
+        fields.messengers = bots.ids;
+      }
       const saved = await api.saveTrigger(id, name === 'create_trigger' ? { ...fields, cwd: folder() } : fields);
-      return 'error' in saved ? failure(st.triggers.errors[saved.error]) : text(shown(saved.trigger, []));
+      return 'error' in saved ? failure(st.triggers.errors[saved.error]) : text(shown(api, saved.trigger, []));
     }
     case 'run_trigger': {
       const run = await api.runTrigger(asString(args.id));

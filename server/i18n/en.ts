@@ -208,6 +208,7 @@ export const en: ServerDictionary = {
       noAnswers: 'Give the answers: each question text to the label chosen.',
       keysInPage: 'A request for keys is only answered in Open Space.',
       rulesFromPage: 'What a trigger does without asking is set in Open Space, not from a session.',
+      unknownBot: (name: string, known: string[]) => `No bot "${name}". ${known.length ? `Your bots: ${known.join(', ')}.` : 'Add one in Open Space, Connections page.'}`,
       notARun: 'Only an automaton\'s run ends this way: a session opened by hand is closed in Open Space.',
       noName: 'Give a name.',
       finishing: 'The session will close at the end of this turn.',

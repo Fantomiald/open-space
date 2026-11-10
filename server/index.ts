@@ -317,6 +317,7 @@ const VERSION = (() => { try { return String(JSON.parse(readFileSync(path.join(R
 /** What the open-space MCP server reaches (server/mcp.ts). */
 const mcpApi: OpenSpaceApi = {
   triggers: () => triggers.list(),
+  bots: () => messengers.list().map(({ id, name, username }) => ({ id, name, username })),
   lastRuns: () => triggers.recentRuns(),
   saveTrigger: async (id, raw) => {
     const base = id ? triggers.get(id) : undefined;

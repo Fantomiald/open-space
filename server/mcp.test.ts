@@ -53,6 +53,7 @@ function fakeApi() {
     rename: (id, name) => { done.push(`rename ${id} ${name}`); },
     finish: (id) => { done.push(`finish ${id}`); },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
+    bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
   };
   return { api, triggers, sessions, crew, done, preferences: () => preferences };
 }
@@ -147,6 +148,11 @@ describe('the open-space MCP server', () => {
     assert.equal(updated.isError, false);
     assert.equal(triggers[0].enabled, false);
     assert.equal(triggers[0].prompt, 'Check the house.', 'what is not given stays');
+    assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, messengers: ['imd'] })).isError, false);
+    assert.deepEqual(triggers[0].messengers, ['bot00001'], 'a bot is named as the user knows it');
+    assert.match((await tool(api, 'list_triggers')).text, /"messengers": \[\s*"iMD"\s*\]/);
+    assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, messengers: ['@IMD_juyin_bot'] })).isError, false);
+    assert.match((await tool(api, 'update_trigger', { id: triggers[0].id, messengers: ['Perso'] })).text, /iMD/, 'an unknown bot names the known ones');
   });
 
   it('starts sessions, adds to the crew, lists roles', async () => {

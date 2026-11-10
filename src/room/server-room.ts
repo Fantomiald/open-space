@@ -2,7 +2,7 @@
 // from the orb to each automaton in its capsule, with the packets of data it pulls along it. Pure functions in room
 // pixels, tested without a DOM (room.test.ts); themes/servers.ts and draw.ts paint them.
 import { ORB } from '../../shared/room-layout.ts';
-import { toScreen, type Point } from './geometry.ts';
+import { depthOf, toScreen, type Point } from './geometry.ts';
 import { glyphRows } from './wall-art.ts';
 import { BOT_GLYPH, BOT_GLYPH_SIZE } from './status-glyphs.ts';
 import { ART_SCALE } from './pixel-art.ts';
@@ -14,8 +14,12 @@ export function orbCenter(bob = 0): Point {
   return { x: floor.x, y: floor.y - ORB.z * ART_SCALE - bob };
 }
 
-/** True for a canvas point on the orb, or close enough to it (the bob left out: it moves by a few pixels only). */
-export function isOrbAt(point: Point): boolean {
+/**
+ * True for a canvas point on the orb, or close enough to it (the bob left out: it moves by a few pixels only), unless
+ * the automaton under that point (`covering`: the tile it stands on) is in front of the orb.
+ */
+export function isOrbAt(point: Point, covering?: Point): boolean {
+  if (covering && depthOf(covering) > depthOf(ORB)) return false;
   const center = orbCenter();
   return Math.hypot(point.x - center.x, point.y - center.y) <= (ORB_SHAPE.radius + 4) * ART_SCALE;
 }

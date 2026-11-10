@@ -17,7 +17,7 @@ import { assignSeats } from './seats.ts';
 import { NO_GEAR, parseLook, randomLook } from '../../shared/look.ts';
 import { AUTOMATON_LOOK, DEFAULT_LOOK, ROBOT_ACCENTS } from '../design/people-palette.ts';
 import { furnitureDepth } from './pixel-furniture.ts';
-import { chestOf, cordEnd, cordPath, orbCenter, orbFloorY, packetsOn, pulseRings, waitingSign } from './server-room.ts';
+import { chestOf, cordEnd, cordPath, isOrbAt, orbCenter, orbFloorY, packetsOn, pulseRings, waitingSign } from './server-room.ts';
 import { packetShare, skyLinks, skyNodes, skyTowers } from './themes/servers-sky.ts';
 import { ORB_SHAPE } from './server-furniture.ts';
 import { robotHeight, robotLook, robotRows, withRobots } from './robot.ts';
@@ -1080,6 +1080,14 @@ describe('the automatons\' server room', () => {
   it('keeps its look whatever the festival', () => {
     assert.equal(layoutOn(SERVER_ROOM, 'christmas'), SERVER_ROOM);
     assert.equal(new Floor(SERVER_ROOM, 'halloween').layout, SERVER_ROOM);
+  });
+
+  it('takes the click over an automaton behind the orb, not over one in front of it', () => {
+    const orb = orbCenter();
+    assert.ok(isOrbAt(orb));
+    assert.ok(isOrbAt(orb, { x: ORB.x - 1, y: ORB.y - 1 }), 'behind');
+    assert.ok(!isOrbAt(orb, { x: ORB.x + 1, y: ORB.y + 1 }), 'in front');
+    assert.ok(!isOrbAt({ x: orb.x + 200, y: orb.y }));
   });
 
   it('draws a cord from the orb\'s edge to each automaton\'s chest, sagging a little, one anchor per capsule', () => {

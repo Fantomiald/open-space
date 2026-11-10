@@ -294,13 +294,13 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const point = roomPoint(event);
     if (useSessions.getState().preferences.pet.kind !== 'none' && scene.pokePet(point)) return;
     const character = scene.characterAt(point);
+    if (room === 'automata' && isOrbAt(point, character?.position)) { useSessions.getState().openAutomata(true); return; }
     if (character?.person.automaton) { useSessions.getState().openAutomata(true, character.person.automaton, character.person.automatonAgent); return; }
     if (character) { show(character.person.sessionId); return; }
     const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open
     if (!isInRoom(point)) { leave(); return; }
-    if (room === 'automata' && isOrbAt(point)) { useSessions.getState().openAutomata(true); return; }
     if (floor.isDoorAt(point)) { scene.walkPlayerOut(); return; }
     if (floor.isPortalAt(point)) { scene.walkPlayerToPortal(); return; }
     if (floor.isUserScreenAt(point)) { useSessions.getState().send({ t: 'openTerminal' }); return; }
@@ -315,12 +315,14 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const onMouseMove = (event: MouseEvent<HTMLCanvasElement>) => {
     if (scene.carried) return;
     const point = roomPoint(event);
-    const person = scene.personAt(point);
+    // the orb takes the click over an automaton behind it
+    const orb = room === 'automata' && isOrbAt(point, scene.characterAt(point)?.position);
+    const person = orb ? null : scene.personAt(point);
     // a session in front of a visitor, the door or the desk takes the click (the user, seated behind their laptop, does not)
-    const visitor = person && person !== PLAYER_ID ? null : scene.visitorAt(point);
+    const visitor = orb || (person && person !== PLAYER_ID) ? null : scene.visitorAt(point);
     hoveredId.current = visitor?.id ?? person;
-    const thing: HoveredThing = (person && person !== PLAYER_ID) || visitor ? null
-      : floor.isDoorAt(point) ? 'door' : floor.isPortalAt(point) ? 'portal' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : room === 'automata' && isOrbAt(point) ? 'orb' : null;
+    const thing: HoveredThing = orb ? 'orb' : (person && person !== PLAYER_ID) || visitor ? null
+      : floor.isDoorAt(point) ? 'door' : floor.isPortalAt(point) ? 'portal' : floor.isUserScreenAt(point) ? 'screen' : floor.isBoardAt(point) ? 'board' : floor.isMetricsAt(point) ? 'metrics' : null;
     hoveredThing.current = thing;
     const words = t.room.hint;
     const automaton = person && person !== PLAYER_ID ? scene.characters.get(person)?.person : undefined;
