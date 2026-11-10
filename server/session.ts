@@ -6,13 +6,13 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
-import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
+import { parseContextUsage, parseMcpServers, parseUsageReport, quotaFromUsage } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
 import { Normalizer, describeRequest, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
@@ -102,6 +102,8 @@ const LAST_MESSAGE_LENGTH = 400;
 const GRACE_MS = 3000;
 /** The text being written is sent at most this often: one message per chunk would flood the clients. */
 const PARTIAL_EVERY_MS = 80;
+/** get_usage calls claude.ai: asked at most this often per session (see askUsage) */
+const USAGE_EVERY_MS = 5 * 60_000;
 
 export class Session {
   private info: StoredInfo;
@@ -132,6 +134,8 @@ export class Session {
   /** the text being written not sent yet, by who writes it */
   private partials = new Map<string, string>();
   private partialTimer: NodeJS.Timeout | null = null;
+  /** when get_usage was last asked for the header's usage (see askUsage) */
+  private usageAskedAt = Number.NEGATIVE_INFINITY;
   /** where other Claude Code sessions reach the current process (see InitInfo), '' before its init */
   private socket = '';
   /** the commands run with "!" since the last message, with what they wrote, in Claude Code's own format: they go with the next one */
@@ -444,7 +448,7 @@ export class Session {
       emit: (ev) => this.onEvent(ev),
       onInit: (init) => this.onInit(init),
       onCommands: (commands) => this.deps.onCommandDetails(commands),
-      onQuota: (quota) => this.deps.onQuota(quota),
+      onQuota: (quota) => { this.deps.onQuota(quota); this.askUsage(); },
       onSpend: (dollars) => this.onSpend(dollars),
       onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
@@ -640,8 +644,28 @@ export class Session {
       case 'mcp': return { view, servers: parseMcpServers(await process.control({ subtype: 'mcp_status' })) };
       // 'summary': from the last answer's usage and estimates, without a token-count call per category
       case 'context': return { view, usage: parseContextUsage(await process.control({ subtype: 'get_context_usage', detail: 'summary' })) };
-      case 'usage': return { view, report: parseUsageReport(await process.control({ subtype: 'get_usage' })) };
+      case 'usage': {
+        const report = parseUsageReport(await process.control({ subtype: 'get_usage' }));
+        this.reportUsage(report);
+        return { view, report };
+      }
     }
+  }
+
+  /**
+   * rate_limit_event only carries the five-hour and weekly windows; a model's own weekly limit (Fable) is only in the
+   * get_usage answer, so it is asked when the usage moves, at most every USAGE_EVERY_MS.
+   */
+  private askUsage() {
+    if (this.now() - this.usageAskedAt < USAGE_EVERY_MS) return;
+    this.usageAskedAt = this.now();
+    // ponytail: best effort, the header keeps the windows it has; the Usage panel shows the error when asked
+    this.process?.control({ subtype: 'get_usage' }).then((response) => this.reportUsage(parseUsageReport(response)), () => {});
+  }
+
+  private reportUsage(report: UsageReport) {
+    const quota = quotaFromUsage(report);
+    if (quota) this.deps.onQuota(quota);
   }
 
   /**

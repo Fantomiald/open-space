@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { asJson } from './json.ts';
-import { parseContextUsage, parseMcpServers, parseUsageReport } from './inspect.ts';
+import { parseContextUsage, parseMcpServers, parseUsageReport, quotaFromUsage } from './inspect.ts';
 
 const fixture = asJson(JSON.parse(readFileSync(new URL('./fixtures/inspect.json', import.meta.url), 'utf8')));
 
@@ -38,5 +38,15 @@ describe('inspect', () => {
     assert.deepEqual(report.session, { costUsd: 0.4213, durationMs: 9253000, apiMs: 61000, linesAdded: 120, linesRemoved: 31 });
     assert.deepEqual(report.week?.agents, [{ name: 'general-purpose', percent: 10 }], 'nothing at 0 %');
     assert.equal(parseUsageReport({}).week, null);
+  });
+
+  it("gives the header's windows from the plan usage, a model's own weekly limit (Fable) included", () => {
+    const quota = quotaFromUsage(parseUsageReport(asJson(fixture.get_usage)));
+    assert.deepEqual(quota?.windows.map(({ name, utilization }) => ({ name, utilization })), [
+      { name: 'five_hour', utilization: 0.33 }, { name: 'seven_day', utilization: 0.48 }, { name: 'seven_day_fable', utilization: 0 },
+    ]);
+    assert.equal(quota?.fiveHour, 0.33);
+    assert.equal(quota?.resetsAt, Math.round(Date.parse('2026-10-17T18:20:00.210222+00:00') / 1000), 'in seconds, like rate_limit_event');
+    assert.equal(quotaFromUsage(parseUsageReport({})), null, 'no limits (an API key): nothing to show');
   });
 });

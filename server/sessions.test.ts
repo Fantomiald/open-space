@@ -24,6 +24,8 @@ class FakeProcess implements ProcessHandle {
   remoteCalls: boolean[] = [];
   remoteTitles: string[] = [];
   controls: Record<string, unknown>[] = [];
+  /** the get_usage answer: none by default, so the header keeps rate_limit_event's windows */
+  usage: Record<string, unknown> = {};
   /** the control subtypes Claude Code refuses, as it does ultracode when dynamic workflows are off */
   refused = new Set<string>();
   stopCalls: number[] = [];
@@ -46,6 +48,7 @@ class FakeProcess implements ProcessHandle {
     if (request.subtype === 'remote_control') { this.remoteCalls.push(request.enabled === true); if (request.name) this.remoteTitles.push(String(request.name)); }
     if (request.subtype === 'remote_control') return Promise.resolve(request.enabled ? { session_url: 'https://claude.ai/code/session_test', bridge_session_id: 'cse_test' } : {});
     if (request.subtype === 'mcp_status') return Promise.resolve({ mcpServers: [{ name: 'docs', status: 'connected', config: { type: 'stdio' }, source: 'project', tools: [{ name: 'search' }] }] });
+    if (request.subtype === 'get_usage') return Promise.resolve(this.usage);
     if (request.subtype === 'mcp_authenticate') return Promise.resolve({ authUrl: 'https://auth.example.com/sign-in', requiresUserAction: true, callbackExpected: true });
     return Promise.resolve({});
   }
@@ -174,6 +177,25 @@ describe('creating sessions', () => {
 });
 
 describe('usage', () => {
+  it("adds a model's own weekly limit (Fable) from get_usage to the header's windows and keeps it through the next rate limit event", async () => {
+    // before the fixtures' resets (simple-turn: 1792149600, inspect.json: 2026-10-17T18:20Z)
+    const { manager, processes } = setup({}, undefined, () => 1792149600_000 - 3_600_000);
+    await manager.init();
+    await manager.create({ cwd: projectA(), text: 'ping' });
+    processes[0].usage = asJson(JSON.parse(readFileSync(new URL('./fixtures/inspect.json', import.meta.url), 'utf8'))).get_usage as Record<string, unknown>;
+    processes[0].feed('simple-turn');
+    await new Promise((resolve) => setImmediate(resolve));
+    const names = () => manager.getQuota()?.windows.map((window) => window.name);
+    assert.deepEqual(names(), ['five_hour', 'seven_day', 'seven_day_fable']);
+    manager.send(manager.list()[0].id, 'again');
+    processes[0].feed('simple-turn');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(manager.getQuota()?.fiveHour, 0.02, 'rate_limit_event refreshed the five hours');
+    assert.deepEqual(names(), ['five_hour', 'seven_day', 'seven_day_fable'], 'and the Fable row stayed');
+    assert.equal(processes[0].controls.filter((request) => request.subtype === 'get_usage').length, 1, 'asked once, not at every event');
+    await manager.shutdown();
+  });
+
   it('keeps the last five-hour usage across a restart, as Claude Code only reports it while a session works', async () => {
     const dataDir = path.join(base, `data-quota-${++counter}`);
     // an hour before the reset recorded in the fixture, so the stored usage is still current
@@ -1355,10 +1377,12 @@ describe('process life cycle', () => {
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'sleep in the background' });
     processes[0].feed('bash-stop-task', 0, 11);
+    // the fixture's rate_limit_event asks get_usage for the header's usage
+    const stops = () => processes[0].controls.filter((request) => request.subtype !== 'get_usage');
     await manager.stopTask(id, 'not-a-task');
-    assert.deepEqual(processes[0].controls, [], 'an id the session never told of goes nowhere');
+    assert.deepEqual(stops(), [], 'an id the session never told of goes nowhere');
     await manager.stopTask(id, 'bgj07aynt');
-    assert.deepEqual(processes[0].controls, [{ subtype: 'stop_task', task_id: 'bgj07aynt' }]);
+    assert.deepEqual(stops(), [{ subtype: 'stop_task', task_id: 'bgj07aynt' }]);
     processes[0].feed('bash-stop-task', 11, 14);
     assert.equal(find(id).background, undefined);
     await manager.shutdown();
@@ -1372,7 +1396,7 @@ describe('process life cycle', () => {
     processes[0].exit(0, null, '');
     await manager.stopTask(id, 'bgj07aynt');
     assert.equal(processes.length, 1, 'no new process');
-    assert.deepEqual(processes[0].controls, []);
+    assert.deepEqual(processes[0].controls.filter((request) => request.subtype !== 'get_usage'), []);
     await manager.shutdown();
   });
 

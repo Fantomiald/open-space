@@ -332,7 +332,7 @@ export class SessionManager {
       // a process started: the folder's commands may have changed since they were probed (a skill added)
       onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
-      onQuota: (quota) => { this.quota = quota; this.deps.broadcast({ t: 'quota', quota }); this.save(); },
+      onQuota: (quota) => this.setQuota(quota),
       allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.roots()),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
       uploadPath: (id) => uploadPath(uploadsFolder(this.deps.config.dataDir), id),
@@ -416,6 +416,19 @@ export class SessionManager {
   getFolderCommands(): Record<string, SlashCommand[]> { return Object.fromEntries(this.folderCommands); }
   getModels(): ModelChoice[] { return this.models; }
   getQuota(): Quota | null { return this.quota; }
+
+  /**
+   * A report replaces the windows it carries and keeps the others until they reset: rate_limit_event has no model's
+   * own weekly limit (Fable), only get_usage answers have it.
+   */
+  private setQuota(quota: Quota) {
+    const now = this.now();
+    const kept = (this.quota?.windows ?? []).filter((window) => !quota.windows.some((fresh) => fresh.name === window.name)
+      && (window.resetsAt === null || (window.resetsAt < 1e12 ? window.resetsAt * 1000 : window.resetsAt) > now));
+    this.quota = { ...quota, windows: [...quota.windows, ...kept] };
+    this.deps.broadcast({ t: 'quota', quota: this.quota });
+    this.save();
+  }
 
   /**
    * The last usage Claude Code reported, kept across restarts (it is only sent while a session works), unless its
