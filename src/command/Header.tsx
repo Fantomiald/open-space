@@ -5,6 +5,7 @@ import { roomSessions } from '../room/cast.ts';
 import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 
@@ -68,6 +69,7 @@ export function Header() {
       <Radio />
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
+        <ModsButton />
         <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} title={words.crewTitle}>
           <CrewIcon /><span className="cp-header__label">{words.crew}</span>
         </button>

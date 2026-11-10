@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ModInfo } from '../../shared/mods.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { locale, t } from '../i18n/index.ts';
 import { defaultFolder, folderName, formatClock } from '../lib/format.ts';
@@ -9,7 +10,7 @@ import { FILTERS, filterCounts, isCommandQuery, searchResults, type Action, type
 import { commandsIn, useSessions } from '../state/sessions.ts';
 import { settingEntries } from '../state/settings-index.ts';
 import {
-  BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
+  BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, MOD_ICONS, ModsIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { runOwnCommand } from './ownCommands.ts';
@@ -18,15 +19,18 @@ import { Snippet } from './Snippet.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { TagChips } from './TagChips.tsx';
 
+const NO_MODS: ModInfo[] = [];
+/** The id of the action that opens a mod: this, then the mod's id. */
+const MOD_ACTION = 'mod:';
 /** How long the field waits after a key before it searches the threads again. */
 const TYPING_PAUSE_MS = 140;
 
 /** Everything the palette can do on its own, in the order shown when nothing is typed. */
-const ACTION_IDS = ['newSession', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
+const ACTION_IDS = ['newSession', 'mods', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
 type ActionId = (typeof ACTION_IDS)[number];
 
 const ACTION_ICONS: Record<ActionId, () => ReactNode> = {
-  newSession: PlusIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon,
+  newSession: PlusIcon, mods: ModsIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon,
   office: DeskIcon, lounge: SofaIcon, shortcuts: KeyboardIcon, terminal: TerminalIcon, branches: BranchIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
 };
 
@@ -51,6 +55,7 @@ function PaletteContent() {
   const seen = useSessions((s) => s.seen);
   const sound = useSessions((s) => s.sound);
   const notifications = useSessions((s) => s.preferences.notifications);
+  const mods = useSessions((s) => s.mods) ?? NO_MODS;
   const searchResultsState = useSessions((s) => s.searchResults);
   const initial = useSessions((s) => s.paletteQuery);
   const [query, setQuery] = useState(initial);
@@ -79,12 +84,13 @@ function PaletteContent() {
   const hits = threadQuery && searchResultsState?.query === threadQuery ? searchResultsState.hits : [];
   const searching = threadQuery !== '' && searchResultsState?.query !== threadQuery;
 
-  const actions = useMemo<Action[]>(() => ACTION_IDS.map((id) => {
+  const actions = useMemo<Action[]>(() => ACTION_IDS.map((id): Action => {
     const label = id === 'sound' ? (sound ? words.actions.soundOff : words.actions.soundOn)
       : id === 'notifications' ? (notifications ? words.actions.notificationsOff : words.actions.notificationsOn) : words.actions[id];
     const more = id === 'sound' ? words.actionWords.soundOn : id === 'notifications' ? words.actionWords.notificationsOn : words.actionWords[id];
     return { id, label, words: more };
-  }), [sound, notifications, words]);
+    // each mod opens or comes to the front by its name
+  }).concat(mods.map((mod) => ({ id: `${MOD_ACTION}${mod.id}`, label: mod.name, words: `mod ${mod.description}` }))), [sound, notifications, words, mods]);
   const settings = useMemo(settingEntries, []);
 
   const everything = useMemo(
@@ -121,8 +127,10 @@ function PaletteContent() {
   const runAction = (id: string) => {
     const s = store();
     close();
+    if (id.startsWith(MOD_ACTION)) { s.openMod(id.slice(MOD_ACTION.length)); return; }
     switch (id as ActionId) {
       case 'newSession': s.openNewSession({}); break;
+      case 'mods': s.openModsPanel(true); break;
       case 'usage': s.openSettings(true, 'usage'); break;
       case 'rewind': s.openSettings(true, 'usage', 'rewind'); break;
       case 'settings': s.openSettings(true); break;
@@ -223,7 +231,8 @@ function PaletteContent() {
         </div>
       );
       case 'action': {
-        const ActionIcon = ACTION_ICONS[result.action as ActionId];
+        const mod = result.action.startsWith(MOD_ACTION) ? mods.find((each) => `${MOD_ACTION}${each.id}` === result.action) : undefined;
+        const ActionIcon = mod ? MOD_ICONS[mod.icon] : ACTION_ICONS[result.action as ActionId];
         return (
           <div key={result.key} {...attributes}>
             <span className="cp-find__icon">{ActionIcon ? <ActionIcon /> : <CostIcon />}</span>

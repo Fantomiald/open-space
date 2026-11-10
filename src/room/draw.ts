@@ -229,7 +229,7 @@ function lightsOf(layout: Layout, occupied: ReadonlySet<number>, bossAtDesk: boo
     }
     if (piece.kind === 'counter' && lamps) lights.push({ at: above(x + 0.6, y + 0.5, 30), radius: 80, colour: P.light.coffee, strength: 0.8 });
     if (piece.kind === 'pumpkin') lights.push({ at: above(x + 0.5, y + 0.5, 12), radius: 60, colour: P.halloween.glow, strength: 0.9 });
-    if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 68), radius: 80, colour: P.light.screen, strength: 0.7 });
+    if (piece.kind === 'metricsTv') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 60), radius: 80, colour: P.light.screen, strength: 0.7 });
     if (piece.kind === 'ticker') lights.push({ at: above(x + 0.4, y + piece.depth / 2, 78), radius: 70, colour: P.light.screenIdle, strength: 0.5 });
     if (piece.kind === 'cooler' && lamps) lights.push({ at: above(x + 0.5, y + 0.8, 30), radius: 50, colour: P.light.screenIdle, strength: 0.6 });
     if (piece.kind === 'desk') {

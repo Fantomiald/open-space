@@ -179,6 +179,9 @@ export const en: ServerDictionary = {
     tooBig: 'This note is too long for the whiteboard (1 MB at most).',
     taken: (name: string) => `A note is already called ${name}.`,
   },
+  mods: {
+    request: (text: string) => `Build this mod, following the CLAUDE.md of the parent folder: ${text}`,
+  },
   metrics: {
     tooBig: 'The numbers file is too long for the screen (1 MB at most).',
   },

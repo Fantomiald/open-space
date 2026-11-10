@@ -1,0 +1,81 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mod kit</title>
+<link rel="stylesheet" href="kit.css">
+<script src="kit.js"></script>
+<style>html { background: #141a2e; }</style>
+<!-- Every component of the kit with example data, to see them at a mod's widths (240 to 960 px). Not a mod. -->
+
+<os-section title="Chiffres clés" action="30 jours">
+  <os-stats>
+    <os-stat label="Revenus" value="1 284 $" delta="+18 %" tone="good"></os-stat>
+    <os-stat label="Aujourd'hui" value="68 $" delta="-4 %" tone="bad"></os-stat>
+    <os-stat label="Essais" value="41" delta="+6" tone="good" hint="dont 12 convertis"></os-stat>
+  </os-stats>
+</os-section>
+
+<os-stats><os-stat size="large" label="MRR" value="3 420 $" delta="+9 %" tone="good"></os-stat></os-stats>
+
+<os-section title="Courbes">
+  <os-line id="line" unit="$" legend></os-line>
+</os-section>
+
+<os-section title="Une courbe remplie"><os-line id="area" area></os-line></os-section>
+
+<os-section title="Barres" action="14 jours"><os-bars id="bars" unit="$"></os-bars></os-section>
+
+<os-row>
+  <os-section title="Classement"><os-rows id="rows" colors></os-rows></os-section>
+  <os-section title="Jauges">
+    <os-meter label="Quota 5 h" value="62" text="62 %" tone="warn"></os-meter>
+    <os-meter label="Semaine" value="23" text="23 %" tone="good"></os-meter>
+  </os-section>
+</os-row>
+
+<os-row>
+  <os-ring label="Objectif" value="41" max="60" text="41"></os-ring>
+  <os-ring label="Disque" value="91" tone="bad"></os-ring>
+  <os-ring label="Tests" value="100" tone="good" text="731"></os-ring>
+</os-row>
+
+<os-section title="Liste">
+  <os-list id="list"></os-list>
+</os-section>
+
+<os-section title="Tableau"><os-table id="table"></os-table></os-section>
+
+<os-section title="Petits éléments">
+  <div style="display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center">
+    <os-badge tone="good">en hausse</os-badge><os-badge tone="warn">à surveiller</os-badge><os-badge tone="bad">en baisse</os-badge><os-badge>neutre</os-badge>
+    <os-spark values="[3,4,6,5,9,8,12]" tone="good"></os-spark>
+  </div>
+  <os-tabs options='["Jour","Semaine","Mois"]' value="Semaine"></os-tabs>
+  <div style="display:flex;gap:var(--space-2)"><input class="os-input" placeholder="Chercher…"><button class="os-button">Filtrer</button><button class="os-button" data-variant="primary">Ajouter</button></div>
+  <os-updated id="updated" label="RevenueCat"></os-updated>
+</os-section>
+
+<os-section title="États">
+  <os-loading rows="2" block></os-loading>
+  <os-empty title="Pas encore de ventes" text="Elles s'afficheront ici."></os-empty>
+  <os-error title="Impossible de lire les ventes" text="La clé RevenueCat a expiré."></os-error>
+</os-section>
+
+<script>
+  const days = Array.from({ length: 30 }, (_, at) => OpenSpace.format.date(Date.now() - (29 - at) * 86400000));
+  const walk = (start, drift) => Array.from({ length: 30 }, (_, at) => Math.max(0, Math.round(start + drift * at + Math.sin(at * 1.7) * 3)));
+  line.series = [{ name: 'SteadyMen', values: walk(4, 0.9) }, { name: 'Last Page', values: walk(10, 0.25) }, { name: 'Thai Everyday', values: walk(0, 0.7) }, { name: 'Lilies', values: walk(6, -0.1) }];
+  line.labels = days;
+  area.series = [{ name: 'Sessions', values: walk(2, 0.3) }];
+  area.labels = days;
+  bars.data = walk(20, 1.2).slice(-14).map((value, at) => ({ label: days[16 + at].split(' ')[0], value }));
+  rows.data = [['Ismaël', 6.1], ['Mayeu', 4.3], ['JBP', 3.2], ['Zard', 1.8], ['Sofia-Charlotte Delacroix', 0.9]].map(([label, value]) => ({ label, value, text: OpenSpace.format.money(value) }));
+  list.data = [
+    { title: '« Enfin une app qui marche »', text: 'SteadyMen · 5 étoiles · il y a 2 h', tone: 'good', value: '★ 5' },
+    { title: '« Trop cher pour ce que c’est, et l’abonnement se renouvelle sans prévenir »', text: 'Last Page · 2 étoiles · hier', tone: 'bad', value: '★ 2' },
+    { title: 'Nouvelle version en review', text: 'Thai Everyday 1.4', tone: 'info', href: 'https://appstoreconnect.apple.com' },
+  ];
+  table.columns = [{ key: 'app', label: 'App', wide: true }, { key: 'trials', label: 'Essais', align: 'right' }, { key: 'mrr', label: 'MRR', align: 'right' }];
+  table.rows = [{ app: 'SteadyMen', trials: 18, mrr: '1 210 $' }, { app: 'Last Page', trials: 9, mrr: '860 $' }, { app: 'Thai Everyday', trials: 14, mrr: '540 $' }];
+  updated.setAttribute('at', String(Date.now() - 4 * 60000));
+</script>

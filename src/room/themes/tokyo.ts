@@ -2,6 +2,7 @@
 // with its tie holes over roll-up shutters, pipes, cables, air conditioners and torn posters, neon signs in katakana and
 // pictograms, red lanterns; wet asphalt with its road paint, puddles and a manhole; a sidewalk for a slab with neon
 // under it; a sliding door behind a noren; shop windows on the street in the rain; an LED clock, a karaoke screen.
+import { modsObject } from './mods-object.ts';
 import { TOKYO_PALETTE as T } from '../../design/theme-tokyo.ts';
 import { ROOM, type FurniturePiece, type Layout, type Rug, type WallItem } from '../../../shared/room-layout.ts';
 import { DOOR_SIZE, toScreen, type Point } from '../geometry.ts';
@@ -607,7 +608,7 @@ export const TOKYO: ThemeKit = {
   paintSkyMotion: paintRain,
   // the light through the shop windows is the neon's, on the floor only
   wallBeam: false,
-  furniture: TOKYO_FURNITURE,
+  furniture: { ...TOKYO_FURNITURE, metricsTv: modsObject('tokyo') },
   lighting: tokyoLighting,
   lights: tokyoLights,
   effects: tokyoEffects,

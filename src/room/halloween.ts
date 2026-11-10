@@ -100,7 +100,8 @@ export function halloweenBulbs(room: Room): { at: Point; colour: string }[] {
 /** Everything painted on the walls, at art resolution, over the walls of the backdrop. */
 export function paintHalloweenWalls(context: Context, room: Room) {
   if (room === 'office') {
-    onWall(context, PUMPKIN, PAINT, 'left', 2.2, 18);
+    // clear of the mods object, on the left wall from 1.8 to 4.3 (METRICS_PIECES in shared/room-layout.ts)
+    onWall(context, PUMPKIN, PAINT, 'left', 6.9, 18);
     onWall(context, GHOST, PAINT, 'left', 5.4, 20);
     onWall(context, BAT, PAINT, 'left', 4.4, 36);
     for (const [x, z] of [[2.6, 42], [8.2, 44], [9.6, 41], [16.4, 43]]) onWall(context, BAT, PAINT, 'back', x, z);

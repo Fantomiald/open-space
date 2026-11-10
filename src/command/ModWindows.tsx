@@ -1,0 +1,199 @@
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import type { ModInfo } from '../../shared/mods.ts';
+import { t } from '../i18n/index.ts';
+import { readPreference, writePreference } from '../lib/preferences.ts';
+import { costsForMods, isModData, MOD_HEAD, MOD_TOKENS, modBox, NOT_PLACED, openingSpots, quotaForMods, resizeMod, sessionsForMods, type ModData, type ModPlacement } from '../state/mods.ts';
+import { placePip } from '../state/pip.ts';
+import type { Box } from '../state/room-frame.ts';
+import { useSessions, type CommandPostState } from '../state/sessions.ts';
+import type { Edge } from '../state/windows.ts';
+import { boxVariables } from './boxes.ts';
+import { FreeHandles } from './FreeHandles.tsx';
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MOD_ICONS, PencilIcon, RefreshIcon } from './Icons.tsx';
+import { INTERACTIVE } from './useWindowDrag.ts';
+
+/** how far a press on the title bar goes before it carries the window */
+const CARRY_AFTER = 4;
+/** what a mod watching the costs gets again, at most this often */
+const COSTS_EVERY_MS = 60_000;
+const surface = () => ({ width: window.innerWidth, height: window.innerHeight });
+const placementKey = (id: string) => `mod-placement:${id}`;
+
+/** The mods' windows over the office, in the order they were last touched: the last one on top. */
+export function ModWindows() {
+  const mods = useSessions((s) => s.mods);
+  const openMods = useSessions((s) => s.openMods);
+  const closeMod = useSessions((s) => s.closeMod);
+  // a mod deleted elsewhere: its window goes (once the server said which mods there are)
+  useEffect(() => { if (mods) for (const id of openMods) if (!mods.some((mod) => mod.id === id)) closeMod(id); }, [mods, openMods, closeMod]);
+  const shown = openMods.map((id) => mods?.find((mod) => mod.id === id)).filter((mod): mod is ModInfo => !!mod);
+  // the ones never placed by hand open side by side, in the order they were opened
+  const unplaced = shown.filter((mod) => readPreference(placementKey(mod.id), NOT_PLACED).left === null);
+  const spots = openingSpots(unplaced.map((mod) => ({ width: mod.width, height: mod.height })), surface());
+  const spotOf = (mod: ModInfo) => spots[unplaced.indexOf(mod)] ?? spots[0] ?? { left: 0, top: 0 };
+  // the windows stay in one order in the page (an iframe moved in the DOM loads again); the order they were touched in sets their depth
+  return [...shown].sort((a, b) => a.id.localeCompare(b.id)).map((mod) => <ModWindow key={mod.id} mod={mod} depth={openMods.indexOf(mod.id)} spot={spotOf(mod)} />);
+}
+
+/** What Open Space tells a mod's page asking for `name`. */
+function dataFor(name: ModData, s: CommandPostState) {
+  switch (name) {
+    case 'sessions': return sessionsForMods(Object.values(s.sessions));
+    case 'quota': return quotaForMods(s.quota);
+    case 'costs': return costsForMods(s.costs, Date.now());
+  }
+}
+const pick = (name: ModData) => (s: CommandPostState) => (name === 'sessions' ? s.sessions : name === 'quota' ? s.quota : s.costs);
+
+/** The design tokens of Open Space's page as they are now: the user's window style, for the mod to dress in. */
+function currentTheme() {
+  const style = getComputedStyle(document.documentElement);
+  const s = useSessions.getState();
+  return {
+    vars: Object.fromEntries(MOD_TOKENS.map((name) => [name, style.getPropertyValue(name).trim()]).filter(([, value]) => value)),
+    style: document.documentElement.dataset.windowStyle ?? 'classic',
+    language: s.preferences.language ?? 'fr',
+    reducedMotion: s.preferences.reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches,
+  };
+}
+
+/**
+ * A mod's window: its page in a sandboxed frame (an origin of its own, see server/http.ts), under a title bar that
+ * carries it, resized by its edges and corners, folded to its title. It tells the page the look of the user's windows
+ * and the data the page asks for (the kit's OpenSpace.watch), while it is open.
+ */
+function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { left: number; top: number } }) {
+  const words = t.mods;
+  const { openMod, closeMod, editMod, send, show } = useSessions.getState();
+  const writer = useSessions((s) => Object.values(s.sessions).find((session) => session.cwd === mod.folder));
+  const [placement, setPlacement] = useState<ModPlacement>(() => readPreference(placementKey(mod.id), NOT_PLACED));
+  const [, setSurface] = useState(surface);
+  // the height its page says its content needs: the window fits it until the user resizes it
+  const [fit, setFit] = useState<number | null>(null);
+  const box = modBox(fit ? { width: mod.width, height: fit } : mod, placement, spot, surface());
+  const place = (next: ModPlacement) => { setPlacement(next); writePreference(placementKey(mod.id), next); };
+  const carried = useRef<{ start: Box; x: number; y: number; edge: Edge | null; started: boolean } | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [moved, setMoved] = useState<Box | null>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [loads, setLoads] = useState(0);
+  const shownBox = moved ?? box;
+
+  // a smaller page: the window stays within reach
+  useEffect(() => {
+    const keep = () => setSurface(surface());
+    window.addEventListener('resize', keep);
+    return () => window.removeEventListener('resize', keep);
+  }, []);
+
+  // its data changed while its window was not open: now it is seen
+  useEffect(() => { if (mod.unread) send({ t: 'modSeen', id: mod.id }); }, [mod.unread, mod.id, send]);
+
+  // what the page asks for, told again whenever it changes, until the page stops asking or the window closes
+  useEffect(() => {
+    const watched = new Map<ModData, () => void>();
+    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, '*');
+    const tellTheme = () => post({ openSpace: 'theme', ...currentTheme() });
+    const tell = (name: ModData) => post({ openSpace: 'data', name, value: dataFor(name, useSessions.getState()) });
+    let costsAsked = 0;
+    const askCosts = () => { if (Date.now() - costsAsked > COSTS_EVERY_MS) { costsAsked = Date.now(); useSessions.getState().loadCosts(); } };
+    const onMessage = (event: MessageEvent) => {
+      if (!frame.current || event.source !== frame.current.contentWindow) return;
+      const message = event.data as { openSpace?: unknown; name?: unknown } | null;
+      switch (message?.openSpace) {
+        case 'ready': tellTheme(); break;
+        case 'escape': break;
+        case 'size': { const height = (message as { height?: unknown }).height; if (typeof height === 'number' && Number.isFinite(height)) setFit(Math.round(height)); break; }
+        case 'watch': {
+          const name = message.name;
+          if (!isModData(name) || watched.has(name)) return;
+          if (name === 'costs') askCosts();
+          watched.set(name, useSessions.subscribe((s, before) => { if (pick(name)(s) !== pick(name)(before)) tell(name); }));
+          tell(name);
+          break;
+        }
+        case 'unwatch': {
+          const name = message.name;
+          if (isModData(name)) { watched.get(name)?.(); watched.delete(name); }
+          break;
+        }
+      }
+    };
+    window.addEventListener('message', onMessage);
+    // the look changes with the window style, the theme, the glass and the language
+    const restyle = useSessions.subscribe((s, before) => {
+      const now = s.preferences, then = before.preferences;
+      if (now.windowStyle !== then.windowStyle || now.theme !== then.theme || now.language !== then.language || now.reduceMotion !== then.reduceMotion) requestAnimationFrame(tellTheme);
+    });
+    const costsTimer = setInterval(() => { if (watched.has('costs')) askCosts(); }, COSTS_EVERY_MS);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      restyle();
+      clearInterval(costsTimer);
+      for (const stop of watched.values()) stop();
+    };
+  }, [loads, mod.version]);
+
+  const grab = (edge: Edge | null, event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || (!edge && (event.target as HTMLElement).closest(INTERACTIVE))) return;
+    openMod(mod.id);
+    carried.current = { start: box, x: event.clientX, y: event.clientY, edge, started: false };
+  };
+  const drag = (event: ReactPointerEvent<HTMLElement>) => {
+    const from = carried.current;
+    if (!from) return;
+    const dx = event.clientX - from.x, dy = event.clientY - from.y;
+    if (!from.started) {
+      if (!from.edge && Math.hypot(dx, dy) < CARRY_AFTER) return;
+      from.started = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setMoving(true);
+    }
+    setMoved(from.edge ? resizeMod(from.start, from.edge, dx, dy, surface()) : placePip({ ...from.start, left: from.start.left + dx, top: from.start.top + dy }, surface()));
+  };
+  const drop = () => {
+    const from = carried.current;
+    carried.current = null;
+    if (!from?.started || !moved) return;
+    setMoving(false);
+    setMoved(null);
+    place({ ...placement, left: moved.left, top: moved.top, size: from.edge ? { width: moved.width, height: moved.height - MOD_HEAD } : placement.size });
+  };
+
+  const Icon = MOD_ICONS[mod.icon];
+  const fold = () => place({ ...placement, folded: !placement.folded });
+  // building: the page is the starter, nothing to show yet
+  const building = mod.draft;
+  return (
+    <section
+      className="cp-mod" aria-label={words.windowLabel(mod.name)} data-folded={placement.folded} data-building={mod.draft} data-moving={moving}
+      style={{ ...boxVariables(shownBox), '--depth': depth } as CSSProperties}
+      onPointerMove={drag} onPointerUp={drop} onPointerCancel={drop} onPointerDownCapture={() => openMod(mod.id)}
+    >
+      <header className="cp-mod__head" onPointerDown={(event) => grab(null, event)} onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest(INTERACTIVE)) fold(); }}>
+        <span className="cp-mod__icon"><Icon /></span>
+        <span className="cp-mod__title">{mod.name}</span>
+        {!building && <button type="button" className="cp-icon-button" data-size="small" aria-label={words.reload} title={words.reload} onClick={() => setLoads((count) => count + 1)}><RefreshIcon /></button>}
+        <button type="button" className="cp-icon-button" data-size="small" aria-label={words.edit} title={words.editTitle(mod.name)} onClick={() => editMod(mod.id)}><PencilIcon /></button>
+        <button type="button" className="cp-icon-button" data-size="small" aria-label={placement.folded ? words.unfold : words.fold} title={placement.folded ? words.unfold : words.fold} onClick={fold}>
+          {placement.folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
+        </button>
+        <button type="button" className="cp-icon-button" data-size="small" aria-label={words.close} title={words.close} onClick={() => closeMod(mod.id)}><CloseIcon /></button>
+      </header>
+      {!placement.folded && (building ? (
+        <div className="cp-mod__building" aria-busy="true">
+          <p className="cp-mod__building-title">{words.building(writer?.name ?? null)}</p>
+          <p>{words.buildingText}</p>
+          <span className="cp-mod__skeleton" /><span className="cp-mod__skeleton" /><span className="cp-mod__skeleton" />
+          {writer && <button type="button" className="cp-button" onClick={() => show(writer.id)}>{words.showSession}</button>}
+        </div>
+      ) : (
+        <iframe
+          key={`${mod.version}:${loads}`} ref={frame} className="cp-mod__page" title={mod.name} src={`${mod.url}?v=${mod.version}`}
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms" referrerPolicy="no-referrer"
+        />
+      ))}
+      {!placement.folded && <FreeHandles onPull={grab} />}
+    </section>
+  );
+}

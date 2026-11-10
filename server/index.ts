@@ -6,7 +6,7 @@
 //   node server/index.ts --open     ... and opens it in the browser, unless a tab reconnects within a few seconds
 //   node server/index.ts --dev      only the bridge (the UI is served by Vite, port 5174)
 import { execFile } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +42,7 @@ import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } f
 import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { hasNewMetrics } from '../shared/metrics.ts';
+import { modKey, Mods, modsFolder } from './mods.ts';
 import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
@@ -84,6 +85,9 @@ setServerLanguage(settings.preferences.language ?? 'fr');
 // the folders sessions may run in: OFFICE_ROOTS when set, else the user's choice (the session manager reads config.roots)
 const applyRoots = () => { if (!config.rootsLocked) config.roots = settings.preferences.roots.filter((root) => existsSync(root)); };
 applyRoots();
+// the mods' folder, where sessions run too (server/mods.ts), by its real path: what a session running there has as its own
+mkdirSync(modsFolder(config.dataDir), { recursive: true, mode: 0o700 });
+config.ownRoots = [realpathSync(modsFolder(config.dataDir))];
 /** set once a stop signal arrived: no new message is handled, no new process starts */
 let stopping = false;
 
@@ -226,10 +230,15 @@ setInterval(() => { checkClaudeVersion().catch((error: unknown) => log('cannot r
 let claudeDefaults = await readClaudeDefaults(os.homedir());
 const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences: settings.preferences, roots: config.roots, onboarded: settings.onboarded, claudeDefaults });
 prepareSounds(config.dataDir, log);
+/** the kit the mods load, and the guide their sessions read: beside the page once built, in public/ while developing */
+const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
+const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), secret, origin: `http://${HOST}:${config.port}`, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
+await mods.prepare();
 const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
+  mods: { kitDir: MOD_KIT, key: (id) => modKey(secret, id), file: (id, relative) => mods.file(id, relative) },
   secrets: {
     key: (sessionId) => secretsKey(secret, sessionId),
     known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
@@ -261,7 +270,7 @@ function onConnection(socket: WebSocket) {
     t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
-    browsers: browsers.states(), browserAvailable: browsers.available,
+    browsers: browsers.states(), browserAvailable: browsers.available, mods: mods.list(),
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });
@@ -288,7 +297,7 @@ function onConnection(socket: WebSocket) {
 function filesRoot(sessionId: string): string {
   const cwd = sessions.folderOf(sessionId);
   if (!cwd) throw new Error(st.sessions.notFound);
-  const root = resolveAllowedDirectory(cwd, config.roots);
+  const root = resolveAllowedDirectory(cwd, [...config.roots, ...(config.ownRoots ?? [])]);
   if (!root) throw new Error(st.files.outside);
   return root;
 }
@@ -490,6 +499,15 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       break;
     }
     case 'searchNotes': send({ t: 'noteMatches', query: message.query, matches: await searchNotes(settings.preferences.journalFolder, message.query) }); break;
+    case 'createMod': {
+      const mod = mods.create(message.text);
+      const taken = new Set(sessions.list().map((session) => session.name));
+      const session = await sessions.create({ cwd: mod.folder, name: crew.freeNameFor(message.text, taken), text: st.mods.request(message.text) });
+      send({ t: 'modCreated', id: mod.id, sessionId: session.id });
+      break;
+    }
+    case 'deleteMod': await mods.remove(message.id); break;
+    case 'modSeen': await mods.markSeen(message.id); break;
     case 'metrics': {
       const metrics = await readMetrics(settings.preferences.metricsFile);
       send({ t: 'metrics', metrics });

@@ -9,6 +9,7 @@ import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
+import type { ModInfo } from './mods.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 import type { TerminalChoice, TerminalKind } from './terminal.ts';
 import type { CostReport } from './usage.ts';
@@ -707,6 +708,12 @@ export type ClientMessage =
   | { t: 'deleteNote'; name: string }
   /** the notes whose name or text holds `query`, case and accents aside */
   | { t: 'searchNotes'; query: string }
+  /** a new mod (shared/mods.ts): its folder is made, and a session starts there with what the user asks it to be */
+  | { t: 'createMod'; text: string }
+  /** puts a mod's folder in the Trash */
+  | { t: 'deleteMod'; id: string }
+  /** the user has a mod's window open: its data counts as seen */
+  | { t: 'modSeen'; id: string }
   /** reads the numbers file to show it: its numbers then count as seen */
   | { t: 'metrics' }
   /** the threads of every session searched for `query` (answered with `searchResults` carrying the same `id`) */
@@ -723,7 +730,7 @@ export type ClientMessage =
   | { t: 'browserInput'; sessionId: string; lane: number; input: BrowserInput };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null; /** by browserId (shared/browser.ts) */ browsers: Record<string, BrowserState>; browserAvailable: boolean }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null; /** by browserId (shared/browser.ts) */ browsers: Record<string, BrowserState>; browserAvailable: boolean; /** none from a server older than the mods */ mods?: ModInfo[] }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */
@@ -779,6 +786,10 @@ export type ServerMessage =
   | { t: 'musicLibrary'; query: string; playlists: string[]; tracks: MusicTrack[] }
   | { t: 'searchResults'; id: number; query: string; hits: SearchHit[] }
   | { t: 'costs'; report: CostReport }
+  /** the user's mods, whenever one is made, changed or removed */
+  | { t: 'mods'; mods: ModInfo[] }
+  /** the mod just made for the user's request, and the session writing it */
+  | { t: 'modCreated'; id: string; sessionId: string }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }
   /** a session's browser changed tabs or address; null once it is closed */
   | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };

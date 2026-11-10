@@ -3,6 +3,7 @@
 // black flag and a treasure map; a tarred deck with a hatch, coils of rope and plundered carpets; the hull outside with
 // its painted band and gun ports; a studded cabin door, stern windows on the sea, the wheel for a clock, a great map for
 // the lounge's screen. The furniture is in pirate-furniture.ts, what moves in pirate-effects.ts, the page in pirate-sky.ts.
+import { modsObject } from './mods-object.ts';
 import { PIRATE_FURNITURE as F, PIRATE_PALETTE as P } from '../../design/theme-pirate.ts';
 import { ROOM, type Layout, type Rug, type WallItem } from '../../../shared/room-layout.ts';
 import type { Point } from '../geometry.ts';
@@ -502,7 +503,7 @@ export const PIRATE: ThemeKit = {
   paintSkyMotion: paintSeaMotion,
   // the gulls flap their wings
   skyFrameMs: 250,
-  furniture: PIRATE_FURNITURE,
+  furniture: { ...PIRATE_FURNITURE, metricsTv: modsObject('pirate') },
   lights: pirateLights,
   // its own lanterns and fires instead of the office's lamps (pirate-effects.ts)
   officeLamps: false,

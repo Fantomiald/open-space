@@ -3,6 +3,7 @@
 // with stalactites, roots and chains for a slab, an arched door with its portcullis raised, barred windows on a cavern
 // of crystals, a clock of runes and a magic mirror. Dim at every hour, lit by its fires (dungeon-effects.ts); its
 // furniture is in dungeon-furniture.ts, the page behind in dungeon-sky.ts.
+import { modsObject } from './mods-object.ts';
 import { DUNGEON_PALETTE as D } from '../../design/theme-dungeon.ts';
 import { ROOM, type Layout, type Rug, type WallItem } from '../../../shared/room-layout.ts';
 import type { Point } from '../geometry.ts';
@@ -455,7 +456,7 @@ export const DUNGEON: ThemeKit = {
   paintSky: paintCavern,
   paintSkyMotion: paintEmbers,
   wallBeam: false,
-  furniture: DUNGEON_FURNITURE,
+  furniture: { ...DUNGEON_FURNITURE, metricsTv: modsObject('dungeon') },
   lighting: dungeonLighting,
   lights: dungeonLights,
   effects: dungeonEffects,

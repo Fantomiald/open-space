@@ -133,7 +133,7 @@ const BOOKSHELF = piece('bookshelf', 4.5, 13, 2);
 /** Each draft of the numbers object, where it goes (the props have the footprint of the desk or shelf they stand on). */
 export const METRICS_PIECES: Readonly<Record<MetricsKind, FurniturePiece>> = {
   cash: piece('cash', BOSS_DESK.x, BOSS_DESK.y, BOSS_DESK.width, BOSS_DESK.depth, false, { top: TOPS.desk }),
-  // on the left wall, high above the desks along it, between the back corner and the door
+  // on the left wall, above the desks along it, between the back corner and the door
   metricsTv: piece('metricsTv', 0, 1.8, 0.12, 2.5, false, { wall: true }),
   ticker: piece('ticker', 0, 1.2, 0.1, 4.2, false, { wall: true }),
   piggyBank: piece('piggyBank', BOOKSHELF.x, BOOKSHELF.y, BOOKSHELF.width, BOOKSHELF.depth, false, { top: TOPS.bookshelf }),

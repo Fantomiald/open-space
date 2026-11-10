@@ -1,5 +1,6 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
+import type { ModInfo } from '../../shared/mods.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
@@ -77,7 +78,7 @@ export interface PipTarget { sessionId: string; lane: number }
 /** The answers to the views of Claude Code of a session, as last asked for. */
 export interface Inspections { mcp?: McpServer[]; context?: ContextUsage; usage?: UsageReport }
 
-interface CommandPostState {
+export interface CommandPostState {
   connection: Connection;
   claude: ClaudeInfo | null;
   roots: string[];
@@ -101,6 +102,12 @@ interface CommandPostState {
   noteMatches: { query: string; matches: NoteMatch[] } | null;
   /** the last note the server sent: read, saved, or refused because it changed on the disk (see the 'note' message) */
   lastNote: { note: Note; outcome: 'read' | 'saved' | 'conflict' } | null;
+  /** the user's mods (shared/mods.ts), as the server last listed them; null until it did */
+  mods: ModInfo[] | null;
+  /** the mods whose window is open, the last one opened or touched last (on top); kept in this browser across reloads */
+  openMods: string[];
+  /** the panel that lists the mods is open */
+  modsOpen: boolean;
   /** the numbers panel is open (a click on the numbers object of the room) */
   metricsOpen: boolean;
   /** the numbers file as last read: null when there is none yet, undefined until read */
@@ -271,6 +278,15 @@ interface CommandPostState {
   openSecrets: (sessionId: string | null, name?: string) => void;
   showBrowserLane: (sessionId: string, lane: number) => void;
   /** takes a browser out of its session's window, which goes back to the conversation */
+  openModsPanel: (open: boolean) => void;
+  /** opens a mod's window, or brings it to the front */
+  openMod: (id: string) => void;
+  closeMod: (id: string) => void;
+  /** asks for a new mod: its folder is made and a session starts writing it, opened here */
+  createMod: (text: string) => boolean;
+  deleteMod: (id: string) => void;
+  /** shows the session that works in a mod's folder, or starts one there */
+  editMod: (id: string) => void;
   openPip: (target: PipTarget) => void;
   closePip: () => void;
   /** closed by the user: it stays closed while that session's turn goes on */
@@ -383,6 +399,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   browsers: {},
   browserAvailable: false,
   browserLanes: {},
+  mods: null,
+  openMods: readPreference<string[]>('mods-open', []),
+  modsOpen: false,
   pip: readPreference<PipTarget | null>('pip', null),
   pipDismissed: [],
   inspections: {},
@@ -462,7 +481,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults, appUpdate: message.appUpdate,
-          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false,
+          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false, mods: message.mods ?? null,
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
@@ -594,6 +613,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       // an answer to an older query, overtaken by the one typed since, is dropped
       case 'searchResults': if (message.id === searchId) set({ searchResults: { id: message.id, query: message.query, hits: message.hits } }); break;
       case 'costs': set({ costs: message.report }); break;
+      case 'mods': set({ mods: message.mods }); break;
+      case 'modCreated': get().openMod(message.id); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
@@ -746,6 +767,41 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openSecrets: (sessionId, name = '') => set({ secretsOpen: sessionId ? { sessionId, name } : null }),
 
   showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
+
+  openModsPanel: (open) => set({ modsOpen: open }),
+
+  openMod: (id) => {
+    const openMods = [...get().openMods.filter((each) => each !== id), id];
+    set({ openMods });
+    writePreference('mods-open', openMods);
+  },
+
+  closeMod: (id) => {
+    const openMods = get().openMods.filter((each) => each !== id);
+    set({ openMods });
+    writePreference('mods-open', openMods);
+  },
+
+  createMod: (text) => {
+    if (!get().send({ t: 'createMod', text })) return false;
+    set({ awaitingNew: true, modsOpen: false });
+    return true;
+  },
+
+  deleteMod: (id) => {
+    get().closeMod(id);
+    get().send({ t: 'deleteMod', id });
+  },
+
+  editMod: (id) => {
+    const s = get();
+    const mod = s.mods?.find((each) => each.id === id);
+    if (!mod) return;
+    set({ modsOpen: false });
+    const session = Object.values(s.sessions).find((each) => each.cwd === mod.folder);
+    if (session) s.show(session.id);
+    else s.createSession({ cwd: mod.folder, model: s.preferences.model || undefined, permissionMode: s.preferences.permissionMode });
+  },
 
   openPip: (target) => {
     const s = get();

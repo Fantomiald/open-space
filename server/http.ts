@@ -13,6 +13,7 @@ import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
+import { isModId } from '../shared/mods.ts';
 import { TESTERS } from './browser.ts';
 
 /** The file types served: the compiled UI's, and what sessions send or publish. */
@@ -43,6 +44,8 @@ export interface WebServerOptions {
   log: (message: string, error?: unknown) => void;
   /** the sessions' browsers (see browser.ts) */
   /** what a session's os-secret asks for (server/secrets.ts), behind its key */
+  /** the user's mods: the folder the kit is served from, each mod's key and its files (server/mods.ts) */
+  mods?: { kitDir: string; key: (id: string) => string; file: (id: string, relative: string) => string | null };
   secrets?: {
     key: (sessionId: string) => string;
     known: (sessionId: string) => boolean;
@@ -84,6 +87,16 @@ const PAGE_CSP = [
 /** The same, for a page served with its files (see servePage): it may load them too, and nothing else of Open Space. */
 const bundledPageCsp = (files: string) => PAGE_CSP.replace('default-src https:', `default-src ${files} https:`).replace('connect-src https:', `connect-src ${files} https:`);
 /** An SVG a session sent is shown as a picture; opened on its own, it may not run anything either. */
+/**
+ * A mod's page (shared/mods.ts): sandboxed like a published page, so with an origin of its own. It loads its own files
+ * (`own`, its folder under the key that lets it in) and Open Space's kit (`kit`), and may reach the web like a page.
+ */
+const modCsp = (own: string, kit: string) => [
+  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms',
+  `default-src ${own} ${kit} https: data: blob: 'unsafe-inline' 'unsafe-eval'`, `connect-src ${own} https:`, "frame-ancestors 'self'", "base-uri 'none'",
+].join('; ');
+/** A page without an origin reads its files and the kit's fonts across origins: the key in the address is what protects a mod's. */
+const ANY_ORIGIN = { 'Access-Control-Allow-Origin': '*' };
 const SVG_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
 /** What claude.ai wraps a published page in (the page starts with its own <title> and <style>, without <html> nor <head>). */
 const PAGE_SKELETON = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -249,6 +262,36 @@ export function createWebServer(options: WebServerOptions) {
     res.writeHead(reply.status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end(reply.text);
   }
 
+  /**
+   * /mods/<key>/<mod>/<file>: a file of a mod's folder, to its page (no cookie: the key, in the address the page was
+   * given, lets it in). Asked again each time: its session changes it. /mod-kit/<file>: the kit every mod loads.
+   */
+  async function serveMod(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const mods = options.mods;
+    let parts: string[];
+    try { parts = url.pathname.split('/').slice(1).map(decodeURIComponent); } catch { res.writeHead(400).end(); return; }
+    if (!mods || (req.method !== 'GET' && req.method !== 'HEAD')) { res.writeHead(404).end(); return; }
+    if (parts[0] === 'mod-kit') {
+      const file = resolveInside(mods.kitDir, parts.slice(1).join('/'));
+      if (!file || !statSync(file).isFile()) { res.writeHead(404).end(); return; }
+      await serveFile(file, res, { 'Cache-Control': 'no-cache', ...ANY_ORIGIN });
+      return;
+    }
+    const [, key = '', id = '', ...rest] = parts;
+    const file = isModId(id) && secretsMatch(mods.key(id), key) ? mods.file(id, rest.join('/')) : null;
+    if (!file) { res.writeHead(404).end(); return; }
+    const host = `http://${req.headers.host}`;
+    if (file.endsWith('.html')) {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store',
+        'Content-Security-Policy': modCsp(`${host}/mods/${key}/${id}/`, `${host}/mod-kit/`), 'Referrer-Policy': 'no-referrer',
+      });
+      res.end(await readFile(file));
+      return;
+    }
+    await serveFile(file, res, { 'Cache-Control': 'no-store', ...ANY_ORIGIN, ...(file.endsWith('.svg') ? { 'Content-Security-Policy': SVG_CSP } : {}) });
+  }
+
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
     if (!hostAllowed(policy, req)) { res.writeHead(403).end('Forbidden host.'); return; }
     const url = parseRequestUrl(req.url);
@@ -297,6 +340,7 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }
+    if (url.pathname.startsWith('/mods/') || url.pathname.startsWith('/mod-kit/')) { await serveMod(req, res, url); return; }
     if (url.pathname.startsWith('/browser/')) { await serveBrowser(req, res, url); return; }
     if (url.pathname.startsWith('/secrets/')) { await serveSecrets(req, res, url); return; }
     if (url.pathname.startsWith('/sounds/')) {

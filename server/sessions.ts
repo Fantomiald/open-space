@@ -319,12 +319,14 @@ export class SessionManager {
       log,
       broadcast: this.deps.broadcast,
       persist: () => this.save(),
+      // every mod's session counts in one project, the mods folder (Open Space's own roots)
+      projectHome: (cwd) => this.deps.config.ownRoots?.find((root) => path.dirname(cwd) === root) ?? null,
       mentioned: (text) => this.introduceMentioned(info.id, text),
       // a process started: the folder's commands may have changed since they were probed (a skill added)
       onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
       onQuota: (quota) => { this.quota = quota; this.deps.broadcast({ t: 'quota', quota }); this.save(); },
-      allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.deps.config.roots),
+      allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.roots()),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
       uploadPath: (id) => uploadPath(uploadsFolder(this.deps.config.dataDir), id),
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
@@ -426,12 +428,12 @@ export class SessionManager {
   /** What a session changed in its files (see changes.ts). */
   changes(id: string): Promise<SessionChanges> {
     const { cwd, conversationId, worktree } = this.session(id).snapshot();
-    return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.deps.config.roots) !== null, this.deps.home, worktree?.base);
+    return sessionChanges(cwd, conversationId ?? id, (directory) => resolveAllowedDirectory(directory, this.roots()) !== null, this.deps.home, worktree?.base);
   }
 
   /** The Claude Code conversations of an allowed folder that are not open here yet; with `query`, those that contain its words. */
   async conversations(directory: string, query?: string): Promise<Conversation[]> {
-    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(directory, this.roots());
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     const open = new Set([...this.sessions.values()].map((session) => session.conversationId));
     return query ? searchConversations(cwd, query, open, this.deps.home) : listConversations(cwd, open, this.deps.home);
@@ -448,7 +450,7 @@ export class SessionManager {
   aside(id: string, question: string) {
     const info = this.session(id).snapshot();
     if (!this.deps.askAside) throw new Error(st.sessions.claudeMissing);
-    const cwd = resolveAllowedDirectory(info.cwd, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(info.cwd, this.roots());
     if (!cwd) throw new Error(st.sessions.folderGone);
     this.asides.get(id)?.stop();
     const entry = { aside: { question, answer: '', state: 'asking' } as Aside, stop: () => {} };
@@ -544,11 +546,16 @@ export class SessionManager {
     return done;
   }
 
+  /** The folders a session may run in: the user's, and Open Space's own. */
+  private roots(): string[] {
+    return [...this.deps.config.roots, ...(this.deps.config.ownRoots ?? [])];
+  }
+
   // ── commands from clients ──
   async create(options: SessionOptions): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
-    const cwd = resolveAllowedDirectory(options.cwd, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(options.cwd, this.roots());
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     // a folder running code of its own (hooks, MCP servers, settings) needs the user's word once (see trust.ts)
     const code = folderCode(cwd);
@@ -649,7 +656,7 @@ export class SessionManager {
 
   /** A worktree goes where the repository is: outside the allowed folders, no process could start there. */
   private checkRepoAllowed(repo: Pick<FolderRepo, 'root'>) {
-    if (!resolveAllowedDirectory(repo.root, this.deps.config.roots)) throw new Error(st.worktree.outsideRoots(repo.root));
+    if (!resolveAllowedDirectory(repo.root, this.roots())) throw new Error(st.worktree.outsideRoots(repo.root));
   }
 
   /** The worktree is there: what git does not carry is copied, the session moves in, and its queue leaves. */
@@ -846,11 +853,11 @@ export class SessionManager {
 
   /** Whether a folder is in a git repository, its branches, its uncommitted files, and how many branches are left to tidy. */
   async folderInfo(directory: string): Promise<FolderRepo | null> {
-    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(directory, this.roots());
     if (!cwd) return null;
     const repo = await folderRepo(cwd).catch(() => null);
     // a repository that starts above the allowed folders cannot have its worktrees there: no branch is offered
-    if (!repo || !resolveAllowedDirectory(repo.root, this.deps.config.roots)) return null;
+    if (!repo || !resolveAllowedDirectory(repo.root, this.roots())) return null;
     const rows = await listBranches(repo.root).catch(() => [] as BranchRow[]);
     return { ...repo, merged: rows.filter((row) => row.merged && !row.inUse && !this.sessionOn(repo.root, row)).length };
   }
@@ -865,7 +872,7 @@ export class SessionManager {
 
   /** The branches of a folder's repository, for the cleaning panel. */
   async branches(directory: string): Promise<{ root: string; branches: BranchRow[] }> {
-    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(directory, this.roots());
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     const repo = await folderRepo(cwd);
     if (!repo) return { root: '', branches: [] };
@@ -878,7 +885,7 @@ export class SessionManager {
    * a session waits or rests on takes it back to the main checkout. Returns the branches that could not go.
    */
   async cleanBranches(directory: string, chosen: readonly CleanedBranch[]): Promise<string[]> {
-    const cwd = resolveAllowedDirectory(directory, this.deps.config.roots);
+    const cwd = resolveAllowedDirectory(directory, this.roots());
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     const repo = await folderRepo(cwd);
     if (!repo) return [];

@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
 import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { MetricsDialog } from './command/MetricsDialog.tsx';
+import { ModsDialog } from './command/ModsPanel.tsx';
+import { ModWindows } from './command/ModWindows.tsx';
 import { BrowserPip } from './command/BrowserPip.tsx';
 import { SearchPalette } from './command/SearchPalette.tsx';
 import { CopyOnSelect } from './command/CopyOnSelect.tsx';
@@ -38,7 +40,6 @@ export function App() {
   // Alt held shows the grab cursors over the room and the windows (drag.ts)
   useAltKey();
   const view = useSessions((s) => s.view);
-  const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
   const day = useFestival();
   // the room and the sky read the theme as they paint: set before they mount again for it (their keys)
   const theme = useSessions((s) => s.preferences.theme);
@@ -197,11 +198,12 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${theme}:${day.festival}:${day.guests.join()}:${withMetrics}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
+          {view === 'focus' ? <SessionList /> : <RoomView key={`${view}:${theme}:${day.festival}:${day.guests.join()}`} room={view === 'repos' ? 'lounge' : 'office'} day={day}/>}
         </div>
         {openIds.length ? <Stack /> : <Launcher />}
       </main>
       {view !== 'focus' && <StatusPanel />}
+      <ModWindows />
       <BrowserPip />
       <SearchPalette />
       <CopyOnSelect />
@@ -210,6 +212,7 @@ export function App() {
       <BoardDialog />
       <BranchesDialog />
       <MetricsDialog />
+      <ModsDialog />
       <TrustDialog />
       <Toasts />
       <AttentionAnnouncer />

@@ -2,6 +2,7 @@
 // light along the top of the walls, vents and console lights below, floor plates, an airlock for a door, black heat
 // tiles and thrusters under the hull, portholes on the Earth, the stars and the Moon, a digital clock; and the page
 // behind, deep space with a nebula, a ringed planet, the Earth below and a satellite going by.
+import { modsObject } from './mods-object.ts';
 import { SPACE_FURNITURE as F, SPACE_PALETTE as S } from '../../design/theme-space.ts';
 import { ROOM, type Layout, type WallItem } from '../../../shared/room-layout.ts';
 import { ART_SCALE } from '../pixel-art.ts';
@@ -414,7 +415,7 @@ export const SPACE: ThemeKit = {
   paintSkyMotion: paintSpaceDrift,
   // the portholes are round: a straight shaft from their wall would veil them
   wallBeam: false,
-  furniture: SPACE_FURNITURE,
+  furniture: { ...SPACE_FURNITURE, metricsTv: modsObject('space') },
   lights: (layout) => furnitureLights(layout),
   effects: (layout, time, lighting) => [
     { depth: WALL_EFFECT, paint: (context) => { runLights(context, time); sweepScreen(context, layout, time); } },

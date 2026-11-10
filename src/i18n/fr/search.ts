@@ -23,6 +23,7 @@ export const search = {
   states: { work: 'Au travail', waiting: 'À toi', ready: 'Prête', resting: 'Au repos', closed: 'Fermée', error: 'Erreur' },
   actions: {
     newSession: 'Nouvelle session',
+    mods: 'Tes mods',
     settings: 'Ouvrir les réglages',
     usage: 'Usage et coûts',
     rewind: 'Récap de la semaine',
@@ -42,6 +43,7 @@ export const search = {
   /** more words each action answers to */
   actionWords: {
     newSession: 'lancer créer démarrer agent',
+    mods: 'mod fenêtre widget graphique panneau',
     settings: 'préférences options',
     usage: 'coût prix dépense tokens facture dollars',
     rewind: 'semaine bilan stats heatmap',
