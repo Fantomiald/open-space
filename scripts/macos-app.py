@@ -30,36 +30,54 @@ HEAD = AVATAR if os.path.exists(AVATAR) else os.path.join(PROJECT, 'scripts', 'i
 PORT = 4848
 
 GRID = 28
+# the art cells left out on each side: the squircle spans the GRID - 2 * MARGIN in between
+MARGIN = 3
+# the share of a macOS icon's width its squircle covers (824 of 1024 on Apple's grid), as the other Dock icons do
+TILE = 824 / 1024
 # the room at night, lighter towards the top
 BACKGROUND_TOP = (58, 65, 112)
 BACKGROUND_BOTTOM = (37, 42, 72)
 
 
 def draw():
-    """The icon on a GRID x GRID grid: a squircle like the other icons of macOS, and the bust standing on its bottom edge."""
+    """The icon's art on a GRID x GRID grid: the room at night and the bust standing on its bottom edge. png() cuts
+    the squircle out of it."""
     from PIL import Image
-    inside = [[abs(x - (GRID - 1) / 2) ** 4 + abs(y - (GRID - 1) / 2) ** 4 <= 11.5 ** 4 for x in range(GRID)] for y in range(GRID)]
     shade = [tuple(round(top + (bottom - top) * y / (GRID - 1)) for top, bottom in zip(BACKGROUND_TOP, BACKGROUND_BOTTOM)) for y in range(GRID)]
-    grid = [[shade[y] if inside[y][x] else None for x in range(GRID)] for y in range(GRID)]
+    grid = [[shade[y] for x in range(GRID)] for y in range(GRID)]
     head = Image.open(HEAD).convert('RGBA')
     left = (GRID - head.width) // 2
     top = GRID - head.height
     for y in range(head.height):
         for x in range(head.width):
             red, green, blue, alpha = head.getpixel((x, y))
-            if alpha and inside[top + y][left + x]:
+            if alpha:
                 grid[top + y][left + x] = (red, green, blue)
     return grid
 
 
+def squircle_coverage(x, y, radius):
+    """How much of the pixel at (x, y) from the middle lies inside a macOS squircle of that radius, from 0 to 1."""
+    reach = (abs(x) ** 5 + abs(y) ** 5) ** (1 / 5)
+    return min(1, max(0, radius - reach + 0.5))
+
+
 def png(grid, size):
-    """The grid scaled to size x size (nearest neighbour, so the pixels stay sharp), as PNG bytes."""
+    """The grid's art scaled to TILE of size x size and centred (nearest neighbour, so the pixels stay sharp), cut to
+    a smooth squircle like the other icons of macOS, as PNG bytes."""
+    cells = GRID - 2 * MARGIN
+    span = round(size * TILE)
+    offset = (size - span) // 2
+
+    def cell(position):
+        return min(GRID - 1, max(0, MARGIN + (position - offset) * cells // span))
+
     rows = b''
     for y in range(size):
         row = bytearray([0])
         for x in range(size):
-            colour = grid[y * GRID // size][x * GRID // size]
-            row += bytes((*colour, 255)) if colour else bytes(4)
+            coverage = squircle_coverage(x + 0.5 - size / 2, y + 0.5 - size / 2, span / 2)
+            row += bytes((*grid[cell(y)][cell(x)], round(255 * coverage))) if coverage else bytes(4)
         rows += bytes(row)
 
     def chunk(kind, data):
