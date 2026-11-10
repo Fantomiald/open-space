@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { LANGUAGES, type Language } from '../../shared/i18n.ts';
-import { isMetricsPath } from '../../shared/metrics.ts';
 import { isAutomataFolder } from '../../shared/automata.ts';
 import { isFullPath } from '../../shared/paths.ts';
 import { hooksAddressOf } from '../../shared/triggers.ts';
@@ -53,7 +52,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
   office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']], ['automata', ['automata', 'hooksAddress']]],
-  notes: [['files', ['journalFolder', 'metricsFile', 'automataFolder']]],
+  notes: [['files', ['journalFolder', 'automataFolder']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
 
@@ -135,9 +134,9 @@ function SettingsEditor() {
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
-  // the notes folder and the numbers file as the page shows paths ("~/Journal"): the server expands "~"
+  // the notes and automatons' folders as the page shows paths ("~/Journal"): the server expands "~"
   const [draft, setDraft] = useState<Preferences>(() => ({
-    ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), metricsFile: homeRelative(preferences.metricsFile), automataFolder: homeRelative(preferences.automataFolder),
+    ...preferences, roots: rootsLocked ? roots : preferences.roots, journalFolder: homeRelative(preferences.journalFolder), automataFolder: homeRelative(preferences.automataFolder),
   }));
   const terminal = draft.terminal ?? 'cmd';
   const change = (changes: Partial<Preferences>) => setDraft((current) => ({ ...current, ...changes }));
@@ -149,7 +148,6 @@ function SettingsEditor() {
   const { status } = useAutosave(draft, (next) => {
     if (!next.roots.length) return t.settings.dialog.noFolder;
     if (!isFullPath(next.journalFolder.trim())) return t.settings.dialog.journalFolderInvalid;
-    if (!isMetricsPath(next.metricsFile)) return t.settings.dialog.metricsFileInvalid;
     if (!isAutomataFolder(next.automataFolder)) return t.settings.dialog.automataFolderInvalid;
     // a server older than this page sends no hooksAddress
     if (hooksAddressOf(next.hooksAddress ?? '') === null) return t.settings.dialog.hooksAddressInvalid;
@@ -445,11 +443,6 @@ function SettingsEditor() {
       case 'journalFolder': return (
         <Row key={id} id={id} flash={flash} wide icon={<NotesIcon />} title={rows.journalFolder.title} hint={rows.journalFolder.hint}>
           <input aria-labelledby={`setting-${id}-title`} title={preferences.journalFolder} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />
-        </Row>
-      );
-      case 'metricsFile': return (
-        <Row key={id} id={id} flash={flash} wide icon={<ChartIcon />} title={rows.metricsFile.title} hint={rows.metricsFile.hint}>
-          <input aria-labelledby={`setting-${id}-title`} title={preferences.metricsFile || undefined} value={draft.metricsFile} onChange={(e) => change({ metricsFile: e.target.value })} placeholder={t.settings.dialog.metricsFilePlaceholder} spellCheck={false} />
         </Row>
       );
       case 'automataFolder': return (

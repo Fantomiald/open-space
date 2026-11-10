@@ -22,7 +22,7 @@ import { startTrip, type PetTrip } from '../room/pet-trip.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
 import { GLASS_OPACITY } from '../../shared/protocol.ts';
-import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, MetricsFile, Note, NoteFile, NoteMatch, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
+import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, Note, NoteFile, NoteMatch, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -113,12 +113,6 @@ export interface CommandPostState {
   openMods: string[];
   /** the panel that lists the mods is open */
   modsOpen: boolean;
-  /** the numbers panel is open (a click on the numbers object of the room) */
-  metricsOpen: boolean;
-  /** the numbers file as last read: null when there is none yet, undefined until read */
-  metrics: MetricsFile | null | undefined;
-  /** the numbers file changed since the page last showed it: a badge on the numbers object */
-  metricsUnread: boolean;
   /** the user's automatons, as the server last told them (shared/automata.ts) */
   automata: AutomataState;
   /** the automatons' panel is open, on a run (null: the first at work, or the last ended) */
@@ -349,8 +343,6 @@ export interface CommandPostState {
   /** asks the Mac app to look for a new Open Space now */
   checkApp: () => void;
   openBoard: (open: boolean) => void;
-  /** opening it reads the numbers file, which clears the badge */
-  openMetrics: (open: boolean) => void;
   /** opens the automatons' panel (on a run, whose thread is then asked for) or closes it */
   /** `fresh`: on the page of a new trigger */
   openAutomata: (open: boolean, runId?: string | null, agent?: string | null, fresh?: boolean) => void;
@@ -436,9 +428,6 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   notes: null,
   noteMatches: null,
   lastNote: null,
-  metricsOpen: false,
-  metrics: undefined,
-  metricsUnread: false,
   automata: NO_AUTOMATA,
   automataOpen: false,
   automataFresh: false,
@@ -497,7 +486,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   petTrip: startTrip(Date.now()),
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], metricsFile: '', automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -664,8 +653,6 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'notes': set({ notes: { folder: message.folder, files: message.files } }); break;
       case 'note': set({ lastNote: { note: message.note, outcome: message.outcome } }); break;
       case 'noteMatches': set({ noteMatches: { query: message.query, matches: message.matches } }); break;
-      case 'metrics': set({ metrics: message.metrics }); break;
-      case 'metricsStatus': set({ metricsUnread: message.unread }); break;
       case 'automata': set({ automata: message.state }); break;
       case 'triggers': set({ triggers: message.state }); break;
       case 'triggerError': set({ triggerError: message.error as TriggerError }); break;
@@ -964,10 +951,6 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   // opened without a section: from the top (General), not where they were last left
   openSettings: (open, section, row) => set((state) => ({ settingsOpen: open, settingsRow: row ?? null, settingsSection: section ?? (open && !state.settingsOpen ? 'general' : state.settingsSection) })),
   openBoard: (open) => set({ boardOpen: open, ...(open ? {} : { lastNote: null }) }),
-  openMetrics: (open) => {
-    set({ metricsOpen: open, metrics: undefined });
-    if (open) get().send({ t: 'metrics' });
-  },
   openAutomata: (open, runId = null, agent = null, fresh = false) => {
     // a thread is read again each time it is shown: what was kept may have missed events while the page was away
     set((state) => ({ automataOpen: open, automataFresh: open && fresh, automatonId: open ? runId : null, automatonAgent: open && runId ? agent : null, automatonLogs: runId ? Object.fromEntries(Object.entries(state.automatonLogs).filter(([id]) => id !== runId)) : state.automatonLogs }));

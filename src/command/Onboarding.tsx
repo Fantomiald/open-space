@@ -35,7 +35,6 @@ export function Onboarding() {
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
     favoriteNotes: [],
-    metricsFile: '',
     automataFolder: '',
     hooksAddress: '',
     copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, remoteByDefault: false, idleCompact: 0, accountsBrowser: 'shared',

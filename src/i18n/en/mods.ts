@@ -21,8 +21,6 @@ export const mods: Dictionary['mods'] = {
   ideasLabel: 'Ideas to start with',
   create: 'Create',
   newHint: 'An agent writes it in a session; it opens here once ready.',
-  metrics: 'Numbers',
-  metricsDescription: 'The numbers file from Settings',
   windowLabel: (name) => `Mod ${name}`,
   reload: 'Reload',
   fold: 'Fold',

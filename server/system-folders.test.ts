@@ -22,8 +22,8 @@ it('offers redirected Windows known folders, without scanning OneDrive, AppData 
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
-it('saves native Windows notes and numbers settings and expands legacy native home paths', { skip: process.platform !== 'win32' }, () => {
-  assert.deepEqual(parsePreferences({ journalFolder: '~\\Journal', metricsFile: 'D:\\Stats\\chiffres.md' }, 'C:\\Users\\Test'), {
-    journalFolder: 'C:\\Users\\Test\\Journal', metricsFile: 'D:\\Stats\\chiffres.md',
+it('saves native Windows notes settings and expands legacy native home paths', { skip: process.platform !== 'win32' }, () => {
+  assert.deepEqual(parsePreferences({ journalFolder: '~\\Journal' }, 'C:\\Users\\Test'), {
+    journalFolder: 'C:\\Users\\Test\\Journal',
   });
 });

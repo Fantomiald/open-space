@@ -3,7 +3,7 @@ import { MAX_MOD_REQUEST, type ModInfo } from '../../shared/mods.ts';
 import { t } from '../i18n/index.ts';
 import { modsNews } from '../room/metrics.ts';
 import { useSessions } from '../state/sessions.ts';
-import { ChartIcon, MOD_ICONS, ModsIcon, PencilIcon, RemoveIcon, SendIcon } from './Icons.tsx';
+import { MOD_ICONS, ModsIcon, PencilIcon, RemoveIcon, SendIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 
 const NO_MODS: ModInfo[] = [];
@@ -31,9 +31,7 @@ export function ModsDialog() {
 
 function ModsContent() {
   const mods = useSessions((s) => s.mods) ?? NO_MODS;
-  const withMetrics = useSessions((s) => s.preferences.metricsFile !== '');
-  const metricsUnread = useSessions((s) => s.metricsUnread);
-  const { openMetrics, openModsPanel } = useSessions.getState();
+  const { openModsPanel } = useSessions.getState();
   const [request, setRequest] = useState('');
   const words = t.mods;
   const close = () => openModsPanel(false);
@@ -56,18 +54,9 @@ function ModsContent() {
         )}
         <p className="cp-mods__hint">{words.newHint}</p>
       </form>
-      {mods.length === 0 && !withMetrics ? <p className="cp-mods__none">{words.none}</p> : (
+      {mods.length === 0 ? <p className="cp-mods__none">{words.none}</p> : (
         <ul className="cp-mods__grid">
           {mods.map((mod) => <ModCard key={mod.id} mod={mod} />)}
-          {withMetrics && (
-            <li className="cp-mods__card">
-              <button type="button" className="cp-mods__open" onClick={() => { close(); openMetrics(true); }}>
-                <span className="cp-mods__icon"><ChartIcon /></span>
-                <span className="cp-mods__text"><strong>{words.metrics}</strong><small>{words.metricsDescription}</small></span>
-              </button>
-              {metricsUnread && <span className="cp-mods__foot"><span className="cp-mods__chip" data-tone="news">{words.unread}</span></span>}
-            </li>
-          )}
         </ul>
       )}
       <div className="cp-form__actions">

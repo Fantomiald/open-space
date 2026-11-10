@@ -505,7 +505,6 @@ export interface Preferences {
   /** the notes starred on the whiteboard, by file name: listed first */
   favoriteNotes: string[];
   /** the Markdown file the office's numbers object shows, kept up to date by the user's scripts or sessions (absolute; '' by default: no object) */
-  metricsFile: string;
   /** the folder of the user's orchestrator of headless agents, watched read-only (shared/automata.ts; absolute; '' by default: off) */
   automataFolder: string;
   /** the public address a tunnel gives the webhooks' port (shared/triggers.ts hooksAddressOf; '' by default: reachable from this computer only) */
@@ -606,7 +605,6 @@ export type FileAction =
 export interface NoteMatch { name: string; count: number; excerpt: string }
 
 /** The numbers file as it is on the disk: its text and its last change (ms). */
-export interface MetricsFile { text: string; mtime: number }
 
 /** A folder offered at the onboarding as a place for sessions to run in: how many projects it holds (-1: not looked into). */
 export interface RootSuggestion { path: string; projects: number }
@@ -728,7 +726,6 @@ export type ClientMessage =
   /** the user has a mod's window open: its data counts as seen */
   | { t: 'modSeen'; id: string }
   /** reads the numbers file to show it: its numbers then count as seen */
-  | { t: 'metrics' }
   /** the thread of an automaton's run so far (answered with `automatonLog`) */
   | { t: 'automatonLog'; runId: string }
   /** adds a trigger (no `id`) or changes one (answered with `triggers`, or a `triggerError`) */
@@ -813,10 +810,7 @@ export type ServerMessage =
   | { t: 'note'; note: Note; outcome: 'read' | 'saved' | 'conflict' }
   /** the answer to 'searchNotes' */
   | { t: 'noteMatches'; query: string; matches: NoteMatch[] }
-  /** the numbers file, null when there is none yet (asked for with 'metrics') */
-  | { t: 'metrics'; metrics: MetricsFile | null }
   /** whether the numbers file changed since the page last showed it (the badge on the numbers object); sent at connection and when it flips */
-  | { t: 'metricsStatus'; unread: boolean }
   /** the automatons (shared/automata.ts): sent at connection and whenever a run, a task or a role changes */
   | { t: 'automata'; state: AutomataState }
   /** a run's thread read from its transcript, its last events only (`truncated`: older ones left out) */

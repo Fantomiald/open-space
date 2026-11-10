@@ -22,8 +22,6 @@ export const mods = {
   create: 'Créer',
   newHint: 'Un agent l’écrit dans une session, il s’ouvre ici quand il est prêt.',
   /** the numbers file of the preferences, listed with the mods */
-  metrics: 'Chiffres',
-  metricsDescription: 'Le fichier de chiffres des Réglages',
   /** a mod's window (ModWindows.tsx) */
   windowLabel: (name: string) => `Mod ${name}`,
   reload: 'Recharger',

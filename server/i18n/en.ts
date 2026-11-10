@@ -190,9 +190,6 @@ export const en: ServerDictionary = {
       unknown: (known: string[]) => `No such mod. ${known.length ? `The mods: ${known.join(', ')}.` : 'No mod yet.'}`,
     },
   },
-  metrics: {
-    tooBig: 'The numbers file is too long for the screen (1 MB at most).',
-  },
   /** the triggers (server/triggers.ts) and the open-space MCP server (server/mcp.ts) */
   triggers: {
     unknown: 'This trigger no longer exists.',

@@ -146,7 +146,7 @@ export const automata = {
 
   runs: {
     head: 'Les « claude -p » lancés hors d’Open Space, en lecture seule.',
-    intro: 'En lecture seule : les « claude -p » qu’un autre programme lance hors d’Open Space, lus dans le dossier réglé dans Réglages > Notes et chiffres.',
+    intro: 'En lecture seule : les « claude -p » qu’un autre programme lance hors d’Open Space, lus dans le dossier réglé dans Réglages > Notes.',
     off: 'Aucun dossier de runs externes n’est choisi : indique-le dans les Réglages pour voir ici les « claude -p » qu’un autre programme lance.',
     missing: (folder: string) => `Le dossier des runs externes (${folder}) est introuvable.`,
     running: 'Au travail',

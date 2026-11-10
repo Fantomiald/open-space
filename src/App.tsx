@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
 import { BranchesDialog } from './command/BranchesDialog.tsx';
-import { MetricsDialog } from './command/MetricsDialog.tsx';
 import { AutomataDialog } from './command/AutomataDialog.tsx';
 import { ModsDialog } from './command/ModsPanel.tsx';
 import { ModWindows } from './command/ModWindows.tsx';
@@ -216,7 +215,6 @@ export function App() {
       <SettingsDialog />
       <BoardDialog />
       <BranchesDialog />
-      <MetricsDialog />
       <AutomataDialog />
       <ModsDialog />
       <TrustDialog />

@@ -207,9 +207,6 @@ export const fr = {
       unknown: (known: string[]) => `Pas de mod à ce nom. ${known.length ? `Les mods : ${known.join(', ')}.` : 'Aucun mod pour l’instant.'}`,
     },
   },
-  metrics: {
-    tooBig: 'Le fichier des chiffres est trop long pour l’écran (1 Mo au plus).',
-  },
   /** the triggers (server/triggers.ts) and the open-space MCP server (server/mcp.ts) */
   triggers: {
     unknown: 'Ce déclencheur n’existe plus.',

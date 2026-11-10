@@ -47,10 +47,6 @@ export const settings = {
     journalFolder: 'Dossier des notes du tableau',
     journalFolderHint: 'un fichier .md par projet, que tes sessions peuvent aussi remplir',
     journalFolderInvalid: `Le dossier des notes doit être un chemin complet (${FULL_PATH}).`,
-    metricsFile: 'Fichier des chiffres (facultatif)',
-    metricsFileHint: 'Un fichier markdown que tes scripts ou une session Claude mettent à jour (chiffres, stats, suivi). Laisse vide pour ne pas afficher l’objet.',
-    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\Journal\\chiffres.md' : '~/Journal/chiffres.md',
-    metricsFileInvalid: `Le fichier des chiffres doit être un chemin complet vers un .md (${FULL_PATH}), ou rester vide.`,
     automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\toi\\agents' : '~/agents',
     hooksAddressInvalid: 'L’adresse publique des webhooks doit commencer par https://, sans ? ni #, ou rester vide.',
     automataFolderInvalid: `Le dossier des runs externes doit être un chemin complet (${FULL_PATH}), ou rester vide.`,
@@ -63,7 +59,7 @@ export const settings = {
     noMatch: (query: string) => `Aucun réglage pour « ${query} ».`,
     menu: 'Rubriques',
     sections: {
-      general: 'Général', sessions: 'Sessions', claude: 'Claude Code', folders: 'Dossiers', office: 'Bureau', notes: 'Notes et chiffres',
+      general: 'Général', sessions: 'Sessions', claude: 'Claude Code', folders: 'Dossiers', office: 'Bureau', notes: 'Notes',
       usage: 'Usage et coûts', shortcuts: 'Raccourcis', about: 'À propos',
     },
     intros: {
@@ -169,7 +165,6 @@ export const settings = {
         closed: 'Le port des webhooks n’a pas pu s’ouvrir (déjà pris ?) : relance Open Space, ou choisis-en un autre avec OFFICE_HOOKS_PORT.',
       },
       journalFolder: { title: 'Dossier des notes', hint: 'Un fichier .md par projet, que tes sessions peuvent aussi remplir. Le dossier est créé à la première note.' },
-      metricsFile: { title: 'Fichier des chiffres', hint: 'Un markdown tenu à jour par tes scripts ou une session. Vide : pas d’objet.' },
       automataFolder: { title: 'Dossier des runs externes', hint: 'Facultatif : le dossier où un autre programme décrit les « claude -p » qu’il lance (runs/<id>.json, et ses rôles dans .claude/agents). Open Space les montre dans la salle des serveurs, sans jamais y écrire. Vide : rien.' },
       version: { title: 'Open Space', hint: 'L’app télécharge les nouvelles versions et redémarre dessus dès qu’aucune session ne travaille.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Introuvable sur cet ordinateur.' },

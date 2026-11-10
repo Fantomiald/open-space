@@ -11,11 +11,11 @@ const BADGE_SPOTS: Readonly<Record<MetricsKind, { x: number; y: number; z: numbe
   piggyBank: { x: 1, y: 0.3, z: 76 },
 };
 
-/** Something new waits in a mod the user does not have open, or in the numbers file (the header's Mods button shows the same). */
-export const modsNews = (s: { metricsUnread: boolean; mods: readonly { id: string; unread: boolean }[] | null; openMods: readonly string[] }) =>
-  s.metricsUnread || !!s.mods?.some((mod) => mod.unread && !s.openMods.includes(mod.id));
+/** Something new waits in a mod the user does not have open (the header's Mods button shows the same). */
+export const modsNews = (s: { mods: readonly { id: string; unread: boolean }[] | null; openMods: readonly string[] }) =>
+  !!s.mods?.some((mod) => mod.unread && !s.openMods.includes(mod.id));
 
-/** Something new waits in the numbers file, and the panel that shows them is closed (opening it clears the badge before the server says so). */
+/** Something new waits in a mod, and the mods' panel is closed. */
 export const showsMetricsBadge = (unread: boolean, panelOpen: boolean) => unread && !panelOpen;
 
 /** Where the badge's tail points on the canvas, in room pixels. */

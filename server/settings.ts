@@ -6,7 +6,6 @@ import path from 'node:path';
 import { isLanguage } from '../shared/i18n.ts';
 import { DEFAULT_PET, parsePet } from '../shared/pets.ts';
 import { DEFAULT_ROOM_THEME, isRoomTheme } from '../shared/room-themes.ts';
-import { isMetricsPath } from '../shared/metrics.ts';
 import { isAutomataFolder } from '../shared/automata.ts';
 import { hooksAddressOf } from '../shared/triggers.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
@@ -20,7 +19,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: DEFAULT_PERMISSION_MODE, agentNote: '', festivals: true, officeLife: true, pet: DEFAULT_PET, theme: DEFAULT_ROOM_THEME,
   journalFolder: path.join(os.homedir(), 'Journal'),
   favoriteNotes: [],
-  metricsFile: '',
   automataFolder: '',
   hooksAddress: '',
   copyOnSelect: false,
@@ -78,10 +76,6 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
     if (path.isAbsolute(folder) && folder.length <= 1000) found.journalFolder = path.resolve(folder);
   }
   if (Array.isArray(raw.favoriteNotes)) found.favoriteNotes = [...new Set(asArray(raw.favoriteNotes).filter((name): name is string => typeof name === 'string' && NOTE_NAME.test(name)))].slice(0, MAX_FAVORITE_NOTES);
-  if (typeof raw.metricsFile === 'string' && isMetricsPath(raw.metricsFile)) {
-    const file = expandHomePath(raw.metricsFile.trim(), home);
-    if (!file || path.isAbsolute(file)) found.metricsFile = file && path.resolve(file);
-  }
   if (typeof raw.automataFolder === 'string' && isAutomataFolder(raw.automataFolder)) {
     const folder = expandHomePath(raw.automataFolder.trim(), home);
     if (!folder || path.isAbsolute(folder)) found.automataFolder = folder && path.resolve(folder);
@@ -95,8 +89,6 @@ export class Settings {
   preferences: Preferences = { ...DEFAULT_PREFERENCES };
   /** false until the user went through the first start */
   onboarded = false;
-  /** the change time (ms) of the numbers file the page last showed, 0 never: a newer file puts a badge on the numbers object */
-  metricsSeenAt = 0;
   private file: string;
 
   constructor(file: string) {
@@ -108,7 +100,6 @@ export class Settings {
       const raw: unknown = JSON.parse(await readFile(this.file, 'utf8'));
       this.preferences = { ...DEFAULT_PREFERENCES, ...parsePreferences(raw) };
       this.onboarded = isJson(raw) && raw.onboarded === true;
-      if (isJson(raw) && typeof raw.metricsSeenAt === 'number' && Number.isFinite(raw.metricsSeenAt)) this.metricsSeenAt = raw.metricsSeenAt;
     } catch { /* missing or unreadable: the defaults, and the onboarding */ }
   }
 
@@ -120,15 +111,9 @@ export class Settings {
     await this.save();
   }
 
-  /** The numbers file was shown as it was at `mtime`. */
-  async metricsSeen(mtime: number) {
-    this.metricsSeenAt = mtime;
-    await this.save();
-  }
-
   private async save() {
     const temporary = `${this.file}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(temporary, JSON.stringify({ onboarded: this.onboarded, metricsSeenAt: this.metricsSeenAt, ...this.preferences }, null, 2), { mode: 0o600 });
+    await writeFile(temporary, JSON.stringify({ onboarded: this.onboarded, ...this.preferences }, null, 2), { mode: 0o600 });
     await rename(temporary, this.file);
   }
 }

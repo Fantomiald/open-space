@@ -41,7 +41,6 @@ import { Settings } from './settings.ts';
 import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
-import { metricsChangedAt, readMetrics } from './metrics.ts';
 import { AutomataWatch } from './automata-watch.ts';
 import { rolesFor } from './agent-roles.ts';
 import { Triggers } from './triggers.ts';
@@ -50,7 +49,6 @@ import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConf
 import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
 import { parsePreferences } from './settings.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
-import { hasNewMetrics } from '../shared/metrics.ts';
 import { modKey, Mods, modsFolder } from './mods.ts';
 import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
@@ -69,7 +67,6 @@ const MAX_BUFFERED_BYTES = 8_000_000;
 /** an open tab retries every 2 s at most, so it is back within this delay; only then does --open open a new one */
 const OPEN_IF_ALONE_AFTER_MS = 3000;
 /** how often the numbers file is looked at, for the badge on the numbers object (scripts or sessions rewrite it now and then) */
-const METRICS_CHECK_MS = 10_000;
 /** how often the installed Claude Code is asked its version */
 const CLAUDE_CHECK_MS = 10 * 60_000;
 
@@ -201,19 +198,9 @@ function changeNotes<T>(change: () => Promise<T>): Promise<T> {
   return run;
 }
 const notesMessage = async (): Promise<ServerMessage> => ({ t: 'notes', folder: settings.preferences.journalFolder, files: await listNotes(settings.preferences.journalFolder) });
-/** something new waits in the numbers file, as last told to the pages */
 // on Windows, looking for the players takes PowerShell a few seconds: the page learns them once found
 let musicApps: MusicApp[] = [];
 void installedMusicApps().then((apps) => { musicApps = apps; broadcast({ t: 'musicApps', apps }); });
-let metricsUnread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
-/** Tells every page when the badge of the numbers object comes or goes. */
-async function checkMetrics() {
-  const unread = hasNewMetrics(await metricsChangedAt(settings.preferences.metricsFile), settings.metricsSeenAt);
-  if (unread === metricsUnread) return;
-  metricsUnread = unread;
-  broadcast({ t: 'metricsStatus', unread });
-}
-setInterval(() => { checkMetrics().catch((error: unknown) => log('numbers file', error)); }, METRICS_CHECK_MS).unref();
 /** the user's automatons, watched read-only from the folder of the settings (server/automata-watch.ts) */
 const automata = new AutomataWatch({ folder: () => settings.preferences.automataFolder, broadcast, log });
 automata.start();
@@ -313,7 +300,6 @@ async function applyPreferences(changes: Partial<typeof settings.preferences>) {
   broadcast(preferencesMessage());
   await sessions.applySettings(changedSettings(before, settings.preferences.claude));
   if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
-  await checkMetrics();
   await automata.poll();
 }
 
@@ -502,7 +488,6 @@ function onConnection(socket: WebSocket) {
     claudeDefaults = found;
     broadcast(preferencesMessage());
   }).catch((error: unknown) => log('cannot read the Claude Code settings', error));
-  send({ t: 'metricsStatus', unread: metricsUnread });
   send({ t: 'automata', state: automata.state });
   send(triggersMessage());
   send({ t: 'musicApps', apps: musicApps });
@@ -713,13 +698,6 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     }
     case 'deleteMod': await mods.remove(message.id); break;
     case 'modSeen': await mods.markSeen(message.id); break;
-    case 'metrics': {
-      const metrics = await readMetrics(settings.preferences.metricsFile);
-      send({ t: 'metrics', metrics });
-      if (metrics && hasNewMetrics(metrics.mtime, settings.metricsSeenAt)) await settings.metricsSeen(metrics.mtime);
-      await checkMetrics();
-      break;
-    }
     case 'automatonLog': send({ t: 'automatonLog', runId: message.runId, ...await automata.thread(message.runId) }); break;
     case 'saveTrigger': {
       const saved = await triggers.save(message.id, message.trigger);

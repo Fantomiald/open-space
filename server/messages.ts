@@ -384,7 +384,6 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const query = boundedString(raw.query, MAX_NOTE_QUERY);
       return query !== null ? { t: 'searchNotes', query } : null;
     }
-    case 'metrics': return { t: 'metrics' };
     case 'automatonLog': return typeof raw.runId === 'string' && RUN_ID.test(raw.runId) ? { t: 'automatonLog', runId: raw.runId } : null;
     case 'saveTrigger': {
       const id = raw.id === undefined ? undefined : typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) ? raw.id : null;

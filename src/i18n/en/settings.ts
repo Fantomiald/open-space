@@ -44,10 +44,6 @@ export const settings: Dictionary['settings'] = {
     journalFolder: 'Whiteboard notes folder',
     journalFolderHint: 'one .md file per project, which your sessions can fill too',
     journalFolderInvalid: `The notes folder must be a full path (${FULL_PATH}).`,
-    metricsFile: 'Numbers file (optional)',
-    metricsFileHint: 'A Markdown file your scripts or a Claude session keep up to date (numbers, stats, tracking). Leave empty to hide the object.',
-    metricsFilePlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\Journal\\numbers.md' : '~/Journal/numbers.md',
-    metricsFileInvalid: `The numbers file must be a full path to a .md file (${FULL_PATH}), or stay empty.`,
     automataFolderPlaceholder: IS_WINDOWS ? 'C:\\Users\\you\\agents' : '~/agents',
     hooksAddressInvalid: 'The webhooks\' public address must start with https://, without ? or #, or stay empty.',
     automataFolderInvalid: `The external runs folder must be a full path (${FULL_PATH}), or stay empty.`,
@@ -59,7 +55,7 @@ export const settings: Dictionary['settings'] = {
     noMatch: (query: string) => `No setting for “${query}”.`,
     menu: 'Sections',
     sections: {
-      general: 'General', sessions: 'Sessions', claude: 'Claude Code', folders: 'Folders', office: 'Office', notes: 'Notes and numbers',
+      general: 'General', sessions: 'Sessions', claude: 'Claude Code', folders: 'Folders', office: 'Office', notes: 'Notes',
       usage: 'Usage and costs', shortcuts: 'Shortcuts', about: 'About',
     },
     intros: {
@@ -166,7 +162,6 @@ export const settings: Dictionary['settings'] = {
         closed: 'The webhooks port could not open (already taken?): restart Open Space, or pick another one with OFFICE_HOOKS_PORT.',
       },
       journalFolder: { title: 'Notes folder', hint: 'One .md file per project, which your sessions can fill too. The folder is created with the first note.' },
-      metricsFile: { title: 'Numbers file', hint: 'A Markdown file kept up to date by your scripts or a session. Empty: no object.' },
       automataFolder: { title: 'External runs folder', hint: 'Optional: the folder where another program describes the claude -p runs it starts (runs/<id>.json, and its roles in .claude/agents). Open Space shows them in the server room and never writes there. Empty: nothing.' },
       version: { title: 'Open Space', hint: 'The app downloads new versions and restarts on them as soon as no session is working.' },
       claude: { title: 'Claude Code', found: (version: string) => `Version ${version}`, missing: 'Not found on this computer.' },

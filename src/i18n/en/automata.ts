@@ -146,7 +146,7 @@ export const automata: Dictionary['automata'] = {
 
   runs: {
     head: 'The claude -p runs started outside Open Space, read only.',
-    intro: 'Read only: the claude -p runs another program starts outside Open Space, read from the folder set in Settings > Notes and numbers.',
+    intro: 'Read only: the claude -p runs another program starts outside Open Space, read from the folder set in Settings > Notes.',
     off: 'No external runs folder is set: name it in the Settings to see here the claude -p runs another program starts.',
     missing: (folder: string) => `The external runs folder (${folder}) cannot be found.`,
     running: 'At work',
