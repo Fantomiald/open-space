@@ -1,7 +1,7 @@
 // What the session panel's own views show (/mcp, /context, /usage), from Claude Code's answers to the control requests
 // mcp_status, get_context_usage and get_usage (shapes checked with 2.1.302, fixtures/inspect.json). Only what the page
 // shows is kept, and anything unexpected is left out rather than trusted.
-import type { ContextCategory, ContextUsage, McpServer, McpSource, McpState, UsageLimit, UsageReport, UsageShare } from '../shared/protocol.ts';
+import type { ContextCategory, ContextUsage, McpServer, McpSource, McpState, Quota, QuotaWindow, UsageLimit, UsageReport, UsageShare } from '../shared/protocol.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
 
 const MCP_STATES: ReadonlySet<string> = new Set(['connected', 'pending', 'failed', 'needs-auth', 'disabled']);
@@ -44,6 +44,7 @@ export function parseContextUsage(response: Json): ContextUsage {
 const share = (items: unknown): UsageShare[] => asArray(items).map(asJson).map((item) => ({ name: asString(item.name), percent: asNumber(item.pct) })).filter((item) => item.name && item.percent > 0);
 
 const LIMIT_KINDS: Readonly<Record<string, UsageLimit['kind']>> = { session: 'session', weekly_all: 'weekly', weekly_scoped: 'weeklyModel' };
+const WINDOW_NAMES: Readonly<Partial<Record<UsageLimit['kind'], string>>> = { session: 'five_hour', weekly: 'seven_day' };
 
 export function parseUsageReport(response: Json): UsageReport {
   // the limits as Claude Code's /usage lists them (rate_limits also holds each raw window, under internal names)
@@ -71,4 +72,14 @@ export function parseUsageReport(response: Json): UsageReport {
       skills: share(week.skills), agents: share(week.agents), mcpServers: share(week.mcp_servers),
     } : null,
   };
+}
+
+/** The header's usage windows from a /usage report: the session and weekly limits, and each model's own weekly limit (Fable) as "seven_day_<model>". */
+export function quotaFromUsage(report: UsageReport): Quota | null {
+  const windows = report.limits.flatMap((limit): QuotaWindow[] => {
+    const name = limit.kind === 'weeklyModel' && limit.model ? `seven_day_${limit.model.toLowerCase().replace(/\W+/g, '_')}` : WINDOW_NAMES[limit.kind];
+    return name ? [{ name, utilization: limit.percent / 100, resetsAt: limit.resetsAt === null ? null : Math.round(limit.resetsAt / 1000) }] : [];
+  });
+  const fiveHour = windows.find((window) => window.name === 'five_hour');
+  return fiveHour ? { fiveHour: fiveHour.utilization, resetsAt: fiveHour.resetsAt, windows } : null;
 }
