@@ -1,5 +1,9 @@
 # Versions
 
+## 1.29.1
+
+- Une session peut t'envoyer un fichier sur Telegram tout de suite (`send_file` du MCP), au seul bot que tu as ou à celui que tu nommes ; avec plusieurs bots, elle te demande lequel. Elle ne crée plus d'automate pour un envoi ponctuel : `create_trigger` est réservé aux tâches qui reviennent ou qu'un webhook lance.
+
 ## 1.29.0
 
 Vient de Mouhrad, repris pour servir à tout le monde :

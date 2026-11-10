@@ -113,7 +113,7 @@ describe('the open-space MCP server', () => {
     assert.deepEqual(done, ['answer s5 r1 allow', 'reply s5 r2 {"Which?":"A"}', 'send s5 Go', 'stop s5']);
   });
 
-  it('lets a messenger\'s agent follow, write to and stop the sessions, send files, but never answer them', async () => {
+  it('lets a messenger\'s agent follow, write to and stop the sessions, send files, but never answer them; a session send files too', async () => {
     const { api, done } = fakeApi();
     const names = toolsFor(BOT).map((each) => each.name);
     assert.ok(['list_sessions', 'send_message', 'stop_session', 'set_remote', 'send_file', 'create_session'].every((name) => names.includes(name)));
@@ -122,8 +122,10 @@ describe('the open-space MCP server', () => {
     assert.equal((await tool(api, 'create_trigger', { name: 'Push', prompt: 'Go', kind: 'cron', cwd: '/work/app', allowedTools: ['Edit'] }, BOT)).isError, true, 'nor give a trigger rights');
     await tool(api, 'set_remote', { sessionId: 's5', enabled: true }, BOT);
     await tool(api, 'send_file', { path: '/work/app/shot.png' }, BOT);
-    assert.equal((await tool(api, 'send_file', { path: '/work/app/shot.png' }, S1)).isError, true, 'a session has no chat');
-    assert.deepEqual(done, ['remote s5 true', 'file bot00001 /work/app/shot.png']);
+    await tool(api, 'send_file', { path: '/work/app/report.pdf' }, S1);
+    await tool(api, 'send_file', { path: '/work/app/a.png', bot: '@imd_juyin_bot' }, S1);
+    assert.match((await tool(api, 'send_file', { path: '/work/app/a.png', bot: 'Perso' }, S1)).text, /iMD/, 'an unknown bot names the known ones');
+    assert.deepEqual(done, ['remote s5 true', 'file bot00001 /work/app/shot.png', 'file bot00001 /work/app/report.pdf', 'file bot00001 /work/app/a.png'], 'a session sends to the only bot, or the one named');
   });
 
   it('lets a session rename itself, and a trigger\'s run say it is done', async () => {

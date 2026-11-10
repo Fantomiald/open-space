@@ -234,6 +234,8 @@ export const fr = {
       noAnswers: 'Donne les réponses : le texte de chaque question vers le libellé choisi.',
       keysInPage: 'Une demande de clés ne se répond que dans Open Space.',
       rulesFromPage: 'Ce qu’un déclencheur fait sans demander se règle dans Open Space, pas depuis une session.',
+      noBot: 'Pas encore de bot : ajoute-en un dans Open Space, page Connexions.',
+      whichBot: (known: string[]) => `Quel bot ? Tes bots : ${known.join(', ')}.`,
       unknownBot: (name: string, known: string[]) => `Pas de bot « ${name} ». ${known.length ? `Tes bots : ${known.join(', ')}.` : 'Ajoute-en un dans Open Space, page Connexions.'}`,
       notARun: 'Seul un run d’automate se termine ainsi : une session ouverte à la main se ferme dans Open Space.',
       noName: 'Donne un nom.',

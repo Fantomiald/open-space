@@ -142,7 +142,7 @@ const write = { readOnlyHint: false, destructiveHint: false, openWorldHint: fals
 
 export const TOOLS: Tool[] = [
   { name: 'list_triggers', description: 'Lists Open Space triggers (scheduled or webhook-started sessions) and their latest runs.', inputSchema: { type: 'object', properties: {} }, annotations: read },
-  { name: 'create_trigger', description: 'Creates a trigger that starts an Open Space session on a schedule (cron) or from a webhook.', inputSchema: { type: 'object', properties: triggerFields, required: ['name', 'prompt', 'kind'] }, annotations: write },
+  { name: 'create_trigger', description: 'Creates a trigger that starts an Open Space session on a schedule (cron) or from a webhook: for a task that comes back, never for a one-off one (to send the user a file now, send_file).', inputSchema: { type: 'object', properties: triggerFields, required: ['name', 'prompt', 'kind'] }, annotations: write },
   { name: 'update_trigger', description: 'Changes an existing trigger; only the fields given change.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, ...triggerFields }, required: ['id'] }, annotations: write },
   { name: 'run_trigger', description: 'Starts a trigger\'s run now (a new session). A webhook trigger already running 3 queues it; a cron trigger whose previous run still works skips it.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: write },
   {
@@ -174,7 +174,12 @@ export const TOOLS: Tool[] = [
   // what a session does to itself only, nothing of the user's: read-only to Claude Code, so that a run in plan mode may too
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
   { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
-  { name: 'send_file', for: ['messenger'], description: 'Sends a file to the user\'s chat (a screenshot, a video, a PDF): its absolute path, inside the folders Open Space allows or a file a session sent.', inputSchema: { type: 'object', properties: { path: { type: 'string' }, caption: { type: 'string' } }, required: ['path'] }, annotations: write },
+  {
+    name: 'send_file', for: ['session', 'messenger'],
+    description: 'Sends a file to the user\'s chat (a screenshot, a video, a PDF) right now: its absolute path, inside the folders Open Space allows or a file a session sent. For a one-off "send me this on Telegram"; never make a trigger for it.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string' }, caption: { type: 'string' }, bot: { type: 'string', description: 'From a session: the bot, by name or @username (the user\'s bots, Connections page in Open Space); optional when there is only one; with several and none given by the user, ask them which' } }, required: ['path'] },
+    annotations: write,
+  },
   { name: 'list_mods', description: 'Lists the Open Space mods: small windows the user\'s agents make (a page in a folder), with their id, name and folder.', inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'create_mod', description: 'Makes a new mod, like Mods > New mod: a session builds it in its own folder from what the user asked, e.g. "my Claude costs this week".', inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'What the mod should show or do, in the user\'s words' } }, required: ['request'] }, annotations: write },
   { name: 'update_mod', description: 'Asks for a change to a mod: its session (or a new one in its folder) makes it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, request: { type: 'string', description: 'The change, in the user\'s words' } }, required: ['id', 'request'] }, annotations: write },
@@ -202,6 +207,14 @@ function botIds(api: OpenSpaceApi, names: unknown): { ids: unknown } | { unknown
     ids.push(bot.id);
   }
   return { ids };
+}
+
+/** The bot a session sends a file to: the one named, or the only one. */
+function chosenBot(api: OpenSpaceApi, name: unknown): { id: string } | { error: string } {
+  const known = api.bots().map((bot) => bot.name);
+  if (!asString(name)) return known.length === 1 ? { id: api.bots()[0].id } : { error: known.length ? st.triggers.mcp.whichBot(known) : st.triggers.mcp.noBot };
+  const found = botIds(api, [name]);
+  return 'unknown' in found ? { error: st.triggers.mcp.unknownBot(found.unknown, known) } : { id: (found.ids as string[])[0] };
 }
 
 const givenTo = (tool: Tool, caller: Caller) => !tool.for || tool.for.includes(audienceOf(caller));
@@ -271,8 +284,9 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       return text(st.triggers.mcp.finishing);
     }
     case 'send_file': {
-      if (!('messenger' in caller)) return failure(st.triggers.mcp.unknownTool(name));
-      await api.sendFile(caller.messenger, asString(args.path), asString(args.caption).slice(0, 1000));
+      const bot = 'messenger' in caller ? { id: caller.messenger } : chosenBot(api, args.bot);
+      if ('error' in bot) return failure(bot.error);
+      await api.sendFile(bot.id, asString(args.path), asString(args.caption).slice(0, 1000));
       return text('sent');
     }
     case 'list_triggers': return text(api.triggers().map((trigger) => shown(api, trigger, api.lastRuns())));
