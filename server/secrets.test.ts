@@ -7,7 +7,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { parseEnvBlock, SECRET_TTL_MS } from '../shared/secrets.ts';
 import { parseClientMessage } from './messages.ts';
-import { answerSecrets, envFileAt, envValue, installScript, SecretStore, withEnvLine, type SecretsApiDeps } from './secrets.ts';
+import { answerSecrets, envFileAt, envValue, installScript, loginOf, SecretStore, withEnvLine, type SecretsApiDeps } from './secrets.ts';
 
 let base: string;
 before(() => { base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'office-secrets-'))); });
@@ -79,8 +79,8 @@ describe('a key written into a .env file', () => {
   });
 });
 
-/** a fake Open Space: the store, a user who answers every box with `given`, and a browser that records cookies and logins */
-function deps(store: SecretStore, roots: string[], given: Record<string, string> | null, cookies: unknown[] = [], logins: unknown[] = []): SecretsApiDeps {
+/** a fake Open Space: the store, a user who answers every box with `given`, and a browser that records cookies, logins and what is typed */
+function deps(store: SecretStore, roots: string[], given: Record<string, string> | null, cookies: unknown[] = [], logins: unknown[] = [], typed: unknown[] = []): SecretsApiDeps {
   return {
     store, roots: () => roots,
     ask: async (sessionId, names) => {
@@ -88,8 +88,9 @@ function deps(store: SecretStore, roots: string[], given: Record<string, string>
       store.set(sessionId, names.flatMap((name) => (given[name] ? [{ name, value: given[name] }] : [])));
       return store.names(sessionId);
     },
-    setCookie: async (_, cookie) => { cookies.push(cookie); },
+    setCookie: async (_, cookie, shared) => { cookies.push({ ...cookie, shared }); },
     signIn: async (_, login) => { logins.push(login); },
+    type: async (_, input) => { typed.push(input); return 'https://example.org/form'; },
   };
 }
 
@@ -121,7 +122,7 @@ describe('what os-secret asks for', () => {
     if (process.platform !== 'win32') assert.equal(statSync(path.join(base, '.env.local')).mode & 0o777, 0o600);
     const cookie = await answerSecrets({ sessionId: 's', action: 'cookie', form: form({ name: 'TOKEN', url: 'https://example.com', as: 'sid' }) }, api);
     assert.equal(cookie.status, 200);
-    assert.deepEqual(cookies, [{ name: 'sid', value: 'tok-123456', url: 'https://example.com' }]);
+    assert.deepEqual(cookies, [{ name: 'sid', value: 'tok-123456', url: 'https://example.com', shared: false }]);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'cookie', form: form({ name: 'TOKEN', url: 'file:///etc' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'list', form: form({}) }, api)).text, 'TOKEN');
     assert.equal((await answerSecrets({ sessionId: 's', action: 'forget', form: form({ name: 'TOKEN' }) }, api)).status, 200);
@@ -129,22 +130,31 @@ describe('what os-secret asks for', () => {
   });
 });
 
-describe('os-secret auth', () => {
+describe('os-secret in the browser: auth and type', () => {
   const form = (fields: Record<string, string>) => new URLSearchParams(fields);
 
-  it('signs a browser in to a site with a user:password key, never telling it', async () => {
+  it('reads a login as user:password, or as the password alone with a user', () => {
+    assert.deepEqual(loginOf('qa:p@ss:w/rd'), { username: 'qa', password: 'p@ss:w/rd' });
+    assert.deepEqual(loginOf('dev:'), { username: 'dev', password: '' });
+    assert.deepEqual(loginOf('p@ss:w/rd', 'qa'), { username: 'qa', password: 'p@ss:w/rd' });
+    assert.equal(loginOf('no-colon'), null);
+    assert.equal(loginOf('pw', 'a:b'), null);
+  });
+
+  it('signs a browser in to a site, never telling the login', async () => {
     const store = new SecretStore(() => {});
-    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'TOKEN', value: 'tok-123456' }]);
+    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'STAGING_PASSWORD', value: 'pw:123456' }, { name: 'TOKEN', value: 'tok-123456' }]);
     const logins: unknown[] = [];
     const api = deps(store, [base], null, [], logins);
     const signed = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org/en', shared: '1' }) }, api);
     assert.equal(signed.status, 200);
     assert.match(signed.text, /https:\/\/staging\.example\.org in your shared browser/);
     assert.doesNotMatch(signed.text, /pw-123456/);
-    assert.deepEqual(logins, [{ url: 'https://staging.example.org/en', credentials: 'qa:pw-123456', shared: true }]);
-    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org' }) }, api)).status, 200);
-    assert.equal((logins[1] as { shared: boolean }).shared, false);
+    assert.deepEqual(logins, [{ url: 'https://staging.example.org/en', username: 'qa', password: 'pw-123456', shared: true }]);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_PASSWORD', url: 'https://staging.example.org', user: 'qa' }) }, api)).status, 200);
+    assert.deepEqual(logins[1], { url: 'https://staging.example.org', username: 'qa', password: 'pw:123456', shared: false });
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'TOKEN', url: 'https://staging.example.org' }) }, api)).status, 400);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'TOKEN', url: 'https://staging.example.org', user: 'a:b' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'file:///etc' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'MISSING', url: 'https://staging.example.org' }) }, api)).status, 404);
     const refused = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org' }) }, { ...api, signIn: async () => { throw new Error('the site refused this user and password'); } });
@@ -152,13 +162,34 @@ describe('os-secret auth', () => {
     assert.match(refused.text, /refused this user and password/);
     assert.equal(logins.length, 2);
   });
+
+  it('types a key into a tab, telling the tab and never the key', async () => {
+    const store = new SecretStore(() => {});
+    store.set('s', [{ name: 'API_KEY', value: 'ak-123456' }]);
+    const typed: unknown[] = [];
+    const api = deps(store, [base], null, [], [], typed);
+    const done = await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY', url: 'https://example.org/', shared: '1' }) }, api);
+    assert.equal(done.status, 200);
+    assert.equal(done.text, 'API_KEY typed into the field that has focus in https://example.org/form.');
+    assert.deepEqual(typed, [{ value: 'ak-123456', url: 'https://example.org/', shared: true }]);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY' }) }, api)).status, 200);
+    assert.deepEqual(typed[1], { value: 'ak-123456', url: '', shared: false });
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY', url: 'javascript:alert(1)' }) }, api)).status, 400);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'MISSING' }) }, api)).status, 404);
+    const unfocused = await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY' }) }, { ...api, type: async () => { throw new Error('no field to type in has focus in https://example.org/form: click in it first'); } });
+    assert.equal(unfocused.status, 409);
+    assert.match(unfocused.text, /no field to type in has focus/);
+    assert.doesNotMatch(unfocused.text, /ak-123456/);
+  });
 });
 
 describe('the os-secret command', { skip: process.platform === 'win32' }, () => {
   let server: http.Server;
   let url: string;
   const store = new SecretStore(() => {});
+  const cookies: unknown[] = [];
   const logins: unknown[] = [];
+  const typed: unknown[] = [];
   const run = (args: string[], cwd = base) => new Promise<{ code: number; out: string; err: string }>((resolve) => {
     const bin = installScript(path.join(base, 'office'));
     execFile(path.join(bin, 'os-secret'), args, { cwd, env: { PATH: process.env.PATH, OPEN_SPACE_SECRETS: url } }, (error, out, err) => resolve({ code: error ? Number(error.code) : 0, out, err }));
@@ -169,7 +200,7 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
       const chunks: Buffer[] = [];
       for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
       const action = req.url?.split('/').pop() ?? '';
-      const reply = await answerSecrets({ sessionId: 's', action, form: new URLSearchParams(Buffer.concat(chunks).toString()) }, deps(store, [base], { GEMINI_KEY: 'gm-secret-value' }, [], logins));
+      const reply = await answerSecrets({ sessionId: 's', action, form: new URLSearchParams(Buffer.concat(chunks).toString()) }, deps(store, [base], { GEMINI_KEY: 'gm-secret-value' }, cookies, logins, typed));
       res.writeHead(reply.status).end(reply.text);
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -198,11 +229,21 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
     assert.match(unknown.err, /No key named NOPE/);
   });
 
-  it('signs the shared browser in to a site', async () => {
-    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }]);
+  it('passes the browser commands their flags, in any order', async () => {
+    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'STAGING_PASSWORD', value: 'pw-123456' }]);
     const signed = await run(['auth', 'STAGING_LOGIN', 'https://staging.example.org', '--shared']);
     assert.equal(signed.code, 0, signed.err);
-    assert.deepEqual(logins, [{ url: 'https://staging.example.org', credentials: 'qa:pw-123456', shared: true }]);
+    assert.equal((await run(['auth', 'STAGING_PASSWORD', '--user', 'qa', 'https://staging.example.org'])).code, 0);
+    assert.deepEqual(logins, [
+      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456', shared: true },
+      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456', shared: false },
+    ]);
+    assert.equal((await run(['cookie', 'STAGING_PASSWORD', '--shared', 'https://staging.example.org', '--as', 'sid'])).code, 0);
+    assert.deepEqual(cookies, [{ name: 'sid', value: 'pw-123456', url: 'https://staging.example.org', shared: true }]);
+    const done = await run(['type', 'STAGING_PASSWORD', '--shared']);
+    assert.equal(done.code, 0, done.err);
+    assert.match(done.out, /typed into the field that has focus in https:\/\/example\.org\/form/);
+    assert.deepEqual(typed, [{ value: 'pw-123456', url: '', shared: true }]);
   });
 
   it('fails outside Open Space and on a refused request', async () => {

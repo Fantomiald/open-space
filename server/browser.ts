@@ -20,7 +20,7 @@ import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserT
 import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import type { AccountsBrowser } from '../shared/protocol.ts';
 import { asArray, asJson, isJson } from './json.ts';
-import { cookiesToClear, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
+import { cookiesToClear, hostOf, isKept, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
 import { signalTree } from './process-tree.ts';
 
@@ -89,10 +89,20 @@ const SIGN_IN_TIMEOUT_MS = 20_000;
 /** How long a refused or failed sign-in's tab may take to show its page before it is closed anyway. */
 const CLOSE_WAIT_MS = 2_000;
 
-/** The user and password of an `os-secret auth` key, "user:password" (server/secrets.ts checks the colon is there). */
-export function loginOf(credentials: string): { username: string; password: string } {
-  const at = credentials.indexOf(':');
-  return { username: credentials.slice(0, at), password: credentials.slice(at + 1) };
+/** Whether a page has a field to type in with focus: a text input, a text area, an editable element, or a frame (its own field). */
+const FOCUSED_FIELD = `(() => { const at = document.activeElement; if (!at) return false;
+  if (at.isContentEditable || at.tagName === 'TEXTAREA' || at.tagName === 'IFRAME') return true;
+  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type); })()`;
+
+/** The tab `os-secret type` types into: the first whose address starts with `url`, else the one shown, else the only one. */
+export function typingTab(tabs: readonly BrowserTab[], shown: string | null | undefined, url: string): BrowserTab | undefined {
+  if (url) return tabs.find((tab) => tab.url.startsWith(url));
+  return tabs.find((tab) => tab.id === shown) ?? (tabs.length === 1 ? tabs[0] : undefined);
+}
+
+/** A tab's address as `os-secret` tells it back: without its query nor fragment, which may hold a token. */
+export function shortAddress(url: string): string {
+  try { const at = new URL(url); return at.origin === 'null' ? url.split(/[?#]/)[0] : `${at.origin}${at.pathname}`; } catch { return url.split(/[?#]/)[0]; }
 }
 
 /** The key in the CDP endpoint given to a session: without it, another program of the machine cannot launch its browser. */
@@ -365,9 +375,43 @@ export class Browsers {
    * A cookie of `os-secret cookie` (server/secrets.ts) in the session's own browser, launched if needed. A session cookie:
    * it goes with the browser, nothing of the key stays in the profile.
    */
-  async setCookie(sessionId: string, cookie: { name: string; value: string; url: string }) {
-    const live = await this.ensure(sessionId);
-    await live.chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
+  async setCookie(sessionId: string, cookie: { name: string; value: string; url: string }, shared = false) {
+    // the user's own accounts (Google…) are kept in the shared browser: no session overwrites them, as its filter refuses too
+    if (shared && isKept(hostOf(cookie.url))) throw new Error('that site holds your own accounts in the shared browser');
+    const chrome = shared ? (await this.ensureShared()).chrome : (await this.ensure(sessionId)).chrome;
+    if (shared) this.visitedBy(sessionId, cookie.url);
+    await chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
+  }
+
+  /** A site a session reached in the shared browser without a tab (a cookie or a login it set): cleared when it goes, and at the next launch. */
+  private visitedBy(sessionId: string, url: string) {
+    this.visited(this.sharedTabs.visitAs(browserId(sessionId), url));
+  }
+
+  /**
+   * `os-secret type` (server/secrets.ts): the key typed into the field that has focus in a tab of the session's own browser,
+   * or of its own tabs in the shared one (its lane's and its testers', never another session's), as a paste would
+   * (Input.insertText), on a connection of Open Space's own. The tab whose address starts with `url`, else the one its view
+   * shows, else its only one. Answers that tab's address (shortAddress).
+   */
+  async typeInto(sessionId: string, value: string, url: string, shared: boolean): Promise<string> {
+    const mine = shared ? this.shared : this.live.get(browserId(sessionId));
+    if (!mine) throw new Error(`your ${shared ? 'shared ' : ''}browser is not open`);
+    const tabs = shared ? this.sharedTabs.tabsOfSession(sessionId).flatMap((id) => this.shared?.tabs.get(id) ?? []) : [...mine.tabs.values()];
+    const shown = this.live.get(browserId(sessionId, shared ? SHARED_LANE : 0))?.active;
+    const tab = typingTab(tabs, shown, url);
+    if (!tab) throw new Error(url ? `no tab of yours is on ${url}` : tabs.length ? 'several tabs: give the address of the one to type in' : 'no tab of yours is open');
+    const cdp = new Cdp(mine.chrome.socket, () => {}, () => {});
+    try {
+      await cdp.opened;
+      const session = String((await cdp.send('Target.attachToTarget', { targetId: tab.id, flatten: true })).sessionId);
+      const focused = asJson((await cdp.send('Runtime.evaluate', { expression: FOCUSED_FIELD, returnByValue: true }, session)).result).value;
+      if (focused !== true) throw new Error(`no field to type in has focus in ${shortAddress(tab.url)}: click in it first`);
+      await cdp.send('Input.insertText', { text: value }, session);
+    } finally {
+      cdp.close();
+    }
+    return shortAddress(tab.url);
   }
 
   /**
@@ -378,9 +422,9 @@ export class Browsers {
    * Chrome keeps it for that site (by its realm, whatever the path) and sends it by itself with every page and call
    * afterwards, in memory only, until that Chrome closes. The shared browser clears what the site leaves, like an owner's visit.
    */
-  async signIn(sessionId: string, site: string, credentials: string, shared: boolean) {
+  async signIn(sessionId: string, site: string, login: { username: string; password: string }, shared: boolean) {
     const chrome = shared ? (await this.ensureShared()).chrome : (await this.ensure(sessionId)).chrome;
-    if (shared) this.visited(new URL(site).origin);
+    if (shared) this.visitedBy(sessionId, site);
     const refused = () => new Error('the site refused this user and password');
     let tab = '';
     let targetId = '';
@@ -397,7 +441,7 @@ export class Browsers {
       if (method === 'Fetch.authRequired') {
         // asked again for the same page: the site refused the login
         const again = ++prompts > 1;
-        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: again ? { response: 'CancelAuth' } : { response: 'ProvideCredentials', ...loginOf(credentials) } }, tab).catch(() => {});
+        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: again ? { response: 'CancelAuth' } : { response: 'ProvideCredentials', ...login } }, tab).catch(() => {});
         if (again) done.reject(refused());
       } else if (method === 'Fetch.requestPaused') {
         const page = params.resourceType === 'Document' && params.frameId === targetId;

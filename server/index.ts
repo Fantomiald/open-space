@@ -433,6 +433,12 @@ prepareSounds(config.dataDir, log);
 const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
 const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, port: config.modsPort, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
 await mods.prepare();
+/** Checks a session may use its browser for `os-secret` (the shared one: only if it was given it). */
+function browserOf(sessionId: string, shared: boolean) {
+  if (!browsers.available) throw new Error(st.sessions.noBrowser);
+  if (shared && !sessions.hasSharedBrowser(sessionId)) throw new Error('this session has no shared browser');
+}
+
 const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
@@ -444,15 +450,9 @@ const { server, hooksServer, modsServer } = createWebServer({ policy, port: conf
     answer: (sessionId, action, form) => answerSecrets({ sessionId, action, form }, {
       store: secretStore, roots: () => config.roots,
       ask: (id, names, why) => sessions.askSecrets(id, names, why),
-      setCookie: (id, cookie) => {
-        if (!browsers.available) throw new Error(st.sessions.noBrowser);
-        return browsers.setCookie(id, cookie);
-      },
-      signIn: (id, { url, credentials, shared }) => {
-        if (!browsers.available) throw new Error(st.sessions.noBrowser);
-        if (shared && !sessions.hasSharedBrowser(id)) throw new Error('this session has no shared browser');
-        return browsers.signIn(id, url, credentials, shared);
-      },
+      setCookie: (id, cookie, shared) => { browserOf(id, shared); return browsers.setCookie(id, cookie, shared); },
+      signIn: (id, { url, username, password, shared }) => { browserOf(id, shared); return browsers.signIn(id, url, { username, password }, shared); },
+      type: (id, { value, url, shared }) => { browserOf(id, shared); return browsers.typeInto(id, value, url, shared); },
     }),
   },
   hooks: async (id, token, body) => {

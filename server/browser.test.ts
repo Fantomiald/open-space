@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, loginOf, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -212,9 +212,19 @@ describe('the browser a key opens', () => {
   });
 });
 
-describe('the login of an os-secret auth key', () => {
-  it('splits at the first colon: the password may hold more', () => {
-    assert.deepEqual(loginOf('qa:p@ss:w/rd'), { username: 'qa', password: 'p@ss:w/rd' });
-    assert.deepEqual(loginOf('dev:'), { username: 'dev', password: '' });
+describe('the tab os-secret type types into', () => {
+  const tabs = [{ id: 'a', url: 'https://tagmanager.google.com/#/container/1', title: '' }, { id: 'b', url: 'https://staging.example.org/login?next=/', title: '' }];
+
+  it('is the one on the address given, else the one shown, else the only one', () => {
+    assert.equal(typingTab(tabs, 'a', 'https://staging.example.org/')?.id, 'b');
+    assert.equal(typingTab(tabs, 'a', 'https://other.example.org/'), undefined);
+    assert.equal(typingTab(tabs, 'b', '')?.id, 'b');
+    assert.equal(typingTab(tabs, null, ''), undefined);
+    assert.equal(typingTab(tabs.slice(0, 1), null, '')?.id, 'a');
+  });
+
+  it('is told back without its query nor fragment', () => {
+    assert.equal(shortAddress('https://staging.example.org/login?token=abc#x'), 'https://staging.example.org/login');
+    assert.equal(shortAddress('about:blank#open-space-helper'), 'about:blank');
   });
 });
