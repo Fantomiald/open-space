@@ -133,6 +133,8 @@ const triggerFields: Json = {
   allowedTools: { type: 'array', items: { type: 'string' }, description: 'Claude Code permission rules its runs use without asking, e.g. "Bash(git push *)". Only the external program sets them, never a session.' },
   messengers: { type: 'array', items: { type: 'string' }, description: 'Bots told what its runs wait for and the files they send, by name or @username (the user\'s bots, Connections page in Open Space); [] for none' },
   notifyDone: { type: 'boolean', description: 'Its bots are also told when a run finishes (default true)' },
+  maxCost: { type: 'number', description: 'A run is stopped once it has spent this many dollars, estimated at list prices (0: no cap, the default)' },
+  maxMinutes: { type: 'number', description: 'A run is stopped after this many minutes (0: no cap, the default)' },
 };
 
 const read = { readOnlyHint: true, openWorldHint: false };

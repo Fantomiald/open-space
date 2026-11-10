@@ -73,6 +73,10 @@ export const en: ServerDictionary = {
     withdrawn: 'Question withdrawn.',
   },
   sessions: {
+    capped: {
+      cost: (dollars: number) => `Stopped: the run reached its $${dollars} cap (estimated at list prices).`,
+      time: (minutes: number) => `Stopped: the run reached its ${minutes} min cap.`,
+    },
     stopped: {
       byUser: 'Closed by you.',
       serverStopped: 'The server stopped while they were working.',

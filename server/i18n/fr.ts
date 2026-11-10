@@ -84,6 +84,10 @@ export const fr = {
   },
   sessions: {
     /** why a session stopped, shown in its thread (the releases of an idle process are not shown) */
+    capped: {
+      cost: (dollars: number) => `Arrêtée : le run a atteint son plafond de ${dollars} $ (estimé au prix public).`,
+      time: (minutes: number) => `Arrêtée : le run a atteint son plafond de ${minutes} min.`,
+    },
     stopped: {
       byUser: 'Fermée par toi.',
       serverStopped: 'Le serveur s’est arrêté pendant qu’elle travaillait.',

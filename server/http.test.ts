@@ -29,7 +29,8 @@ function rawPost(target: string, body: string, headers: Record<string, string> =
     let data = '';
     socket.on('data', (chunk) => { data += chunk; });
     socket.on('close', () => resolve({ status: Number(data.slice(9, 12)), body: data.split('\r\n\r\n')[1] ?? '' }));
-    socket.on('error', reject);
+    // a body refused (413) before it was all sent: the server closes while we still write, the reset comes after its answer
+    socket.on('error', (error) => { if (!data) reject(error); });
     const extra = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join('');
     socket.write(`POST ${target} HTTP/1.1\r\nHost: ${host}\r\nContent-Length: ${Buffer.byteLength(body)}\r\n${extra}Connection: close\r\n\r\n${body}`);
   });

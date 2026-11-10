@@ -120,6 +120,10 @@ export class Session {
   private interrupted = false;
   /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
   private finishing = false;
+  /** a trigger's caps (0: none), and what the run spent so far at list prices */
+  private caps = { cost: 0, minutes: 0 };
+  private spent = 0;
+  private capped = false;
   private queuedImages = new Map<string, readonly ImageUpload[]>();
   /** the other files of the queued messages, by queue id, as their upload ids (same) */
   private queuedFiles = new Map<string, readonly string[]>();
@@ -436,6 +440,7 @@ export class Session {
       onInit: (init) => this.onInit(init),
       onCommands: (commands) => this.deps.onCommandDetails(commands),
       onQuota: (quota) => this.deps.onQuota(quota),
+      onSpend: (dollars) => this.onSpend(dollars),
       onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
       onRequest: (request) => this.onRequest(request),
@@ -845,6 +850,25 @@ export class Session {
   /** A trigger's run that said it is done (finish_run): it closes once its turn ends. */
   finishAfterTurn() { this.finishing = true; }
 
+  /** A trigger's run caps: past either, it is stopped and closed (its conversation stays in Resume). */
+  limit(caps: { cost: number; minutes: number }) {
+    this.caps = caps;
+    if (!caps.minutes) return;
+    const timer = setTimeout(() => this.stopCapped(st.sessions.capped.time(caps.minutes)), caps.minutes * 60_000);
+    timer.unref();
+  }
+
+  private onSpend(dollars: number) {
+    this.spent += dollars;
+    if (this.caps.cost && this.spent >= this.caps.cost) this.stopCapped(st.sessions.capped.cost(this.caps.cost));
+  }
+
+  private stopCapped(note: string) {
+    if (this.capped || this.context.state === 'closed') return;
+    this.capped = true;
+    void this.close(note);
+  }
+
   private endTurn(tell: boolean, how: TurnEnd = 'done') {
     this.turnOutput = false;
     // a /compact that ended without compacting (nothing to compact, refused): it is not under way any more
@@ -984,14 +1008,14 @@ export class Session {
   }
 
   /** Stops the process now (and Remote Control for good). A session without a process is simply marked closed. */
-  async close() {
+  async close(note = st.sessions.stopped.byUser) {
     await Promise.all([this.setRemote(false), this.stopShells()]);
     this.clearIdleTimer();
     if (this.process?.alive) {
-      this.stopRequest = { reason: 'closed', note: st.sessions.stopped.byUser };
+      this.stopRequest = { reason: 'closed', note };
       await this.process.stop(0);
     } else if (this.context.state !== 'closed') {
-      this.apply({ type: 'exit', reason: 'closed' }, st.sessions.stopped.byUser);
+      this.apply({ type: 'exit', reason: 'closed' }, note);
     }
   }
 

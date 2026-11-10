@@ -16,6 +16,7 @@ Vient de Mouhrad, repris pour servir à tout le monde :
 - Un portail relie l'open space et la salle des serveurs : un anneau dressé à l'avant de la salle, un vortex dedans ; un clic, une colonne de lumière, et on arrive dans l'anneau jumeau de l'autre salle.
 - Le droïde des automates roule de salle en salle (par la porte ou le portail), fait bip de temps en temps, et ouvre le panneau des automates au clic. Il se règle dans l'équipe, à côté de l'animal : dôme rond, tête carrée ou sphère, sa couleur, ou aucun.
 - Mods par le MCP : `list_mods`, `create_mod` (comme « Nouveau mod »), `update_mod` (la session du mod fait le changement) et `delete_mod` (à la Corbeille). Le bouton Mods de l'en-tête n'a plus que son icône, comme les autres.
+- Plafonds d'un automate, chacun facultatif : un coût (en dollars, estimé au prix public d'après les tokens de chaque réponse) et un temps (en minutes). Passé l'un d'eux, le run s'arrête et se ferme, et son fil dit pourquoi. Réglables sur sa page ou par le MCP (`maxCost`, `maxMinutes`).
 - Le fichier des chiffres (Réglages, rubrique renommée « Notes ») et son panneau disparaissent : l'objet de la salle ouvre les mods, et des chiffres se font maintenant en mod.
 
 ## 1.28.0

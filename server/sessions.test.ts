@@ -109,6 +109,24 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
 
 const projectA = () => path.join(root, 'project-a');
 
+describe('a trigger\'s caps', () => {
+  it('stops and closes a run once it has spent its cost cap, and says why', async () => {
+    const { manager, processes, find, messages } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' }, caps: { cost: 1, minutes: 0 } });
+    manager.send(id, 'go');
+    const usage = { input_tokens: 100_000, output_tokens: 10_000 };
+    processes[0].handlers.onMessage({ type: 'assistant', message: { id: 'msg_1', model: 'claude-opus-5-5', usage, content: [{ type: 'text', text: 'Working' }] } });
+    assert.equal(processes[0].alive, true, 'under the cap: it goes on');
+    processes[0].handlers.onMessage({ type: 'assistant', message: { id: 'msg_2', model: 'claude-opus-5-5', usage: { input_tokens: 0, output_tokens: 50_000 }, content: [{ type: 'text', text: 'More' }] } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(processes[0].alive, false);
+    assert.equal(find(id).state, 'closed');
+    assert.ok(messages.some((m) => m.t === 'ev' && m.sessionId === id && /1 \$|\$1 /.test(JSON.stringify(m.ev))), 'the thread says it hit its cap');
+    await manager.shutdown();
+  });
+});
+
 describe('creating sessions', () => {
   it('creates a waiting session with a first name, inside an allowed folder', async () => {
     const { manager } = setup();

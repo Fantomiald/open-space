@@ -35,6 +35,10 @@ export interface TriggerInput {
   /** the bots (shared/messengers.ts) told what its runs wait for, the files they send, and with `notifyDone` when they finish */
   messengers: string[];
   notifyDone: boolean;
+  /** a run is stopped once it has spent this much, in dollars at list prices (0: no cap) */
+  maxCost: number;
+  /** a run is stopped after this many minutes (0: no cap) */
+  maxMinutes: number;
 }
 
 /** A trigger as kept: its input, its id, and for a webhook its token (the page shows it in the URL; the MCP server never). */
@@ -104,6 +108,9 @@ export const ROLE_NAME = /^[\w][\w.-]{0,63}$/;
 /** A Claude Code permission rule: a tool, and what it applies to between brackets. */
 export const ALLOW_RULE = /^[A-Za-z][\w-]{0,99}(\([^()\n]{1,200}\))?$/;
 export const MAX_ALLOW_RULES = 40;
+/** The highest caps a trigger takes: a run's dollars and minutes. */
+export const MAX_RUN_COST = 1000;
+export const MAX_RUN_MINUTES = 24 * 60;
 
 /** Ready-made sets of rules the page offers; the rules stay editable one by one. */
 export const ALLOW_PRESETS = {
@@ -127,7 +134,7 @@ export function parseAllowRules(raw: unknown): string[] | null {
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
 
 export const DEFAULT_TRIGGER: TriggerInput = {
-  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, allowedTools: [], messengers: [], notifyDone: true,
+  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, allowedTools: [], messengers: [], notifyDone: true, maxCost: 0, maxMinutes: 0,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -140,6 +147,11 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
   if (!isRecord(raw)) return { error: 'invalid' };
   const text = (key: string, fallback: string, max: number) => (typeof raw[key] === 'string' ? (raw[key] as string).trim().slice(0, max) : fallback);
   const flag = (key: string, fallback: boolean) => (typeof raw[key] === 'boolean' ? (raw[key] as boolean) : fallback);
+  // a cap given as text ("2.5") is taken too; anything else, or below zero, leaves it as it was
+  const cap = (key: string, fallback: number, max: number, step: number) => {
+    const value = typeof raw[key] === 'string' && (raw[key] as string).trim() !== '' ? Number(raw[key]) : raw[key];
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.round(value / step) * step, max) : fallback ?? 0;
+  };
   const kind = TRIGGER_KINDS.find((known) => known === raw.kind) ?? base.kind;
   const permissionMode = raw.permissionMode === undefined ? base.permissionMode : raw.permissionMode;
   if (!isPermissionMode(permissionMode)) return { error: 'mode' };
@@ -161,6 +173,8 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
     allowedTools,
     messengers,
     notifyDone: flag('notifyDone', base.notifyDone),
+    maxCost: cap('maxCost', base.maxCost, MAX_RUN_COST, 0.01),
+    maxMinutes: cap('maxMinutes', base.maxMinutes, MAX_RUN_MINUTES, 1),
   };
   if (!input.name) return { error: 'name' };
   if (!input.cwd) return { error: 'folder' };

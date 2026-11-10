@@ -65,6 +65,17 @@ describe('the triggers', () => {
     assert.deepEqual(parseTriggerInput({ ...input(), allowedTools: ['Edit', '../x'] }), { error: 'rules' });
   });
 
+  it('takes a cost cap and a time cap, both optional, within bounds', () => {
+    const plain = parseTriggerInput(input());
+    assert.ok('input' in plain && plain.input.maxCost === 0 && plain.input.maxMinutes === 0, 'no cap by default');
+    const capped = parseTriggerInput({ ...input(), maxCost: '2.504', maxMinutes: 45.4 });
+    assert.ok('input' in capped && capped.input.maxCost === 2.5 && capped.input.maxMinutes === 45);
+    const wild = parseTriggerInput({ ...input(), maxCost: 1e9, maxMinutes: -3 });
+    assert.ok('input' in wild && wild.input.maxCost === 1000 && wild.input.maxMinutes === 0, 'capped at the highest, a negative one left out');
+    const kept = parseTriggerInput({ maxMinutes: 'soon' }, { ...DEFAULT_TRIGGER, ...input(), maxMinutes: 30 });
+    assert.ok('input' in kept && kept.input.maxMinutes === 30, 'what does not fit leaves it as it was');
+  });
+
   it('keeps triggers in a private file, inside the allowed folders only', async () => {
     const { triggers } = setup();
     assert.deepEqual(await triggers.save(undefined, input({ cwd: '/elsewhere' })), { error: 'folder' });

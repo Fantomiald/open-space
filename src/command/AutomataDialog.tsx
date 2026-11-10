@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { automatonPersonId, roleLabel, type AutomatonRun } from '../../shared/automata.ts';
 import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
-import { ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput } from '../../shared/triggers.ts';
+import { ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, MAX_RUN_COST, MAX_RUN_MINUTES, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { formatAgo, formatClock, formatDuration, homeRelative } from '../lib/format.ts';
 import { useNow } from '../lib/useNow.ts';
@@ -16,8 +16,8 @@ import { ConnectionsPage } from './ConnectionsPage.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import {
-  AutomatonIcon, BrandIcon, ClockIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
-  PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TuneIcon, WebhookIcon,
+  AutomatonIcon, BrandIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
+  PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TimerIcon, TuneIcon, WebhookIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PageHead } from './PageHead.tsx';
@@ -275,6 +275,12 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
               <select value={draft.permissionMode} aria-label={fields.mode} onChange={(e) => change({ permissionMode: e.target.value as PermissionMode })}>
                 {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
               </select>
+            </Row>
+            <Row id="trigger-max-cost" icon={<CostIcon />} title={fields.maxCost} hint={fields.maxCostHint}>
+              <input type="number" min={0} max={MAX_RUN_COST} step={0.5} inputMode="decimal" value={draft.maxCost || ''} placeholder={fields.noCap} aria-label={fields.maxCost} onChange={(e) => change({ maxCost: Number(e.target.value) || 0 })} />
+            </Row>
+            <Row id="trigger-max-minutes" icon={<TimerIcon />} title={fields.maxMinutes} hint={fields.maxMinutesHint}>
+              <input type="number" min={0} max={MAX_RUN_MINUTES} step={5} inputMode="numeric" value={draft.maxMinutes || ''} placeholder={fields.noCap} aria-label={fields.maxMinutes} onChange={(e) => change({ maxMinutes: Number(e.target.value) || 0 })} />
             </Row>
           </div>
         </section>

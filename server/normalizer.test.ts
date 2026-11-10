@@ -347,6 +347,24 @@ describe('Normalizer on files Claude sends the user (SendUserFile, as seen with 
   });
 });
 
+describe('Normalizer on what the answers cost', () => {
+  it('tells each answer\'s cost once, at list prices, cache writes by duration', () => {
+    const spent: number[] = [];
+    const normalizer = new Normalizer({
+      emit: () => {}, onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
+      names: new Set(), onSpend: (dollars) => spent.push(dollars),
+    });
+    const usage = { input_tokens: 1_000_000, output_tokens: 100_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    const answer = (id: string, content: object[], model = 'claude-opus-5-5') => normalizer.handle({ type: 'assistant', message: { id, model, usage, content } });
+    // Claude Code prints one line per block of the same answer, each with its usage
+    answer('msg_1', [{ type: 'text', text: 'Hello' }]);
+    answer('msg_1', [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/x' } }]);
+    answer('msg_2', [{ type: 'text', text: 'Again' }], 'some-unknown-model');
+    normalizer.handle({ type: 'assistant', message: { id: 'msg_3', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 0, output_tokens: 0, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 1_000_000 } } } });
+    assert.deepEqual(spent, [4 + 2, 0, 8]);
+  });
+});
+
 describe('Normalizer on pages Claude publishes (Artifact, as in the transcripts of 2.1.302)', () => {
   it('passes a published page on with its claude.ai address and its file, and keeps its action line', () => {
     const published: { who: string; artifact: { url: string; path: string; title: string; files: Record<string, string> } }[] = [];

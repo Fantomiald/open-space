@@ -258,7 +258,7 @@ const triggers = new Triggers({
     try {
       const { session } = await startSession(
         { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
-        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote },
+        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes } },
       );
       const keys = triggerKeys.entries(trigger.id);
       if (keys.length) sessions.giveSecrets(session.id, undefined, keys);

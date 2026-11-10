@@ -9,6 +9,7 @@ import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { DIFF_TOOLS, fileDiff } from './diffs.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, type Json } from './json.ts';
+import { costOf } from '../shared/usage.ts';
 
 export interface TurnResult { ok: boolean; text: string; ms: number }
 
@@ -58,6 +59,8 @@ export interface NormalizerOptions {
   onInit: (info: InitInfo) => void;
   onCommands: (commands: SlashCommand[]) => void;
   onQuota: (quota: Quota) => void;
+  /** what an answer cost, in dollars at list prices, once per answer (sub-agents' too) */
+  onSpend?: (dollars: number) => void;
   /** Claude Code started compacting the conversation (it ends with a compact event) */
   onCompacting?: () => void;
   onResult: (result: TurnResult) => void;
@@ -96,6 +99,8 @@ export interface NormalizerOptions {
 export class Normalizer {
   private whoOfTool = new Map<string, string>(); // tool call id -> who made it
   private reported = new Set<string>();
+  /** the answers whose cost was told */
+  private spent = new Set<string>();
   /** every sub-agent called, gone or not */
   private hired = new Set<string>();
   /** the text being written, by who writes it */
@@ -279,6 +284,20 @@ export class Normalizer {
     this.options.emit({ k: 'hire', id, type, name: this.pickName(), task: cut(task || type, 48), prompt: cut(prompt, 2000) });
   }
 
+  /** Claude Code repeats an answer's usage on each of its blocks: it is counted once, by the answer's id. */
+  private spend(answer: Json, usage: Json) {
+    const id = asString(answer.id);
+    if (!this.options.onSpend || !id || !Object.keys(usage).length || this.spent.has(id)) return;
+    this.spent.add(id);
+    const created = asJson(usage.cache_creation);
+    const split = Object.keys(created).length > 0;
+    this.options.onSpend(costOf(asString(answer.model), {
+      input: asNumber(usage.input_tokens), output: asNumber(usage.output_tokens), cacheRead: asNumber(usage.cache_read_input_tokens),
+      cacheWrite5m: split ? asNumber(created.ephemeral_5m_input_tokens) : asNumber(usage.cache_creation_input_tokens),
+      cacheWrite1h: split ? asNumber(created.ephemeral_1h_input_tokens) : 0,
+    }));
+  }
+
   private leave(id: string, ok: boolean, usage: Json = {}) {
     if (!this.present.delete(id)) return;
     this.options.emit({ k: 'leave', who: id, ok, tokens: asNumber(usage.total_tokens), tools: asNumber(usage.tool_uses), ms: asNumber(usage.duration_ms) });
@@ -288,6 +307,7 @@ export class Normalizer {
     const who = asString(message.parent_tool_use_id) || 'chef';
     // what this answer was given to read is the context as it stands (cache included); a sub-agent has its own
     const usage = asJson(asJson(message.message).usage);
+    this.spend(asJson(message.message), usage);
     if (who === 'chef' && Object.keys(usage).length) {
       const used = asNumber(usage.input_tokens) + asNumber(usage.cache_creation_input_tokens) + asNumber(usage.cache_read_input_tokens) + asNumber(usage.output_tokens);
       if (used) this.options.onContext?.({ used });

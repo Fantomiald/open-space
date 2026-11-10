@@ -562,7 +562,7 @@ export class SessionManager {
    * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
    * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
    */
-  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean } = {}): Promise<SessionInfo> {
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean; caps?: { cost: number; minutes: number } } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.roots());
@@ -592,6 +592,7 @@ export class SessionManager {
     if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
+    if (started.caps) session.limit(started.caps);
     this.logs.set(info.id, log);
     this.sessions.set(info.id, session);
     if (!options.resumeId) this.awaitingTag.add(info.id);
