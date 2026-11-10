@@ -111,6 +111,8 @@ export interface SecretsApiDeps {
   ask: (sessionId: string, names: string[], why: string) => Promise<string[] | null>;
   /** puts a cookie in the session's own browser */
   setCookie: (sessionId: string, cookie: { name: string; value: string; url: string }) => Promise<void>;
+  /** signs the session's own browser (or the shared one) in to a site with basic auth, `credentials` being "user:password" */
+  signIn: (sessionId: string, login: { url: string; credentials: string; shared: boolean }) => Promise<void>;
 }
 
 const NAMES_SEPARATOR = /[\s,]+/;
@@ -161,6 +163,16 @@ export async function answerSecrets({ sessionId, action, form }: SecretsRequest,
       try { await deps.setCookie(sessionId, { name: cookie, value, url }); } catch (error) { return { status: 409, text: `Cannot set the cookie: ${error instanceof Error ? error.message : String(error)}` }; }
       return { status: 200, text: `Cookie ${cookie} set for ${url} in your browser.` };
     }
+    case 'auth': {
+      const value = store.get(sessionId, name);
+      if (value === null) return missing(name);
+      const url = form.get('url') ?? '';
+      if (!/^https?:\/\//.test(url) || !URL.canParse(url)) return { status: 400, text: 'Give the address of the site (https://…).' };
+      if (!value.includes(':')) return { status: 400, text: `${name} is not a login: give it as user:password.` };
+      const shared = form.get('shared') === '1';
+      try { await deps.signIn(sessionId, { url, credentials: value, shared }); } catch (error) { return { status: 409, text: `Cannot sign in: ${error instanceof Error ? error.message : String(error)}` }; }
+      return { status: 200, text: `Signed in to ${new URL(url).origin} in your ${shared ? 'shared ' : ''}browser: its pages send the login by themselves until that browser closes.` };
+    }
     case 'forget':
       if (store.get(sessionId, name) === null) return missing(name);
       store.drop(sessionId, name);
@@ -187,6 +199,7 @@ os-secret list                                    the names of the keys given (n
 os-secret env NAME [FILE] [--as VAR]              writes NAME into a .env file (default .env here), replacing its line
 os-secret run NAME... -- COMMAND...               runs COMMAND with the keys as environment variables, output masked
 os-secret cookie NAME URL [--as COOKIE]           puts the key as a cookie for URL in your Open Space browser
+os-secret auth NAME URL [--shared]                signs your Open Space browser in to the site of URL (basic auth, NAME = user:password); --shared: the shared browser
 os-secret forget NAME                             forgets a key
 EOF
 }
@@ -211,6 +224,10 @@ case "$command" in
     name=$1; url=$2; as=""
     [ "$3" = --as ] && as=$4
     reply cookie --data-urlencode "name=$name" --data-urlencode "url=$url" --data-urlencode "as=$as" ;;
+  auth)
+    name=$1; url=$2; shared=""
+    [ "$3" = --shared ] && shared=1
+    reply auth --data-urlencode "name=$name" --data-urlencode "url=$url" --data-urlencode "shared=$shared" ;;
   forget) reply forget --data-urlencode "name=$1" ;;
   run)
     # names are environment variable names (checked by Open Space), so a plain list splits safely

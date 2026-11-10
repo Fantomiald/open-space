@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, loginOf, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -209,5 +209,12 @@ describe('the browser a key opens', () => {
     const browsers = new Browsers({ chrome: null, folder: os.tmpdir(), sessionAlive: () => false, onState: () => {}, log: () => {} });
     await assert.rejects(browsers.version('s1', SHARED_LANE), /no such browser/);
     await assert.rejects(browsers.version('s1', TESTERS + 1), /no such browser/);
+  });
+});
+
+describe('the login of an os-secret auth key', () => {
+  it('splits at the first colon: the password may hold more', () => {
+    assert.deepEqual(loginOf('qa:p@ss:w/rd'), { username: 'qa', password: 'p@ss:w/rd' });
+    assert.deepEqual(loginOf('dev:'), { username: 'dev', password: '' });
   });
 });

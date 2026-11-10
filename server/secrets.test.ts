@@ -79,8 +79,8 @@ describe('a key written into a .env file', () => {
   });
 });
 
-/** a fake Open Space: the store, a user who answers every box with `given`, and a browser that records cookies */
-function deps(store: SecretStore, roots: string[], given: Record<string, string> | null, cookies: unknown[] = []): SecretsApiDeps {
+/** a fake Open Space: the store, a user who answers every box with `given`, and a browser that records cookies and logins */
+function deps(store: SecretStore, roots: string[], given: Record<string, string> | null, cookies: unknown[] = [], logins: unknown[] = []): SecretsApiDeps {
   return {
     store, roots: () => roots,
     ask: async (sessionId, names) => {
@@ -89,6 +89,7 @@ function deps(store: SecretStore, roots: string[], given: Record<string, string>
       return store.names(sessionId);
     },
     setCookie: async (_, cookie) => { cookies.push(cookie); },
+    signIn: async (_, login) => { logins.push(login); },
   };
 }
 
@@ -128,10 +129,36 @@ describe('what os-secret asks for', () => {
   });
 });
 
+describe('os-secret auth', () => {
+  const form = (fields: Record<string, string>) => new URLSearchParams(fields);
+
+  it('signs a browser in to a site with a user:password key, never telling it', async () => {
+    const store = new SecretStore(() => {});
+    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'TOKEN', value: 'tok-123456' }]);
+    const logins: unknown[] = [];
+    const api = deps(store, [base], null, [], logins);
+    const signed = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org/en', shared: '1' }) }, api);
+    assert.equal(signed.status, 200);
+    assert.match(signed.text, /https:\/\/staging\.example\.org in your shared browser/);
+    assert.doesNotMatch(signed.text, /pw-123456/);
+    assert.deepEqual(logins, [{ url: 'https://staging.example.org/en', credentials: 'qa:pw-123456', shared: true }]);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org' }) }, api)).status, 200);
+    assert.equal((logins[1] as { shared: boolean }).shared, false);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'TOKEN', url: 'https://staging.example.org' }) }, api)).status, 400);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'file:///etc' }) }, api)).status, 400);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'MISSING', url: 'https://staging.example.org' }) }, api)).status, 404);
+    const refused = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org' }) }, { ...api, signIn: async () => { throw new Error('the site refused this user and password'); } });
+    assert.equal(refused.status, 409);
+    assert.match(refused.text, /refused this user and password/);
+    assert.equal(logins.length, 2);
+  });
+});
+
 describe('the os-secret command', { skip: process.platform === 'win32' }, () => {
   let server: http.Server;
   let url: string;
   const store = new SecretStore(() => {});
+  const logins: unknown[] = [];
   const run = (args: string[], cwd = base) => new Promise<{ code: number; out: string; err: string }>((resolve) => {
     const bin = installScript(path.join(base, 'office'));
     execFile(path.join(bin, 'os-secret'), args, { cwd, env: { PATH: process.env.PATH, OPEN_SPACE_SECRETS: url } }, (error, out, err) => resolve({ code: error ? Number(error.code) : 0, out, err }));
@@ -142,7 +169,7 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
       const chunks: Buffer[] = [];
       for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
       const action = req.url?.split('/').pop() ?? '';
-      const reply = await answerSecrets({ sessionId: 's', action, form: new URLSearchParams(Buffer.concat(chunks).toString()) }, deps(store, [base], { GEMINI_KEY: 'gm-secret-value' }));
+      const reply = await answerSecrets({ sessionId: 's', action, form: new URLSearchParams(Buffer.concat(chunks).toString()) }, deps(store, [base], { GEMINI_KEY: 'gm-secret-value' }, [], logins));
       res.writeHead(reply.status).end(reply.text);
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -169,6 +196,13 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
     const unknown = await run(['run', 'NOPE', '--', 'true']);
     assert.equal(unknown.code, 1);
     assert.match(unknown.err, /No key named NOPE/);
+  });
+
+  it('signs the shared browser in to a site', async () => {
+    store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }]);
+    const signed = await run(['auth', 'STAGING_LOGIN', 'https://staging.example.org', '--shared']);
+    assert.equal(signed.code, 0, signed.err);
+    assert.deepEqual(logins, [{ url: 'https://staging.example.org', credentials: 'qa:pw-123456', shared: true }]);
   });
 
   it('fails outside Open Space and on a refused request', async () => {

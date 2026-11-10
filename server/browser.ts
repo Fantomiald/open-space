@@ -78,6 +78,23 @@ export function chromeArgs(profile: string, shared: boolean): string[] {
   ];
 }
 
+/**
+ * The address a tab Open Space opens for itself starts on (an `os-secret auth` sign-in): no view shows it, and its closing does
+ * not stop a session's browser left with blank tabs only. In the shared browser it has no owner, like any tab without one.
+ */
+export const HELPER_TAB = 'about:blank#open-space-helper';
+
+/** How long a site may take to answer `os-secret auth`'s sign-in (Browsers.signIn). */
+const SIGN_IN_TIMEOUT_MS = 20_000;
+/** How long a refused or failed sign-in's tab may take to show its page before it is closed anyway. */
+const CLOSE_WAIT_MS = 2_000;
+
+/** The user and password of an `os-secret auth` key, "user:password" (server/secrets.ts checks the colon is there). */
+export function loginOf(credentials: string): { username: string; password: string } {
+  const at = credentials.indexOf(':');
+  return { username: credentials.slice(0, at), password: credentials.slice(at + 1) };
+}
+
 /** The key in the CDP endpoint given to a session: without it, another program of the machine cannot launch its browser. */
 export const browserKey = (secret: string, sessionId: string) => createHmac('sha256', secret).update(`browser:${sessionId}`).digest('hex').slice(0, 32);
 
@@ -353,6 +370,66 @@ export class Browsers {
     await live.chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
   }
 
+  /**
+   * A site's basic-auth login (`os-secret auth`, server/secrets.ts) in the session's own browser or the shared one. A tab of
+   * Open Space's own, on a connection of its own, opens the address and answers the site's password prompt (Fetch auth, at the
+   * request stage: a 401 paused at the response stage never reaches the prompt, checked with Chrome 156). Only that page
+   * loads, its scripts off: nothing of the site runs there (no tag, no analytics hit), and the login is in no address.
+   * Chrome keeps it for that site (by its realm, whatever the path) and sends it by itself with every page and call
+   * afterwards, in memory only, until that Chrome closes. The shared browser clears what the site leaves, like an owner's visit.
+   */
+  async signIn(sessionId: string, site: string, credentials: string, shared: boolean) {
+    const chrome = shared ? (await this.ensureShared()).chrome : (await this.ensure(sessionId)).chrome;
+    if (shared) this.visited(new URL(site).origin);
+    const refused = () => new Error('the site refused this user and password');
+    let tab = '';
+    let targetId = '';
+    let prompts = 0;
+    let done!: { resolve: () => void; reject: (error: Error) => void };
+    let loaded!: () => void;
+    const settled = new Promise<void>((resolve) => { loaded = resolve; });
+    const outcome = new Promise<void>((resolve, reject) => { done = { resolve, reject }; });
+    // awaited below: a failure before that (the browser closing meanwhile) must not end Open Space as an unhandled rejection
+    outcome.catch(() => {});
+    const cdp = new Cdp(chrome.socket, (method, params, session) => {
+      if (session !== tab) return;
+      const requestId = params.requestId;
+      if (method === 'Fetch.authRequired') {
+        // asked again for the same page: the site refused the login
+        const again = ++prompts > 1;
+        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: again ? { response: 'CancelAuth' } : { response: 'ProvideCredentials', ...loginOf(credentials) } }, tab).catch(() => {});
+        if (again) done.reject(refused());
+      } else if (method === 'Fetch.requestPaused') {
+        const page = params.resourceType === 'Document' && params.frameId === targetId;
+        void cdp.send(page ? 'Fetch.continueRequest' : 'Fetch.failRequest', page ? { requestId } : { requestId, errorReason: 'Aborted' }, tab).catch(() => {});
+      } else if (method === 'Page.loadEventFired') {
+        // not at Page.navigate's answer: Chrome may still be committing the page then, and ignores a close meanwhile
+        loaded();
+        done.resolve();
+      }
+    }, () => done.reject(new Error('browser closed')));
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await cdp.opened;
+      targetId = String((await cdp.send('Target.createTarget', { url: HELPER_TAB, background: true })).targetId);
+      tab = String((await cdp.send('Target.attachToTarget', { targetId, flatten: true })).sessionId);
+      await cdp.send('Page.enable', {}, tab);
+      await cdp.send('Emulation.setScriptExecutionDisabled', { value: true }, tab);
+      await cdp.send('Fetch.enable', { handleAuthRequests: true, patterns: [{ urlPattern: '*' }] }, tab);
+      cdp.send('Page.navigate', { url: site }, tab).then(({ errorText }) => {
+        if (errorText) done.reject(errorText === 'net::ERR_INVALID_AUTH_CREDENTIALS' ? refused() : new Error(String(errorText)));
+      }, (error: Error) => done.reject(error));
+      timer = setTimeout(() => done.reject(new Error('the site did not answer')), SIGN_IN_TIMEOUT_MS);
+      await outcome;
+    } finally {
+      clearTimeout(timer);
+      // a refused login still shows Chrome's 401 page: closed once there too, if it comes
+      await Promise.race([settled, new Promise((resolve) => setTimeout(resolve, CLOSE_WAIT_MS))]);
+      if (targetId) await cdp.send('Target.closeTarget', { targetId }).catch((error) => this.deps.log('cannot close the sign-in tab', error));
+      cdp.close();
+    }
+  }
+
   /** What Playwright asks for before connecting: the browser's own /json/version, with its WebSocket address. */
   async version(sessionId: string, lane: number): Promise<Record<string, unknown>> {
     // the session's own browser or a tester's: the view of the shared one is reached through its filter only (sharedVersion)
@@ -595,6 +672,13 @@ export class Browsers {
       return;
     }
     const info = asJson(params.targetInfo);
+    // Open Space's own tab, known by its first address (Chrome may tell it only once the tab exists): out of the view
+    if ((method === 'Target.targetCreated' || method === 'Target.targetInfoChanged') && info.url === HELPER_TAB) {
+      if (!live.tabs.delete(String(info.targetId))) return;
+      if (live.active === info.targetId) this.show(id, live, [...live.tabs.keys()].at(-1) ?? null);
+      else this.deps.onState(id, this.state(id));
+      return;
+    }
     if (method === 'Target.targetCreated' && info.type === 'page') {
       const tab = { id: String(info.targetId), url: String(info.url ?? ''), title: String(info.title ?? '') };
       live.tabs.set(tab.id, tab);

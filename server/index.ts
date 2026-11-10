@@ -448,6 +448,11 @@ const { server, hooksServer, modsServer } = createWebServer({ policy, port: conf
         if (!browsers.available) throw new Error(st.sessions.noBrowser);
         return browsers.setCookie(id, cookie);
       },
+      signIn: (id, { url, credentials, shared }) => {
+        if (!browsers.available) throw new Error(st.sessions.noBrowser);
+        if (shared && !sessions.hasSharedBrowser(id)) throw new Error('this session has no shared browser');
+        return browsers.signIn(id, url, credentials, shared);
+      },
     }),
   },
   hooks: async (id, token, body) => {
