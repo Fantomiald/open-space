@@ -437,6 +437,15 @@ describe('prompt suggestions', () => {
     await manager.shutdown();
   });
 
+  it('leaves them out of an automaton\'s run, where nobody types', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => true });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' } });
+    manager.send(id, 'go');
+    assert.equal(processes[0].launch.promptSuggestions, undefined);
+    await manager.shutdown();
+  });
+
   it('offers the message Claude Code predicts after a turn, until the next message is sent', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => true });
     await manager.init();
