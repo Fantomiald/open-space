@@ -17,7 +17,7 @@ export function Marquee({ className, live = false, children }: { className: stri
     <span className={`cp-marquee ${className}`} ref={box} data-scroll={scrolls} aria-live={live ? 'polite' : undefined}>
       <span className="cp-marquee__track">
         <span ref={first}>{children}</span>
-        {scrolls && <span aria-hidden="true">{children}</span>}
+        {scrolls && <span className="cp-marquee__copy" aria-hidden="true">{children}</span>}
       </span>
     </span>
   );
