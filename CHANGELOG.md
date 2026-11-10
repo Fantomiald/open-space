@@ -1,5 +1,14 @@
 # Versions
 
+## 1.30.0
+
+- Sortir une fenêtre : une conv, un mod ou le navigateur sort d'Open Space dans sa propre fenêtre, gardée au-dessus des autres apps (même en plein écran) ou non, et revient d'un clic.
+- Tab masque tout sauf la salle : l'en-tête, les états, les convs, le lanceur et les mods. Un rappel en haut à droite dit comment tout réafficher, puis s'efface quand la souris ne bouge plus.
+- Tag auto : une consigne libre dans les Réglages (« si on parle d'un ticket, mets sa clé »), visible quand le tag auto est allumé.
+- Mods : `OpenSpace.store` garde leurs données (une check-list, un post-it) d'une ouverture à l'autre, et la fenêtre d'un mod n'est plus plus haute que son contenu.
+- `create_mod` appelé depuis une session : la session construit le mod elle-même au lieu d'en lancer une autre.
+- Vient des PR de JB et GC : suggestions de message prises avec Tab, comme dans Claude Code ; `/clear` vide le fil ; limite hebdo Fable dans l'en-tête ; agents des workflows parmi les sous-agents ; CI Windows réparée.
+
 ## 1.29.1
 
 - Une session peut t'envoyer un fichier sur Telegram tout de suite (`send_file` du MCP), au seul bot que tu as ou à celui que tu nommes ; avec plusieurs bots, elle te demande lequel. Elle ne crée plus d'automate pour un envoi ponctuel : `create_trigger` est réservé aux tâches qui reviennent ou qu'un webhook lance.
