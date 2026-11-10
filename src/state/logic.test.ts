@@ -238,11 +238,26 @@ describe('buildFeed', () => {
     assert.equal(contextLevel({ used: 800_000, max: 1_000_000 }), 'high', 'red only once the meter is three quarters full');
   });
 
-  it('tells a compaction and a new conversation in the thread', () => {
-    const items = buildFeed([logged(1, { k: 'compact', auto: false, before: 29998, after: 5250 }), logged(2, { k: 'cleared' })]).items;
-    const [compacted, cleared] = items.map((item) => (item.kind === 'notice' ? item.text : ''));
-    assert.match(compacted, /^Conversation compactée : 30\sk → 5,3\sk jetons$/);
-    assert.equal(cleared, 'Nouvelle conversation : Claude repart de zéro (/clear).');
+  it('tells a compaction in the thread', () => {
+    const items = buildFeed([logged(1, { k: 'compact', auto: false, before: 29998, after: 5250 })]).items;
+    assert.equal(items.length, 1);
+    assert.match(items[0]?.kind === 'notice' ? items[0].text : '', /^Conversation compactée : 30\sk → 5,3\sk jetons$/);
+  });
+
+  it('empties the thread on a new conversation (/clear), leaving its notice and what comes after', () => {
+    const feed = buildFeed([
+      logged(1, { k: 'start', text: 'Corrige le test' }),
+      logged(2, { k: 'say', who: 'chef', text: 'Corrigé.' }),
+      logged(3, { k: 'plan', items: [{ text: 'Corriger le test', status: 'completed' }] }),
+      logged(4, { k: 'end', ok: true, text: 'Corrigé.', ms: 1200 }),
+      logged(5, { k: 'start', text: '/clear' }),
+      logged(6, { k: 'cleared' }),
+      logged(7, { k: 'end', ok: true, text: '', ms: 10 }),
+      logged(8, { k: 'start', text: 'On repart de zéro' }),
+    ]);
+    assert.deepEqual(feed.items.map((item) => item.kind), ['notice', 'turn', 'user']);
+    assert.equal(feed.items[0]?.kind === 'notice' ? feed.items[0].text : '', 'Nouvelle conversation : Claude repart de zéro (/clear).');
+    assert.deepEqual(feed.plan, [], 'the plan went with the old conversation');
   });
 
   it('keeps the sub-agents’ hand-backs of older logs out of the conversation', () => {

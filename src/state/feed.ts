@@ -114,7 +114,12 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
         break;
       }
       case 'compact': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.compacted(ev.auto, ev.before, ev.after, ev.idle === true) }); break;
-      case 'cleared': items.push({ id: seq, kind: 'notice', at, text: t.session.feed.cleared }); break;
+      case 'cleared':
+        items.length = 0;
+        plan = [];
+        turnStart = 0;
+        items.push({ id: seq, kind: 'notice', at, text: t.session.feed.cleared });
+        break;
       case 'error': items.push({ id: seq, kind: 'notice', at, text: ev.message }); break;
       case 'note': items.push({ id: seq, kind: 'notice', at, text: ev.text }); break;
       case 'branch': items.push({ id: seq, kind: 'branch', at, what: ev.what, branch: ev.branch, base: ev.base, ...(ev.behind ? { behind: ev.behind } : {}) }); break;
