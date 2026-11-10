@@ -1746,14 +1746,19 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-radio__now { display: grid; min-width: 7.5rem; line-height: 1.2; }
 .cp-radio__label { font-size: 0.625rem; font-weight: var(--weight-bold); letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
 .cp-radio__title { max-width: 10rem; font: var(--weight-medium) var(--text-sm) / 1.2 var(--font-pixel); color: var(--color-text); }
-/* a title longer than its box scrolls round, pausing at the start of each turn (and stops under the pointer) */
+/*
+ * a title longer than its box scrolls round, pausing at the start of each turn (and stops under the pointer). The second
+ * copy, there only while it scrolls, is out of the flow: the box keeps the width of one copy, so scrolling never widens
+ * the pill, which would give the title room enough to stop, and so on at every frame.
+ */
 .cp-marquee { overflow: hidden; white-space: nowrap; }
-.cp-marquee__track { display: inline-flex; gap: 2.5rem; }
+.cp-marquee__track { --marquee-gap: 2.5rem; position: relative; display: inline-flex; }
 .cp-marquee__track > span { flex: none; }
+.cp-marquee__copy { position: absolute; top: 0; left: calc(100% + var(--marquee-gap)); }
 .cp-marquee[data-scroll='true'] { mask-image: linear-gradient(to right, transparent, #000 0.5rem, #000 calc(100% - 0.75rem), transparent); }
 .cp-marquee[data-scroll='true'] .cp-marquee__track { animation: cp-marquee 16s linear infinite; }
 .cp-marquee[data-scroll='true']:hover .cp-marquee__track { animation-play-state: paused; }
-@keyframes cp-marquee { 0%, 15% { transform: none; } 100% { transform: translateX(calc(-50% - 1.25rem)); } }
+@keyframes cp-marquee { 0%, 15% { transform: none; } 100% { transform: translateX(calc(-100% - var(--marquee-gap))); } }
 @media (prefers-reduced-motion: reduce) { .cp-marquee[data-scroll='true'] .cp-marquee__track { animation: none; } }
 .cp-radio__bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 0.9rem; }
 .cp-radio__bars span { width: 3px; height: 100%; border-radius: 1px; background: var(--color-text-muted); transform: scaleY(0.3); transform-origin: bottom; }
