@@ -1,6 +1,6 @@
 # Versions
 
-## Pas encore publié
+## 1.29.0
 
 Vient de Mouhrad, repris pour servir à tout le monde :
 
@@ -18,6 +18,8 @@ Vient de Mouhrad, repris pour servir à tout le monde :
 - Mods par le MCP : `list_mods`, `create_mod` (comme « Nouveau mod »), `update_mod` (la session du mod fait le changement) et `delete_mod` (à la Corbeille). Le bouton Mods de l'en-tête n'a plus que son icône, comme les autres.
 - Plafonds d'un automate, chacun facultatif : un coût (en dollars, estimé au prix public d'après les tokens de chaque réponse) et un temps (en minutes). Passé l'un d'eux, le run s'arrête et se ferme, et son fil dit pourquoi. Réglables sur sa page ou par le MCP (`maxCost`, `maxMinutes`).
 - Le fichier des chiffres (Réglages, rubrique renommée « Notes ») et son panneau disparaissent : l'objet de la salle ouvre les mods, et des chiffres se font maintenant en mod.
+- Réglages d'un mod : nom, description, icône, rafraîchissement automatique et variables d'environnement que sa page demande.
+- Le contour au survol suit la forme dessinée par le thème : l'objet des mods, le portail, le tableau, le poste de l'utilisateur (laptop, grimoire, journal de bord…) et la porte.
 
 ## 1.28.0
 

@@ -12,7 +12,7 @@ import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
-import type { ModInfo } from './mods.ts';
+import type { ModInfo, ModSettings } from './mods.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 import type { TerminalChoice, TerminalKind } from './terminal.ts';
 import type { CostReport } from './usage.ts';
@@ -725,6 +725,10 @@ export type ClientMessage =
   | { t: 'deleteMod'; id: string }
   /** the user has a mod's window open: its data counts as seen */
   | { t: 'modSeen'; id: string }
+  /** what the user set in a mod's settings */
+  | { t: 'configureMod'; id: string; settings: ModSettings }
+  /** the variables the user gave a mod, which its page asks for (answered with `modEnv`) */
+  | { t: 'modEnv'; id: string }
   /** reads the numbers file to show it: its numbers then count as seen */
   /** the thread of an automaton's run so far (answered with `automatonLog`) */
   | { t: 'automatonLog'; runId: string }
@@ -832,6 +836,8 @@ export type ServerMessage =
   | { t: 'mods'; mods: ModInfo[] }
   /** the mod just made for the user's request, and the session writing it */
   | { t: 'modCreated'; id: string; sessionId: string }
+  /** the variables the user gave a mod, for its page alone */
+  | { t: 'modEnv'; id: string; env: Record<string, string> }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }
   /** a session's browser changed tabs or address; null once it is closed */
   | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };

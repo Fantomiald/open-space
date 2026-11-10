@@ -13,10 +13,13 @@ const valid = (rows: readonly SecretEntry[]) => filled(rows).length > 0 && fille
 
 /**
  * Name and value rows, as many as needed. A block of `NAME=value` lines pasted in any field fills the rows at once.
- * The values are password fields: nothing of them shows, nor goes anywhere but to Open Space's server. `focused`: the
+ * The values are password fields: nothing of them shows, nor goes anywhere but to Open Space's server. `kept`: names
+ * whose value the server already holds (an empty field keeps it); `hints`: a line under a name's row. `focused`: the
  * first empty field takes the focus when its dialog opens (not in a page where the rows are one setting among others).
  */
-function SecretRows({ rows, setRows, fixed, focused = true }: { rows: SecretEntry[]; setRows: (rows: SecretEntry[]) => void; fixed?: readonly string[]; focused?: boolean }) {
+export function SecretRows({ rows, setRows, fixed, kept, hints, addLabel, focused = true }: {
+  rows: SecretEntry[]; setRows: (rows: SecretEntry[]) => void; fixed?: readonly string[]; kept?: readonly string[]; hints?: Readonly<Record<string, string>>; addLabel?: string; focused?: boolean;
+}) {
   const words = t.composer.secrets;
   const change = (index: number, row: Partial<SecretEntry>) => setRows(rows.map((each, at) => (at === index ? { ...each, ...row } : each)));
   const paste = (index: number) => (event: ClipboardEvent<HTMLInputElement>) => {
@@ -31,24 +34,27 @@ function SecretRows({ rows, setRows, fixed, focused = true }: { rows: SecretEntr
       {rows.map((row, index) => {
         const named = fixed?.includes(row.name) ?? false;
         const wrongName = row.name.trim() !== '' && !isSecretName(row.name.trim());
+        const held = kept?.includes(row.name.trim()) ?? false;
+        const hint = hints?.[row.name.trim()];
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity of their own, a name can be edited
-          <div className="cp-secrets__row" key={index}>
+          <div className="cp-secrets__row" key={index} data-held={held}>
             <input
               className="cp-secrets__name" value={row.name} readOnly={named} aria-invalid={wrongName} aria-label={words.name} placeholder={words.namePlaceholder}
               spellCheck={false} autoComplete="off" autoCapitalize="off" data-autofocus={focused && index === 0 && !row.name ? true : undefined} onChange={(e) => change(index, { name: e.target.value })} onPaste={paste(index)}
             />
             <input
-              className="cp-secrets__value" type="password" value={row.value} aria-label={words.valueOf(row.name || words.name)} placeholder={words.valuePlaceholder}
+              className="cp-secrets__value" type="password" value={row.value} aria-label={words.valueOf(row.name || words.name)} placeholder={held ? words.keptPlaceholder : words.valuePlaceholder}
               autoComplete="new-password" spellCheck={false} data-autofocus={focused && index === 0 && row.name ? true : undefined} onChange={(e) => change(index, { value: e.target.value })} onPaste={paste(index)}
             />
-            {!named && rows.length > 1 && (
+            {!named && (rows.length > 1 || held) && (
               <button type="button" className="cp-icon-button" data-size="small" aria-label={words.removeRow} title={words.removeRow} onClick={() => setRows(rows.filter((_, at) => at !== index))}><RemoveIcon /></button>
             )}
+            {hint && <span className="cp-secrets__hint">{hint}</span>}
           </div>
         );
       })}
-      <button type="button" className="cp-button cp-secrets__add" data-variant="quiet" onClick={() => setRows([...rows, emptyRow()])}><PlusIcon />{words.addRow}</button>
+      <button type="button" className="cp-button cp-secrets__add" data-variant="quiet" onClick={() => setRows([...rows, emptyRow()])}><PlusIcon />{addLabel ?? words.addRow}</button>
     </div>
   );
 }

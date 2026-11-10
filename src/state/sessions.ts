@@ -3,7 +3,8 @@
 import { NO_AUTOMATA, type AgentRole, type AutomataState } from '../../shared/automata.ts';
 import { NO_TRIGGERS, type TriggerError, type TriggerInput, type TriggersState } from '../../shared/triggers.ts';
 import { appendRunEvents, type RunLog } from './automata.ts';
-import type { ModInfo } from '../../shared/mods.ts';
+import type { ModInfo, ModSettings } from '../../shared/mods.ts';
+import { heardModEnv } from './mods.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import type { MessengerInput } from '../../shared/messengers.ts';
 import { create } from 'zustand';
@@ -130,6 +131,8 @@ export interface CommandPostState {
   triggerError: TriggerError | null;
   /** the roles a session of a folder can run as, as last asked for (null: not asked yet) */
   agentRoles: { cwd: string; roles: AgentRole[] } | null;
+  /** the mod whose settings that panel shows, instead of the list */
+  modSettings: string | null;
   /** the music apps of the computer the radio can drive (none outside macOS) */
   musicApps: MusicApp[];
   /** what the music app the radio drives plays, as last asked for */
@@ -299,6 +302,9 @@ export interface CommandPostState {
   showBrowserLane: (sessionId: string, lane: number) => void;
   /** takes a browser out of its session's window, which goes back to the conversation */
   openModsPanel: (open: boolean) => void;
+  /** shows a mod's settings in the mods' panel (null: back to the list) */
+  openModSettings: (id: string | null) => void;
+  configureMod: (id: string, settings: ModSettings) => void;
   /** opens a mod's window, or brings it to the front */
   openMod: (id: string) => void;
   closeMod: (id: string) => void;
@@ -448,6 +454,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   mods: null,
   openMods: readPreference<string[]>('mods-open', []),
   modsOpen: false,
+  modSettings: null,
   pip: readPreference<PipTarget | null>('pip', null),
   pipDismissed: [],
   inspections: {},
@@ -672,6 +679,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'costs': set({ costs: message.report }); break;
       case 'mods': set({ mods: message.mods }); break;
       case 'modCreated': get().openMod(message.id); break;
+      case 'modEnv': heardModEnv(message.id, message.env); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
@@ -825,7 +833,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
 
-  openModsPanel: (open) => set({ modsOpen: open }),
+  openModsPanel: (open) => set({ modsOpen: open, modSettings: null }),
+
+  openModSettings: (id) => set({ modsOpen: true, modSettings: id }),
+
+  configureMod: (id, settings) => { get().send({ t: 'configureMod', id, settings }); },
 
   openMod: (id) => {
     const openMods = [...get().openMods.filter((each) => each !== id), id];

@@ -58,7 +58,7 @@ function fakeApi() {
     bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
     mods: () => mods,
     createMod: async (request) => {
-      const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
+      const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, refresh: 0, env: [], envSet: [], folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
       mods.push(mod);
       done.push(`mod ${request}`);
       return { mod, sessionId: 's9' };

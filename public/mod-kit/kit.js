@@ -11,6 +11,8 @@
   // ── Open Space around the page ──
   const watchers = new Map(); // name -> Set of functions
   const latest = new Map(); // name -> last value
+  const refreshers = new Set();
+  let envAsked = [];
   let themed;
   const ready = new Promise((resolve) => { themed = resolve; });
   const say = (message) => host?.postMessage({ openSpace: message.kind, ...message }, '*');
@@ -29,6 +31,12 @@
       latest.set(message.name, message.value);
       for (const heard of watchers.get(message.name) ?? []) heard(message.value);
     }
+    if (message.openSpace === 'env') {
+      const asked = envAsked;
+      envAsked = [];
+      for (const resolve of asked) resolve({ ...(message.env ?? {}) });
+    }
+    if (message.openSpace === 'refresh') for (const refresh of refreshers) refresh();
   });
   // alone in a tab (opened by hand, or a test): the classic look, and no data
   if (!host) themed();
@@ -47,6 +55,21 @@
     if (!host) { resolve(null); return; }
     const stop = watch(name, (value) => { queueMicrotask(() => stop()); resolve(value); });
   });
+  /** The variables the user gave the mod in its settings ({ NAME: value }), read again at each call ({} outside Open Space). */
+  const env = () => new Promise((resolve) => {
+    if (!host) { resolve({}); return; }
+    envAsked.push(resolve);
+    say({ kind: 'env' });
+  });
+  /**
+   * Calls `refresh` when the window refreshes the mod (its ↻ button, or the pace set in its settings), instead of
+   * loading the page again. Returns what stops it.
+   */
+  function onRefresh(refresh) {
+    refreshers.add(refresh);
+    if (refreshers.size === 1) say({ kind: 'refreshable', on: true });
+    return () => { refreshers.delete(refresh); if (!refreshers.size) say({ kind: 'refreshable', on: false }); };
+  }
   /** A JSON file of the mod's own folder ("data/sales.json"), read fresh. */
   async function json(file) {
     const answer = await fetch(new URL(file, document.baseURI), { cache: 'no-store' });
@@ -364,7 +387,7 @@
     }
   });
 
-  window.OpenSpace = { ready, watch, data, json, format, h };
+  window.OpenSpace = { ready, watch, data, env, onRefresh, json, format, h };
   // the height its content needs, for its window to fit it (until the user gives the window a size of their own)
   let told = 0;
   const measure = () => {

@@ -1,5 +1,7 @@
 import type { Dictionary } from '../index.ts';
 
+const every = (seconds: number) => (seconds === 60 ? 'Every minute' : seconds === 3600 ? 'Every hour' : `Every ${seconds / 60} min`);
+
 export const mods: Dictionary['mods'] = {
   title: 'Mods',
   buttonTitle: 'Your mods: small windows your agents make',
@@ -23,10 +25,35 @@ export const mods: Dictionary['mods'] = {
   newHint: 'An agent writes it in a session; it opens here once ready.',
   windowLabel: (name) => `Mod ${name}`,
   reload: 'Reload',
+  reloadTitle: (refresh) => (refresh ? `Refresh (by itself: ${every(refresh).toLowerCase()})` : 'Refresh'),
   fold: 'Fold',
   unfold: 'Unfold',
   close: 'Close',
   building: (who) => (who ? `${who} is building it…` : 'Being built…'),
   buildingText: 'The window fills in once the agent is done.',
   showSession: 'Show the session',
+  settings: 'Settings',
+  settingsTitle: (name) => `${name} settings`,
+  settingsView: {
+    title: (name) => `${name} settings`,
+    back: 'Back to the mods',
+    subtitle: 'Its window, its pace and its variables',
+    window: 'Window',
+    name: 'Name',
+    description: 'Description',
+    descriptionPlaceholder: 'What it shows, in one line',
+    icon: 'Icon',
+    refresh: 'Refresh',
+    refreshLabel: 'Refresh by itself',
+    pace: (seconds) => (seconds === 0 ? 'Never' : seconds < 3600 ? `${seconds / 60} min` : `${seconds / 3600} h`),
+    refreshHint: (seconds) => `${every(seconds)} while its window is open and unfolded. The window’s ↻ button does it on demand.`,
+    refreshNever: 'Only when you click ↻ in its window.',
+    env: 'Environment variables',
+    envHint: 'Keys or settings the mod’s page reads with OpenSpace.env(). Kept by Open Space outside the mod’s folder: its agent never sees their values.',
+    addVariable: 'Add a variable',
+    envInvalid: 'A variable name is not valid or appears twice: letters, digits and _ only.',
+    editWithAgent: 'Edit with an agent',
+    cancel: 'Cancel',
+    save: 'Save',
+  },
 };

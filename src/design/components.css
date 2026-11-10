@@ -2871,6 +2871,47 @@ a.cp-button { text-decoration: none; }
 @keyframes cp-mod-breathe { 50% { opacity: 0.4; } }
 :root[data-motion='reduced'] .cp-mod__skeleton { animation: none; }
 @media (prefers-reduced-motion: reduce) { .cp-mod__skeleton { animation: none; } }
+/* the mods' dialog: the list, or one mod's settings in its place (ModsPanel.tsx), each sliding in */
+.cp-mods__list { display: grid; gap: var(--space-3); animation: cp-mods-in 180ms var(--easing); }
+.cp-modal[data-look='sheet'][data-wide] { width: min(46rem, calc(100vw - 2 * var(--gutter))); }
+.cp-mod-settings { flex: 1; min-width: 0; min-height: 0; max-height: calc(100dvh - 2 * var(--gutter)); display: flex; flex-direction: column; animation: cp-mods-in 180ms var(--easing); }
+@keyframes cp-mods-in { from { opacity: 0; translate: 10px 0; } }
+:root[data-motion='reduced'] :is(.cp-mods__list, .cp-mod-settings) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.cp-mods__list, .cp-mod-settings) { animation: none; } }
+.cp-mod-settings__head { flex: none; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5) var(--space-3) var(--space-3); border-bottom: var(--border-width) solid var(--color-border); }
+.cp-mod-settings__head .cp-mods__icon { flex: none; }
+.cp-mod-settings__titles { flex: 1; min-width: 0; }
+.cp-mod-settings__titles h3 { margin: 0; font-size: var(--text-lg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cp-mod-settings__titles p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-muted); }
+.cp-mod-settings__content { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-5); display: grid; align-content: start; gap: var(--space-5); }
+.cp-mod-settings__field { display: grid; grid-template-columns: 9rem minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); font-size: var(--text-sm); }
+.cp-mod-settings__field + .cp-mod-settings__field { border-top: var(--border-width) solid var(--color-border); }
+.cp-mod-settings__field > span { font-weight: var(--weight-medium); }
+.cp-mod-settings__field > input { width: 100%; height: var(--control-height); padding-block: 0; }
+.cp-mod-settings__field > small { grid-column: 2; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-mod-settings__label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cp-mod-settings__label .cp-icon { color: var(--color-text-muted); }
+.cp-mod-settings__icons { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cp-mod-settings__icon {
+  display: grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0; border: var(--border-width) solid transparent; border-radius: var(--radius-sm);
+  background: var(--glass-tint); color: var(--color-text-muted); cursor: pointer; transition: background var(--duration) var(--easing), color var(--duration) var(--easing), border-color var(--duration) var(--easing);
+}
+.cp-mod-settings__icon:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+.cp-mod-settings__icon[aria-checked='true'] { background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent); }
+.cp-mod-settings__paces { flex-wrap: wrap; justify-self: start; max-width: 100%; border-radius: var(--radius-md); }
+.cp-mod-settings__paces button { padding: var(--space-1) var(--space-3); font-variant-numeric: tabular-nums; }
+.cp-mod-settings__env { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); }
+.cp-mod-settings__note { display: flex; gap: var(--space-2); margin: 0; font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-mod-settings__note .cp-icon { flex: none; margin-top: 1px; }
+.cp-mod-settings__error { margin: 0; font-size: var(--text-xs); color: var(--tone-error); }
+.cp-secrets__hint { grid-column: 1 / -1; margin-top: calc(-1 * var(--space-1)); font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-mod-settings__foot { flex: none; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: var(--border-width) solid var(--color-border); }
+.cp-mod-settings__actions { display: flex; gap: var(--space-2); margin-left: auto; }
+@media (max-width: 40rem) {
+  .cp-mod-settings__field { grid-template-columns: minmax(0, 1fr); }
+  .cp-mod-settings__field > small { grid-column: 1; }
+  .cp-mod-settings__foot { flex-wrap: wrap; }
+}
 .cp-mods__ideas { display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-1) var(--space-1) 0; }
 .cp-mods__idea {
   height: var(--badge-height); padding: 0 var(--space-2); border-radius: 999px; border: var(--border-width) solid var(--color-border-strong);

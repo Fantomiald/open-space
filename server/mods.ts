@@ -1,13 +1,14 @@
 // The user's mods (shared/mods.ts): one folder each under OFFICE_DIR/mods, written by sessions that run there. This
 // lists them, makes the folder of a new one, watches their files, and remembers when the user last saw each one's data
-// (OFFICE_DIR/mods-seen.json). The folder's CLAUDE.md, the rules a session writing a mod reads, is Open Space's own
+// (OFFICE_DIR/mods-seen.json). The variables the user gives a mod in its settings are kept apart from its folder, which its
+// session reads (OFFICE_DIR/mods-env.json, the user's alone), and go only to its page when it asks. The folder's CLAUDE.md, the rules a session writing a mod reads, is Open Space's own
 // (the kit's GUIDE.md): written again whenever it differs.
 import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
-import { hasNewData, isModId, MOD_DATA_FOLDER, modIdFor, readManifest, type ModInfo } from '../shared/mods.ts';
+import { hasNewData, isModId, MOD_DATA_FOLDER, modIdFor, readManifest, type ModInfo, type ModSettings } from '../shared/mods.ts';
 import { asJson } from './json.ts';
 import { resolveInside } from './paths.ts';
 import { moveToTrash } from './trash.ts';
@@ -53,6 +54,8 @@ export interface ModsOptions {
   kitDir: string;
   /** OFFICE_DIR/mods-seen.json */
   seenFile: string;
+  /** OFFICE_DIR/mods-env.json */
+  envFile: string;
   secret: string;
   /** where Open Space answers (http://127.0.0.1:<port>): a mod's address, for its session to open it in its browser */
   origin: string;
@@ -63,6 +66,7 @@ export interface ModsOptions {
 export class Mods {
   private options: ModsOptions;
   private seen: Record<string, number> = {};
+  private env: Record<string, Record<string, string>> = {};
   private watcher: FSWatcher | null = null;
   private settling: NodeJS.Timeout | null = null;
   private last = '';
@@ -73,7 +77,7 @@ export class Mods {
 
   /** Makes the folder, writes the guide, reads what was seen, and starts watching. */
   async prepare() {
-    const { folder, kitDir, seenFile, log } = this.options;
+    const { folder, kitDir, seenFile, envFile, log } = this.options;
     mkdirSync(folder, { recursive: true, mode: 0o700 });
     try {
       const guide = readFileSync(path.join(kitDir, GUIDE), 'utf8');
@@ -84,6 +88,14 @@ export class Mods {
       const raw = asJson(JSON.parse(await readFile(seenFile, 'utf8')));
       for (const [id, at] of Object.entries(raw)) if (isModId(id) && typeof at === 'number') this.seen[id] = at;
     } catch { /* nothing seen yet */ }
+    try {
+      const raw = asJson(JSON.parse(await readFile(envFile, 'utf8')));
+      for (const [id, values] of Object.entries(raw)) {
+        if (!isModId(id)) continue;
+        const kept = Object.entries(asJson(values)).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+        if (kept.length) this.env[id] = Object.fromEntries(kept);
+      }
+    } catch { /* no variable given yet */ }
     const mods = this.list();
     for (const mod of mods) this.writeAddress(mod);
     this.last = JSON.stringify(mods);
@@ -127,6 +139,7 @@ export class Mods {
         ...readManifest(raw, id), id, folder: own, url: `/mods/${modKey(secret, id)}/${id}/`,
         version: changedAt(own) ?? 0,
         unread: hasNewData(changedAt(path.join(own, MOD_DATA_FOLDER)), this.seen[id]),
+        envSet: Object.keys(this.env[id] ?? {}).sort(),
       });
     }
     return mods.sort((a, b) => a.name.localeCompare(b.name));
@@ -154,7 +167,36 @@ export class Mods {
     await moveToTrash(own, true);
     delete this.seen[id];
     await this.saveSeen();
+    if (this.env[id]) { delete this.env[id]; await this.saveEnv(); }
     this.announce();
+  }
+
+  /**
+   * What the user set in a mod's settings: its name, description, icon and pace in its mod.json (the rest of the file
+   * as its agent wrote it), its variables here. A variable left out is forgotten; one given without a value keeps its own.
+   */
+  async configure(id: string, settings: ModSettings) {
+    const own = this.folderOf(id);
+    if (!own || !existsSync(path.join(own, 'mod.json'))) return;
+    const manifest = path.join(own, 'mod.json');
+    let raw: Record<string, unknown> = {};
+    try { raw = asJson(JSON.parse(await readFile(manifest, 'utf8'))); } catch { /* rewritten whole */ }
+    const { name, description, icon, refresh } = settings;
+    await writeFile(manifest, `${JSON.stringify({ ...raw, name, description, icon, refresh }, null, 2)}\n`);
+    const before = this.env[id] ?? {};
+    const after = Object.fromEntries(settings.env.flatMap(({ name, value }) => {
+      const kept = value || before[name];
+      return kept ? [[name, kept]] : [];
+    }));
+    if (Object.keys(after).length) this.env[id] = after;
+    else delete this.env[id];
+    await this.saveEnv();
+    this.announce();
+  }
+
+  /** The variables the user gave a mod, for its page. */
+  envOf(id: string): Record<string, string> {
+    return { ...(this.env[id] ?? {}) };
   }
 
   /** The user has the mod in sight: its data as it is now counts as seen. */
@@ -170,6 +212,8 @@ export class Mods {
   private writeAddress(mod: ModInfo) {
     try { writeFileSync(path.join(mod.folder, ADDRESS), `${this.options.origin}${mod.url}\n`); } catch (error) { this.options.log(`cannot write the address of mod ${mod.id}`, error); }
   }
+
+  private saveEnv = () => writeFile(this.options.envFile, `${JSON.stringify(this.env)}\n`, { mode: 0o600 });
 
   private saveSeen = () => writeFile(this.options.seenFile, `${JSON.stringify(this.seen)}\n`, { mode: 0o600 });
 
