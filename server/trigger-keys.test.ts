@@ -17,7 +17,7 @@ describe('the keys a trigger hands its runs', () => {
     const keys = new TriggerKeys(file);
     assert.deepEqual(keys.set('t1', [{ name: 'TOKEN', value: 'one' }, { name: 'bad name', value: 'x' }, { name: 'EMPTY', value: '' }, { name: 'TOKEN', value: 'two' }]), ['TOKEN']);
     keys.set('t1', [{ name: 'API_KEY', value: 'abc' }]);
-    assert.equal(statSync(file).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
     assert.deepEqual(keys.all(), { t1: ['API_KEY', 'TOKEN'] });
     const again = new TriggerKeys(file);
     assert.deepEqual(again.entries('t1'), [{ name: 'TOKEN', value: 'two' }, { name: 'API_KEY', value: 'abc' }]);
