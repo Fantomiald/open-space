@@ -63,6 +63,8 @@ export interface SessionDeps {
   claudeSettings?: () => ClaudeSettings;
   /** files the session may not read nor change: Open Space's keys (claude-process.ts hiddenRules) */
   hidden?: readonly string[];
+  /** Claude Code predicts the next message after each turn (Preferences.promptSuggestions), read at each launch */
+  promptSuggestions?: () => boolean;
   /** the name of the session a SendMessage call goes to (see Normalizer) */
   peerName?: (address: string) => string;
   /** time source, replaceable in tests */
@@ -91,7 +93,7 @@ type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
 interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void }
 
 /** Session fields that are computed, not stored. */
-export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout'>;
+export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout' | 'suggestion'>;
 
 /** How long a finished run stays after its last turn before closing (Session.finishAfterTurn), and one that never said so. */
 const FINISH_DELAY_MS = 5000;
@@ -147,6 +149,8 @@ export class Session {
   private remote: RemoteControl | undefined;
   /** the page its agent last had in the user's own Chrome (see onChrome) */
   private chrome: ChromeView | undefined;
+  /** the next message Claude Code predicts, offered in the field until a message is sent (see onSuggestion) */
+  private suggestion: string | undefined;
   /** Open Space compacts the conversation on its own (see autoCompact): how the session was before, to go back to it */
   private autoCompaction: { resting: boolean; hadProcess: boolean; compacted: boolean } | null = null;
   /** its worktree is being made: messages wait in the queue, nothing starts until it is ready */
@@ -167,7 +171,7 @@ export class Session {
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     const secrets = this.deps.secretNames?.() ?? [];
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.checkout && !this.info.worktree ? { checkout: this.checkout } : {}), ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(secrets.length ? { secrets } : {}) };
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.checkout && !this.info.worktree ? { checkout: this.checkout } : {}), ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(this.suggestion ? { suggestion: this.suggestion } : {}), ...(secrets.length ? { secrets } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -360,6 +364,7 @@ export class Session {
   /** `joining`: sent during a turn, which it joins (see send) instead of starting one; `shown`: what the thread shows instead of the text. */
   private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false, shown?: string) {
     this.clearIdleTimer();
+    this.suggestion = undefined;
     if (!joining) {
       this.turnOutput = false;
       this.interrupted = false;
@@ -448,6 +453,7 @@ export class Session {
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
       onChrome: (sight) => this.onChrome(sight),
+      onSuggestion: (suggestion) => this.onSuggestion(suggestion),
       onBackground: (tasks) => this.onBackground(tasks),
       onSchedule: (change) => this.onSchedule(change),
       onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
@@ -475,7 +481,7 @@ export class Session {
       cwd,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -656,6 +662,13 @@ export class Session {
     const at = this.now();
     const picture = sight.picture ? { name: this.deps.saveImage(sight.picture), url: sight.url, at } : this.chrome?.picture;
     this.chrome = { url: sight.url, title: sight.title, at, ...(picture ? { picture } : {}) };
+    this.publish();
+  }
+
+  /** Claude Code predicted the next message: offered in the field, unless the user has already written again. */
+  private onSuggestion(suggestion: string) {
+    if (this.busy || this.info.queued?.length || this.autoCompaction) return;
+    this.suggestion = suggestion;
     this.publish();
   }
 

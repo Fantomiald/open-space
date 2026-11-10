@@ -69,6 +69,11 @@ describe('buildClaudeArgs', () => {
     assert.doesNotMatch(identityPrompt('Iris', 'Max'), /claude-in-chrome/);
   });
 
+  it('asks Claude Code for the next message it predicts, only when the user wants suggestions', () => {
+    assert.ok(buildClaudeArgs({ ...base, promptSuggestions: true }).includes('--prompt-suggestions'));
+    assert.ok(!buildClaudeArgs(base).includes('--prompt-suggestions'));
+  });
+
   it('passes the session permission mode', () => {
     const args = buildClaudeArgs({ ...base, permissionMode: 'manual' });
     assert.equal(args[args.indexOf('--permission-mode') + 1], 'manual');

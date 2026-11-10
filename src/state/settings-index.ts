@@ -12,7 +12,7 @@ export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   language: 'general', timeFormat: 'general', reduceMotion: 'general', glassOpacity: 'general', windowStyle: 'general', tagColors: 'general', sound: 'general', notifications: 'general', terminal: 'general',
   timestamps: 'general', turnDuration: 'general', detailedActions: 'general', copyOnSelect: 'general',
   model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', remoteByDefault: 'sessions', isolate: 'sessions', accountsBrowser: 'sessions', autoPip: 'sessions',
-  thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
+  thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', promptSuggestions: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',
   theme: 'office', festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office', automata: 'office', hooksAddress: 'office',
@@ -24,7 +24,7 @@ export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
 export const CONFIG_LABELS: Readonly<Partial<Record<SettingRow, string>>> = {
   timeFormat: 'Time format', reduceMotion: 'Reduce motion', notifications: 'Notifications', timestamps: 'Show message timestamps',
   turnDuration: 'Show turn duration', copyOnSelect: 'Copy on select', model: 'Model', permissions: 'Default permission mode',
-  thinking: 'Thinking mode', outputStyle: 'Output style', responseLanguage: 'Language', autoCompact: 'Auto-compact', idleCompact: 'Idle compaction',
+  thinking: 'Thinking mode', outputStyle: 'Output style', responseLanguage: 'Language', promptSuggestions: 'Prompt suggestions', autoCompact: 'Auto-compact', idleCompact: 'Idle compaction',
   autoContinue: 'Continue automatically at usage limit', autoModeInPlan: 'Use auto mode during plan', workflows: 'Dynamic workflows',
   ultracodeKeyword: 'Ultracode keyword trigger', workflowSize: 'Dynamic workflow size', inbound: 'Messages from your other sessions', artifacts: 'Artifacts',
 };

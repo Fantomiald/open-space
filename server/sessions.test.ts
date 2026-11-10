@@ -425,6 +425,50 @@ describe('Remote Control by default', () => {
   });
 });
 
+describe('prompt suggestions', () => {
+  it('launches with them when the setting is on, and only then', async () => {
+    let on = false;
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => on });
+    await manager.init();
+    await manager.create({ cwd: projectA(), text: 'bonjour' });
+    on = true;
+    await manager.create({ cwd: projectA(), text: 'bonjour' });
+    assert.deepEqual(processes.map((process) => !!process.launch.promptSuggestions), [false, true]);
+    await manager.shutdown();
+  });
+
+  it('leaves them out of an automaton\'s run, where nobody types', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => true });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' } });
+    manager.send(id, 'go');
+    assert.equal(processes[0].launch.promptSuggestions, undefined);
+    await manager.shutdown();
+  });
+
+  it('offers the message Claude Code predicts after a turn, until the next message is sent', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => true });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'un slogan' });
+    processes[0].feed('prompt-suggestion');
+    assert.equal(find(id).suggestion, 'Vérifie la disponibilité du nom');
+    manager.send(id, 'autre chose');
+    assert.equal(find(id).suggestion, undefined);
+    await manager.shutdown();
+  });
+
+  it('drops a suggestion that comes once the user has already written again', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { promptSuggestions: () => true });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'un slogan' });
+    processes[0].feed('prompt-suggestion', 0, 2);
+    manager.send(id, 'plus court');
+    processes[0].feed('prompt-suggestion', 2);
+    assert.equal(find(id).suggestion, undefined);
+    await manager.shutdown();
+  });
+});
+
 describe('automatic tags', () => {
   const tagging = (enabled: boolean) => {
     const asked: string[] = [];

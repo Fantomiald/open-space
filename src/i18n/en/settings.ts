@@ -115,6 +115,7 @@ export const settings: Dictionary['settings'] = {
       thinking: { title: 'Thinking', hint: 'Claude thinks before it answers (thinking mode).' },
       outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${STYLES_FOLDER}.`, default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
+      promptSuggestions: { title: 'Prompt suggestions', hint: 'After a turn, the message Claude Code guesses you will send shows in grey in the empty field: Tab writes it, then Enter sends it. One small extra call per turn, except for a conversation’s first turns. A session already running picks it up at its next launch.' },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {
         title: 'Compact when idle',

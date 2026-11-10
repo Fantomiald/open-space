@@ -69,6 +69,8 @@ export interface SessionManagerDeps {
   identity?: SessionDeps['identity'];
   claudeSettings?: SessionDeps['claudeSettings'];
   hidden?: SessionDeps['hidden'];
+  /** Preferences.promptSuggestions */
+  promptSuggestions?: SessionDeps['promptSuggestions'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
   /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
@@ -344,6 +346,7 @@ export class SessionManager {
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       hidden: this.deps.hidden,
+      promptSuggestions: this.deps.promptSuggestions,
       peerName: (address) => this.peerName(address),
       liveCount: () => [...this.sessions.values()].filter((session) => session.alive).length,
       maxLive: this.deps.config.maxLive,

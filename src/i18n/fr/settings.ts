@@ -118,6 +118,7 @@ export const settings = {
       thinking: { title: 'Réflexion', hint: 'Claude réfléchit avant de répondre (thinking mode).' },
       outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${STYLES_FOLDER}.`, default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
+      promptSuggestions: { title: 'Suggestions de message', hint: 'Après un tour, le message que Claude Code devine que tu vas envoyer s’affiche en gris dans le champ vide : Tab l’écrit, puis Entrée l’envoie. Un petit appel en plus par tour, sauf aux premiers tours d’une conversation. Une session déjà lancée s’y met à son prochain démarrage.' },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {
         title: 'Compacter au repos',

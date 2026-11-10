@@ -145,6 +145,8 @@ export interface LaunchOptions {
   hidden?: readonly string[];
   /** the user's own Chrome through the Claude in Chrome extension, for their accounts (Preferences.accountsBrowser) */
   chrome?: boolean;
+  /** a prompt_suggestion message after each turn Claude Code predicts the next message for (Preferences.promptSuggestions) */
+  promptSuggestions?: boolean;
   /** variables of this session only, on top of the shared environment (os-secret's address: server/secrets.ts) */
   env?: Record<string, string>;
   /** it works on a branch of its own, in a worktree: its conversation is told so when it starts */
@@ -169,11 +171,13 @@ export interface LaunchOptions {
  *   resume list shows Claude's summary instead (see listConversations). Given at every launch, so a rename shows from the next one.
  * - `--chrome` connects the claude-in-chrome server to the Claude in Chrome extension in `-p` too (checked with 2.1.318:
  *   two sessions at once, each in a tab group of its own, and no site permission asked by the extension).
+ * - `--prompt-suggestions` sends `{type: "prompt_suggestion", suggestion}` a few seconds after a turn's result (checked with
+ *   2.1.319: none for the first turns of a conversation, nor once the process has exited; fixtures/prompt-suggestion.jsonl).
  */
 /** What a trigger's run does to its own session without asking: name itself, say it is done (server/mcp.ts). */
 const RUN_TOOLS = ['rename_session', 'finish_run'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -198,6 +202,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.hidden?.length) args.push('--disallowedTools', hiddenRules(options.hidden).join(','));
   if (options.agents) args.push('--agents', options.agents);
   if (options.chrome) args.push('--chrome');
+  if (options.promptSuggestions) args.push('--prompt-suggestions');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
   if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run));

@@ -47,7 +47,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip']]],
   claude: [
-    ['reasoning', ['thinking', 'outputStyle', 'responseLanguage']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
+    ['reasoning', ['thinking', 'outputStyle', 'responseLanguage', 'promptSuggestions']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
   folders: [['places', ['roots', 'defaultFolder']]],
@@ -277,6 +277,11 @@ function SettingsEditor() {
             onChange={(e) => change({ claude: withSetting(draft.claude, 'language', e.target.value.trim() ? e.target.value : undefined, undefined) })}
             placeholder={claudeDefaults.language ?? rows.responseLanguage.english}
           />
+        </Row>
+      );
+      case 'promptSuggestions': return (
+        <Row key={id} id={id} flash={flash} icon={<KeyboardIcon />} title={rows.promptSuggestions.title} hint={rows.promptSuggestions.hint} config={config}>
+          <Switch checked={draft.promptSuggestions} onChange={(promptSuggestions) => change({ promptSuggestions })} label={rows.promptSuggestions.title} />
         </Row>
       );
       case 'idleCompact': return (

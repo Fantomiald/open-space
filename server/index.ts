@@ -170,6 +170,7 @@ const sessions = new SessionManager({
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,
   hidden: HIDDEN_FILES,
+  promptSuggestions: () => settings.preferences.promptSuggestions,
   broadcast,
   log,
   onAttention: (kind, session) => {
