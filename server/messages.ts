@@ -10,7 +10,7 @@ import { parseJobs } from '../shared/jobs.ts';
 import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
 import { storedTags } from '../shared/tags.ts';
-import { isModId, MAX_MOD_REQUEST } from '../shared/mods.ts';
+import { isModId, MAX_MOD_DESCRIPTION, MAX_MOD_ENV, MAX_MOD_NAME, MAX_MOD_REQUEST, MOD_ICONS, MOD_REFRESH, type ModSettings } from '../shared/mods.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
@@ -388,6 +388,11 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'deleteMod': return isModId(raw.id) ? { t: 'deleteMod', id: raw.id } : null;
     case 'modSeen': return isModId(raw.id) ? { t: 'modSeen', id: raw.id } : null;
+    case 'modEnv': return isModId(raw.id) ? { t: 'modEnv', id: raw.id } : null;
+    case 'configureMod': {
+      const settings = parseModSettings(raw.settings);
+      return isModId(raw.id) && settings ? { t: 'configureMod', id: raw.id, settings } : null;
+    }
     case 'search': {
       const query = boundedString(raw.query, MAX_QUERY);
       const id = asNumber(raw.id, -1);
@@ -465,6 +470,18 @@ function parseMusicAction(value: unknown): MusicAction | null {
     case 'track': return typeof value.id === 'string' && /^[0-9A-F]{16}$/.test(value.id) ? { kind: 'track', id: value.id } : null;
     default: return null;
   }
+}
+
+/** A mod's settings: a name, a known icon and pace, and distinct variables (a value of '' keeps the one given before). */
+function parseModSettings(raw: unknown): ModSettings | null {
+  if (!isJson(raw)) return null;
+  const name = boundedString(raw.name, MAX_MOD_NAME)?.trim(), description = boundedString(raw.description, MAX_MOD_DESCRIPTION)?.trim();
+  const icon = MOD_ICONS.find((each) => each === raw.icon), refresh = MOD_REFRESH.find((each) => each === raw.refresh);
+  const env = Array.isArray(raw.env) && raw.env.length <= MAX_MOD_ENV ? raw.env.map((entry) =>
+    isJson(entry) && typeof entry.name === 'string' && isSecretName(entry.name) && typeof entry.value === 'string' && entry.value.length <= MAX_SECRET_LENGTH ? { name: entry.name, value: entry.value } : null) : null;
+  if (!name || description === undefined || !icon || refresh === undefined || !env || env.some((entry) => !entry)) return null;
+  const entries = env as { name: string; value: string }[];
+  return new Set(entries.map((entry) => entry.name)).size === entries.length ? { name, description, icon, refresh, env: entries } : null;
 }
 
 /** A key given in the box: a variable name and a value, never trimmed (a token is taken as pasted). */

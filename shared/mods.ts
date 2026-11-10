@@ -1,5 +1,6 @@
 // Mods: small pages the user's agents write, each in a folder of OFFICE_DIR/mods (mod.json + index.html), shown by the
 // page as floating windows. Here: what a mod is, and how its manifest is read. Pure, shared by the server and the page.
+import { isSecretName } from './secrets.ts';
 
 /** The pictures a mod may wear in the panel and on its window (src/command/ModIcon.tsx). */
 export const MOD_ICONS = ['puzzle', 'chart', 'bars', 'coins', 'timer', 'list', 'bell', 'calendar', 'star', 'heart', 'bolt', 'globe', 'note', 'terminal'] as const;
@@ -11,6 +12,10 @@ export const MAX_MOD_NAME = 40;
 export const MAX_MOD_DESCRIPTION = 120;
 /** what the user asks a new mod to be */
 export const MAX_MOD_REQUEST = 2000;
+/** How often a mod's window refreshes it, in seconds (0: never by itself), as the settings offer it. */
+export const MOD_REFRESH = [0, 60, 300, 900, 1800, 3600] as const;
+export const MAX_MOD_ENV = 30;
+export const MAX_MOD_ENV_LABEL = 80;
 
 /** A mod's folder name: what names it everywhere (its address, its place on the screen). */
 export const isModId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(value);
@@ -23,7 +28,14 @@ export interface ModManifest {
   height: number;
   /** still being written by its agent: the window says so instead of showing a half-made page */
   draft: boolean;
+  /** how often its window refreshes it, in seconds (one of MOD_REFRESH; 0: only when asked) */
+  refresh: number;
+  /** the variables its page needs (OpenSpace.env in the kit), which the user fills in its settings */
+  env: ModEnvNeed[];
 }
+
+/** A variable a mod asks for: its name, and what it is for in the user's words (where to find it). */
+export interface ModEnvNeed { name: string; label: string }
 
 export interface ModInfo extends ModManifest {
   id: string;
@@ -35,7 +47,12 @@ export interface ModInfo extends ModManifest {
   version: number;
   /** its data (the files of its data/ folder) changed since the user last had it open */
   unread: boolean;
+  /** the names of the variables the user gave it (their values stay on the server until its page asks) */
+  envSet: string[];
 }
+
+/** What the settings change in a mod: written in its mod.json, but `env`, kept by Open Space (a value of '' keeps the one given before). */
+export interface ModSettings { name: string; description: string; icon: ModIcon; refresh: number; env: { name: string; value: string }[] }
 
 const within = (value: unknown, { min, max, initial }: { min: number; max: number; initial: number }) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.round(Math.min(Math.max(value, min), max)) : initial;
@@ -51,6 +68,11 @@ export function readManifest(raw: unknown, id: string): ModManifest {
     width: within(given.width, MOD_SIZE.width),
     height: within(given.height, MOD_SIZE.height),
     draft: given.draft === true,
+    refresh: MOD_REFRESH.find((each) => each === given.refresh) ?? 0,
+    env: Array.isArray(given.env) ? given.env.flatMap((raw): ModEnvNeed[] => {
+      const need = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+      return typeof need.name === 'string' && isSecretName(need.name) ? [{ name: need.name, label: text(need.label, MAX_MOD_ENV_LABEL) }] : [];
+    }).filter((need, index, all) => all.findIndex((each) => each.name === need.name) === index).slice(0, MAX_MOD_ENV) : [],
   };
 }
 

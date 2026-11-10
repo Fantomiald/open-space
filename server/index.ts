@@ -232,7 +232,7 @@ const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences
 prepareSounds(config.dataDir, log);
 /** the kit the mods load, and the guide their sessions read: beside the page once built, in public/ while developing */
 const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
-const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), secret, origin: `http://${HOST}:${config.port}`, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
+const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, origin: `http://${HOST}:${config.port}`, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
 await mods.prepare();
 const { server } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
@@ -508,6 +508,8 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     }
     case 'deleteMod': await mods.remove(message.id); break;
     case 'modSeen': await mods.markSeen(message.id); break;
+    case 'configureMod': await mods.configure(message.id, message.settings); break;
+    case 'modEnv': send({ t: 'modEnv', id: message.id, env: mods.envOf(message.id) }); break;
     case 'metrics': {
       const metrics = await readMetrics(settings.preferences.metricsFile);
       send({ t: 'metrics', metrics });

@@ -1,3 +1,6 @@
+/** how often, said in full: « Chaque minute », « Toutes les 5 min » */
+const every = (seconds: number) => (seconds === 60 ? 'Chaque minute' : seconds === 3600 ? 'Chaque heure' : `Toutes les ${seconds / 60} min`);
+
 export const mods = {
   /** the button of the header and the dialog it opens (ModsPanel.tsx) */
   title: 'Mods',
@@ -27,10 +30,36 @@ export const mods = {
   /** a mod's window (ModWindows.tsx) */
   windowLabel: (name: string) => `Mod ${name}`,
   reload: 'Recharger',
+  reloadTitle: (refresh: number) => (refresh ? `Rafraîchir (tout seul : ${every(refresh).toLowerCase()})` : 'Rafraîchir'),
   fold: 'Replier',
   unfold: 'Déplier',
   close: 'Fermer',
   building: (who: string | null) => (who ? `${who} le fabrique…` : 'En fabrication…'),
   buildingText: 'La fenêtre se remplit dès que l’agent a fini.',
   showSession: 'Voir la session',
+  /** a mod's settings (ModsPanel.tsx), in the mods' dialog */
+  settings: 'Réglages',
+  settingsTitle: (name: string) => `Réglages de ${name}`,
+  settingsView: {
+    title: (name: string) => `Réglages de ${name}`,
+    back: 'Retour aux mods',
+    subtitle: 'Sa fenêtre, son rythme et ses variables',
+    window: 'Fenêtre',
+    name: 'Nom',
+    description: 'Description',
+    descriptionPlaceholder: 'Ce qu’on y voit, en une ligne',
+    icon: 'Icône',
+    refresh: 'Rafraîchissement',
+    refreshLabel: 'Rafraîchir tout seul',
+    pace: (seconds: number) => (seconds === 0 ? 'Jamais' : seconds < 3600 ? `${seconds / 60} min` : `${seconds / 3600} h`),
+    refreshHint: (seconds: number) => `${every(seconds)} tant que sa fenêtre est ouverte et dépliée. Le bouton ↻ de la fenêtre le fait à la demande.`,
+    refreshNever: 'Seulement quand tu cliques sur ↻ dans sa fenêtre.',
+    env: 'Variables d’environnement',
+    envHint: 'Des clés ou des réglages que la page du mod lit avec OpenSpace.env(). Gardés par Open Space hors du dossier du mod : son agent n’en voit jamais la valeur.',
+    addVariable: 'Ajouter une variable',
+    envInvalid: 'Un nom de variable n’est pas valable ou revient deux fois : lettres, chiffres et _ seulement.',
+    editWithAgent: 'Modifier avec un agent',
+    cancel: 'Annuler',
+    save: 'Enregistrer',
+  },
 };

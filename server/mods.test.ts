@@ -14,13 +14,31 @@ writeFileSync(path.join(kitDir, 'GUIDE.md'), '# the rules\n');
 writeFileSync(path.join(kitDir, 'starter.html'), '<!doctype html><os-loading></os-loading>\n');
 
 async function prepared(name: string, changes: ModInfo[][] = []) {
-  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), secret: 'secret', origin: 'http://127.0.0.1:4848', onChange: (list) => changes.push(list), log: () => {} });
+  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), envFile: path.join(base, name, 'env.json'), secret: 'secret', origin: 'http://127.0.0.1:4848', onChange: (list) => changes.push(list), log: () => {} });
   await mods.prepare();
   after(() => mods.stop());
   return mods;
 }
 
 describe('mods folder', () => {
+  it('writes the settings in mod.json, keeps the variables apart, and a variable given without a value keeps its own', async () => {
+    const mods = await prepared('settings');
+    const made = mods.create('settings test');
+    const manifest = path.join(made.folder, 'mod.json');
+    writeFileSync(manifest, JSON.stringify({ name: 'Old', width: 500, env: [{ name: 'TOKEN', label: 'Ton token' }] }));
+    await mods.configure(made.id, { name: 'Tickets', description: 'Mes tickets', icon: 'list', refresh: 300, env: [{ name: 'TOKEN', value: 'abc' }, { name: 'EMAIL', value: 'me@x.y' }] });
+    const written = JSON.parse(readFileSync(manifest, 'utf8'));
+    assert.deepEqual(written, { name: 'Tickets', width: 500, env: [{ name: 'TOKEN', label: 'Ton token' }], description: 'Mes tickets', icon: 'list', refresh: 300 });
+    assert.doesNotMatch(readFileSync(manifest, 'utf8'), /abc/, 'no value in the folder its agent reads');
+    assert.deepEqual(mods.list().find((mod) => mod.id === made.id)?.envSet, ['EMAIL', 'TOKEN']);
+    await mods.configure(made.id, { name: 'Tickets', description: '', icon: 'list', refresh: 0, env: [{ name: 'TOKEN', value: '' }] });
+    assert.deepEqual(mods.envOf(made.id), { TOKEN: 'abc' }, 'kept without a new value, forgotten when left out');
+    const again = await prepared('settings');
+    assert.deepEqual(again.envOf(made.id), { TOKEN: 'abc' }, 'read back after a restart');
+    await again.remove(made.id);
+    assert.deepEqual(again.envOf(made.id), {});
+  });
+
   it('writes the rules as the folder’s CLAUDE.md, and makes a new mod a draft from the starter', async () => {
     const changes: ModInfo[][] = [];
     const mods = await prepared('new', changes);

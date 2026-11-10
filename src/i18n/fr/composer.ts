@@ -114,6 +114,7 @@ export const composer = {
     name: 'Nom',
     namePlaceholder: 'NOM_DE_LA_CLE',
     valuePlaceholder: 'Colle la valeur ici',
+    keptPlaceholder: 'Déjà enregistrée',
     valueOf: (name: string) => `Valeur de ${name}`,
     addRow: 'Ajouter une clé',
     removeRow: 'Retirer cette ligne',

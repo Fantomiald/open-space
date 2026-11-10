@@ -112,6 +112,7 @@ export const composer: Dictionary['composer'] = {
     name: 'Name',
     namePlaceholder: 'KEY_NAME',
     valuePlaceholder: 'Paste the value here',
+    keptPlaceholder: 'Already saved',
     valueOf: (name: string) => `Value of ${name}`,
     addRow: 'Add a key',
     removeRow: 'Remove this row',

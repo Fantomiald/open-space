@@ -1,6 +1,7 @@
 // The browser-side state of Open Space: connection, sessions, the log of the followed session,
 // slash commands and UI selection. Server messages go through `receive`; user actions through the `send` set by net/connection.ts.
-import type { ModInfo } from '../../shared/mods.ts';
+import type { ModInfo, ModSettings } from '../../shared/mods.ts';
+import { heardModEnv } from './mods.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
@@ -108,6 +109,8 @@ export interface CommandPostState {
   openMods: string[];
   /** the panel that lists the mods is open */
   modsOpen: boolean;
+  /** the mod whose settings that panel shows, instead of the list */
+  modSettings: string | null;
   /** the numbers panel is open (a click on the numbers object of the room) */
   metricsOpen: boolean;
   /** the numbers file as last read: null when there is none yet, undefined until read */
@@ -279,6 +282,9 @@ export interface CommandPostState {
   showBrowserLane: (sessionId: string, lane: number) => void;
   /** takes a browser out of its session's window, which goes back to the conversation */
   openModsPanel: (open: boolean) => void;
+  /** shows a mod's settings in the mods' panel (null: back to the list) */
+  openModSettings: (id: string | null) => void;
+  configureMod: (id: string, settings: ModSettings) => void;
   /** opens a mod's window, or brings it to the front */
   openMod: (id: string) => void;
   closeMod: (id: string) => void;
@@ -402,6 +408,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   mods: null,
   openMods: readPreference<string[]>('mods-open', []),
   modsOpen: false,
+  modSettings: null,
   pip: readPreference<PipTarget | null>('pip', null),
   pipDismissed: [],
   inspections: {},
@@ -615,6 +622,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'costs': set({ costs: message.report }); break;
       case 'mods': set({ mods: message.mods }); break;
       case 'modCreated': get().openMod(message.id); break;
+      case 'modEnv': heardModEnv(message.id, message.env); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
@@ -768,7 +776,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   showBrowserLane: (sessionId, lane) => set({ browserLanes: { ...get().browserLanes, [sessionId]: lane } }),
 
-  openModsPanel: (open) => set({ modsOpen: open }),
+  openModsPanel: (open) => set({ modsOpen: open, modSettings: null }),
+
+  openModSettings: (id) => set({ modsOpen: true, modSettings: id }),
+
+  configureMod: (id, settings) => { get().send({ t: 'configureMod', id, settings }); },
 
   openMod: (id) => {
     const openMods = [...get().openMods.filter((each) => each !== id), id];

@@ -2,14 +2,14 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as R
 import type { ModInfo } from '../../shared/mods.ts';
 import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
-import { costsForMods, isModData, MOD_HEAD, MOD_TOKENS, modBox, NOT_PLACED, openingSpots, quotaForMods, resizeMod, sessionsForMods, type ModData, type ModPlacement } from '../state/mods.ts';
+import { awaitModEnv, costsForMods, isModData, MOD_HEAD, MOD_TOKENS, modBox, NOT_PLACED, openingSpots, quotaForMods, resizeMod, sessionsForMods, type ModData, type ModPlacement } from '../state/mods.ts';
 import { placePip } from '../state/pip.ts';
 import type { Box } from '../state/room-frame.ts';
 import { useSessions, type CommandPostState } from '../state/sessions.ts';
 import type { Edge } from '../state/windows.ts';
 import { boxVariables } from './boxes.ts';
 import { FreeHandles } from './FreeHandles.tsx';
-import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MOD_ICONS, PencilIcon, RefreshIcon } from './Icons.tsx';
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MOD_ICONS, RefreshIcon, SettingsIcon } from './Icons.tsx';
 import { INTERACTIVE } from './useWindowDrag.ts';
 
 /** how far a press on the title bar goes before it carries the window */
@@ -64,7 +64,7 @@ function currentTheme() {
  */
 function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { left: number; top: number } }) {
   const words = t.mods;
-  const { openMod, closeMod, editMod, send, show } = useSessions.getState();
+  const { openMod, closeMod, openModSettings, send, show } = useSessions.getState();
   const writer = useSessions((s) => Object.values(s.sessions).find((session) => session.cwd === mod.folder));
   const [placement, setPlacement] = useState<ModPlacement>(() => readPreference(placementKey(mod.id), NOT_PLACED));
   const [, setSurface] = useState(surface);
@@ -77,6 +77,9 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
   const [moved, setMoved] = useState<Box | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [loads, setLoads] = useState(0);
+  // set while the page refreshes itself (the kit's OpenSpace.onRefresh): a refresh tells it rather than loading it again
+  const pageRefresh = useRef<(() => void) | null>(null);
+  const refresh = () => (pageRefresh.current ? pageRefresh.current() : setLoads((count) => count + 1));
   const shownBox = moved ?? box;
 
   // a smaller page: the window stays within reach
@@ -85,6 +88,15 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
     window.addEventListener('resize', keep);
     return () => window.removeEventListener('resize', keep);
   }, []);
+
+  // the pace set in its settings, while the window shows it
+  const folded = placement.folded;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh reads refs and setters only
+  useEffect(() => {
+    if (!mod.refresh || mod.draft || folded) return;
+    const timer = setInterval(() => { if (!document.hidden) refresh(); }, mod.refresh * 1000);
+    return () => clearInterval(timer);
+  }, [mod.refresh, mod.draft, folded]);
 
   // its data changed while its window was not open: now it is seen
   useEffect(() => { if (mod.unread) send({ t: 'modSeen', id: mod.id }); }, [mod.unread, mod.id, send]);
@@ -95,6 +107,8 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
     const post = (message: object) => frame.current?.contentWindow?.postMessage(message, '*');
     const tellTheme = () => post({ openSpace: 'theme', ...currentTheme() });
     const tell = (name: ModData) => post({ openSpace: 'data', name, value: dataFor(name, useSessions.getState()) });
+    const envWaits = new Set<() => void>();
+    pageRefresh.current = null;
     let costsAsked = 0;
     const askCosts = () => { if (Date.now() - costsAsked > COSTS_EVERY_MS) { costsAsked = Date.now(); useSessions.getState().loadCosts(); } };
     const onMessage = (event: MessageEvent) => {
@@ -103,6 +117,13 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
       switch (message?.openSpace) {
         case 'ready': tellTheme(); break;
         case 'escape': break;
+        case 'env': {
+          const stop = awaitModEnv(mod.id, (env) => { envWaits.delete(stop); post({ openSpace: 'env', env }); });
+          envWaits.add(stop);
+          send({ t: 'modEnv', id: mod.id });
+          break;
+        }
+        case 'refreshable': pageRefresh.current = (message as { on?: unknown }).on === true ? () => post({ openSpace: 'refresh' }) : null; break;
         case 'size': { const height = (message as { height?: unknown }).height; if (typeof height === 'number' && Number.isFinite(height)) setFit(Math.round(height)); break; }
         case 'watch': {
           const name = message.name;
@@ -131,8 +152,10 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
       restyle();
       clearInterval(costsTimer);
       for (const stop of watched.values()) stop();
+      for (const stop of envWaits) stop();
+      pageRefresh.current = null;
     };
-  }, [loads, mod.version]);
+  }, [loads, mod.version, mod.id, send]);
 
   const grab = (edge: Edge | null, event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || (!edge && (event.target as HTMLElement).closest(INTERACTIVE))) return;
@@ -173,8 +196,8 @@ function ModWindow({ mod, depth, spot }: { mod: ModInfo; depth: number; spot: { 
       <header className="cp-mod__head" onPointerDown={(event) => grab(null, event)} onDoubleClick={(event) => { if (!(event.target as HTMLElement).closest(INTERACTIVE)) fold(); }}>
         <span className="cp-mod__icon"><Icon /></span>
         <span className="cp-mod__title">{mod.name}</span>
-        {!building && <button type="button" className="cp-icon-button" data-size="small" aria-label={words.reload} title={words.reload} onClick={() => setLoads((count) => count + 1)}><RefreshIcon /></button>}
-        <button type="button" className="cp-icon-button" data-size="small" aria-label={words.edit} title={words.editTitle(mod.name)} onClick={() => editMod(mod.id)}><PencilIcon /></button>
+        {!building && <button type="button" className="cp-icon-button" data-size="small" aria-label={words.reload} title={words.reloadTitle(mod.refresh)} onClick={refresh}><RefreshIcon /></button>}
+        <button type="button" className="cp-icon-button" data-size="small" aria-label={words.settings} title={words.settingsTitle(mod.name)} onClick={() => openModSettings(mod.id)}><SettingsIcon /></button>
         <button type="button" className="cp-icon-button" data-size="small" aria-label={placement.folded ? words.unfold : words.fold} title={placement.folded ? words.unfold : words.fold} onClick={fold}>
           {placement.folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
         </button>

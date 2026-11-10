@@ -59,6 +59,23 @@ export function resizeMod(start: Box, edge: Edge, dx: number, dy: number, surfac
   return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, 0, surface.height - size.height)), ...size };
 }
 
+/** The pages waiting for the variables of a mod (the kit's OpenSpace.env): the server's answer goes to each. */
+const envAsked = new Map<string, Set<(env: Record<string, string>) => void>>();
+
+/** Waits for the next `modEnv` of mod `id`; returns what stops waiting. */
+export function awaitModEnv(id: string, heard: (env: Record<string, string>) => void) {
+  const waiting = envAsked.get(id) ?? new Set();
+  envAsked.set(id, waiting);
+  waiting.add(heard);
+  return () => { waiting.delete(heard); };
+}
+
+export function heardModEnv(id: string, env: Record<string, string>) {
+  const waiting = envAsked.get(id);
+  envAsked.delete(id);
+  for (const heard of waiting ?? []) heard(env);
+}
+
 /** What a mod may ask Open Space for (OpenSpace.watch in the kit). */
 export const MOD_DATA = ['sessions', 'quota', 'costs'] as const;
 export type ModData = (typeof MOD_DATA)[number];
