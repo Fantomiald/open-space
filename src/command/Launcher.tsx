@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BRANCH_PREFIX, workSlug } from '../../shared/worktrees.ts';
 import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
 import { defaultFolder, folderName, formatAgo, homeRelative } from '../lib/format.ts';
 import { availability, stillFree } from '../state/availability.ts';
 import { useProjects } from '../state/useProjects.ts';
 import { useSessions } from '../state/sessions.ts';
+import { LAUNCHER_DRAFT, readDraft, writeDraft } from '../state/drafts.ts';
 import { branchPreview, isolationOffer, occupants } from '../state/worktrees.ts';
 import { BranchName } from './BranchCard.tsx';
 import { Switch } from './Switch.tsx';
@@ -52,7 +53,9 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(preferences.permissionMode);
   // the settings arrive with the server's hello, maybe after the launcher showed
   useEffect(() => { setModel(preferences.model); setEffort(preferences.effort || undefined); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.effort, preferences.permissionMode]);
-  const [text, setText] = useState('');
+  // kept while a session is open in its place: going back finds it again
+  const [text, setTyped] = useState(() => readDraft(LAUNCHER_DRAFT));
+  const setText = useCallback((value: string) => { writeDraft(LAUNCHER_DRAFT, value); setTyped(value); }, []);
   const [resumeId, setResumeId] = useState<string | null>(null);
   // words to find in the folder's conversations (their messages, not only their titles)
   const [query, setQuery] = useState('');
@@ -95,7 +98,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     if (draft.person) setAsked(draft.person);
     field.current?.focus();
     openNewSession(null);
-  }, [draft, openNewSession]);
+  }, [draft, openNewSession, setText]);
 
   // the folder's conversations, asked for once the user stops typing it or the words to find
   useEffect(() => {

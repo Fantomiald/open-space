@@ -1,5 +1,11 @@
 # Versions
 
+## 1.30.1
+
+- Le message écrit dans « Nouvelle conversation » reste quand on va voir une session et qu'on revient (N).
+- Suggestions de message : elles arrivent aussi sur les comptes où Anthropic ne les a pas encore ouvertes (le réglage force `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION`).
+- Vient de la PR de GC : l'icône du Dock à la taille et à l'arrondi des autres icônes macOS.
+
 ## 1.30.0
 
 - Sortir une fenêtre : une conv, un mod ou le navigateur sort d'Open Space dans sa propre fenêtre, gardée au-dessus des autres apps (même en plein écran) ou non, et revient d'un clic.

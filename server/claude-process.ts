@@ -173,6 +173,8 @@ export interface LaunchOptions {
  *   two sessions at once, each in a tab group of its own, and no site permission asked by the extension).
  * - `--prompt-suggestions` sends `{type: "prompt_suggestion", suggestion}` a few seconds after a turn's result (checked with
  *   2.1.319: none for the first turns of a conversation, nor once the process has exited; fixtures/prompt-suggestion.jsonl).
+ *   Claude Code also needs the account in Anthropic's rollout (growthbook flag tengu_chomp_inflection), else it sends none:
+ *   CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=1 skips that check (checked with 2.1.311).
  */
 /** What a trigger's run does to its own session without asking: name itself, say it is done (server/mcp.ts). */
 const RUN_TOOLS = ['rename_session', 'finish_run'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
@@ -352,7 +354,7 @@ class ClaudeProcess implements ProcessHandle {
     // uploading them (checked with 2.1.302): Open Space shows them in the thread (see Normalizer and Session.onFiles)
     // auto-compact turned off in Claude Code's own /config is kept in ~/.claude.json, which wins over --settings: the
     // variable turns it off whatever that file says
-    const env = { ...environment, ...launch.env, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
+    const env = { ...environment, ...launch.env, CLAUDE_CODE_ATTACHMENTS_BY_PATH: '1', ...(launch.promptSuggestions ? { CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: '1' } : {}), ...(launch.settings?.autoCompactEnabled === false ? { DISABLE_AUTO_COMPACT: '1' } : {}) };
     const child = spawn(...claudeCommand(binary.path, buildClaudeArgs(launch)), { cwd: launch.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true });
     this.child = child;
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
