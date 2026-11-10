@@ -76,7 +76,7 @@ describe('the automatons: what their files say', () => {
     assert.equal(DEFAULT_PREFERENCES.automataFolder, '');
     // a settings file from before has none: the defaults fill it
     assert.equal(parsePreferences({ notifications: true }).automataFolder, undefined);
-    assert.equal(parsePreferences({ automataFolder: '~/agents' }, '/home/me').automataFolder, '/home/me/agents');
+    assert.equal(parsePreferences({ automataFolder: '~/agents' }, '/home/me').automataFolder, path.resolve('/home/me/agents'));
     assert.equal(parsePreferences({ automataFolder: 'relative' }).automataFolder, undefined);
     assert.deepEqual(parseClientMessage({ t: 'automatonLog', runId: 'r-1' }), { t: 'automatonLog', runId: 'r-1' });
     assert.equal(parseClientMessage({ t: 'automatonLog', runId: '../x' }), null);

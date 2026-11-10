@@ -67,7 +67,7 @@ describe('the chat bots', () => {
     });
     try {
       assert.equal(messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: true, model: '' }), true);
-      assert.equal(statSync(path.join(base, 'messengers.json')).mode & 0o777, 0o600);
+      if (process.platform !== 'win32') assert.equal(statSync(path.join(base, 'messengers.json')).mode & 0o777, 0o600);
       const [bot] = messengers.list();
       assert.ok(bot?.linkCode && !bot.linked);
       assert.ok(!JSON.stringify(messengers.list()).includes(TOKEN), 'the page never gets the token');

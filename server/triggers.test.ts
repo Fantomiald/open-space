@@ -84,7 +84,7 @@ describe('the triggers', () => {
     assert.match(saved.trigger.id, /^[a-z0-9]{16}$/);
     assert.ok(saved.trigger.token.length >= 43);
     const file = (triggers as unknown as { options: { file: string } }).options.file;
-    assert.equal(statSync(file).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).triggers[0].name, 'Recap');
     const changed = await triggers.save(saved.trigger.id, input({ name: 'Morning' }));
     assert.ok('trigger' in changed && changed.trigger.token === saved.trigger.token, 'its token stays');

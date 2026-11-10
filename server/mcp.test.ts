@@ -218,7 +218,7 @@ describe('the open-space MCP server', () => {
     const key = new ExternalKey(file);
     assert.equal(key.current, null);
     const first = key.renew();
-    assert.equal(statSync(file).mode & 0o777, 0o600);
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
     assert.equal(readFileSync(file, 'utf8').trim(), first);
     assert.equal(new ExternalKey(file).current, first);
     assert.notEqual(key.renew(), first);
