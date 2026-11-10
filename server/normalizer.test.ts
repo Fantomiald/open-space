@@ -215,6 +215,38 @@ describe('Normalizer on a real sub-agent sent to the background', () => {
   });
 });
 
+describe('Normalizer on a real workflow of two agents (2.1.322)', () => {
+  const { events, results, background } = replay('workflow');
+  const workflow = 'toolu_01CWz2JkZBpvXc5npg9bwmzg';
+  const crew = events.filter((event) => event.k === 'hire' || event.k === 'report' || event.k === 'leave');
+
+  it('hires each agent of the workflow, which streams none of their messages, and lets it leave with its result', () => {
+    assert.deepEqual(crew.map((event) => [event.k, event.k === 'hire' ? event.id : event.who]), [
+      ['hire', `${workflow}:1`], ['hire', `${workflow}:2`],
+      ['report', `${workflow}:1`], ['leave', `${workflow}:1`], ['report', `${workflow}:2`], ['leave', `${workflow}:2`],
+    ]);
+    const hire = crew[0];
+    assert.ok(hire.k === 'hire' && hire.task === 'alpha' && hire.prompt.startsWith('Reply with exactly the word alpha') && hire.workflow === 'Two tiny agents');
+    const report = crew[2];
+    assert.equal(report.k === 'report' && report.text, 'alpha');
+    const leave = crew[3];
+    assert.ok(leave.k === 'leave' && leave.ok && leave.tokens === 93084 && leave.ms === 1636);
+  });
+
+  it('keeps the workflow itself among the background tasks, and its end starts a turn of its own', () => {
+    assert.deepEqual(background, [[{ id: 'wdzl0i206', description: 'Two tiny agents' }], []]);
+    assert.equal(results.length, 2);
+  });
+
+  it('lets the agents still listed leave when their workflow ends without saying so', () => {
+    const { normalizer, events: seen } = createNormalizer();
+    const row = (index: number, state: string) => ({ type: 'workflow_agent', index, label: `agent ${index}`, state });
+    normalizer.handle({ type: 'system', subtype: 'task_progress', tool_use_id: 'toolu_w', summary: 'Big one', workflow_progress: [row(1, 'start'), row(2, 'error')] });
+    normalizer.handle({ type: 'system', subtype: 'task_notification', tool_use_id: 'toolu_w', status: 'killed', summary: 'stopped' });
+    assert.deepEqual(seen.filter((event) => event.k === 'leave').map((event) => event.k === 'leave' && [event.who, event.ok]), [['toolu_w:2', false], ['toolu_w:1', false]]);
+  });
+});
+
 describe('Normalizer on a real Bash command sent to the background', () => {
   const { background, events, results } = replay('bash-background');
 

@@ -277,12 +277,23 @@ export class Normalizer {
         this.hire(call, launch?.type ?? '', asString(message.description), this.sentMessages.get(via) ?? '');
         break;
       }
+      case 'task_progress': {
+        // a workflow's agents: Claude Code streams none of their messages, only how each one stands, all of them in
+        // each progress (fixtures/workflow.jsonl, 2.1.322; a big workflow's rows lose their agentId and previews)
+        const call = asString(message.tool_use_id);
+        for (const row of asArray(message.workflow_progress).map(asJson)) {
+          if (row.type === 'workflow_agent' && call && asNumber(row.index)) this.workflowAgent(`${call}:${asNumber(row.index)}`, asString(message.summary), row);
+        }
+        break;
+      }
       case 'task_notification': {
         // the end of a task, sub-agents included (in the background or not, it comes before the Task call's result).
         // The report is in handback_report when the sub-agent handed it back; the summary then only says so.
         const raw = asString(message.tool_use_id);
         const id = this.revived.get(raw) ?? raw;
         if (!id || !message.status) break;
+        // a workflow's end: the agents it still listed as working will not say more (stopped, or it failed)
+        for (const agent of [...this.present].filter((each) => each.startsWith(`${raw}:`))) this.leave(agent, message.status === 'completed');
         const report = asString(asJson(message.handback_report).text) || asString(message.summary);
         if (report.trim() && this.present.has(id) && !this.reported.has(id)) {
           this.reported.add(id);
@@ -294,10 +305,23 @@ export class Normalizer {
     }
   }
 
-  private hire(id: string, type: string, task: string, prompt: string) {
+  private hire(id: string, type: string, task: string, prompt: string, workflow?: string) {
     this.present.add(id);
     this.hired.add(id);
-    this.options.emit({ k: 'hire', id, type, name: this.pickName(), task: cut(task || type, 48), prompt: cut(prompt, 2000) });
+    this.options.emit({ k: 'hire', id, type, name: this.pickName(), task: cut(task || type, 48), prompt: cut(prompt, 2000), ...(workflow === undefined ? {} : { workflow: cut(workflow, 90) }) });
+  }
+
+  /** One agent of a workflow, as its row stands: hired when first listed, gone once done or failed, with its result. */
+  private workflowAgent(id: string, workflow: string, row: Json) {
+    // ponytail: an agent the workflow runs again after a failure (same index) stays failed; re-hire it if retries show up
+    if (!this.hired.has(id)) this.hire(id, asString(row.agentType), asString(row.label), asString(row.promptPreview), workflow);
+    if ((row.state !== 'done' && row.state !== 'error') || !this.present.has(id)) return;
+    const report = asString(row.resultPreview) || asString(row.error);
+    if (report.trim() && !this.reported.has(id)) {
+      this.reported.add(id);
+      this.options.emit({ k: 'report', who: id, text: report.slice(0, 20000) });
+    }
+    this.leave(id, row.state === 'done', { total_tokens: row.tokens, tool_uses: row.toolCalls, duration_ms: row.durationMs });
   }
 
   /** Claude Code repeats an answer's usage on each of its blocks: it is counted once, by the answer's id. */

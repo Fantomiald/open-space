@@ -719,8 +719,9 @@ export class Session {
       if (this.emptyResult) { clearTimeout(this.emptyResult); this.emptyResult = null; }
     }
     // the session's own agent at work while waiting: a queued message or a background task started a new turn (a
-    // sub-agent still at work in the background does not: the session itself waits for the user)
-    const own = (ev.k === 'say' || ev.k === 'act' || ev.k === 'think') ? ev.who === 'chef' : ev.k === 'hire';
+    // sub-agent still at work in the background does not, nor a workflow starting its next agents: the session itself
+    // waits for the user)
+    const own = (ev.k === 'say' || ev.k === 'act' || ev.k === 'think') ? ev.who === 'chef' : ev.k === 'hire' && ev.workflow === undefined;
     if (this.context.state === 'wait' && own) this.apply({ type: 'activity' });
     if (ev.k === 'say' && ev.who === 'chef') this.info.lastMessage = tail(ev.text, LAST_MESSAGE_LENGTH);
     if (ev.k === 'hire') this.info.subagents = [...this.info.subagents, { id: ev.id, name: ev.name, type: ev.type }];
