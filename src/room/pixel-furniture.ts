@@ -35,7 +35,7 @@ export interface Painter {
 }
 
 /** The user's laptop on their desk, keyboard and lid (floor.ts finds the same box under the pointer). */
-function paintLaptop(p: Painter) {
+export function paintLaptop(p: Painter) {
   p.box(1.1, 0.15, 0.8, 0.45, 11, 1, C.lightMetal);
   p.box(1.1, 0.55, 0.8, 0.06, 12, 5, C.monitor);
 }
@@ -309,6 +309,13 @@ export interface Design {
 
 /** A piece's design in the theme the room is dressed in. */
 const designOf = (kind: PieceKind): Design => themeKit()?.furniture?.[kind] ?? DESIGNS[kind];
+/** The part outlined under the pointer: the theme's own, or its whole piece when it redraws one without saying which part. */
+function clickablePart(kind: PieceKind, board: BoardContent): ((paint: Painter, piece: FurniturePiece) => void) | undefined {
+  const themed = themeKit()?.furniture?.[kind];
+  if (!themed) return DESIGNS[kind].clickable ?? CLICKABLE[kind];
+  if (themed.clickable) return themed.clickable;
+  return CLICKABLE[kind] && ((paint, piece) => themed.paint(paint, piece, board));
+}
 /** How long a floating piece takes to bob up and back down, in ms. */
 const BOB_MS = 3200;
 /** How high a floating piece is lifted at `time`, in room pixels: each on its own beat, a whole art pixel at a time. */
@@ -814,7 +821,7 @@ export function pixelFurniture(board: BoardContent = { kind: 'notes' }): Furnitu
       place(context, piece, image);
     },
     drawHighlight(context, piece) {
-      const part = designOf(piece.kind).clickable ?? CLICKABLE[piece.kind];
+      const part = clickablePart(piece.kind, board);
       if (!part) return;
       let image = highlights.get(piece);
       if (!image) { image = render(piece, board, part); highlights.set(piece, image); }

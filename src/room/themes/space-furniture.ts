@@ -177,6 +177,9 @@ export const SPACE_FURNITURE: Partial<Record<PieceKind, Design>> = {
   ground(p) {
     p.shadow(0.5, 0.5, 4, 2);
     halo(p, { x: 0.5, y: 0.5 }, 7);
+  }, clickable: (p) => {
+    p.box(1.1, 0.15, 0.8, 0.45, 11, 1, F.keel, F.glowDim);
+    holoScreen(p, SCREEN.y, SCREEN.bossDesk.fromX, SCREEN.bossDesk.toX, SCREEN.low, SCREEN.high);
   } },
   // an alien tree in a cylinder of glass: a twisted violet trunk, a glowing crown, fruits of light
   bigPlant: { height: 44, float: 1, paint(p) {

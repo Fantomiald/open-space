@@ -175,7 +175,7 @@ export const PIRATE_FURNITURE: Partial<Record<PieceKind, Design>> = {
     for (const [x, y] of [[0.75, 0.6], [0.83, 0.6], [0.79, 0.56], [0.79, 0.64]]) p.pixel(x, y, 11.5, P.cross);
     for (const [x, y] of [[0.25, 0.3], [0.3, 0.28], [0.35, 0.32]]) p.pixel(x, y, 11.5, P.ink);
     p.pixel(2.79, 0.21, 14, P.flameCore);
-  } },
+  }, clickable: (p) => logbook(p, 1.1, 0.8) },
   // a barrel for a stool, a round cushion on it
   chair: { height: 14, paint(p) {
     const middle = { x: 0.5, y: 0.5 };

@@ -139,7 +139,7 @@ export const DUNGEON_FURNITURE: Partial<Record<PieceKind, Design>> = {
     discOnFront(p, 0.91, 1.5, 5.8, 1, D.gold);
     gildCover(p, 1.1, 1.9, D.rune);
     p.pixel(1.5, 0.61, 14.5, D.runeLit);
-  } },
+  }, clickable: (p) => grimoire(p, 1.1, 1.9, 0.15, D.leather[3]) },
   // a small throne: four legs, a velvet cushion, a carved oak back with gold knobs
   chair: { height: 24, paint(p) {
     for (const [x, y] of [[0.22, 0.22], [0.68, 0.22], [0.22, 0.68], [0.68, 0.68]]) p.box(x, y, 0.1, 0.1, 0, 5, D.oakDark);

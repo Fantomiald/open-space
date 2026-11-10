@@ -6,7 +6,7 @@ import { ROOM, type Layout, type WallItem } from '../../shared/room-layout.ts';
 import { paintFestivalFloor, paintFestivalWalls, paintTvPicture, type Room } from './festivals.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, WALL_HEIGHT } from './geometry.ts';
 import { css, mix, type Lighting } from './lighting.ts';
-import { ART_SCALE, artCanvas, fillPolygon, shadedBall, toArt, tones } from './pixel-art.ts';
+import { ART_SCALE, artCanvas, fillPolygon, ring, shadedBall, toArt, tones } from './pixel-art.ts';
 import { hash } from './sprites.ts';
 import { themeKit } from './themes/index.ts';
 import type { Point } from './geometry.ts';
@@ -142,8 +142,15 @@ function paintDoor(context: Context, layout: Layout) {
   if (kit?.paintDoor) return kit.paintDoor(context, DOOR.from, DOOR.to, DOOR.height);
   leftQuad(context, DOOR.from - 0.15, DOOR.to + 0.15, 0, DOOR.height + 2, C.doorFrame);
   leftQuad(context, DOOR.from, DOOR.to, 0, DOOR.height, C.doorway);
-  // the corridor's light on the doorway's floor; no door leaf, so the outline drawn on hover (draw.ts) fits the opening
+  // the corridor's light on the doorway's floor
   leftQuad(context, DOOR.from + 0.1, DOOR.to - 0.1, 0, 4, tones(C.doorLight).dark);
+}
+
+/** The line around the door drawn on hover, at art resolution like the backdrop: it follows the shape of the theme's door. */
+export function paintDoorOutline(layout: Layout): HTMLCanvasElement {
+  const { canvas, context } = artCanvas(ART.width, ART.height);
+  paintDoor(context, layout);
+  return ring(canvas, ROOM_PALETTE.doorHover);
 }
 
 /** The floor, the rugs, the walls (dressed for the festival, if any) and the door, painted once at art resolution. */

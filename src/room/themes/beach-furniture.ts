@@ -192,7 +192,7 @@ export const BEACH_FURNITURE: Partial<Record<PieceKind, Design>> = {
     p.upright(0, 15, F.flameCore, lamp);
     p.upright(-1, 17, F.lampGlass, lamp);
     cocktail(p, 0.45, 0.35, 11, F.cocktails[1]);
-  } },
+  }, clickable: (p) => laptop(p, 1.1, 1.9, 0.45, F.stickers[0]) },
   // a bamboo deckchair, its seat and back in striped canvas
   chair: { height: 20, paint(p, piece) {
     const stripe = canvasOf(piece);

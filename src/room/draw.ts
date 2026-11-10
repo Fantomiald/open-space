@@ -13,8 +13,9 @@ import { ROOM, isMetricsPiece, type FurniturePiece, type Layout } from '../../sh
 import { metricsBadgeAt } from './metrics.ts';
 import { BOT_GLYPH, BOT_GLYPH_SIZE, BRANCH_GLYPH, BRANCH_GLYPH_HEIGHT, BRANCH_GLYPH_WIDTH, STATUS_GLYPHS, WORKING_DOTS, WORKING_STEP_MS, type Glyph } from './status-glyphs.ts';
 import { festivalGlows, paintFestivalEffects, windowsOf, type Room } from './festivals.ts';
-import { WINDOW_GLASS, paintWallItems } from './backdrop.ts';
+import { WINDOW_GLASS, paintDoorOutline as doorOutlineOf, paintWallItems } from './backdrop.ts';
 import { roomTheme, themeKit } from './themes/index.ts';
+import type { ThemeKit } from './themes/kit.ts';
 import type { PortalStyle, ThemeEffect } from './themes/kit.ts';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DOOR_SIZE, RENDER_SCALE, WALL_HEIGHT, depthOf, toScreen, type Point } from './geometry.ts';
 import { css, rgb, type Lighting } from './lighting.ts';
@@ -115,20 +116,12 @@ function paintHighlight(context: Context, furniture: FurnitureSprites, piece: Fu
   context.drawImage(canvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
-/** A white outline around the door's frame, drawn after the light so the night does not dim it. */
+let doorOutline: { layout: Layout; kit: ThemeKit | null; canvas: HTMLCanvasElement } | null = null;
+/** A white line around the theme's door, drawn after the light so the night does not dim it. */
 function paintDoorOutline(context: Context, layout: Layout) {
-  const from = layout.door.y - 0.15, to = layout.door.y + DOOR_SIZE.width + 0.15, top = DOOR_SIZE.height + 4;
-  const corner = (along: number, height: number) => { const base = toScreen({ x: 0, y: along }); return { x: base.x, y: base.y - height }; };
-  paintOutline(context, [corner(from, 0), corner(to, 0), corner(to, top), corner(from, top)]);
-}
-
-function paintOutline(context: Context, outline: readonly Point[]) {
-  context.beginPath();
-  outline.forEach((point, index) => { if (index) context.lineTo(point.x, point.y); else context.moveTo(point.x, point.y); });
-  context.closePath();
-  context.lineWidth = 2;
-  context.strokeStyle = P.doorHover;
-  context.stroke();
+  const kit = themeKit();
+  if (doorOutline?.layout !== layout || doorOutline.kit !== kit) doorOutline = { layout, kit, canvas: doorOutlineOf(layout) };
+  context.drawImage(doorOutline.canvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
 type Context = CanvasRenderingContext2D;

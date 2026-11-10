@@ -4,7 +4,7 @@
 // machine for the water cooler, a light box for the whiteboard, and a ramen stall for the coffee counter.
 import { TOKYO_PALETTE as T } from '../../design/theme-tokyo.ts';
 import type { PieceKind } from '../../../shared/room-layout.ts';
-import { standing, writeOnBoard, type Design, type Painter } from '../pixel-furniture.ts';
+import { paintLaptop, standing, writeOnBoard, type Design, type Painter } from '../pixel-furniture.ts';
 import { tones } from '../pixel-art.ts';
 import { glyphRows } from '../wall-art.ts';
 
@@ -88,7 +88,7 @@ export const TOKYO_FURNITURE: Partial<Record<PieceKind, Design>> = {
     p.box(2.64, 0.08, 0.3, 0.3, 17, 1, T.lanternCap);
     p.box(2.05, 0.5, 0.45, 0.3, 11, 1, T.cupNoodle);
     standing(p, LUCKY_CAT, CAT_COLOURS, { x: 0.45, y: 0.45 }, 11);
-  } },
+  }, clickable: paintLaptop },
   // a bar stool: a chrome post on its foot, a ring for the feet, a round red seat
   chair: { height: 16, paint(p) {
     p.box(0.33, 0.33, 0.34, 0.34, 0, 1, T.chrome);

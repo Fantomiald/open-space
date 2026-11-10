@@ -6,7 +6,7 @@
 import { CELLAR_PALETTE as K } from '../../design/theme-cellar.ts';
 import type { PieceKind } from '../../../shared/room-layout.ts';
 import { tones } from '../pixel-art.ts';
-import { writeOnBoard, type Design, type Painter } from '../pixel-furniture.ts';
+import { paintLaptop, writeOnBoard, type Design, type Painter } from '../pixel-furniture.ts';
 import { pick } from '../sky.ts';
 
 /** A point of a piece, from its corner: x and y in tiles, z in art pixels. */
@@ -114,7 +114,7 @@ export const CELLAR_FURNITURE: Partial<Record<PieceKind, Design>> = {
     p.pixel(1.7, 0.61, 15, K.sticker[2]);
     p.pixel(2.2, 0.68, 12.5, K.ink);
     p.pixel(2.4, 0.5, 14.5, K.can);
-  } },
+  }, clickable: paintLaptop },
   // a worn swivel chair: five feet, a post, a split cushion
   chair: { height: 24, paint(p) {
     p.box(0.22, 0.46, 0.56, 0.08, 0, 1, K.steelDark);
