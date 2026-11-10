@@ -8,6 +8,8 @@ import './design/components.css';
 import './room/room.css';
 import { App } from './App.tsx';
 import { ErrorBoundary } from './command/ErrorBoundary.tsx';
+import { OutApp } from './command/OutApp.tsx';
+import { outTarget } from './state/out.ts';
 import { unlockChime } from './lib/chime.ts';
 import { connect } from './net/connection.ts';
 import { useSessions } from './state/sessions.ts';
@@ -18,7 +20,7 @@ for (const type of ['pointerdown', 'keydown']) window.addEventListener(type, unl
 /** The page in the user's language: mounted again when it changes, so every text is read again (see src/i18n). */
 function Root() {
   const language = useSessions((s) => s.language);
-  return <App key={language} />;
+  return outTarget ? <OutApp key={language} target={outTarget} /> : <App key={language} />;
 }
 
 createRoot(document.getElementById('root')!).render(<ErrorBoundary><Root /></ErrorBoundary>);

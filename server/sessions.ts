@@ -11,6 +11,7 @@ import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, 
 import { parseAllowRules, ROLE_NAME, TRIGGER_ID, type TriggerTag } from '../shared/triggers.ts';
 import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
+import { modsFolder } from './mods.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import { hasSharedBrowser } from './browser.ts';
 import type { SecretStore } from './secrets.ts';
@@ -76,6 +77,8 @@ export interface SessionManagerDeps {
   /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
   tagger?: Tagger | null;
   autoTag?: () => boolean;
+  /** Preferences.autoTagRule */
+  tagRule?: () => string;
   /** Preferences.remoteByDefault */
   remoteByDefault?: () => boolean;
   /** runs a command typed with "!" (see shell.ts) */
@@ -141,6 +144,7 @@ export class SessionManager {
     await mkdir(this.logsDir, { recursive: true, mode: 0o700 });
     // --add-dir needs it to exist
     await mkdir(uploadsFolder(this.deps.config.dataDir), { recursive: true, mode: 0o700 });
+    await mkdir(modsFolder(this.deps.config.dataDir), { recursive: true, mode: 0o700 });
     await this.trusted.load();
     const stored = await this.readStoredState();
     this.commands = stored.commands;
@@ -321,7 +325,7 @@ export class SessionManager {
         const browsers = this.browserLaunch(info.id);
         this.launchedBrowsers.set(info.id, browsers);
         const openSpaceMcp = this.deps.openSpaceMcp?.(info.id, !!this.sessions.get(info.id)?.snapshot().untrusted);
-        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir)], ...browsers, ...(openSpaceMcp ? { openSpaceMcp } : {}), ...(env ? { env } : {}) }, handlers);
+        return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir), modsFolder(this.deps.config.dataDir)], ...browsers, ...(openSpaceMcp ? { openSpaceMcp } : {}), ...(env ? { env } : {}) }, handlers);
       },
       log,
       broadcast: this.deps.broadcast,
@@ -990,7 +994,7 @@ export class SessionManager {
     if (!text.trim() || text.trimStart().startsWith('/')) return;
     this.awaitingTag.delete(info.id);
     if (!tagger || !this.deps.autoTag?.() || info.tags?.length) return;
-    void tagger(text).then((tag) => {
+    void tagger(text, this.deps.tagRule?.()).then((tag) => {
       const current = this.sessions.get(info.id);
       if (!tag || !current || current.snapshot().tags?.length) return;
       current.setTags([tag]);

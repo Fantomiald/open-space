@@ -57,11 +57,12 @@ function fakeApi() {
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
     bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
     mods: () => mods,
-    createMod: async (request) => {
+    modGuide: () => '# the rules',
+    createMod: async (request, bySession) => {
       const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, refresh: 0, env: [], envSet: [], folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
-      mods.push(mod);
-      done.push(`mod ${request}`);
-      return { mod, sessionId: 's9' };
+      if (!mods.some((each) => each.id === mod.id)) mods.push(mod);
+      done.push(`mod ${request}${bySession ? '' : ' by the caller'}`);
+      return { mod, sessionId: bySession ? 's9' : null };
     },
     editMod: async (id, request) => (mods.some((mod) => mod.id === id) ? (done.push(`change ${id} ${request}`), { sessionId: 's9' }) : null),
     deleteMod: async (id) => {
@@ -188,10 +189,15 @@ describe('the open-space MCP server', () => {
     const { api, done } = fakeApi();
     assert.equal((await tool(api, 'create_mod', { request: ' ' })).isError, true);
     assert.match((await tool(api, 'create_mod', { request: 'my Claude costs' }, EXTERNAL)).text, /"sessionId": "s9"/);
+    const self = (await tool(api, 'create_mod', { request: 'my list' })).text;
+    assert.match(self, /"folder": "\/mods\/couts"/);
+    assert.match(self, /# the rules/, 'a session gets the rules and writes it itself');
+    assert.doesNotMatch(self, /sessionId/);
+    assert.match((await tool(api, 'create_mod', { request: 'my tasks', build: 'session' })).text, /"sessionId": "s9"/);
     assert.match((await tool(api, 'list_mods')).text, /"id": "couts"/);
     assert.equal((await tool(api, 'update_mod', { id: 'couts', request: 'in euros' })).isError, false);
     assert.match((await tool(api, 'update_mod', { id: 'ventes', request: 'in euros' })).text, /couts/, 'an unknown mod names the known ones');
-    assert.deepEqual(done, ['mod my Claude costs', 'change couts in euros']);
+    assert.deepEqual(done, ['mod my Claude costs', 'mod my list by the caller', 'mod my tasks', 'change couts in euros']);
     assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, false);
     assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, true);
   });

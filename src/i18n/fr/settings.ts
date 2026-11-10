@@ -138,6 +138,7 @@ export const settings = {
       agentNote: { title: 'Un mot pour tous tes agents', hint: 'Ajouté aux consignes de chaque nouvelle conversation.' },
       remoteByDefault: { title: 'Remote Control par défaut', hint: 'Chaque nouvelle conversation est joignable depuis ton téléphone et claude.ai. Elle garde son process actif, donc quand les sessions actives approchent de la limite, les suivantes démarrent sans (leur bouton l’active quand même).' },
       autoTag: { title: 'Tag automatique', hint: 'Une nouvelle session reçoit un tag d’un ou deux mots tiré de son premier message (Haiku, moins d’un centime).' },
+      autoTagRule: { title: 'Consigne pour le tag', hint: 'Ce que le tag doit être quand ça s’applique. Sinon, il reste tiré du sujet.', placeholder: 'Si on parle d’un ticket, mets sa clé (EX-1576).' },
       isolate: {
         title: 'Isoler les sessions',
         hint: 'Une nouvelle session sur une branche et dans un dossier à elle (un worktree git), pour ne pas toucher aux fichiers des autres. Open Space fusionne quand tu le demandes.',
@@ -195,7 +196,7 @@ export const settings = {
       quickSession: 'Lancer une session dans le dossier par défaut',
       command: 'Une commande, en début de message',
       interrupt: 'Interrompre la session au travail',
-      hide: 'Voir la salle derrière les fenêtres',
+      hide: 'Masquer tout sauf la salle',
       move: 'Bouger la salle ou une fenêtre',
       zoom: 'Zoomer la salle',
       magnets: 'Sans les aimants, en déplaçant',

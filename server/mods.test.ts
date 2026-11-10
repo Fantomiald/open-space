@@ -97,4 +97,20 @@ describe('mods folder', () => {
     const again = await prepared('seen');
     assert.equal(again.list()[0].unread, false);
   });
+
+  it('keeps what a page saves, out of sight: no news, no new version, read back after a restart', async () => {
+    const mods = await prepared('store');
+    const made = mods.create('store test');
+    const version = mods.list()[0].version;
+    assert.equal(await mods.stored(made.id, 'items'), null);
+    assert.ok(mods.store(made.id, 'items', [{ text: 'pain', done: true }]));
+    assert.deepEqual(await mods.stored(made.id, 'items'), [{ text: 'pain', done: true }], 'before it is written');
+    mods.stop();
+    assert.deepEqual(JSON.parse(readFileSync(path.join(made.folder, '.store', 'items.json'), 'utf8')), [{ text: 'pain', done: true }]);
+    assert.equal(mods.list()[0].unread, false);
+    assert.equal(mods.list()[0].version, version);
+    const again = await prepared('store');
+    assert.deepEqual(await again.stored(made.id, 'items'), [{ text: 'pain', done: true }]);
+    assert.equal(again.store('gone', 'items', 1), false);
+  });
 });

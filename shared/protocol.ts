@@ -497,6 +497,8 @@ export interface Preferences {
   officeLife: boolean;
   /** a new session gets a tag of one or two words from its first message (server/auto-tag.ts) */
   autoTag: boolean;
+  /** the user's own rule for that tag ("the ticket key when there is one"), given to the model ('' : none) */
+  autoTagRule: string;
   /** Remote Control turned on for each new session, as long as live slots are left (server/sessions.ts) */
   remoteByDefault: boolean;
   /** the pet, going from room to room: a cat, a dog, a droid, Rocky…, or none */
@@ -734,6 +736,10 @@ export type ClientMessage =
   | { t: 'configureMod'; id: string; settings: ModSettings }
   /** the variables the user gave a mod, which its page asks for (answered with `modEnv`) */
   | { t: 'modEnv'; id: string }
+  /** a value a mod's page saved (answered with `modStore`) */
+  | { t: 'modStoreGet'; id: string; name: string }
+  /** a mod's page saves a value: every page showing the mod gets it (`modStore`) */
+  | { t: 'modStoreSet'; id: string; name: string; value: unknown }
   /** reads the numbers file to show it: its numbers then count as seen */
   /** the thread of an automaton's run so far (answered with `automatonLog`) */
   | { t: 'automatonLog'; runId: string }
@@ -843,6 +849,8 @@ export type ServerMessage =
   | { t: 'modCreated'; id: string; sessionId: string }
   /** the variables the user gave a mod, for its page alone */
   | { t: 'modEnv'; id: string; env: Record<string, string> }
+  /** a value a mod's page saved (null: none) */
+  | { t: 'modStore'; id: string; name: string; value: unknown }
   | { t: 'toast'; kind: 'info' | 'error'; text: string }
   /** a session's browser changed tabs or address; null once it is closed */
   | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };

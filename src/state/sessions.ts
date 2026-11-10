@@ -4,7 +4,7 @@ import { NO_AUTOMATA, type AgentRole, type AutomataState } from '../../shared/au
 import { NO_TRIGGERS, type TriggerError, type TriggerInput, type TriggersState } from '../../shared/triggers.ts';
 import { appendRunEvents, type RunLog } from './automata.ts';
 import type { ModInfo, ModSettings } from '../../shared/mods.ts';
-import { heardModEnv } from './mods.ts';
+import { heardModEnv, heardModStore } from './mods.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import type { MessengerInput } from '../../shared/messengers.ts';
 import { create } from 'zustand';
@@ -36,6 +36,8 @@ import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeL
 import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { projectOf } from './projects.ts';
+import { openOut } from '../net/out.ts';
+import { outKey, outSize, outTarget, parseOut, type OutTarget } from './out.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
 
 /** The open windows, kept in this browser so a reload finds them as they were. */
@@ -152,6 +154,8 @@ export interface CommandPostState {
   pip: PipTarget | null;
   /** sessions whose floating browser the user closed: it does not come back by itself before their turn ends */
   pipDismissed: string[];
+  /** the windows taken out of this page, by key (src/state/out.ts): shown in their own window, not here */
+  outKeys: string[];
   /** the views of Claude Code answered so far, by session */
   inspections: Record<string, Inspections>;
   /** what the focused session's panel shows */
@@ -194,8 +198,8 @@ export interface CommandPostState {
   openIds: string[];
   /** one of several open sessions shown alone for a while, the others kept in their place (as tmux's zoom) */
   zoomedId: string | null;
-  /** Tab: the open sessions stay open but step aside, to see and click the room */
-  stackHidden: boolean;
+  /** Tab: everything but the room steps aside (header, status, sessions, launcher, mods), to see and click it */
+  uiHidden: boolean;
   /** the grid's columns and rows resized by hand, for each arrangement (null: shared out evenly) */
   gridSizes: Record<Arrangement, GridSizes | null>;
   /** the width of the windows over the room pulled by hand, in fractions of the page's (null: as many columns as they need) */
@@ -293,7 +297,7 @@ export interface CommandPostState {
   /** a window placed by hand moved or resized (in fractions of its area); it comes to the front */
   placeWindow: (sessionId: string, box: Box) => void;
   raiseWindow: (sessionId: string) => void;
-  hideStack: (hidden: boolean) => void;
+  hideUi: (hidden: boolean) => void;
   /** after the window shrank: the column that no longer fits closes */
   fitOpen: () => void;
   /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
@@ -319,6 +323,12 @@ export interface CommandPostState {
   dismissPip: () => void;
   /** puts the floating browser back in its session's window */
   dockPip: () => void;
+  /** takes a window out into one of its own, or brings that one forward */
+  popOut: (target: OutTarget) => void;
+  /** a window says it is out, or gone: out, it leaves this page */
+  noteOut: (key: string, out: boolean) => void;
+  /** a window out goes back into this page */
+  putBack: (target: OutTarget) => void;
   /** the user is looking at this session: what it shows now is no longer news */
   markSeen: (sessionId: string) => void;
   setView: (view: View) => void;
@@ -457,6 +467,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   modSettings: null,
   pip: readPreference<PipTarget | null>('pip', null),
   pipDismissed: [],
+  outKeys: [],
   inspections: {},
   panelView: 'thread',
   secretsOpen: null,
@@ -479,7 +490,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   columns: [],
   openIds: [],
   zoomedId: null,
-  stackHidden: false,
+  uiHidden: false,
   gridSizes: savedWindows.sizes,
   stackWidth: savedWindows.stackWidth,
   windowMode: savedWindows.mode,
@@ -493,7 +504,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   petTrip: startTrip(Date.now()),
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, autoTagRule: '', remoteByDefault: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
@@ -503,7 +514,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   appUpdate: null,
   rootSuggestions: null,
   terminals: [],
-  sound: readPreference('sound', true),
+  // a window out stays quiet: Open Space's page rings already
+  sound: !outTarget && readPreference('sound', true),
   paletteOpen: false,
   paletteQuery: '',
   trustRequest: null,
@@ -680,12 +692,13 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'mods': set({ mods: message.mods }); break;
       case 'modCreated': get().openMod(message.id); break;
       case 'modEnv': heardModEnv(message.id, message.env); break;
+      case 'modStore': heardModStore(message.id, message.name, message.value); break;
       case 'toast': s.toast(message.kind, message.text); break;
     }
   },
 
   select: (sessionId) => {
-    set({ stackHidden: false });
+    set({ uiHidden: false });
     get().arrange(sessionId ? [[sessionId]] : []);
     if (sessionId) get().focus(sessionId);
     else set({ selectedId: null, searchOpen: false, panelView: 'thread' });
@@ -693,7 +706,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   show: (sessionId) => {
     const s = get();
-    set({ stackHidden: false });
+    if (s.outKeys.includes(outKey({ kind: 'session', sessionId }))) { s.popOut({ kind: 'session', sessionId }); return; }
+    set({ uiHidden: false });
     if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
     const beside = s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
     if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
@@ -705,8 +719,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   toggleOpen: (sessionId) => {
     const s = get();
+    if (s.outKeys.includes(outKey({ kind: 'session', sessionId }))) { s.popOut({ kind: 'session', sessionId }); return; }
     if (!s.selectedId) { s.select(sessionId); return; }
-    set({ stackHidden: false });
+    set({ uiHidden: false });
     if (s.openIds.includes(sessionId)) {
       if (s.openIds.length > 1) s.closeOpen(sessionId);
       return;
@@ -812,7 +827,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     writeWindows(get());
   },
 
-  hideStack: (hidden) => set({ stackHidden: hidden && get().openIds.length > 0 }),
+  hideUi: (hidden) => set({ uiHidden: hidden }),
 
   fitOpen: () => {
     const s = get();
@@ -840,6 +855,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   configureMod: (id, settings) => { get().send({ t: 'configureMod', id, settings }); },
 
   openMod: (id) => {
+    if (get().outKeys.includes(outKey({ kind: 'mod', modId: id }))) { get().popOut({ kind: 'mod', modId: id }); return; }
     const openMods = [...get().openMods.filter((each) => each !== id), id];
     set({ openMods });
     writePreference('mods-open', openMods);
@@ -874,6 +890,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   openPip: (target) => {
     const s = get();
+    // out in a window of its own already, where it shows
+    if (s.outKeys.includes(outKey({ kind: 'browser', ...target }))) return;
     const { [target.sessionId]: _floated, ...keptViews } = s.keptViews;
     set({ pip: target, pipDismissed: s.pipDismissed.filter((id) => id !== target.sessionId), keptViews, ...(s.selectedId === target.sessionId && s.panelView === 'browser' ? { panelView: 'thread' } : {}) });
     writePreference('pip', target);
@@ -899,6 +917,31 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     s.show(sessionId);
     s.showBrowserLane(sessionId, lane);
     get().showPanel('browser');
+  },
+
+  popOut: (target) => {
+    const mod = target.kind === 'mod' ? get().mods?.find((each) => each.id === target.modId) : undefined;
+    openOut(target, outSize(target, mod));
+  },
+
+  noteOut: (key, out) => {
+    const s = get();
+    const outKeys = s.outKeys.filter((each) => each !== key);
+    set({ outKeys: out ? [...outKeys, key] : outKeys });
+    const target = parseOut(key);
+    if (!out || !target) return;
+    // it leaves this page once its window is there (a popup a browser blocks takes nothing away)
+    if (target.kind === 'session' && s.openIds.includes(target.sessionId)) s.closeOpen(target.sessionId);
+    if (target.kind === 'mod' && s.openMods.includes(target.modId)) s.closeMod(target.modId);
+    if (target.kind === 'browser' && s.pip?.sessionId === target.sessionId && s.pip.lane === target.lane) s.closePip();
+  },
+
+  putBack: (target) => {
+    const s = get();
+    set({ outKeys: s.outKeys.filter((each) => each !== outKey(target)) });
+    if (target.kind === 'session' && s.sessions[target.sessionId]) s.show(target.sessionId);
+    if (target.kind === 'mod') s.openMod(target.modId);
+    if (target.kind === 'browser' && s.sessions[target.sessionId]) s.openPip({ sessionId: target.sessionId, lane: target.lane });
   },
 
   markSeen: (sessionId) => {
@@ -990,9 +1033,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
    */
   openNewSession: (draft) => {
     const s = get();
-    if (draft && s.view === 'focus' && s.openIds.length) set({ launcherOpen: true, zoomedId: null, stackHidden: false });
+    if (draft && s.view === 'focus' && s.openIds.length) set({ launcherOpen: true, zoomedId: null, uiHidden: false });
     else if (draft) s.select(null);
-    set({ newSession: draft });
+    set({ newSession: draft, uiHidden: false });
   },
   closeLauncher: () => set({ launcherOpen: false }),
   openBranches: (cwd) => {

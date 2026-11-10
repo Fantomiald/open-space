@@ -164,6 +164,7 @@ const sessions = new SessionManager({
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   tagger: claude ? createTagger(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   autoTag: () => settings.preferences.autoTag,
+  tagRule: () => settings.preferences.autoTagRule,
   remoteByDefault: () => settings.preferences.remoteByDefault,
   accountsBrowser: () => settings.preferences.accountsBrowser,
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
@@ -317,7 +318,8 @@ async function makeMod(request: string) {
 const mcpApi: OpenSpaceApi = {
   triggers: () => triggers.list(),
   mods: () => mods.list(),
-  createMod: makeMod,
+  createMod: async (request, bySession) => (bySession ? makeMod(request) : { mod: mods.create(request), sessionId: null }),
+  modGuide: () => mods.guide(),
   editMod: async (id, request) => {
     const mod = mods.list().find((each) => each.id === id);
     if (!mod) return null;
@@ -701,6 +703,8 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'modSeen': await mods.markSeen(message.id); break;
     case 'configureMod': await mods.configure(message.id, message.settings); break;
     case 'modEnv': send({ t: 'modEnv', id: message.id, env: mods.envOf(message.id) }); break;
+    case 'modStoreGet': send({ t: 'modStore', id: message.id, name: message.name, value: await mods.stored(message.id, message.name) }); break;
+    case 'modStoreSet': if (mods.store(message.id, message.name, message.value)) broadcast({ t: 'modStore', id: message.id, name: message.name, value: message.value }); break;
     case 'automatonLog': send({ t: 'automatonLog', runId: message.runId, ...await automata.thread(message.runId) }); break;
     case 'saveTrigger': {
       const saved = await triggers.save(message.id, message.trigger);

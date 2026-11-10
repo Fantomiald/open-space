@@ -15,6 +15,9 @@ export const MAX_MOD_REQUEST = 2000;
 /** How often a mod's window refreshes it, in seconds (0: never by itself), as the settings offer it. */
 export const MOD_REFRESH = [0, 60, 300, 900, 1800, 3600] as const;
 export const MAX_MOD_ENV = 30;
+/** What a mod's page saves (the kit's OpenSpace.store): a name per value, a JSON value of this many bytes at most. */
+export const MAX_MOD_STORE = 256 * 1024;
+export const isModStoreName = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
 export const MAX_MOD_ENV_LABEL = 80;
 
 /** A mod's folder name: what names it everywhere (its address, its place on the screen). */

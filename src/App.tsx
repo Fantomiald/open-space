@@ -20,11 +20,12 @@ import { SessionList } from './command/SessionList.tsx';
 import { Sky, refreshFrost } from './room/Sky.tsx';
 import { chibiBust, chibiIcon } from './room/chibi.ts';
 import { useFestival } from './room/useFestival.ts';
-import { applyGlassOpacity } from './design/glass.ts';
-import { shownWindowStyle } from './design/window-style.ts';
-import { applyTagColors } from './design/tag-colors.ts';
+import { usePageStyle } from './command/usePageStyle.ts';
+import { followOutWindows } from './net/out.ts';
+import { parseBackHash, parseOut } from './state/out.ts';
 import { setRoomTheme } from './room/themes/index.ts';
 import { Stack } from './command/Stack.tsx';
+import { BareHint } from './command/BareHint.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { useAltKey } from './lib/drag.ts';
@@ -53,16 +54,10 @@ export function App() {
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
-  const reduceMotion = useSessions((s) => s.preferences.reduceMotion);
-  const glassOpacity = useSessions((s) => s.preferences.glassOpacity);
-  const windowStyle = useSessions((s) => s.preferences.windowStyle);
-  const tagColors = useSessions((s) => s.preferences.tagColors);
+  const bare = useSessions((s) => s.uiHidden && s.view !== 'focus');
+  usePageStyle();
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
-  useEffect(() => { document.documentElement.dataset.motion = reduceMotion ? 'reduced' : 'full'; }, [reduceMotion]);
-  useEffect(() => { applyGlassOpacity(glassOpacity); }, [glassOpacity]);
-  useEffect(() => { applyTagColors(tagColors); }, [tagColors]);
-  useEffect(() => { document.documentElement.dataset.windowStyle = shownWindowStyle(windowStyle, theme); }, [windowStyle, theme]);
   // the frost of the panes showed the room for up to a second after it went away (focus mode): drawn again at once
   useEffect(() => { const frame = requestAnimationFrame(refreshFrost); return () => cancelAnimationFrame(frame); }, [view]);
 
@@ -100,20 +95,28 @@ export function App() {
     };
   }, [live]);
 
-  // a link to a session (a click on a macOS notification opens the page on #session=<id>) opens it
+  // a link to a session (a click on a macOS notification opens the page on #session=<id>) opens it; #mod=<id> and
+  // #browser=<id>:<lane> too, when a window out is put back (src/state/out.ts)
   useEffect(() => {
     if (!known) return;
     const openLinked = () => {
-      const id = /^#session=([\w-]+)$/.exec(location.hash)?.[1];
-      if (!id) return;
+      const target = parseBackHash(location.hash);
+      if (!target) return;
       history.replaceState(null, '', location.pathname + location.search);
-      const state = useSessions.getState();
-      if (state.sessions[id]) state.show(id);
+      useSessions.getState().putBack(target);
     };
     openLinked();
     window.addEventListener('hashchange', openLinked);
     return () => window.removeEventListener('hashchange', openLinked);
   }, [known]);
+
+  // the windows taken out of this page, which say so as they open and close
+  useEffect(() => followOutWindows({
+    out: (key) => useSessions.getState().noteOut(key, true),
+    gone: (key) => useSessions.getState().noteOut(key, false),
+    back: (key) => { const target = parseOut(key); if (target) useSessions.getState().putBack(target); },
+    seen: (sessionId) => useSessions.getState().markSeen(sessionId),
+  }), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -152,10 +155,10 @@ export function App() {
         if (state.zoomedId) { e.preventDefault(); state.zoom(null); return; }
         if (session && !isTyping(e.target)) { state.closeOpen(session.id); return; }
       }
-      // Tab, outside a field: the open sessions step aside to see and click the room, and come back (Shift+Tab still
+      // Tab, outside a field: everything but the room steps aside to see and click it, and comes back (Shift+Tab still
       // moves the focus). In the message field it does nothing, so a Tab pressed while writing neither hides the
       // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it. Focus mode has no room to see.
-      if (e.key === 'Tab' && state.view !== 'focus' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && state.openIds.length && !document.querySelector('dialog[open]')) {
+      if (e.key === 'Tab' && state.view !== 'focus' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !document.querySelector('dialog[open]')) {
         const target = e.target instanceof HTMLElement ? e.target : null;
         if (target?.matches('.cp-composer textarea')) {
           e.preventDefault();
@@ -163,12 +166,12 @@ export function App() {
         }
         if (!isTyping(target)) {
           e.preventDefault();
-          if (state.stackHidden) {
-            state.hideStack(false);
-            if (state.selectedId) document.getElementById(`composer-field-${state.selectedId}`)?.focus({ preventScroll: true });
+          if (state.uiHidden) {
+            state.hideUi(false);
+            if (state.selectedId && state.openIds.length) document.getElementById(`composer-field-${state.selectedId}`)?.focus({ preventScroll: true });
           } else {
             target?.blur();
-            state.hideStack(true);
+            state.hideUi(true);
           }
           return;
         }
@@ -195,7 +198,7 @@ export function App() {
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
   return (
-    <div className="cp-app" data-view={view}>
+    <div className="cp-app" data-view={view} data-bare={bare}>
       <Sky key={theme} festival={day.festival} />
       <Header />
       <ConnectionBanner />
@@ -209,6 +212,7 @@ export function App() {
       {view !== 'focus' && <StatusPanel />}
       <ModWindows />
       <BrowserPip />
+      {bare && <BareHint />}
       <SearchPalette />
       <CopyOnSelect />
       <CrewDialog />

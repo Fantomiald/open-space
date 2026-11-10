@@ -28,8 +28,15 @@ const config = loadConfig(process.env, os.homedir());
 const address = `http://127.0.0.1:${config.port}`;
 const logFile = path.join(config.dataDir, 'server.log');
 const boundsFile = path.join(app.getPath('userData'), 'window.json');
+const outFile = path.join(app.getPath('userData'), 'out-windows.json');
+/** a window taken out of Open Space (src/state/out.ts): a session, a mod or a browser */
+const OUT_KEY = /^(session:[\w-]+|mod:[\w-]+|browser:[\w-]+:\d{1,2})$/;
 
 let window: BrowserWindow | null = null;
+/** the windows taken out, by key: one each, kept over the other apps unless the user said otherwise */
+const outWindows = new Map<string, BrowserWindow>();
+/** which are open (opened again at the next launch), where each was, and the ones the user let go behind */
+interface OutSaved { open: string[]; bounds: Record<string, Electron.Rectangle>; behind: string[] }
 let tray: Tray | null = null;
 let avatarIcon: NativeImage | null = null;
 let bridge: UtilityProcess | null = null;
@@ -136,16 +143,26 @@ function showWindow() {
     if (process.platform === 'win32') current.setOverlayIcon(count ? attentionBadge(Number(count)) : null, count);
     tray?.setToolTip(title);
   });
-  // links (an MCP sign-in, a link in a message) open in the browser; the window stays on Open Space. A file a session sent
-  // ("Open the original") opens in a window of the app: the browser has no session cookie to load it with.
+  guard(current.webContents);
+  if (page) void current.loadURL(page);
+}
+
+/**
+ * Where a page of Open Space goes. Links (an MCP sign-in, a link in a message) open in the browser; the window stays on
+ * Open Space. A file a session sent ("Open the original") opens in a window of the app: the browser has no session
+ * cookie to load it with. A window taken out opens as one of the app's own (openOut).
+ */
+function guard(contents: Electron.WebContents) {
   const isAttachment = (url: string) => url.startsWith(`${address}/attachments/`);
-  current.webContents.setWindowOpenHandler(({ url }) => {
+  contents.setWindowOpenHandler(({ url, features }) => {
     if (isAttachment(url)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, backgroundColor: BACKGROUND } };
-    openOutside(url);
+    const key = outKeyOf(url);
+    if (key) openOut(key, sizeOf(features));
+    else openOutside(url);
     return { action: 'deny' };
   });
-  offerImageMenu(current.webContents);
-  current.webContents.on('did-create-window', (opened) => {
+  offerImageMenu(contents);
+  contents.on('did-create-window', (opened) => {
     offerImageMenu(opened.webContents);
     opened.webContents.setWindowOpenHandler(({ url }) => { openOutside(url); return { action: 'deny' }; });
     // the window's own first load goes through will-navigate too: stopping it sent the file to the browser
@@ -155,12 +172,83 @@ function showWindow() {
       openOutside(url);
     });
   });
-  current.webContents.on('will-navigate', (event, url) => {
+  contents.on('will-navigate', (event, url) => {
     if (url.startsWith(`${address}/`) || url === address) return;
     event.preventDefault();
     openOutside(url);
   });
-  if (page) void current.loadURL(page);
+}
+
+/** The key of a window taken out, from its page's address (/?out=<key>); null for any other address. */
+function outKeyOf(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const key = parsed.searchParams.get('out');
+    return parsed.origin === address && parsed.pathname === '/' && key && OUT_KEY.test(key) ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The size the page asked for (window.open's "width=…,height=…"), within reason. */
+function sizeOf(features: string) {
+  const read = (name: string) => Number(new RegExp(`${name}=(\\d+)`).exec(features)?.[1]) || undefined;
+  const width = read('width'), height = read('height');
+  return width && height ? { width: Math.min(Math.max(width, 280), 2400), height: Math.min(Math.max(height, 160), 1600) } : undefined;
+}
+
+function readOut(): OutSaved {
+  try {
+    const saved = JSON.parse(readFileSync(outFile, 'utf8')) as Partial<OutSaved>;
+    return { open: (saved.open ?? []).filter((key) => OUT_KEY.test(key)), bounds: saved.bounds ?? {}, behind: saved.behind ?? [] };
+  } catch {
+    return { open: [], bounds: {}, behind: [] };
+  }
+}
+
+function updateOut(change: (saved: OutSaved) => void) {
+  const saved = readOut();
+  change(saved);
+  try { writeFileSync(outFile, JSON.stringify(saved)); } catch { /* not kept */ }
+}
+
+/** Over the other apps, on every desktop and over an app in full screen (a video), or a window like the others. */
+function keepOnTop(current: BrowserWindow, onTop: boolean) {
+  current.setAlwaysOnTop(onTop, 'floating');
+  current.setVisibleOnAllWorkspaces(onTop, { visibleOnFullScreen: onTop });
+}
+
+/** A window taken out of Open Space, or the one open already brought forward. It opens where it was last. */
+function openOut(key: string, size?: { width: number; height: number }) {
+  const existing = outWindows.get(key);
+  if (existing) { if (existing.isMinimized()) existing.restore(); existing.show(); existing.focus(); return; }
+  const saved = readOut();
+  const current = new BrowserWindow({
+    ...(size ?? { width: 520, height: 720 }), ...saved.bounds[key], minWidth: 280, minHeight: 160,
+    title: 'Open Space', backgroundColor: BACKGROUND, show: false, fullscreenable: false,
+    // the page's head carries it (-webkit-app-region in components.css); its own close button closes it
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const } : {}),
+    ...(process.platform === 'win32' ? { icon: avatarIcon ?? path.join(OUT, 'desktop', 'icon.png') } : {}),
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, plugins: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
+  });
+  if (process.platform === 'darwin') current.setWindowButtonVisibility(false);
+  keepOnTop(current, !saved.behind.includes(key));
+  outWindows.set(key, current);
+  updateOut((out) => { out.open = [...out.open.filter((each) => each !== key), key]; });
+  current.once('ready-to-show', () => current.show());
+  current.on('close', () => updateOut((out) => { out.bounds[key] = current.getNormalBounds(); }));
+  current.on('closed', () => {
+    outWindows.delete(key);
+    // quitting, it stays in the list: it opens again at the next launch
+    if (!quitting) updateOut((out) => { out.open = out.open.filter((each) => each !== key); });
+  });
+  guard(current.webContents);
+  void current.loadURL(`${address}/?out=${encodeURIComponent(key)}`);
+}
+
+/** The window taken out that sent this message (its page itself, not a frame in it). */
+function outOf(event: Electron.IpcMainInvokeEvent): [string, BrowserWindow] | undefined {
+  return [...outWindows].find(([, current]) => event.sender === current.webContents && event.senderFrame === current.webContents.mainFrame);
 }
 
 /** A right click on a picture (one shown large, a sent file opened in its window) offers to save or copy it, as a browser does. */
@@ -189,13 +277,23 @@ function showNotification(title: string, body: string, sessionId: string) {
   notification.show();
 }
 
-/** The window, on that session (the page opens #session=<id>, see src/App.tsx); a new window once its page is loaded. */
+/** That session: its window taken out if it is, else Open Space's window on it. */
 function openSession(sessionId: string) {
+  const out = outWindows.get(`session:${sessionId}`);
+  if (out) { out.show(); out.focus(); return; }
+  if (/^[\w-]+$/.test(sessionId)) openLink(`session=${sessionId}`);
+}
+
+/**
+ * The window, on a link of its page: #session=<id>, #mod=<id>, #browser=<id>:<lane> (see src/App.tsx), which shows
+ * that in it; a new window once its page is loaded.
+ */
+function openLink(hash: string) {
   const fresh = !window;
   showWindow();
   const contents = window?.webContents;
-  if (!contents || !/^[\w-]+$/.test(sessionId)) return;
-  const open = () => { void contents.executeJavaScript(`location.hash = ${JSON.stringify(`session=${sessionId}`)}`); };
+  if (!contents) return;
+  const open = () => { void contents.executeJavaScript(`location.hash = ${JSON.stringify(hash)}`); };
   if (fresh || contents.isLoading()) contents.once('did-finish-load', open);
   else open();
 }
@@ -323,6 +421,24 @@ async function start() {
       return result.canceled ? null : result.filePaths[0] ?? null;
     } finally { pickingFolder = false; }
   });
+  // a window taken out goes back into Open Space's window (its key gives the link, see openLink)
+  ipcMain.handle('open-space:out-back', (event) => {
+    const found = outOf(event);
+    if (!found) return;
+    const [key, current] = found;
+    current.close();
+    openLink(key.replace(':', '='));
+  });
+  ipcMain.handle('open-space:out-top', (event, onTop: unknown) => {
+    const found = outOf(event);
+    if (!found) return false;
+    const [key, current] = found;
+    if (typeof onTop === 'boolean') {
+      keepOnTop(current, onTop);
+      updateOut((out) => { out.behind = onTop ? out.behind.filter((each) => each !== key) : [...out.behind.filter((each) => each !== key), key]; });
+    }
+    return current.isAlwaysOnTop();
+  });
   // the page is always dark: the title bar and the menus too
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(process.platform === 'win32' ? null : Menu.buildFromTemplate([
@@ -351,6 +467,8 @@ async function start() {
       return;
     }
   }
+  // the windows taken out at the last quit come back once the page has paired this app with the bridge (its cookie)
+  window?.webContents.once('did-finish-load', () => { for (const key of readOut().open) openOut(key); });
   void window?.loadURL(page);
   watchForUpdates();
 }

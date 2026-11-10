@@ -6,7 +6,7 @@ Un mod est une petite fenêtre flottante d'Open Space. Tu travailles dans **son 
 
 ## Ce que contient le dossier
 
-- `mod.json` : `name` (court, 2 ou 3 mots, sans « mod »), `description` (une ligne, ce qu'on y voit), `icon` (un parmi `puzzle chart bars coins timer list bell calendar star heart bolt globe note terminal`), `width` et `height` en pixels (la taille d'ouverture, sans la barre de titre ; 240 à 960 et 120 à 900 ; la fenêtre prend ensuite la hauteur de son contenu, tant que l'utilisateur ne l'a pas redimensionnée), `draft`, et au besoin :
+- `mod.json` : `name` (court, 2 ou 3 mots, sans « mod »), `description` (une ligne, ce qu'on y voit), `icon` (un parmi `puzzle chart bars coins timer list bell calendar star heart bolt globe note terminal`), `width` et `height` en pixels (la taille d'ouverture, sans la barre de titre ; 240 à 960 et 120 à 900 ; la fenêtre prend ensuite la hauteur de son contenu et ne la dépasse jamais, même redimensionnée ; laisse donc le contenu à sa hauteur naturelle, sans `height: 100%` ni `100vh` sur la page), `draft`, et au besoin :
   - `refresh` : tous les combien la fenêtre rafraîchit le mod, en secondes, parmi `0` (jamais), `60`, `300`, `900`, `1800`, `3600`. Choisis-le selon la donnée (des ventes : `900` ; un minuteur : `0`). L'utilisateur le change dans les réglages du mod.
   - `env` : les variables dont la page a besoin (une clé d'API, un identifiant), par exemple `[{ "name": "STRIPE_KEY", "label": "Clé secrète Stripe, dans Développeurs > Clés API" }]`. Le `label` dit à l'utilisateur ce que c'est et où la trouver. Il remplit les valeurs dans les réglages du mod (l'engrenage) ; tu ne les vois jamais.
 
@@ -101,6 +101,7 @@ Les composants sont des balises `os-*`. Les données passent en attribut JSON (`
 - `OpenSpace.data(nom)` : la même chose une seule fois (une promesse).
 - `OpenSpace.env()` : les variables que l'utilisateur a remplies dans les réglages du mod, `{ NOM: valeur }` (une promesse, relue à chaque appel ; `{}` hors d'Open Space). Une variable vide n'y est pas.
 - `OpenSpace.onRefresh(() => …)` : appelé quand la fenêtre rafraîchit le mod (son bouton ↻, ou le rythme `refresh`). Sans lui, la fenêtre recharge la page entière. Recharge tes données dedans, sans effacer ce qui est affiché avant d'avoir la réponse. Renvoie de quoi arrêter.
+- `OpenSpace.store` : ce que le mod enregistre (une liste cochée, des réglages), gardé par Open Space dans son dossier (`.store/`, à ne pas écrire toi-même) et retrouvé à la réouverture. `await OpenSpace.store.get('nom')` (null si rien), `OpenSpace.store.set('nom', valeur)` (JSON, 256 Ko au plus, nom en lettres, chiffres, `-` et `_`), `OpenSpace.store.watch('nom', (valeur) => …)` pour suivre les autres fenêtres du même mod (renvoie de quoi arrêter). `localStorage` et IndexedDB ne marchent pas dans un mod.
 - `OpenSpace.format` : `number`, `compact` (1,3 k), `money(v, 'USD')`, `percent(0.62)`, `ago(date)`, `duration(minutes)`, `date(date)`.
 - `OpenSpace.h(tag, attributs, ...enfants)` : crée un élément.
 - `OpenSpace.ready` : une promesse tenue une fois le thème appliqué.

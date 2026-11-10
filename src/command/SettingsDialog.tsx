@@ -45,7 +45,7 @@ type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
   general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag', 'autoTagRule']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage', 'promptSuggestions']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -344,6 +344,11 @@ function SettingsEditor() {
       case 'autoTag': return (
         <Row key={id} id={id} flash={flash} icon={<TagIcon />} title={rows.autoTag.title} hint={rows.autoTag.hint}>
           <Switch checked={draft.autoTag} onChange={(autoTag) => change({ autoTag })} label={rows.autoTag.title} />
+        </Row>
+      );
+      case 'autoTagRule': return !draft.autoTag ? null : (
+        <Row key={id} id={id} flash={flash} wide icon={<TagIcon />} title={rows.autoTagRule.title} hint={rows.autoTagRule.hint}>
+          <textarea aria-labelledby={`setting-${id}-title`} rows={2} maxLength={300} value={draft.autoTagRule} onChange={(e) => change({ autoTagRule: e.target.value })} placeholder={rows.autoTagRule.placeholder} />
         </Row>
       );
       case 'agentNote': return (

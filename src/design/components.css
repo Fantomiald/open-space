@@ -432,9 +432,13 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 /* a key asked for in a small window: the rows and the buttons, the rest is for the large one */
 .cp-stack__slot[data-compact='true'] :is(.cp-secrets__note, .cp-secrets__add) { display: none; }
 .cp-stack__slot[data-compact='true'] .cp-detail > :is(.cp-permission, .cp-question) { margin: var(--space-2) var(--space-3) var(--space-2); padding: var(--space-2) var(--space-3); }
-.cp-stack__show { grid-column: 2; grid-row: 1; z-index: 1; align-self: start; justify-self: end; margin: var(--gutter); animation: cp-stack-show 200ms 120ms ease-out backwards; }
-@keyframes cp-stack-show { from { opacity: 0; translate: 0.75rem 0; } }
-@media (prefers-reduced-motion: reduce) { .cp-stack__show { animation: none; } }
+/* Tab: only the room stays; the rest fades out in place so the room does not jump */
+.cp-app :is(.cp-header, .cp-status, .cp-launcher, .cp-mod, .cp-pip, .cp-room__arrange) { transition: opacity 160ms ease-out; }
+.cp-app[data-bare='true'] :is(.cp-header, .cp-status, .cp-launcher, .cp-mod, .cp-pip, .cp-room__arrange) { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 160ms ease-in, visibility 0s 160ms; }
+.cp-bare-hint { position: fixed; top: var(--gutter); right: var(--gutter); z-index: 50; transition: opacity 400ms ease-out; animation: cp-bare-hint 200ms 120ms ease-out backwards; }
+.cp-bare-hint[data-idle='true'] { opacity: 0; pointer-events: none; transition-duration: 800ms; }
+@keyframes cp-bare-hint { from { opacity: 0; translate: 0.75rem 0; } }
+@media (prefers-reduced-motion: reduce) { .cp-bare-hint { animation: none; } }
 /* flex, not grid rows: the prompt and the plan come and go, the feed takes what is left and the composer stays visible */
 .cp-detail { position: relative; min-height: 0; min-width: 0; overflow-x: hidden; display: flex; flex-direction: column; }
 /* the right column floats over the room in glass; what is inside it (and in the status card) turns translucent too */
@@ -2923,3 +2927,14 @@ a.cp-button { text-decoration: none; }
   background: transparent; color: var(--color-text-muted); font: inherit; font-size: var(--text-xs); cursor: pointer;
 }
 .cp-mods__idea:hover { border-color: var(--color-accent); color: var(--color-text); }
+
+/* ── A window taken out of Open Space (OutApp.tsx): what it shows fills it, without the room behind ── */
+.cp-out { height: 100%; display: flex; flex-direction: column; background: var(--color-bg); }
+.cp-out > :is(.cp-detail, .cp-mod, .cp-pip) {
+  position: relative; flex: 1 1 auto; translate: none; width: auto; height: auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none;
+}
+.cp-out .cp-pip .cp-browser__screen { flex: 1 1 auto; border-radius: 0; }
+.cp-pip__name { flex: 1 1 auto; min-width: 0; padding-left: var(--space-2); font-size: var(--text-sm); font-weight: var(--weight-bold); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* in the Mac app, its window has no title bar of its own: the head carries it, but for what it holds that is clicked */
+.cp-out :is(.cp-detail__head, .cp-mod__head, .cp-pip__head) { -webkit-app-region: drag; cursor: default; }
+.cp-out :is(.cp-detail__head, .cp-mod__head, .cp-pip__head) :is(button, input, textarea, select, a, form, dialog, ul, [role='menu'], [role='tablist'], [popover]) { -webkit-app-region: no-drag; }

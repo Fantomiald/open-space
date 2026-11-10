@@ -13,7 +13,7 @@ import { parseJobs } from '../shared/jobs.ts';
 import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
 import { storedTags } from '../shared/tags.ts';
-import { isModId, MAX_MOD_DESCRIPTION, MAX_MOD_ENV, MAX_MOD_NAME, MAX_MOD_REQUEST, MOD_ICONS, MOD_REFRESH, type ModSettings } from '../shared/mods.ts';
+import { isModId, isModStoreName, MAX_MOD_DESCRIPTION, MAX_MOD_ENV, MAX_MOD_NAME, MAX_MOD_REQUEST, MAX_MOD_STORE, MOD_ICONS, MOD_REFRESH, type ModSettings } from '../shared/mods.ts';
 import { MUSIC_APPS, type MusicAction, type MusicApp } from '../shared/music.ts';
 import type { BrowserAction, BrowserInput, MouseButton } from '../shared/browser.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
@@ -424,6 +424,11 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'deleteMod': return isModId(raw.id) ? { t: 'deleteMod', id: raw.id } : null;
     case 'modSeen': return isModId(raw.id) ? { t: 'modSeen', id: raw.id } : null;
     case 'modEnv': return isModId(raw.id) ? { t: 'modEnv', id: raw.id } : null;
+    case 'modStoreGet': return isModId(raw.id) && isModStoreName(raw.name) ? { t: 'modStoreGet', id: raw.id, name: raw.name } : null;
+    case 'modStoreSet': {
+      if (!isModId(raw.id) || !isModStoreName(raw.name) || raw.value === undefined) return null;
+      return JSON.stringify(raw.value).length <= MAX_MOD_STORE ? { t: 'modStoreSet', id: raw.id, name: raw.name, value: raw.value } : null;
+    }
     case 'configureMod': {
       const settings = parseModSettings(raw.settings);
       return isModId(raw.id) && settings ? { t: 'configureMod', id: raw.id, settings } : null;

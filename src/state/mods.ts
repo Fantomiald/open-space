@@ -21,11 +21,11 @@ export const NOT_PLACED: ModPlacement = { left: null, top: null, size: null, fol
 
 const within = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
 
-/** The size of a mod's window, title bar included, no bigger than the page. */
-function sized(size: Size, surface: Size): Size {
+/** The size of a mod's window, title bar included, no bigger than the page nor taller than its content (`tallest`, once its page told it). */
+function sized(size: Size, surface: Size, tallest = Number.POSITIVE_INFINITY): Size {
   return {
     width: Math.round(within(size.width, Math.min(MOD_SIZE.width.min, surface.width - 2 * PIP_MARGIN), Math.min(MOD_SIZE.width.max, surface.width - 2 * PIP_MARGIN))),
-    height: Math.round(within(size.height, MOD_SIZE.height.min, Math.min(MOD_SIZE.height.max, surface.height - 2 * PIP_MARGIN - MOD_HEAD)) + MOD_HEAD),
+    height: Math.round(within(size.height, Math.min(MOD_SIZE.height.min, tallest), Math.min(MOD_SIZE.height.max, surface.height - 2 * PIP_MARGIN - MOD_HEAD, tallest)) + MOD_HEAD),
   };
 }
 
@@ -44,16 +44,19 @@ export function openingSpots(sizes: readonly Size[], surface: Size): { left: num
   });
 }
 
-/** A mod's window: where the user left it, else at `spot` (see openingSpots); always within the page. */
-export function modBox(mod: Pick<ModInfo, 'width' | 'height'>, placement: ModPlacement, spot: { left: number; top: number }, surface: Size): Box {
-  const size = sized(placement.size ?? { width: mod.width, height: mod.height }, surface);
+/**
+ * A mod's window: where the user left it, else at `spot` (see openingSpots); always within the page. `content`: the
+ * height its page says its content needs; the window is never taller (smaller, the page scrolls).
+ */
+export function modBox(mod: Pick<ModInfo, 'width' | 'height'>, placement: ModPlacement, spot: { left: number; top: number }, surface: Size, content?: number | null): Box {
+  const size = sized(placement.size ?? { width: mod.width, height: content ?? mod.height }, surface, content ?? undefined);
   return placePip({ left: placement.left ?? spot.left, top: placement.top ?? spot.top, ...size }, surface);
 }
 
 /** `start` pulled by `edge` by dx, dy: the opposite side or corner stays where it is. */
-export function resizeMod(start: Box, edge: Edge, dx: number, dy: number, surface: Size): Box {
+export function resizeMod(start: Box, edge: Edge, dx: number, dy: number, surface: Size, content?: number | null): Box {
   const pulled = { width: start.width + (edge.includes('e') ? dx : edge.includes('w') ? -dx : 0), height: start.height - MOD_HEAD + (edge.includes('s') ? dy : edge.includes('n') ? -dy : 0) };
-  const size = sized(pulled, surface);
+  const size = sized(pulled, surface, content ?? undefined);
   const left = edge.includes('w') ? start.left + start.width - size.width : start.left;
   const top = edge.includes('n') ? start.top + start.height - size.height : start.top;
   return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, 0, surface.height - size.height)), ...size };
@@ -74,6 +77,21 @@ export function heardModEnv(id: string, env: Record<string, string>) {
   const waiting = envAsked.get(id);
   envAsked.delete(id);
   for (const heard of waiting ?? []) heard(env);
+}
+
+/** The windows showing each mod, told every value its page saved (the kit's OpenSpace.store), wherever it was saved. */
+const storeHeard = new Map<string, Set<(name: string, value: unknown) => void>>();
+
+/** Hears the values saved for mod `id`; returns what stops it. */
+export function onModStore(id: string, heard: (name: string, value: unknown) => void) {
+  const hearing = storeHeard.get(id) ?? new Set();
+  storeHeard.set(id, hearing);
+  hearing.add(heard);
+  return () => { hearing.delete(heard); };
+}
+
+export function heardModStore(id: string, name: string, value: unknown) {
+  for (const heard of storeHeard.get(id) ?? []) heard(name, value);
 }
 
 /** What a mod may ask Open Space for (OpenSpace.watch in the kit). */

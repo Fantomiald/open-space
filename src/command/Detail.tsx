@@ -18,7 +18,8 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PopOutIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { OutControls } from './OutControls.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
@@ -72,8 +73,11 @@ const NO_DRAFTS: Readonly<Record<string, string>> = {};
  * One open session over the room. Several can be open side by side (see Stack): the one the user is in
  * (`selectedId`) is `active`, and only it shows the search bar and the views other than the thread; one can be zoomed.
  */
-/** Kept from being drawn again while a window is carried or resized: only its own session changes it. */
-export const Detail = memo(function Detail({ sessionId }: { sessionId: string }) {
+/**
+ * Kept from being drawn again while a window is carried or resized: only its own session changes it. `detached`: alone
+ * in a window taken out of Open Space (OutApp), which closing it closes.
+ */
+export const Detail = memo(function Detail({ sessionId, detached = false }: { sessionId: string; detached?: boolean }) {
   const active = useSessions((s) => s.selectedId === sessionId);
   const session = useSessions((s) => s.sessions[sessionId]);
   const events = useSessions((s) => s.logs[sessionId]) ?? NO_EVENTS;
@@ -82,6 +86,8 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const send = useSessions((s) => s.send);
   const focus = useSessions((s) => s.focus);
   const closeOpen = useSessions((s) => s.closeOpen);
+  const popOut = useSessions((s) => s.popOut);
+  const hide = detached ? () => window.close() : () => closeOpen(sessionId);
   const several = useSessions((s) => s.openIds.length > 1);
   const zoomed = useSessions((s) => s.zoomedId === sessionId);
   const zoom = useSessions((s) => s.zoom);
@@ -114,7 +120,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
   const [restAsked, setRestAsked] = useState(false);
   const secretsOpen = useSessions((s) => (s.secretsOpen?.sessionId === session.id ? s.secretsOpen : null));
   const openSecrets = useSessions((s) => s.openSecrets);
-  const rest = () => { send({ t: 'rest', sessionId }); closeOpen(sessionId); };
+  const rest = () => { send({ t: 'rest', sessionId }); hide(); };
   // the sub-agent whose thread is shown, null for the conversation
   const [agent, setAgent] = useState<string | null>(null);
   // the pictures of the next message: dropped anywhere on the panel, pasted or picked in the composer (App keys the
@@ -180,7 +186,12 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
             <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onKeys={() => openSecrets(session.id)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
-            <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={() => closeOpen(session.id)}><CloseIcon /></button>
+            {detached ? <OutControls target={{ kind: 'session', sessionId: session.id }} variant="outlined" /> : (
+              <>
+                <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.common.out.popOut} title={t.common.out.popOutTitle} onClick={() => popOut({ kind: 'session', sessionId: session.id })}><PopOutIcon /></button>
+                <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={hide}><CloseIcon /></button>
+              </>
+            )}
           </div>
         </div>
         <div className="cp-detail__line">
@@ -225,7 +236,7 @@ export const Detail = memo(function Detail({ sessionId }: { sessionId: string })
             {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}
             <div className="cp-form__actions">
               <button type="button" className="cp-button" onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); closeOpen(session.id); }}>{t.session.detail.switchOff}</button>
+              <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); hide(); }}>{t.session.detail.switchOff}</button>
             </div>
           </Modal>
         )}

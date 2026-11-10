@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildTagArgs, cleanTag, readTagOutput } from './auto-tag.ts';
+import { buildTagArgs, cleanTag, readTagOutput, tagPrompt } from './auto-tag.ts';
 
 describe('automatic tag', () => {
   it('keeps two words at most, without quotes, punctuation or capitals', () => {
@@ -11,6 +11,13 @@ describe('automatic tag', () => {
     assert.equal(cleanTag('-'), null);
     assert.equal(cleanTag('  '), null);
     assert.equal(cleanTag("Je n'ai pas assez de contexte pour donner un tag."), null);
+  });
+
+  it('follows the user\'s rule, capitals included', () => {
+    assert.equal(cleanTag('EX-1576', true), 'EX-1576');
+    assert.ok(buildTagArgs('EX-1576 fix the login', 'the ticket key').includes(tagPrompt('the ticket key')));
+    assert.match(tagPrompt('the ticket key'), /the ticket key$/);
+    assert.ok(!tagPrompt('').includes('rule'));
   });
 
   it('reads the answer of claude -p, and nothing from an error', () => {

@@ -4,7 +4,7 @@
 // session reads (OFFICE_DIR/mods-env.json, the user's alone), and go only to its page when it asks. The folder's CLAUDE.md, the rules a session writing a mod reads, is Open Space's own
 // (the kit's GUIDE.md): written again whenever it differs.
 import { createHmac } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
@@ -21,6 +21,11 @@ export const modKey = (secret: string, id: string) => createHmac('sha256', secre
 const GUIDE = 'GUIDE.md';
 /** in each mod's folder: the address its page is served at, for its session to test it (never served: it starts with a dot) */
 const ADDRESS = '.address';
+/** in each mod's folder: what its page saved (the kit's OpenSpace.store), one JSON file per name. Hidden, so a save neither reloads the page nor marks new data */
+const STORE = '.store';
+const MAX_STORE_NAMES = 100;
+/** the saves of a burst (a page saving at each key typed) go to disk once */
+const STORE_FLUSH_MS = 400;
 const STARTER = 'starter.html';
 /** a burst of writes (a session saving several files) is one change */
 const SETTLE_MS = 250;
@@ -70,6 +75,9 @@ export class Mods {
   private watcher: FSWatcher | null = null;
   private settling: NodeJS.Timeout | null = null;
   private last = '';
+  /** the values saved and not written yet, by mod then name */
+  private unwritten = new Map<string, Map<string, unknown>>();
+  private flushing: NodeJS.Timeout | null = null;
 
   constructor(options: ModsOptions) {
     this.options = options;
@@ -111,6 +119,51 @@ export class Mods {
   stop() {
     this.watcher?.close();
     if (this.settling) clearTimeout(this.settling);
+    this.flushStore();
+  }
+
+  /** What a mod's page saved under `name`, null when nothing. */
+  async stored(id: string, name: string): Promise<unknown> {
+    const waiting = this.unwritten.get(id);
+    if (waiting?.has(name)) return waiting.get(name);
+    const own = this.folderOf(id);
+    if (!own) return null;
+    try { return JSON.parse(await readFile(path.join(own, STORE, `${name}.json`), 'utf8')); } catch { return null; }
+  }
+
+  /** Keeps what a mod's page saved, written a little later; false when the mod is gone or has too many names already. */
+  store(id: string, name: string, value: unknown): boolean {
+    const own = this.folderOf(id);
+    if (!own || !existsSync(path.join(own, 'mod.json'))) return false;
+    const waiting = this.unwritten.get(id) ?? new Map<string, unknown>();
+    if (!waiting.has(name) && !existsSync(path.join(own, STORE, `${name}.json`))) {
+      let names: string[] = [];
+      try { names = readdirSync(path.join(own, STORE)); } catch { /* none yet */ }
+      if (names.length + waiting.size >= MAX_STORE_NAMES) return false;
+    }
+    waiting.set(name, value);
+    this.unwritten.set(id, waiting);
+    this.flushing ??= setTimeout(() => this.flushStore(), STORE_FLUSH_MS);
+    return true;
+  }
+
+  /** Writes the values waiting, each whole or not at all (a temporary file renamed). */
+  private flushStore() {
+    if (this.flushing) clearTimeout(this.flushing);
+    this.flushing = null;
+    for (const [id, waiting] of this.unwritten) {
+      const own = this.folderOf(id);
+      if (!own) continue;
+      try {
+        mkdirSync(path.join(own, STORE), { recursive: true, mode: 0o700 });
+        for (const [name, value] of waiting) {
+          const file = path.join(own, STORE, `${name}.json`);
+          writeFileSync(`${file}.tmp`, JSON.stringify(value));
+          renameSync(`${file}.tmp`, file);
+        }
+      } catch (error) { this.options.log(`cannot save the data of mod ${id}`, error); }
+    }
+    this.unwritten.clear();
   }
 
   /** Tells the pages when the list is not what they last got. */
@@ -158,6 +211,11 @@ export class Mods {
     if (!made) throw new Error(`mod ${id} was not made`);
     this.writeAddress(made);
     return made;
+  }
+
+  /** The rules for writing a mod: the folder's CLAUDE.md. */
+  guide(): string {
+    try { return readFileSync(path.join(this.options.folder, 'CLAUDE.md'), 'utf8'); } catch { return ''; }
   }
 
   /** Puts a mod's folder in the Trash. */

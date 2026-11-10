@@ -135,6 +135,7 @@ export const settings: Dictionary['settings'] = {
       agentNote: { title: 'A note for all your agents', hint: 'Added to the instructions of every new conversation.' },
       remoteByDefault: { title: 'Remote Control by default', hint: 'Each new conversation can be reached from your phone and claude.ai. It keeps its process running, so when active sessions near the limit, the next ones start without it (their button still turns it on).' },
       autoTag: { title: 'Automatic tag', hint: 'A new session gets a tag of one or two words from its first message (Haiku, less than a cent).' },
+      autoTagRule: { title: 'Rule for the tag', hint: 'What the tag should be when it applies. Otherwise it still names the subject.', placeholder: 'For a ticket, use its key (EX-1576).' },
       isolate: {
         title: 'Isolate sessions',
         hint: 'A new session on a branch and in a folder of its own (a git worktree), away from the others’ files. Open Space merges when you ask.',
@@ -192,7 +193,7 @@ export const settings: Dictionary['settings'] = {
       quickSession: 'Start a session in the default folder',
       command: 'A command, at the start of a message',
       interrupt: 'Interrupt the working session',
-      hide: 'See the room behind the windows',
+      hide: 'Hide everything but the room',
       move: 'Move the room or a window',
       zoom: 'Zoom the room',
       magnets: 'Without magnets, while moving',

@@ -20,6 +20,14 @@ describe('mod windows', () => {
     assert.deepEqual(box, { left: 600, top: 300, width: 500, height: 200 + MOD_HEAD });
   });
 
+  it('is never taller than its content, even at the size the user gave it or pulled to', () => {
+    const placed = { left: 600, top: 300, size: { width: 500, height: 400 }, folded: false };
+    assert.equal(modBox({ width: 380, height: 320 }, NOT_PLACED, { left: 12, top: 72 }, page, 180).height, 180 + MOD_HEAD);
+    assert.equal(modBox({ width: 380, height: 320 }, placed, { left: 12, top: 72 }, page, 250).height, 250 + MOD_HEAD);
+    assert.equal(modBox({ width: 380, height: 320 }, NOT_PLACED, { left: 12, top: 72 }, page, 60).height, 60 + MOD_HEAD, 'below the smallest size');
+    assert.equal(resizeMod({ left: 100, top: 100, width: 400, height: 300 }, 's', 0, 200, page, 280).height, 280 + MOD_HEAD);
+  });
+
   it('is resized from any side, the opposite one staying, never below its smallest size', () => {
     const start = { left: 100, top: 100, width: 400, height: 300 };
     assert.deepEqual(resizeMod(start, 'se', 50, 40, page), { left: 100, top: 100, width: 450, height: 340 });

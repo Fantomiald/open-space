@@ -37,6 +37,7 @@
       for (const resolve of asked) resolve({ ...(message.env ?? {}) });
     }
     if (message.openSpace === 'refresh') for (const refresh of refreshers) refresh();
+    if (message.openSpace === 'store') heardStored(message.name, message.value ?? null);
   });
   // alone in a tab (opened by hand, or a test): the classic look, and no data
   if (!host) themed();
@@ -70,6 +71,38 @@
     if (refreshers.size === 1) say({ kind: 'refreshable', on: true });
     return () => { refreshers.delete(refresh); if (!refreshers.size) say({ kind: 'refreshable', on: false }); };
   }
+  // what the page saves, kept by Open Space in the mod's folder (in memory alone outside Open Space)
+  const storeAsked = new Map(); // name -> resolve functions
+  const storeWatchers = new Map(); // name -> Set of functions
+  const alone = new Map();
+  function heardStored(name, value) {
+    const asked = storeAsked.get(name) ?? [];
+    storeAsked.delete(name);
+    for (const resolve of asked) resolve(value);
+    for (const heard of storeWatchers.get(name) ?? []) heard(value);
+  }
+  const store = {
+    /** The JSON value saved under `name` (letters, digits, "-" and "_"), null when nothing was. */
+    get: (name) => new Promise((resolve) => {
+      if (!host) { resolve(alone.get(name) ?? null); return; }
+      storeAsked.set(name, [...(storeAsked.get(name) ?? []), resolve]);
+      say({ kind: 'store-get', name });
+    }),
+    /** Saves `value` (JSON, 256 KB at most) under `name`: it is there after the window closes, and in every window of the mod. */
+    set(name, value) {
+      const copy = JSON.parse(JSON.stringify(value ?? null));
+      if (!host) { alone.set(name, copy); for (const heard of storeWatchers.get(name) ?? []) heard(copy); return; }
+      say({ kind: 'store-set', name, value: copy });
+    },
+    /** Calls `heard` with the value saved under `name`, then each time a window of the mod saves another. Returns what stops it. */
+    watch(name, heard) {
+      const known = storeWatchers.get(name) ?? new Set();
+      storeWatchers.set(name, known);
+      known.add(heard);
+      void store.get(name).then((value) => { if (known.has(heard)) heard(value); });
+      return () => { known.delete(heard); };
+    },
+  };
   /** A JSON file of the mod's own folder ("data/sales.json"), read fresh. */
   async function json(file) {
     const answer = await fetch(new URL(file, document.baseURI), { cache: 'no-store' });
@@ -387,7 +420,7 @@
     }
   });
 
-  window.OpenSpace = { ready, watch, data, env, onRefresh, json, format, h };
+  window.OpenSpace = { ready, watch, data, env, onRefresh, store, json, format, h };
   // the height its content needs, for its window to fit it (until the user gives the window a size of their own)
   let told = 0;
   const measure = () => {

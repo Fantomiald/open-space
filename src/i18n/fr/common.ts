@@ -160,4 +160,13 @@ export const common = {
     copy: 'Copier le code',
     copyTitle: 'Copier',
   },
+  /** a window taken out of Open Space, in a window of its own */
+  out: {
+    popOut: 'Sortir dans une fenêtre',
+    popOutTitle: 'Sortir dans une fenêtre à part, qui reste au-dessus de tes autres apps',
+    putBack: 'Remettre dans Open Space',
+    pin: 'Garder au-dessus des autres apps',
+    unpin: 'Ne plus garder au-dessus des autres apps',
+    close: 'Fermer la fenêtre',
+  },
 };

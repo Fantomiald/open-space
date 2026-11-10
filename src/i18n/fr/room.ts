@@ -9,9 +9,9 @@ export const room = {
   birthdayWish: (names: readonly string[]) => `Joyeux anniversaire ${names.join(' et ')} !`,
   subagent: 'Sous-agent',
   /** the card following the pointer over the door, the user's screen, the whiteboard or the numbers */
-  /** Tab hides the open sessions to see the room, and brings them back */
+  /** Tab hid everything but the room: the hint to bring it back */
+  bare: { before: 'Appuie sur', after: 'pour tout réafficher' },
   stack: {
-    show: (count: number) => `Afficher ${plural(count, 'conversation', 'conversations')}`,
     resizeColumns: 'Largeur des colonnes',
     resizeRows: 'Hauteur des fenêtres',
     resizeStack: 'Largeur des fenêtres',

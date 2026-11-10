@@ -4,9 +4,9 @@ export const room: Dictionary['room'] = {
   you: 'You',
   birthdayWish: (names: readonly string[]) => `Happy birthday ${names.join(' and ')}!`,
   subagent: 'Sub-agent',
-  /** Tab hides the open sessions to see the room, and brings them back */
+  /** Tab hid everything but the room: the hint to bring it back */
+  bare: { before: 'Press', after: 'to show everything' },
   stack: {
-    show: (count: number) => `Show ${plural(count, 'conversation', 'conversations')}`,
     resizeColumns: 'Column width',
     resizeRows: 'Window height',
     resizeStack: 'Width of the windows',

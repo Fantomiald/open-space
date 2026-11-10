@@ -36,6 +36,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   tagColors: false,
   idleCompact: 0,
   autoTag: false,
+  autoTagRule: '',
   remoteByDefault: false,
   // a settings file from before worktrees has none: it gets this one
   isolate: 'busy',
@@ -43,6 +44,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
 };
 
 export const MAX_AGENT_NOTE = 600;
+export const MAX_TAG_RULE = 300;
 const MAX_ROOTS = 20;
 const MAX_FAVORITE_NOTES = 200;
 
@@ -68,6 +70,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
   if (isPermissionMode(raw.permissionMode)) found.permissionMode = raw.permissionMode;
   if (typeof raw.agentNote === 'string') found.agentNote = raw.agentNote.trim().slice(0, MAX_AGENT_NOTE);
+  if (typeof raw.autoTagRule === 'string') found.autoTagRule = raw.autoTagRule.trim().slice(0, MAX_TAG_RULE);
   if (isRoomTheme(raw.theme)) found.theme = raw.theme;
   const pet = parsePet(raw.pet);
   if (pet) found.pet = pet;

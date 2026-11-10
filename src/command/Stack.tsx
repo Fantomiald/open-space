@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import { t } from '../i18n/index.ts';
 import { canArrange } from '../lib/drag.ts';
 import type { Box } from '../state/room-frame.ts';
 import { arrangementOf, maxColumnsIn, tilingOf, useSessions } from '../state/sessions.ts';
@@ -64,8 +63,7 @@ export function Stack() {
   const columns = useSessions((s) => s.columns);
   const openIds = useSessions((s) => s.openIds);
   const zoomedId = useSessions((s) => s.zoomedId);
-  const hidden = useSessions((s) => s.stackHidden);
-  const hideStack = useSessions((s) => s.hideStack);
+  const hidden = useSessions((s) => s.uiHidden);
   const view = useSessions((s) => s.view);
   const launcherOpen = useSessions((s) => s.launcherOpen);
   const closeLauncher = useSessions((s) => s.closeLauncher);
@@ -283,11 +281,6 @@ export function Stack() {
           <div key={LAUNCHER} className="cp-stack__slot" data-zoomed="true" style={whole ? boxVariables(whole) : undefined}><Launcher onClose={closeLauncher} replacing={active} /></div>
         )}
       </div>
-      {hidden && (
-        <button type="button" className="cp-button cp-stack__show" onClick={() => hideStack(false)}>
-          {t.room.stack.show(slots.length)} <kbd className="cp-kbd">Tab</kbd>
-        </button>
-      )}
     </WindowDragContext>
   );
 }

@@ -13,7 +13,8 @@ import type { Edge } from '../state/windows.ts';
 import { BrowserScreen, FormatSwitch, LanePicker, useLanes } from './BrowserView.tsx';
 import { boxVariables } from './boxes.ts';
 import { FreeHandles } from './FreeHandles.tsx';
-import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MaximizeIcon } from './Icons.tsx';
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MaximizeIcon, PopOutIcon } from './Icons.tsx';
+import { OutControls } from './OutControls.tsx';
 import { INTERACTIVE } from './useWindowDrag.ts';
 
 const NO_EVENTS: never[] = [];
@@ -55,7 +56,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
     const running = new Set(Object.keys(s.browsers).map(sessionOfBrowser));
     return Object.keys(s.sessions).filter((id) => id === session.id || running.has(id)).join(',');
   });
-  const { openPip, dismissPip, dockPip } = useSessions.getState();
+  const { openPip, dismissPip, dockPip, popOut } = useSessions.getState();
   const words = t.session.browser;
   const format = browser ? shownFormat(browser) : 'desktop';
   const [placement, setPlacement] = useState<Placement>(() => readPreference<Placement>('pip-placement', { box: null, folded: false }));
@@ -126,11 +127,31 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
         <button type="button" className="cp-icon-button" data-size="small" aria-label={placement.folded ? words.unfold : words.fold} title={placement.folded ? words.unfold : words.fold} onClick={() => place({ ...placement, folded: !placement.folded })}>
           {placement.folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
         </button>
+        <button type="button" className="cp-icon-button" data-size="small" aria-label={t.common.out.popOut} title={t.common.out.popOutTitle} onClick={() => popOut({ kind: 'browser', sessionId: session.id, lane })}><PopOutIcon /></button>
         <button type="button" className="cp-icon-button" data-size="small" aria-label={words.dock} title={words.dockTitle(session.name)} onClick={dockPip}><MaximizeIcon /></button>
         <button type="button" className="cp-icon-button" data-size="small" aria-label={words.pipClose} title={words.pipClose} onClick={dismissPip}><CloseIcon /></button>
       </header>
       {!placement.folded && <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} driving={driving} />}
       {!placement.folded && <FreeHandles onPull={grab} />}
+    </section>
+  );
+}
+
+/** A session's browser alone in a window taken out of Open Space (OutApp), which the app's window carries and resizes. */
+export function OutBrowser({ session, lane }: { session: SessionInfo; lane: number }) {
+  const browser = useSessions((s) => s.browsers[browserId(session.id, lane)]);
+  const format = browser ? shownFormat(browser) : 'desktop';
+  const events = useSessions((s) => (lane === 0 ? (s.logs[session.id] ?? NO_EVENTS) : NO_EVENTS));
+  const running = isRunning(session);
+  const driving = useMemo(() => running && lane === 0 && drivesBrowser(buildFeed(events).items), [events, running, lane]);
+  return (
+    <section className="cp-pip" data-detached="true" aria-label={t.session.browser.pipLabel(session.name)}>
+      <header className="cp-pip__head">
+        <span className="cp-pip__name">{session.name}</span>
+        <FormatSwitch session={session} lane={lane} format={browser && format} />
+        <OutControls target={{ kind: 'browser', sessionId: session.id, lane }} variant="small" />
+      </header>
+      <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} driving={driving} />
     </section>
   );
 }

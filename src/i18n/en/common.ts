@@ -161,4 +161,12 @@ export const common: Dictionary['common'] = {
     copy: 'Copy code',
     copyTitle: 'Copy',
   },
+  out: {
+    popOut: 'Pop out',
+    popOutTitle: 'Pop out into a window of its own, kept over your other apps',
+    putBack: 'Put back in Open Space',
+    pin: 'Keep over other apps',
+    unpin: 'Stop keeping over other apps',
+    close: 'Close window',
+  },
 };

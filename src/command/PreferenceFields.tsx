@@ -24,7 +24,7 @@ export function FoldersPicker({ roots, onRoots, defaultFolder, onDefaultFolder, 
 }) {
   const [other, setOther] = useState('');
   const [pickFailed, setPickFailed] = useState(false);
-  const nativePicker = window.openSpaceDesktop;
+  const nativePicker = window.openSpaceDesktop?.pickFolder ? { pickFolder: window.openSpaceDesktop.pickFolder } : undefined;
   const addFolder = (folder: string) => { if (!roots.includes(folder)) onRoots([...roots, folder]); };
   const browse = async () => {
     setPickFailed(false);

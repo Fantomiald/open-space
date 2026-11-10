@@ -31,7 +31,7 @@ export const MCP_SERVER = MCP_SERVER_NAME;
 
 /** The settings the MCP server reads and changes: how the office looks and behaves, nothing about access or safety. */
 export const MCP_SETTINGS = [
-  'language', 'theme', 'pet', 'festivals', 'officeLife', 'notifications', 'autoTag', 'remoteByDefault', 'model', 'effort',
+  'language', 'theme', 'pet', 'festivals', 'officeLife', 'notifications', 'autoTag', 'autoTagRule', 'remoteByDefault', 'model', 'effort',
   'idleCompact', 'timeFormat', 'timestamps', 'turnDuration', 'detailedActions', 'reduceMotion', 'glassOpacity', 'windowStyle', 'tagColors',
   'copyOnSelect', 'autoPip',
 ] as const satisfies readonly (keyof Preferences)[];
@@ -104,8 +104,10 @@ export interface OpenSpaceApi {
   /** the user's bots, to name in a trigger's `messengers` */
   bots: () => { id: string; name: string; username: string | null }[];
   mods: () => ModInfo[];
-  /** a new mod's folder and the session that writes it, as the Mods panel makes them */
-  createMod: (request: string) => Promise<{ mod: ModInfo; sessionId: string }>;
+  /** a new mod's folder, and the session that writes it as the Mods panel makes them unless `bySession` is false (the caller writes it) */
+  createMod: (request: string, bySession: boolean) => Promise<{ mod: ModInfo; sessionId: string | null }>;
+  /** the rules for writing a mod (the mods folder's CLAUDE.md) */
+  modGuide: () => string;
   /** the change asked of a mod, to its open session or a new one in its folder; null when there is no such mod */
   editMod: (id: string, request: string) => Promise<{ sessionId: string } | null>;
   /** puts the mod's folder in the Trash; false when there is no such mod */
@@ -181,12 +183,20 @@ export const TOOLS: Tool[] = [
     annotations: write,
   },
   { name: 'list_mods', description: 'Lists the Open Space mods: small windows the user\'s agents make (a page in a folder), with their id, name and folder.', inputSchema: { type: 'object', properties: {} }, annotations: read },
-  { name: 'create_mod', description: 'Makes a new mod, like Mods > New mod: a session builds it in its own folder from what the user asked, e.g. "my Claude costs this week".', inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'What the mod should show or do, in the user\'s words' } }, required: ['request'] }, annotations: write },
+  {
+    name: 'create_mod',
+    description: 'Makes a new mod, e.g. "my Claude costs this week". From a session: makes its folder (a draft from the starter) and gives you its path and the rules; you then write the mod yourself, there. build: "session" instead hands it to a new session that builds it in the background, like Mods > New mod (always the case from outside a session).',
+    inputSchema: { type: 'object', properties: { request: { type: 'string', description: 'What the mod should show or do, in the user\'s words' }, build: { type: 'string', enum: ['self', 'session'] } }, required: ['request'] },
+    annotations: write,
+  },
   { name: 'update_mod', description: 'Asks for a change to a mod: its session (or a new one in its folder) makes it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, request: { type: 'string', description: 'The change, in the user\'s words' } }, required: ['id', 'request'] }, annotations: write },
   { name: 'delete_mod', description: 'Deletes a mod (its folder goes to the Trash).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
   { name: 'get_settings', description: `Reads Open Space settings that are safe to change: ${MCP_SETTINGS.join(', ')}.`, inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'update_settings', description: `Changes some of these Open Space settings: ${MCP_SETTINGS.join(', ')}. Others are refused.`, inputSchema: { type: 'object', properties: { settings: { type: 'object' } }, required: ['settings'] }, annotations: write },
 ];
+
+const BUILD_IT_YOURSELF = 'Write the mod yourself in `folder`, following `guide` (the CLAUDE.md of the mods folder): mod.json, index.html, then draft: false. ' +
+  'Its address, to test it in your browser, is in `.address` there. If you cannot write in that folder, ask the user to allow it.';
 
 /** A trigger as an agent sees it: never its webhook token. */
 const shown = (api: OpenSpaceApi, { token: _token, ...trigger }: Trigger, runs: TriggerRun[]) => {
@@ -328,8 +338,10 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
     case 'create_mod': {
       const request = asString(args.request).trim().slice(0, MAX_MOD_REQUEST);
       if (!request) return failure(st.mods.mcp.noRequest);
-      const { mod, sessionId } = await api.createMod(request);
-      return text({ id: mod.id, folder: mod.folder, sessionId });
+      const self = 'session' in caller && args.build !== 'session';
+      const { mod, sessionId } = await api.createMod(request, !self);
+      if (!self) return text({ id: mod.id, folder: mod.folder, sessionId });
+      return text({ id: mod.id, folder: mod.folder, next: BUILD_IT_YOURSELF, guide: api.modGuide() });
     }
     case 'update_mod': {
       const request = asString(args.request).trim().slice(0, MAX_MOD_REQUEST);
