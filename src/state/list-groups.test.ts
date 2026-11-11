@@ -23,6 +23,7 @@ describe('the list in groups', () => {
     const byProject = listGroups([unseen, read, other, resting], seen, 'project');
     assert.deepEqual(keys(byProject), [['project:/code/app', ['a', 'b']], ['project:/code/site', ['c', 'd']]]);
     assert.deepEqual(byProject.map((group) => group.waiting), [1, 0]);
+    assert.deepEqual(byProject.map((group) => group.folder), ['/code/app', '/code/site']);
   });
 
   it('keeps the session just opened where it was, until another is opened', () => {

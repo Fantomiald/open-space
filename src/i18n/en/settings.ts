@@ -193,6 +193,7 @@ export const settings: Dictionary['settings'] = {
       threadSearch: 'Search the open session',
       newSession: 'Write a new request',
       quickSession: 'Start a session in the default folder',
+      projectSession: 'New request in the 1st, 2nd… project',
       command: 'A command, at the start of a message',
       interrupt: 'Interrupt the working session',
       hide: 'Hide everything but the room',

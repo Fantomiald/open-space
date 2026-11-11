@@ -1,7 +1,5 @@
-import { IS_MAC, MODIFIER } from '../lib/platform.ts';
+import { IS_MAC, MODIFIER, OPTION } from '../lib/platform.ts';
 import { t } from '../i18n/index.ts';
-
-const OPTION = IS_MAC ? '⌥' : 'Alt';
 
 /** The keyboard shortcuts, as App.tsx and the windows listen to them (read-only). */
 export function Shortcuts() {
@@ -9,7 +7,7 @@ export function Shortcuts() {
   const groups: readonly (readonly [string, readonly (readonly [string, readonly string[]])[]])[] = [
     [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.terminal, IS_MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
     [words.groups.sessions, [
-      [words.newSession, ['N']], [words.quickSession, ['⇧', 'N']], [words.command, ['/']], [words.threadSearch, [MODIFIER, 'F']],
+      [words.newSession, ['N']], [words.quickSession, ['⇧', 'N']], [words.projectSession, [OPTION, '1…9']], [words.command, ['/']], [words.threadSearch, [MODIFIER, 'F']],
       [words.interrupt, ['esc']], [words.hide, ['tab']],
     ]],
     [words.groups.windows, [[words.move, [OPTION, words.drag]], [words.zoom, [OPTION, words.wheel]], [words.magnets, [MODIFIER]]]],

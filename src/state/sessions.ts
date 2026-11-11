@@ -72,8 +72,8 @@ export interface Toast { id: number; kind: 'info' | 'error'; text: string }
 
 /** What the palette or the "new session" dialog starts with. */
 /** What the launcher starts with: a command in its field, someone of the crew to take it (a click on a visitor). */
-/** `resumeIn`: the launcher opens on that folder's conversations (/resume) */
-export interface NewSessionDraft { command?: string; person?: string; resumeIn?: string }
+/** `resumeIn`: the launcher opens on that folder's conversations (/resume); `folder`: the folder it starts in (a project's +) */
+export interface NewSessionDraft { command?: string; person?: string; resumeIn?: string; folder?: string }
 
 /** What the session panel shows under its header: the conversation, what the session changed, its browser, or one of the views of Claude Code. */
 export type PanelView = 'thread' | 'changes' | 'browser' | 'files' | InspectView;

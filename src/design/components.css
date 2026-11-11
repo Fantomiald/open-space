@@ -2049,6 +2049,17 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-list__title > button > :not(.cp-list__hint) { flex: none; }
 .cp-list__title .cp-icon { align-self: center; width: 0.75rem; height: 0.75rem; color: var(--color-text-muted); transition: transform var(--duration) var(--easing); }
 .cp-list__title > button[aria-expanded='false'] .cp-icon { transform: rotate(-90deg); }
+.cp-list__title { position: relative; }
+.cp-list__title:has(.cp-list__add) > button:not(.cp-list__add) { padding-inline-end: 4.5rem; }
+.cp-list__title > .cp-list__add {
+  width: auto; position: absolute; inset-block: 0; inset-inline-end: var(--space-1); display: flex; align-items: center; gap: var(--space-1); margin-block: auto; height: 1.5rem;
+  padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-text-muted); cursor: pointer;
+  opacity: 0; transition: opacity var(--duration) var(--easing);
+}
+.cp-list__title:is(:hover, :focus-within) .cp-list__add { opacity: 1; }
+.cp-list__title > .cp-list__add:hover { background: var(--color-surface); color: var(--color-text); }
+.cp-list__add .cp-kbd { font-weight: var(--weight-regular); }
+.cp-list__title .cp-list__add .cp-icon { width: 0.875rem; height: 0.875rem; color: inherit; }
 .cp-list__hint { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: var(--weight-regular); color: var(--color-text-muted); }
 .cp-list__item {
   width: 100%; min-height: 3.25rem; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);

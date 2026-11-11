@@ -196,6 +196,7 @@ export const settings = {
       threadSearch: 'Chercher dans la session ouverte',
       newSession: 'Écrire une nouvelle demande',
       quickSession: 'Lancer une session dans le dossier par défaut',
+      projectSession: 'Nouvelle demande dans le 1er, 2e… projet',
       command: 'Une commande, en début de message',
       interrupt: 'Interrompre la session au travail',
       hide: 'Masquer tout sauf la salle',

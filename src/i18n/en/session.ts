@@ -335,6 +335,7 @@ export const session: Dictionary['session'] = {
   list: {
     title: 'Sessions',
     new: 'New session',
+    newIn: (project: string) => `New session in ${project}`,
     groups: { waiting: 'For you', working: 'At work', ready: 'Ready', resting: 'Resting', automata: 'Automatons' },
     hints: { waiting: '', working: '', ready: 'read', resting: '', automata: '' },
     groupBy: 'Group the list',
