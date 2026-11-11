@@ -3,7 +3,7 @@
 // (claude-code-sessions/<account>/<org>/local_<id>.json: { cliSessionId, sourceBranch, branch, cwd, … }, checked with
 // the Windows app in November 2026). That format is Desktop's own and undocumented: anything unexpected gives nothing,
 // and Open Space falls back to the main checkout's branch.
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { asString, isJson } from './json.ts';
@@ -41,4 +41,25 @@ export async function desktopSourceBranch(conversationId: string, home = os.home
     } catch { /* unreadable: skipped */ }
   }
   return '';
+}
+
+/** What each record said last time it was read, by file: read again only when the file changed (Desktop keeps hundreds). */
+const archivedRecords = new Map<string, { changed: number; archived: string }>();
+
+/** The conversations whose Claude Desktop session is archived (records with isArchived: true), by conversation id. */
+export async function desktopArchived(home = os.homedir(), platform: NodeJS.Platform = process.platform): Promise<Set<string>> {
+  const archived = new Set<string>();
+  for (const file of await recordFiles(path.join(desktopDataFolder(home, platform), 'claude-code-sessions'))) {
+    try {
+      const changed = (await stat(file)).mtimeMs;
+      let known = archivedRecords.get(file);
+      if (known?.changed !== changed) {
+        const record: unknown = JSON.parse(await readFile(file, 'utf8'));
+        known = { changed, archived: isJson(record) && record.isArchived === true ? asString(record.cliSessionId) : '' };
+        archivedRecords.set(file, known);
+      }
+      if (known.archived) archived.add(known.archived);
+    } catch { /* unreadable: skipped */ }
+  }
+  return archived;
 }

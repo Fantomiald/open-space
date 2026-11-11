@@ -57,6 +57,8 @@ export const composer: Dictionary['composer'] = {
     commandKey: 'at the start of a message for a command',
     searching: (folder: string) => `Looking for conversations in ${folder}…`,
     noConversation: (folder: string) => `No Claude Code conversations in ${folder} (or they’re already open here).`,
+    archived: 'archived',
+    archivedTitle: 'Archived in Claude Desktop',
     searchConversations: 'Search the conversations (a ticket, something said…)',
     searchingWords: (folder: string) => `Searching the conversations in ${folder}…`,
     noMatch: (words: string, folder: string) => `No conversation in ${folder} contains “${words}”.`,

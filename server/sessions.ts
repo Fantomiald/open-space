@@ -22,7 +22,7 @@ import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, Fold
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
-import { desktopSourceBranch } from './claude-desktop.ts';
+import { desktopArchived, desktopSourceBranch } from './claude-desktop.ts';
 import type { Config } from './config.ts';
 import { importConversation, lastContextUse, lastExchanges, lastName, listConversations, searchConversations, worktreeTranscript } from './conversations.ts';
 import { st } from './i18n/index.ts';
@@ -465,7 +465,11 @@ export class SessionManager {
     const cwd = resolveAllowedDirectory(directory, this.roots());
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     const open = new Set([...this.sessions.values()].map((session) => session.conversationId));
-    return query ? searchConversations(cwd, query, open, this.deps.home) : listConversations(cwd, open, this.deps.home);
+    const [found, archived] = await Promise.all([
+      query ? searchConversations(cwd, query, open, this.deps.home) : listConversations(cwd, open, this.deps.home),
+      desktopArchived(this.deps.home).catch(() => new Set<string>()),
+    ]);
+    return found.map((conversation) => (archived.has(conversation.id) ? { ...conversation, archived: true } : conversation));
   }
 
   private session(id: string): Session {

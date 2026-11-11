@@ -473,8 +473,8 @@ export interface SessionOptions {
 }
 
 /** A Claude Code conversation found on disk for a folder, that a new session can go on with. updatedAt: ms. */
-/** `name`: what Open Space called its session, when it ran there (its custom title); `match`: for a search, its latest message with the words, where they are in it */
-export interface Conversation { id: string; title: string; preview: string; updatedAt: number; name?: string; match?: { text: string; start: number; length: number } }
+/** `name`: what Open Space called its session, when it ran there (its custom title); `match`: for a search, its latest message with the words, where they are in it; `archived`: its Claude Desktop session is archived */
+export interface Conversation { id: string; title: string; preview: string; updatedAt: number; name?: string; archived?: boolean; match?: { text: string; start: number; length: number } }
 
 /** Someone of the user's crew: sessions named like them wear their look; `self` is the user's own avatar. Null: the default look. */
 /** `birthday`: "MM-DD", the day the rooms throw them a party. `jobs`: what they do, to send them the requests that fit (shared/jobs.ts). */

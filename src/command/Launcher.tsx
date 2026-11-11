@@ -13,7 +13,7 @@ import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
-import { BranchIcon, CleanIcon, CloseIcon, SendIcon } from './Icons.tsx';
+import { BranchIcon, CleanIcon, CloseIcon, KeepIcon, SendIcon } from './Icons.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import { Snippet } from './Snippet.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
@@ -173,7 +173,10 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
                       <li key={conversation.id}>
                         <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); if (conversation.name) setAsked(conversation.name); field.current?.focus(); }}>
                           <span className="cp-resume__title">{conversation.title}</span>
-                          <span className="cp-resume__when">{formatAgo(Date.now() - conversation.updatedAt)}</span>
+                          <span className="cp-resume__when">
+                            {conversation.archived && <span className="cp-tag cp-resume__archived" title={words.archivedTitle}><KeepIcon />{words.archived}</span>}
+                            {formatAgo(Date.now() - conversation.updatedAt)}
+                          </span>
                           {conversation.match ? <span className="cp-resume__preview"><Snippet {...conversation.match} /></span>
                             : conversation.preview && conversation.preview !== conversation.title && <span className="cp-resume__preview">{conversation.preview}</span>}
                         </button>

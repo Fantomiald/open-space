@@ -686,6 +686,21 @@ describe('a Claude Desktop conversation, in a worktree of the folder', () => {
     await manager.shutdown();
   });
 
+  it('lists a conversation whose Desktop session is archived as archived, and only that one', async () => {
+    const repo = repository();
+    const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');
+    desktopTranscript(desktop, 'claude/fix-login');
+    const records = path.join(desktopDataFolder(home), 'claude-code-sessions', 'account', 'org');
+    const { manager } = setup();
+    await manager.init();
+    assert.equal((await manager.conversations(repo)).find((conversation) => conversation.id === C)?.archived, undefined);
+    write(path.join(records, 'local_other.json'), JSON.stringify({ cliSessionId: '00000000-0000-4000-8000-000000000000', isArchived: true }));
+    write(path.join(records, 'local_this.json'), JSON.stringify({ cliSessionId: C, isArchived: true }));
+    assert.equal((await manager.conversations(repo)).find((conversation) => conversation.id === C)?.archived, true);
+    rmSync(desktopDataFolder(home), { recursive: true, force: true });
+    await manager.shutdown();
+  });
+
   it('its worktree gone, it goes on on its branch in a folder made again', async () => {
     const repo = repository();
     const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');

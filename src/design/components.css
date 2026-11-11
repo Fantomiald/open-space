@@ -1581,6 +1581,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-resume__item[aria-pressed='true'] { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .cp-resume__title { font-size: var(--text-sm); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-resume__when { font-size: var(--text-xs); color: var(--color-text-muted); display: inline-block; max-width: 100%; vertical-align: 1px; }
+.cp-resume__archived { height: auto; margin-inline-end: var(--space-2); padding-block: 1px; background: transparent; border-color: var(--color-border-strong); color: var(--color-text-muted); vertical-align: 1px; }
 .cp-resume__preview { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-resume__preview mark { padding: 0 1px; border-radius: 3px; background: var(--mark); color: var(--mark-text); }
 .cp-resume__search {

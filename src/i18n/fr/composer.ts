@@ -59,6 +59,8 @@ export const composer = {
     commandKey: 'en début de message pour une commande',
     searching: (folder: string) => `Recherche des conversations de ${folder}…`,
     noConversation: (folder: string) => `Aucune conversation Claude Code dans ${folder} (ou elles sont déjà ouvertes ici).`,
+    archived: 'archivée',
+    archivedTitle: 'Archivée dans Claude Desktop',
     searchConversations: 'Chercher dans les conversations (un ticket, une phrase…)',
     searchingWords: (folder: string) => `Recherche dans les conversations de ${folder}…`,
     noMatch: (words: string, folder: string) => `Aucune conversation de ${folder} ne contient « ${words} ».`,
