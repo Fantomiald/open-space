@@ -81,6 +81,8 @@ export interface SessionDeps {
   onTurnEnd?: (session: SessionInfo, how: TurnEnd) => void;
   /** a compaction asked by autoCompact ended without compacting (the session limit reached, most often) */
   onAutoCompactFailed?: () => void;
+  /** /clear started a new conversation: its tags are gone, its first plain message may name new ones */
+  onCleared?: () => void;
 }
 
 export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
@@ -520,6 +522,8 @@ export class Session {
       this.info.toldSharedBrowser = undefined;
       this.info.toldChrome = undefined;
       this.info.toldSecrets = undefined;
+      this.info.tags = undefined;
+      this.deps.onCleared?.();
       this.record({ k: 'cleared' });
       this.cleared = true;
     }
