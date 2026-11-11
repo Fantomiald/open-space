@@ -35,6 +35,11 @@ export const mods = {
   building: (who: string | null) => (who ? `${who} le fabrique…` : 'En fabrication…'),
   buildingText: 'La fenêtre se remplit dès que l’agent a fini.',
   showSession: 'Voir la session',
+  /** a mod's page asking to start its trigger (the kit's OpenSpace.runTrigger) */
+  runQuestion: (trigger: string) => `Lancer « ${trigger} » ?`,
+  runText: (mod: string) => `Le mod ${mod} demande à démarrer une session avec ce déclencheur.`,
+  run: 'Lancer',
+  cancel: 'Annuler',
   /** a mod's settings (ModsPanel.tsx), in the mods' dialog */
   settings: 'Réglages',
   settingsTitle: (name: string) => `Réglages de ${name}`,

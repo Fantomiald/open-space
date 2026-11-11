@@ -220,7 +220,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'sendNow': return sessionId ? { t: 'sendNow', sessionId } : null;
     case 'aside': {
       const question = boundedString(raw.question, MAX_TEXT)?.trim();
-      return sessionId && question ? { t: 'aside', sessionId, question } : null;
+      return sessionId && question ? { t: 'aside', sessionId, question, ...(raw.follow === true ? { follow: true } : {}) } : null;
     }
     case 'asideClose': return sessionId ? { t: 'asideClose', sessionId } : null;
     case 'presence': return typeof raw.active === 'boolean' ? { t: 'presence', active: raw.active } : null;

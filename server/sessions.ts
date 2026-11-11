@@ -354,7 +354,8 @@ export class SessionManager {
       hidden: this.deps.hidden,
       promptSuggestions: this.deps.promptSuggestions,
       peerName: (address) => this.peerName(address),
-      liveCount: () => [...this.sessions.values()].filter((session) => session.alive).length,
+      liveCount: () => [...this.sessions.values()].filter((session) => session.alive && !session.leaving).length,
+      makeRoom: () => this.makeRoom(info.id),
       maxLive: this.deps.config.maxLive,
       idleMs: this.deps.config.idleMs,
       now: this.deps.now,
@@ -474,22 +475,27 @@ export class SessionManager {
   }
 
   // ── side questions (/btw) ──
-  /** Asks a side question about a session's conversation; one at a time per session, a new one replaces the last. */
-  aside(id: string, question: string) {
+  /**
+   * Asks a side question about a session's conversation; one at a time per session, a new one replaces the last. A reply
+   * (`follow`) to the one answered is asked with the exchange so far: each side question is a fork that remembers none.
+   */
+  aside(id: string, question: string, follow = false) {
     const info = this.session(id).snapshot();
     if (!this.deps.askAside) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(info.cwd, this.roots());
     if (!cwd) throw new Error(st.sessions.folderGone);
-    this.asides.get(id)?.stop();
-    const entry = { aside: { question, answer: '', state: 'asking' } as Aside, stop: () => {} };
+    const last = this.asides.get(id);
+    last?.stop();
+    const earlier = follow && last && last.aside.state === 'answered' ? [...(last.aside.earlier ?? []), { question: last.aside.question, answer: last.aside.answer }] : [];
+    const entry = { aside: { question, answer: '', state: 'asking', ...(earlier.length ? { earlier } : {}) } as Aside, stop: () => {} };
     this.asides.set(id, entry);
     const publish = () => { if (this.asides.get(id) === entry) this.deps.broadcast({ t: 'aside', sessionId: id, aside: entry.aside }); };
     let timer: NodeJS.Timeout | null = null;
-    const running = this.deps.askAside({ cwd, sessionId: info.conversationId ?? id, resume: info.resumable, model: info.model, untrusted: info.untrusted, question }, {
+    const running = this.deps.askAside({ cwd, sessionId: info.conversationId ?? id, resume: info.resumable, model: info.model, untrusted: info.untrusted, question: earlier.length ? st.prompt.asideReply(earlier, question) : question }, {
       onText: (text) => { entry.aside = { ...entry.aside, answer: text }; timer ??= setTimeout(() => { timer = null; publish(); }, ASIDE_EVERY_MS); },
       onEnd: ({ ok, text }) => {
         if (timer) clearTimeout(timer);
-        entry.aside = { question, answer: text, state: ok ? 'answered' : 'failed' };
+        entry.aside = { ...entry.aside, answer: text, state: ok ? 'answered' : 'failed' };
         entry.stop = () => {};
         publish();
       },
@@ -665,6 +671,16 @@ export class SessionManager {
   private remoteOn(session: Session) {
     if (!this.sessions.has(session.snapshot().id)) return;
     session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control on for ${session.snapshot().name}`, error));
+  }
+
+  /**
+   * Room for one more process, at the limit: the session waiting the longest for a message lets its process go (it
+   * resumes its conversation on the next one). One at work, asking something or keeping its process is left alone.
+   */
+  private makeRoom(starting: string) {
+    const waiting = [...this.sessions.values()].filter((session) => session.alive && !session.leaving && session.snapshot().id !== starting);
+    waiting.sort((a, b) => a.snapshot().stateSince - b.snapshot().stateSince);
+    for (const session of waiting) if (session.release(st.sessions.stopped.forRoom)) return;
   }
 
   /** A new session in Remote Control when the settings say so; past the slots it keeps free, it stays off (its button still turns it on). */
