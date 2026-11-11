@@ -1,5 +1,9 @@
 # Versions
 
+## 1.32.1
+
+- Mods : chaque mod est servi à une adresse à lui (`<mod>.localhost`, sur le port d'Open Space + 2), qui n'est ni celle d'Open Space ni celle d'un autre mod. Il peut donc intégrer un lecteur YouTube, Spotify, une carte ou tout site qui accepte d'être intégré. Un site qui le refuse reste vide : le guide du kit dit à l'agent de proposer un lien à la place.
+
 ## 1.32.0
 
 - Un seul modèle de fenêtre : une conversation ou un mod glissé vers les autres se range dans la grille, tiré dehors il flotte. La bascule Grille / Libre disparaît. Un mod rangé ne recharge pas sa page. « Ranger les fenêtres » dans ⌘K.
