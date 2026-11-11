@@ -100,9 +100,12 @@ export function BranchCardView({ sessionId }: { sessionId: string }) {
   if (!session || !worktree || !card) return null;
   const words = t.branches.card;
   const act = (action: 'merge' | 'pr' | 'discard' | 'dismiss') => { setPending(true); send({ t: 'branch', sessionId, action }); };
+  const discardable = () => setConfirming(true);
+  // a branch of Claude Desktop's goes from Desktop too: said before anything is done
+  const desktop = worktree.borrowed ? <p className="cp-branch-card__text">{words.desktop}</p> : null;
   const discard = confirming ? (
     <div className="cp-branch-card__confirm" role="alert">
-      <p><b>{words.discardQuestion(worktree.branch)}</b> {words.discardText(session.name, folderName(worktree.home))}</p>
+      <p><b>{words.discardQuestion(worktree.branch)}</b> {words.discardText(session.name, folderName(worktree.home))}{worktree.borrowed ? ` ${words.desktop}` : ''}</p>
       <div className="cp-branch-card__actions">
         <button type="button" className="cp-button" data-size="small" onClick={() => setConfirming(false)}>{words.cancel}</button>
         <button type="button" className="cp-button" data-size="small" data-variant="danger" disabled={pending} autoFocus onClick={() => act('discard')}><RemoveIcon />{words.discardConfirm}</button>
@@ -117,11 +120,12 @@ export function BranchCardView({ sessionId }: { sessionId: string }) {
         <section className="cp-branch-card" data-tone="failed" aria-live="polite">
           <h3 className="cp-branch-card__title"><AlertIcon />{words.failed}</h3>
           {problem && <p className="cp-branch-card__text">{problemText(problem, session)}</p>}
+          {!discard && desktop}
           {discard ?? (
             <div className="cp-branch-card__actions">
               <button type="button" className="cp-button" data-size="small" data-variant="primary" disabled={pending} onClick={() => act('merge')}><RefreshIcon />{words.retry}</button>
               <button type="button" className="cp-button" data-size="small" data-variant="quiet" title={words.dismissTitle} disabled={pending} onClick={() => act('dismiss')}>{words.dismiss}</button>
-              <CardMenu onDiscard={() => setConfirming(true)} />
+              <CardMenu onDiscard={discardable} />
             </div>
           )}
         </section>
@@ -140,11 +144,12 @@ export function BranchCardView({ sessionId }: { sessionId: string }) {
           <Count text={words.files(status.files)} />
           <span>{status.dirty ? words.dirty(status.dirty) : words.clean}</span>
         </p>
+        {!discard && desktop}
         {discard ?? (
           <div className="cp-branch-card__actions">
             <button type="button" className="cp-button" data-size="small" data-variant="primary" title={words.mergeTitle(session.name, worktree.base)} disabled={pending} onClick={() => act('merge')}><MergeIcon />{words.merge}</button>
             {worktree.canPr && <button type="button" className="cp-button" data-size="small" title={words.pullRequestTitle(session.name, worktree.base)} disabled={pending} onClick={() => act('pr')}><PullRequestIcon />{words.pullRequest}</button>}
-            <CardMenu onLater={() => snooze(sessionId, branchSignature(status))} onDiscard={() => setConfirming(true)} />
+            <CardMenu onLater={() => snooze(sessionId, branchSignature(status))} onDiscard={discardable} />
           </div>
         )}
       </section>

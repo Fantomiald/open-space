@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import type { OfficeEvent, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import { desktopDataFolder } from './claude-desktop.ts';
 import type { LaunchOptions, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { projectFolder } from './conversations.ts';
@@ -601,6 +602,120 @@ describe('an isolated session never loses work, nor touches what it should not',
     await until(() => manager.list().find((session) => session.id === id)?.state === 'wait', 'the failure');
     assert.equal(manager.list().find((session) => session.id === id)?.cwd, web);
     assert.ok(!existsSync(path.join(outer, '.claude')));
+    await manager.shutdown();
+  });
+});
+
+describe('a Claude Desktop conversation, in a worktree of the folder', () => {
+  const C = '7d1c2e3f-0a1b-4c2d-8e3f-9a0b1c2d3e4f';
+  /** The transcript Claude Desktop left for a session run in `folder`, on `branch`. */
+  const desktopTranscript = (folder: string, branch: string) => write(path.join(projectFolder(folder, home), `${C}.jsonl`), [
+    JSON.stringify({ type: 'custom-title', customTitle: 'Réparer le login' }),
+    JSON.stringify({ type: 'user', gitBranch: branch, message: { content: 'Le login plante' } }),
+  ].join('\n'));
+
+  it('goes on in its worktree, put away like one of Open Space\'s: thrown away, it goes from Desktop too', async () => {
+    const repo = repository();
+    const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');
+    git(repo, 'worktree', 'add', '-q', '-b', 'claude/fix-login', desktop);
+    commit(desktop, 'login.ts', 'fixed\n');
+    desktopTranscript(desktop, 'claude/fix-login');
+    const { manager, processes, find, events } = setup();
+    await manager.init();
+    const created = await manager.create({ cwd: repo, resumeId: C, text: 'On continue' });
+    await until(() => find(C).worktree?.status !== undefined && processes.length === 1, 'the worktree');
+    const session = find(created.id);
+    assert.equal(session.cwd, desktop);
+    assert.equal(session.worktree?.branch, 'claude/fix-login');
+    assert.equal(session.worktree?.base, 'main');
+    assert.equal(session.worktree?.borrowed, true);
+    assert.equal(session.worktree?.status?.ahead, 1);
+    assert.notEqual(session.name, 'Réparer le login', 'Desktop\'s title is not a name');
+    assert.equal(processes[0].launch.cwd, desktop);
+    // told where it works now, and its name here, before the message
+    assert.equal(processes[0].sent.length, 1);
+    assert.match(processes[0].sent[0], /claude\/fix-login[\s\S]*On continue$/);
+    assert.ok(events(C).some((ev) => ev.k === 'note' && ev.text.includes('Claude Desktop')));
+    // the conversation stays where Desktop keeps it, without a copy in the main folder
+    assert.ok(existsSync(path.join(projectFolder(desktop, home), `${C}.jsonl`)));
+    assert.ok(!existsSync(path.join(projectFolder(repo, home), `${C}.jsonl`)));
+    processes[0].turn(C);
+    await until(() => find(C).state === 'wait', 'the end of the turn');
+    await manager.discardBranch(C);
+    assert.ok(!existsSync(desktop));
+    assert.equal(git(repo, 'branch', '--list', 'claude/fix-login'), '');
+    assert.equal(find(C).cwd, repo);
+    // its conversation goes on from the main folder
+    assert.ok(existsSync(path.join(projectFolder(repo, home), `${C}.jsonl`)));
+    await manager.shutdown();
+  });
+
+  it('switched off with work, Desktop\'s branch is kept as Open Space keeps its own (wip), its folder removed', async () => {
+    const repo = repository();
+    const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');
+    git(repo, 'worktree', 'add', '-q', '-b', 'claude/fix-login', desktop);
+    desktopTranscript(desktop, 'claude/fix-login');
+    const { manager, processes, find } = setup();
+    await manager.init();
+    await manager.create({ cwd: repo, resumeId: C, text: 'On continue' });
+    await until(() => find(C).worktree?.status !== undefined && processes.length === 1, 'the worktree');
+    write(path.join(desktop, 'login.ts'), 'fixed\n');
+    await manager.forget(C, 'keep');
+    assert.ok(!existsSync(desktop));
+    assert.match(git(repo, 'log', '-1', '--format=%s', 'claude/fix-login'), /^wip: /);
+    await manager.shutdown();
+  });
+
+  it('merges back into the branch its Desktop session started from, whatever the main checkout is on', async () => {
+    const repo = repository();
+    git(repo, 'branch', 'dev');
+    const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');
+    git(repo, 'worktree', 'add', '-q', '-b', 'claude/fix-login', desktop, 'dev');
+    desktopTranscript(desktop, 'claude/fix-login');
+    const record = (id: string, sourceBranch: string) => JSON.stringify({ sessionId: `local_${id}`, cliSessionId: id, cwd: desktop, sourceBranch, branch: 'claude/fix-login' });
+    const records = path.join(desktopDataFolder(home), 'claude-code-sessions', 'account', 'org');
+    write(path.join(records, 'local_other.json'), record('00000000-0000-4000-8000-000000000000', 'main'));
+    write(path.join(records, 'local_this.json'), record(C, 'dev'));
+    const { manager, processes, find } = setup();
+    await manager.init();
+    await manager.create({ cwd: repo, resumeId: C, text: 'On continue' });
+    await until(() => find(C).worktree?.status !== undefined && processes.length === 1, 'the worktree');
+    assert.equal(find(C).worktree?.base, 'dev');
+    rmSync(desktopDataFolder(home), { recursive: true, force: true });
+    await manager.shutdown();
+  });
+
+  it('its worktree gone, it goes on on its branch in a folder made again', async () => {
+    const repo = repository();
+    const desktop = path.join(repo, '.claude', 'worktrees', 'fix-login');
+    git(repo, 'worktree', 'add', '-q', '-b', 'claude/fix-login', desktop);
+    commit(desktop, 'login.ts', 'fixed\n');
+    git(repo, 'worktree', 'remove', desktop);
+    desktopTranscript(desktop, 'claude/fix-login');
+    const { manager, processes, find } = setup();
+    await manager.init();
+    await manager.create({ cwd: repo, resumeId: C, text: 'On continue' });
+    await until(() => find(C).worktree?.status !== undefined && processes.length === 1, 'the worktree');
+    const worktree = find(C).worktree!;
+    assert.equal(worktree.branch, 'claude/fix-login');
+    assert.equal(worktree.borrowed, undefined);
+    assert.ok(existsSync(path.join(worktree.root, 'login.ts')));
+    assert.ok(existsSync(path.join(projectFolder(find(C).cwd, home), `${C}.jsonl`)), 'its conversation is where --resume looks');
+    await manager.shutdown();
+  });
+
+  it('neither its worktree nor its branch left: it goes on in the main folder, its conversation copied there', async () => {
+    const repo = repository();
+    const desktop = path.join(repo, '.claude', 'worktrees', 'gone');
+    desktopTranscript(desktop, 'claude/gone');
+    const { manager, processes, find } = setup();
+    await manager.init();
+    await manager.create({ cwd: repo, resumeId: C, text: 'On continue' });
+    await until(() => processes.length === 1, 'the process');
+    assert.equal(find(C).cwd, repo);
+    assert.equal(find(C).worktree, undefined);
+    assert.ok(existsSync(path.join(projectFolder(repo, home), `${C}.jsonl`)));
+    assert.ok(existsSync(path.join(projectFolder(desktop, home), `${C}.jsonl`)));
     await manager.shutdown();
   });
 });

@@ -3,8 +3,10 @@
 // ~/.claude/projects/<the folder, every character but letters and digits turned into "-">/<session id>.jsonl.
 // That format is Claude Code's own and undocumented: only a few fields are read, from the start of a file (its title
 // and first message) and from its end (the last exchanges), and anything unexpected is skipped.
-import { createReadStream, readFileSync } from 'node:fs';
-import { open, readdir, stat } from 'node:fs/promises';
+// The sessions of Claude Desktop (and of `claude --worktree`) run in <folder>/.claude/worktrees/<name>, so theirs are
+// kept under that worktree's key: they are listed with the folder's, and copied to its key when one is reopened here.
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { copyFile, cp, mkdir, open, readdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Conversation } from '../shared/protocol.ts';
@@ -20,6 +22,62 @@ const LIST_LIMIT = 40;
 const TEXT_MAX = 2000;
 
 export const projectFolder = (cwd: string, home = os.homedir()) => path.join(home, '.claude', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'));
+
+/** The keys of the folder's worktrees in .claude/worktrees (Claude Desktop's sessions, `claude --worktree`'s). */
+async function worktreeFolders(cwd: string, home: string): Promise<string[]> {
+  const prefix = `${path.basename(projectFolder(path.join(cwd, '.claude', 'worktrees'), home))}-`;
+  const projects = path.dirname(projectFolder(cwd, home));
+  try {
+    return (await readdir(projects, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix))
+      .map((entry) => path.join(projects, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+/** The key of the folder's worktree holding a conversation the folder's own key does not (one of Claude Desktop's), or null. */
+export async function worktreeTranscript(cwd: string, id: string, home = os.homedir()): Promise<string | null> {
+  if (!CONVERSATION_ID.test(id) || existsSync(path.join(projectFolder(cwd, home), `${id}.jsonl`))) return null;
+  for (const folder of await worktreeFolders(cwd, home)) {
+    if (existsSync(path.join(folder, `${id}.jsonl`))) return folder;
+  }
+  return null;
+}
+
+/** A conversation's transcript: under the folder's key, else under one of its worktrees'. */
+async function transcriptOf(cwd: string, id: string, home: string) {
+  return path.join(await worktreeTranscript(cwd, id, home) ?? projectFolder(cwd, home), `${id}.jsonl`);
+}
+
+/** Copies a conversation's transcript and its sub-agents' from one key to another, replacing what is there. */
+async function copyTranscripts(from: string, to: string, id: string) {
+  await mkdir(to, { recursive: true });
+  await copyFile(path.join(from, `${id}.jsonl`), path.join(to, `${id}.jsonl`));
+  if (existsSync(path.join(from, id))) await cp(path.join(from, id), path.join(to, id), { recursive: true, force: true });
+}
+
+/**
+ * Copies a conversation found under one of the folder's worktrees (a Claude Desktop session) to the folder's own key,
+ * where `claude --resume` run from the folder looks for it, with its sub-agents. A copy: the session it came from keeps
+ * its own. False when the folder already has it, or nothing was found.
+ */
+export async function importConversation(cwd: string, id: string, home = os.homedir()): Promise<boolean> {
+  const from = await worktreeTranscript(cwd, id, home);
+  if (!from) return false;
+  await copyTranscripts(from, projectFolder(cwd, home), id);
+  return true;
+}
+
+/** The branch a conversation last worked on (Claude Code writes it on its records as gitBranch), or ''. */
+export async function lastBranch(folder: string, id: string): Promise<string> {
+  if (!CONVERSATION_ID.test(id)) return '';
+  try {
+    return records(await readSlice(path.join(folder, `${id}.jsonl`), true, TAIL_BYTES)).map((record) => asString(record.gitBranch)).filter(Boolean).at(-1) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * How a sub-agent of a conversation was launched, from the record Claude Code keeps next to its transcript
@@ -77,19 +135,33 @@ function assistantText(record: Record<string, unknown>, max = TEXT_MAX): string 
   return text ? text.slice(0, max) : null;
 }
 
-/** The folder's conversation files, most recent first, without those already open here (`exclude`). */
+/**
+ * The folder's conversation files, and those of its worktrees (`worktree`), most recent first, without those already
+ * open here (`exclude`). A conversation in both (one reopened here already) is the folder's.
+ */
 async function conversationFiles(cwd: string, exclude: ReadonlySet<string>, home: string) {
-  const folder = projectFolder(cwd, home);
-  let names: string[];
-  try { names = await readdir(folder); } catch { return []; }
-  const files = await Promise.all(names
-    .filter((name) => name.endsWith('.jsonl') && CONVERSATION_ID.test(name.slice(0, -6)) && !exclude.has(name.slice(0, -6)))
-    .map(async (name) => ({ id: name.slice(0, -6), file: path.join(folder, name), updatedAt: (await stat(path.join(folder, name))).mtimeMs })));
+  const own = projectFolder(cwd, home);
+  const seen = new Set(exclude);
+  const found: { id: string; file: string; worktree: boolean }[] = [];
+  for (const folder of [own, ...await worktreeFolders(cwd, home)]) {
+    let names: string[];
+    try { names = await readdir(folder); } catch { continue; }
+    for (const name of names) {
+      const id = name.slice(0, -6);
+      if (!name.endsWith('.jsonl') || !CONVERSATION_ID.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      found.push({ id, file: path.join(folder, name), worktree: folder !== own });
+    }
+  }
+  const files = await Promise.all(found.map(async (entry) => ({ ...entry, updatedAt: (await stat(entry.file)).mtimeMs })));
   return files.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-/** A conversation's title and first message, from the start of its file; null for an empty one. */
-async function describe(id: string, file: string, updatedAt: number): Promise<Conversation | null> {
+/**
+ * A conversation's title and first message, from the start of its file; null for an empty one. One of a worktree
+ * (Claude Desktop's) has its session's title as custom title, not a name of Open Space's.
+ */
+async function describe(id: string, file: string, updatedAt: number, worktree = false): Promise<Conversation | null> {
   let aiTitle = '', customTitle = '', preview = '';
   for (const record of records(await readSlice(file, false, HEAD_BYTES))) {
     if (record.type === 'ai-title') aiTitle = asString(record.aiTitle);
@@ -97,6 +169,7 @@ async function describe(id: string, file: string, updatedAt: number): Promise<Co
     preview ||= userText(record) ?? '';
   }
   if (!preview && !aiTitle && !customTitle) return null;
+  if (worktree) return { id, title: customTitle || aiTitle || preview.slice(0, 80), preview: preview.slice(0, 200), updatedAt };
   // a session of Open Space has its name as custom title (claude --name) and, run with -p, no title of Claude's:
   // "Margot · what it was asked"
   const about = aiTitle || preview.slice(0, 80);
@@ -106,9 +179,9 @@ async function describe(id: string, file: string, updatedAt: number): Promise<Co
 /** The folder's conversations, most recent first, without those already open here (`exclude`) and without empty ones. */
 export async function listConversations(cwd: string, exclude: ReadonlySet<string>, home = os.homedir()): Promise<Conversation[]> {
   const conversations: Conversation[] = [];
-  for (const { id, file, updatedAt } of (await conversationFiles(cwd, exclude, home)).slice(0, LIST_LIMIT)) {
+  for (const { id, file, updatedAt, worktree } of (await conversationFiles(cwd, exclude, home)).slice(0, LIST_LIMIT)) {
     try {
-      const conversation = await describe(id, file, updatedAt);
+      const conversation = await describe(id, file, updatedAt, worktree);
       if (conversation) conversations.push(conversation);
     } catch { /* unreadable: skipped */ }
   }
@@ -159,7 +232,7 @@ export async function searchConversations(cwd: string, query: string, exclude: R
   const patterns = bytePatterns(query);
   if (!patterns.length) return [];
   const conversations: Conversation[] = [];
-  for (const { id, file, updatedAt } of await conversationFiles(cwd, exclude, home)) {
+  for (const { id, file, updatedAt, worktree } of await conversationFiles(cwd, exclude, home)) {
     if (conversations.length >= LIST_LIMIT) break;
     try {
       let found = '';
@@ -168,7 +241,7 @@ export async function searchConversations(cwd: string, query: string, exclude: R
         if (said && matchesAll(said, query)) found = said;
       }
       const match = found && snippetOf(found, query);
-      const conversation = match && await describe(id, file, updatedAt);
+      const conversation = match && await describe(id, file, updatedAt, worktree);
       if (conversation) conversations.push({ ...conversation, match });
     } catch { /* unreadable: skipped */ }
   }
@@ -180,7 +253,7 @@ export async function lastExchanges(cwd: string, id: string, max = 8, home = os.
   if (!CONVERSATION_ID.test(id)) return [];
   try {
     type Exchange = { who: 'user' | 'assistant'; text: string };
-    const exchanges = records(await readSlice(path.join(projectFolder(cwd, home), `${id}.jsonl`), true, TAIL_BYTES)).flatMap((record): Exchange[] => {
+    const exchanges = records(await readSlice(await transcriptOf(cwd, id, home), true, TAIL_BYTES)).flatMap((record): Exchange[] => {
       const user = userText(record);
       if (user) return [{ who: 'user', text: user }];
       const assistant = assistantText(record);
@@ -195,7 +268,7 @@ export async function lastExchanges(cwd: string, id: string, max = 8, home = os.
 /** The name a session of Open Space last gave the conversation (its custom title, claude --name), or null. */
 export async function lastName(cwd: string, id: string, home = os.homedir()): Promise<string | null> {
   if (!CONVERSATION_ID.test(id)) return null;
-  const file = path.join(projectFolder(cwd, home), `${id}.jsonl`);
+  const file = await transcriptOf(cwd, id, home);
   try {
     for (const fromEnd of [true, false]) {
       const titles = records(await readSlice(file, fromEnd, fromEnd ? TAIL_BYTES : HEAD_BYTES)).flatMap((record) => (record.type === 'custom-title' && asString(record.customTitle) ? [asString(record.customTitle)] : []));
@@ -215,7 +288,7 @@ export async function lastContextUse(cwd: string, id: string, home = os.homedir(
   if (!CONVERSATION_ID.test(id)) return null;
   try {
     let last: { used: number; model: string } | null = null;
-    for (const record of records(await readSlice(path.join(projectFolder(cwd, home), `${id}.jsonl`), true, TAIL_BYTES))) {
+    for (const record of records(await readSlice(await transcriptOf(cwd, id, home), true, TAIL_BYTES))) {
       if (record.isSidechain === true) continue;
       if (record.type === 'assistant' && isJson(record.message) && isJson(record.message.usage)) {
         const usage = record.message.usage;

@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { BRANCH_PREFIX, WORKTREES_FOLDER, isInside, worktreeNames } from '../shared/worktrees.ts';
 import type { BranchRow, BranchStatus, FolderRepo, MergeProblem } from '../shared/protocol.ts';
-import { projectFolder } from './conversations.ts';
+import { lastBranch, projectFolder } from './conversations.ts';
 import { st } from './i18n/index.ts';
 
 const GIT_TIMEOUT_MS = 60_000;
@@ -208,6 +208,21 @@ export async function recreateWorktree(mainRoot: string, branch: string): Promis
   await mkdir(path.dirname(root), { recursive: true });
   await git(mainRoot, ['worktree', 'add', root, branch]);
   return real(root);
+}
+
+/**
+ * Where a conversation of another tool's worktree (a Claude Desktop session, its transcripts under the key `key`) goes
+ * on: that worktree, still there on a branch; else the branch it last worked on, in no worktree (a folder is made for it
+ * again, see recreateWorktree); else nowhere (null), and it goes on in the main checkout.
+ */
+export async function borrowedPlace(mainRoot: string, key: string, id: string, home = os.homedir()): Promise<{ root?: string; branch: string } | null> {
+  const list = await worktreeList(mainRoot);
+  const same = (folder: string) => path.basename(projectFolder(folder, home)).toLowerCase() === path.basename(key).toLowerCase();
+  const entry = list.slice(1).find((worktree) => same(worktree.path));
+  if (entry) return entry.branch ? { root: entry.path, branch: entry.branch } : null;
+  const branch = await lastBranch(key, id);
+  if (!branch || list.some((worktree) => worktree.branch === branch) || !await branchExists(mainRoot, branch)) return null;
+  return { branch };
 }
 
 /**

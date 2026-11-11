@@ -140,6 +140,7 @@ export const fr = {
     unknownBase: (base: string) => `la branche « ${base} » n’existe pas`,
     notCopied: (name: string) => `Les dépendances et les .env du dossier principal n’ont pas pu être copiés : ${name} installera ce qu’il faut.`,
     revived: (branch: string) => `Branche « ${branch} » retrouvée : son dossier est recréé.`,
+    borrowed: (branch: string) => `Conversation de Claude Desktop : la session reprend dans son dossier, sur la branche « ${branch} ». Ne la continue pas dans Desktop en même temps. Fusionner, garder ou jeter la branche ici retire aussi ce dossier à Desktop.`,
     folderGone: (branch: string, folder: string) => `Le dossier de la branche « ${branch} » a disparu : la session continue dans ${folder}.`,
     waitTurn: (name: string) => `${name} travaille encore : attends la fin de son tour.`,
     nothingToMerge: 'La branche n’a rien de nouveau à fusionner.',

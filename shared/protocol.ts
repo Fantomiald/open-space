@@ -233,6 +233,8 @@ export interface WorktreeInfo {
   status?: BranchStatus;
   /** a pull request can be opened (a remote, and `gh` installed) */
   canPr?: boolean;
+  /** the folder and branch are a Claude Desktop session's: removing them here takes them from Desktop too, which the page says first */
+  borrowed?: true;
   /**
    * a merge under way: asked of the session (it squashes, catches up, settles the conflicts), then checked and done by
    * Open Space at the end of its turn (`retried`: asked again once because the base moved meanwhile), or failed;

@@ -40,6 +40,7 @@ export const branches: Dictionary['branches'] = {
     discardQuestion: (branch) => `Throw ${branch} away?`,
     discardText: (name, folder) => `Its commits and changes are lost for good. ${name} goes on in ${folder}.`,
     discardConfirm: 'Throw away',
+    desktop: 'This folder and branch are a Claude Desktop session’s: merging or throwing the branch away takes them from Desktop too.',
     cancel: 'Cancel',
     moved: (base) => `${base} moved on since`,
     movedText: (name, base, behind) => `${behind ? `${plural(behind, 'new commit', 'new commits')} on ${base} since the branch started. ` : ''}${name} brings their branch up to date before merging, and settles the conflicts if any.`,
@@ -77,6 +78,7 @@ export const branches: Dictionary['branches'] = {
     keepText: 'The work stays on the branch, the folder is removed',
     discard: 'Throw it all away',
     discardText: 'Branch and folder removed',
+    desktop: 'This branch comes from Claude Desktop: merging it, keeping it or throwing it all away takes its folder from Desktop too.',
     cancel: 'Cancel',
   },
   panel: {
