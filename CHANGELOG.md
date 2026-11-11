@@ -1,5 +1,11 @@
 # Versions
 
+## 1.31.0
+
+- Quoi de neuf : à la première ouverture d'une nouvelle version, une fenêtre montre ses nouveautés, avec un dessin, ses points forts et un bouton vers chaque fonction quand il y en a un. Elle ne revient pas sur un patch de la même version, et se rouvre depuis Réglages > À propos.
+- L'onboarding refait : la salle dessinée dès l'accueil (au travail, t'attend, fini), puis une étape Découvrir après les réglages : sessions en parallèle, automates et Telegram, mods, navigateur en mini-fenêtre, Tab, mode focus et fenêtres sorties. On peut la passer, et on peut la refaire depuis Réglages > À propos (« Revoir la visite »).
+- Sortir une version : une version mineure doit avoir ses nouveautés dans la fenêtre, et les tests échouent tant qu'elles manquent.
+
 ## 1.30.1
 
 - Le message écrit dans « Nouvelle conversation » reste quand on va voir une session et qu'on revient (N).
