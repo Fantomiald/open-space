@@ -22,8 +22,9 @@ import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, Fold
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
+import { desktopSourceBranch } from './claude-desktop.ts';
 import type { Config } from './config.ts';
-import { lastContextUse, lastExchanges, lastName, listConversations, searchConversations } from './conversations.ts';
+import { importConversation, lastContextUse, lastExchanges, lastName, listConversations, searchConversations, worktreeTranscript } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
@@ -35,7 +36,7 @@ import { Session, newSessionInfo, type SessionDeps, type StoredInfo, type TurnEn
 import { SessionLog, switchedOffFolder } from './session-log.ts';
 import { searchSessions } from './search.ts';
 import {
-  branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
+  borrowedPlace, branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
   listBranches, moveConversation, recreateWorktree, removeWorktree, setBranchNote,
 } from './worktrees.ts';
 
@@ -595,8 +596,11 @@ export class SessionManager {
     if (!trusted && options.trust === 'folder') await this.trusted.add(cwd);
     if (options.resumeId && this.sessions.has(options.resumeId)) throw new Error(st.sessions.alreadyOpen);
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
+    // one of Claude Desktop's, kept under the key of a worktree of the folder: its custom title is not a name
+    const resumeId = options.resumeId;
+    const borrowedFrom = resumeId && !options.isolate ? await worktreeTranscript(cwd, resumeId, this.deps.home) : null;
     // a resumed conversation keeps the name its session had, unless someone else was asked for or took it since
-    const former = options.resumeId && !options.name?.trim() ? await lastName(cwd, options.resumeId, this.deps.home) : null;
+    const former = resumeId && !borrowedFrom && !options.name?.trim() ? await lastName(cwd, resumeId, this.deps.home) : null;
     const formerName = former && !taken.has(former) ? former.slice(0, MAX_NAME) : null;
     const name = options.name?.trim().slice(0, MAX_NAME) || formerName || pickSessionName(taken);
     // a resumed conversation keeps its id: the session goes on with it through --resume
@@ -628,7 +632,16 @@ export class SessionManager {
     // was switched off with its branch kept gets that branch's worktree back
     const repo = options.isolate || options.resumeId ? await folderRepo(cwd).catch(() => null) : null;
     const kept = options.resumeId && repo ? await keptBranchOf(repo.root, options.resumeId).catch(() => null) : null;
-    if (options.isolate || kept) session.startPreparing(st.worktree.preparing);
+    // Claude Desktop's goes on in its worktree, or on its branch in a folder made again; else in the main folder, its
+    // transcripts copied where --resume looks for them
+    const borrowed = resumeId && borrowedFrom && repo && !kept ? await borrowedPlace(repo.root, borrowedFrom, resumeId, this.deps.home).catch(() => null) : null;
+    // it merges back into the branch its Desktop session started from (dev, say), when that one is still there
+    const source = resumeId && borrowed && repo ? await desktopSourceBranch(resumeId, this.deps.home).catch(() => '') : '';
+    const desktopBase = source && repo?.branches.includes(source) ? source : undefined;
+    if (resumeId && borrowedFrom && !borrowed?.root) {
+      await importConversation(cwd, resumeId, this.deps.home).catch((error) => this.deps.log(`cannot copy the conversation ${resumeId}`, error));
+    }
+    if (options.isolate || kept || borrowed) session.startPreparing(st.worktree.preparing);
     if (options.text?.trim() || options.images?.length || options.files?.length) {
       try {
         session.send(options.text ?? '', options.images, options.files);
@@ -641,6 +654,8 @@ export class SessionManager {
     // Remote Control needs the process, which waits for the worktree
     const remote = () => (started.remote ? this.remoteOn(session) : this.remoteByDefault(session));
     if (kept && repo) void this.reviveWorktree(info.id, repo, kept.branch, kept.note.base).then(remote);
+    else if (borrowed?.root && repo) void this.borrowWorktree(info.id, repo, borrowed.root, borrowed.branch, desktopBase).then(remote);
+    else if (borrowed && repo) void this.reviveWorktree(info.id, repo, borrowed.branch, desktopBase).then(remote);
     else if (options.isolate) void this.prepareWorktree(info.id, cwd, repo, options.isolate.base, options.text ?? '').then(remote);
     else remote();
     return session.snapshot();
@@ -696,14 +711,38 @@ export class SessionManager {
     }
   }
 
+  /**
+   * A Claude Desktop conversation goes on in its own worktree, put away like one of Open Space's (merged, kept, thrown
+   * away): the page says first that it goes from Desktop too.
+   */
+  private async borrowWorktree(id: string, repo: Omit<FolderRepo, 'merged'>, root: string, branch: string, base: string | undefined) {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    const info = session.snapshot();
+    try {
+      this.checkRepoAllowed(repo);
+      session.announce({ k: 'note', text: st.worktree.borrowed(branch) });
+      await this.settleWorktree(session, repo, root, branch, base || repo.branch || branch, info.cwd, true);
+    } catch (error) {
+      // it goes on in the main folder, where --resume needs its transcripts
+      await importConversation(info.cwd, info.id, this.deps.home).catch(() => {});
+      session.announce({ k: 'note', text: st.worktree.prepareFailed(error instanceof Error ? error.message : String(error), info.name, path.basename(info.cwd)) });
+      session.finishPreparing(false);
+    }
+  }
+
   /** A worktree goes where the repository is: outside the allowed folders, no process could start there. */
   private checkRepoAllowed(repo: Pick<FolderRepo, 'root'>) {
     if (!resolveAllowedDirectory(repo.root, this.roots())) throw new Error(st.worktree.outsideRoots(repo.root));
   }
 
-  /** The worktree is there: what git does not carry is copied, the session moves in, and its queue leaves. */
-  private async settleWorktree(session: Session, repo: Omit<FolderRepo, 'merged'>, root: string, branch: string, base: string, home: string) {
-    const copied = await copyIncluded(repo.root, root).catch(() => ({ copied: 0, failed: 1 }));
+  /**
+   * The worktree is there: what git does not carry is copied, the session moves in, and its queue leaves. `borrowed`:
+   * another tool's worktree (Claude Desktop's), which has what it needs and keeps its conversation where it is.
+   */
+  private async settleWorktree(session: Session, repo: Omit<FolderRepo, 'merged'>, root: string, branch: string, base: string, home: string, borrowed = false) {
+    const copied = borrowed ? { copied: 0, failed: 0 } : await copyIncluded(repo.root, root).catch(() => ({ copied: 0, failed: 1 }));
+    if (this.sessions.get(session.id) !== session && borrowed) return;
     // switched off while its folder was made: the folder goes, and the branch too when it holds nothing of its own
     if (this.sessions.get(session.id) !== session) {
       await removeWorktree(repo.root, root, false).catch((error) => this.deps.log(`cannot remove the worktree ${root}`, error));
@@ -711,7 +750,7 @@ export class SessionManager {
       return;
     }
     if (copied.failed) session.announce({ k: 'note', text: st.worktree.notCopied(session.snapshot().name) });
-    const worktree: WorktreeInfo = { branch, base, root, mainRoot: repo.root, home, canPr: await canOpenPullRequest(repo.root).catch(() => false) };
+    const worktree: WorktreeInfo = { branch, base, root, mainRoot: repo.root, home, canPr: await canOpenPullRequest(repo.root).catch(() => false), ...(borrowed ? { borrowed: true as const } : {}) };
     const inside = path.join(root, repo.sub);
     const cwd = existsSync(inside) ? inside : root;
     // the user agreed to what the main folder runs (trust.ts), not to hooks, MCP servers or settings only the branch has
@@ -722,7 +761,7 @@ export class SessionManager {
       session.announce({ k: 'note', text: st.worktree.restricted(info.name) });
     }
     // a conversation that goes on (resumed) is looked for by its folder: its transcripts follow it
-    if (info.resumable) await moveConversation(info.cwd, cwd, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
+    if (info.resumable && !borrowed) await moveConversation(info.cwd, cwd, this.conversationIds(info), this.deps.home).catch((error) => this.deps.log(`cannot move the conversation of ${info.name}`, error));
     session.relocate(cwd, worktree);
     session.finishPreparing(true);
     if (!this.folderCommands.has(session.snapshot().cwd)) void this.probeFolder(session.snapshot().cwd, !!session.snapshot().untrusted);
@@ -1218,6 +1257,7 @@ function parseWorktree(raw: unknown): WorktreeInfo | undefined {
   const problem = merge && isJson(merge.problem) && MERGE_PROBLEMS.has(asString(merge.problem.kind)) ? merge.problem as MergeProblem : { kind: 'stopped' as const };
   return {
     branch, base, root, mainRoot, home, ...(status ? { status } : {}), ...(raw.canPr === true ? { canPr: true } : {}),
+    ...(raw.borrowed === true ? { borrowed: true } : {}),
     ...(merge ? { merge: { step: 'failed' as const, problem: merge.step === 'failed' ? problem : { kind: 'stopped' as const }, ...thenOff } } : {}),
   };
 }

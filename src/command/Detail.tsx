@@ -250,6 +250,7 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
           <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
             <p className="cp-muted">{t.session.detail.switchOffText}</p>
             {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}
+            {session.worktree?.borrowed && <p className="cp-muted">{t.branches.switchOff.desktop}</p>}
             <div className="cp-form__actions">
               <button type="button" className="cp-button" onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
               <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); hide(); }}>{t.session.detail.switchOff}</button>

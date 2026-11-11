@@ -128,6 +128,7 @@ export const en: ServerDictionary = {
     unknownBase: (base: string) => `there is no branch “${base}”`,
     notCopied: (name: string) => `The dependencies and .env files of the main folder couldn’t be copied: ${name} will install what is needed.`,
     revived: (branch: string) => `Found the branch “${branch}”: its folder is made again.`,
+    borrowed: (branch: string) => `A Claude Desktop conversation: the session goes on in its folder, on the branch “${branch}”. Don’t continue it in Desktop at the same time. Merging, keeping or throwing the branch away here also takes this folder from Desktop.`,
     folderGone: (branch: string, folder: string) => `The folder of the branch “${branch}” is gone: the session goes on in ${folder}.`,
     waitTurn: (name: string) => `${name} is still working: wait for the end of their turn.`,
     nothingToMerge: 'The branch has nothing new to merge.',

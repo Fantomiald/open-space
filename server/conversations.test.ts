@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { agentLaunch, lastContextUse, lastExchanges, listConversations, projectFolder, searchConversations } from './conversations.ts';
+import { agentLaunch, importConversation, lastContextUse, lastExchanges, listConversations, projectFolder, searchConversations } from './conversations.ts';
 
 const home = mkdtempSync(path.join(os.tmpdir(), 'office-conversations-'));
 after(() => rmSync(home, { recursive: true, force: true }));
@@ -66,6 +66,29 @@ describe('Claude Code conversations on disk', () => {
       line({ type: 'user', message: { role: 'user', content: 'Corrige le bug du login' } }),
     ].join('\n'));
     assert.deepEqual((await listConversations(named, new Set(), home)).map(({ title }) => title), ['Margot · Corrige le bug du login']);
+  });
+
+  it('lists the conversations of the folder\'s worktrees (Claude Desktop\'s), and copies one to the folder to reopen it', async () => {
+    const repo = '/Users/me/code/desktop';
+    const C = '7d1c2e3f-0a1b-4c2d-8e3f-9a0b1c2d3e4f';
+    const worktree = projectFolder(path.join(repo, '.claude', 'worktrees', 'fix-login-1a2b3c'), home);
+    mkdirSync(path.join(worktree, C, 'subagents'), { recursive: true });
+    writeFileSync(path.join(worktree, `${C}.jsonl`), [
+      line({ type: 'custom-title', customTitle: 'Réparer le login' }),
+      line({ type: 'user', message: { role: 'user', content: 'Le login plante' } }),
+    ].join('\n'));
+    writeFileSync(path.join(worktree, C, 'subagents', 'agent-1.jsonl'), '{}\n');
+    mkdirSync(projectFolder(`${repo}-other`, home), { recursive: true });
+    writeFileSync(path.join(projectFolder(`${repo}-other`, home), `${B}.jsonl`), line({ type: 'user', message: { content: 'ailleurs' } }));
+
+    assert.deepEqual((await listConversations(repo, new Set(), home)).map(({ id, title, name }) => ({ id, title, name })), [{ id: C, title: 'Réparer le login', name: undefined }]);
+    assert.equal((await searchConversations(repo, 'login', new Set(), home))[0]?.id, C);
+    assert.equal(await importConversation(repo, C, home), true);
+    assert.ok(existsSync(path.join(projectFolder(repo, home), `${C}.jsonl`)));
+    assert.ok(existsSync(path.join(projectFolder(repo, home), C, 'subagents', 'agent-1.jsonl')));
+    assert.ok(existsSync(path.join(worktree, `${C}.jsonl`)), 'the Desktop session keeps its own');
+    assert.equal(await importConversation(repo, C, home), false);
+    assert.deepEqual((await listConversations(repo, new Set(), home)).map(({ id }) => id), [C], 'listed once');
   });
 
   it('reads the last exchanges, what the user said and what Claude answered', async () => {

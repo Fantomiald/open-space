@@ -44,6 +44,8 @@ export const branches = {
     discardQuestion: (branch: string) => `Jeter ${branch} ?`,
     discardText: (name: string, folder: string) => `Ses commits et ses modifs sont perdus pour de bon. ${name} continue dans ${folder}.`,
     discardConfirm: 'Jeter',
+    /** a branch of a Claude Desktop session (WorktreeInfo.borrowed) */
+    desktop: 'Ce dossier et cette branche sont ceux d’une session Claude Desktop : fusionner ou jeter la branche les retire aussi à Desktop.',
     cancel: 'Annuler',
     moved: (base: string) => `${base} a bougé depuis`,
     movedText: (name: string, base: string, behind: number | undefined) =>
@@ -83,6 +85,7 @@ export const branches = {
     keepText: 'Le travail reste sur la branche, le dossier est supprimé',
     discard: 'Tout jeter',
     discardText: 'Branche et dossier supprimés',
+    desktop: 'Cette branche vient de Claude Desktop : la fusionner, la garder ou tout jeter retire aussi son dossier à Desktop.',
     cancel: 'Annuler',
   },
   panel: {
