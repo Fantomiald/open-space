@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSy
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
@@ -31,6 +31,8 @@ const address = `http://127.0.0.1:${config.port}`;
 const logFile = path.join(config.dataDir, 'server.log');
 const boundsFile = path.join(app.getPath('userData'), 'window.json');
 const outFile = path.join(app.getPath('userData'), 'out-windows.json');
+/** how long the window stays still before where it is gets written down */
+const BOUNDS_SAVE_MS = 500;
 /** a window taken out of Open Space (src/state/out.ts): a session, a mod or a browser */
 const OUT_KEY = /^(session:[\w-]+|mod:[\w-]+|browser:[\w-]+:\d{1,2})$/;
 
@@ -117,23 +119,50 @@ function showBroken() {
   void window?.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(text)}`);
 }
 
-function readBounds(): Electron.Rectangle | undefined {
-  try { return JSON.parse(readFileSync(boundsFile, 'utf8')) as Electron.Rectangle; } catch { return undefined; }
+/** where the window was and whether it filled the screen */
+interface WindowSaved extends Electron.Rectangle { maximized?: boolean }
+
+/** The window as it was left; its place is dropped (the size kept) when no screen shows it any more. */
+function readBounds(): Partial<WindowSaved> | undefined {
+  let saved: Partial<WindowSaved> | null;
+  try { saved = JSON.parse(readFileSync(boundsFile, 'utf8')) as Partial<WindowSaved> | null; } catch { return undefined; }
+  const { x, y, width, height } = saved ?? {};
+  const isNumber = (value: unknown): value is number => Number.isFinite(value);
+  if (!(isNumber(x) && isNumber(y) && isNumber(width) && isNumber(height))) return undefined;
+  const maximized = saved?.maximized === true;
+  // its title bar must be on a screen, enough of it to grab
+  const seen = screen.getAllDisplays().some(({ workArea: area }) =>
+    x + width > area.x + 100 && x < area.x + area.width - 100 && y >= area.y - 10 && y < area.y + area.height - 40);
+  return seen ? { x, y, width, height, maximized } : { width, height, maximized };
+}
+
+/** Writes where the window is down: its size out of the maximized state, and that state (kept while minimized). */
+function saveBounds(current: BrowserWindow) {
+  const maximized = current.isMinimized() ? readBounds()?.maximized : current.isMaximized();
+  try { writeFileSync(boundsFile, JSON.stringify({ ...current.getNormalBounds(), maximized } satisfies WindowSaved)); } catch { /* not kept */ }
 }
 
 function showWindow() {
   if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); return; }
+  const { maximized, ...bounds } = readBounds() ?? {};
   window = new BrowserWindow({
-    width: 1440, height: 900, ...readBounds(), minWidth: 380, minHeight: 520,
+    width: 1440, height: 900, ...bounds, minWidth: 380, minHeight: 520,
     title: 'Open Space', backgroundColor: BACKGROUND, show: false,
     ...(process.platform === 'win32' ? { icon: avatarIcon ?? path.join(OUT, 'desktop', 'icon.png') } : {}),
     // plugins: Chromium's PDF viewer, for the PDFs the files explorer shows (the only plugin left)
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, plugins: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
   });
   const current = window;
-  current.once('ready-to-show', () => current.show());
+  // given again once the window exists: on Windows, a place on a screen scaled unlike the main one gets a wrong size
+  if (bounds.x !== undefined) current.setBounds(bounds);
+  current.once('ready-to-show', () => { if (maximized) current.maximize(); current.show(); });
+  // written as it changes too: an update or a shutdown can end the app without closing the window
+  let saving: NodeJS.Timeout | undefined;
+  const saveSoon = () => { clearTimeout(saving); saving = setTimeout(() => { if (!current.isDestroyed()) saveBounds(current); }, BOUNDS_SAVE_MS); };
+  current.on('move', saveSoon).on('resize', saveSoon).on('maximize', saveSoon).on('unmaximize', saveSoon);
   current.on('close', (event) => {
-    try { writeFileSync(boundsFile, JSON.stringify(current.getNormalBounds())); } catch { /* not kept */ }
+    clearTimeout(saving);
+    saveBounds(current);
     // Keep the page and its unread counts alive. The tray's Quit action stops sessions cleanly.
     if (process.platform === 'win32' && tray && !quitting) { event.preventDefault(); current.hide(); }
   });
