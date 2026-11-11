@@ -69,17 +69,16 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.32': {
-        title: 'Windows that tidy up, a clearer app',
+      '1.33': {
+        title: 'Your windows stay where you put them',
         items: {
-          windows: { title: 'Windows and mods tidy up as you drag', text: 'Drag a conversation or a mod onto the others: it joins the grid. Pull it out: it floats. No more Grid / Free switch.' },
-          list: { title: 'The list grouped your way', text: 'The filter icon groups by state or by project. Tags show in full, and in the All view each window names its project.' },
-          quota: { title: 'Two rings for your quota', text: 'The 5 hours and the week side by side in the header: no more hidden weekly limit.' },
-          settings: { title: 'Tidier settings', text: 'An Appearance section (radio you can turn off, first names you can hide in the room), and Automatons and connections in one place.' },
-          telegram: { title: 'A calmer Telegram', text: 'A session the bot starts in Remote Control no longer writes to you twice. /follow and /unfollow pick what you follow.' },
-          desktop: { title: 'Claude Desktop’s conversations', text: 'Resume lists them too, and picks them up in their folder and on their branch. A /clear also takes the old tags off.' },
+          windows: { title: 'Each mode keeps its layout', text: 'Go from focus mode to the room and back: your windows are where you left them. A click on the background closes what is docked in the grid, floating windows stay.' },
+          files: { title: 'Videos and PDFs to open', text: 'The files you send show in the conversation: a video plays large, a PDF opens in the viewer.' },
+          aside: { title: 'Reply aside', text: 'Under a side question (/btw), a Reply field keeps the exchange going, no need to type /btw again.' },
+          sessions: { title: '12 sessions, and room', text: 'Up to 12 sessions at once. At the limit, the one waiting the longest goes to sleep, and resumes on the next message.' },
+          mods: { title: 'A mod starts an automation', text: 'A button in a mod can start an automation, once you agree. Each run says whether it is running, waiting for you or done.' },
+          browsers: { title: 'Muted browsers', text: 'A video or a song an agent tests no longer plays on your speakers.' },
         },
-        thanks: 'Thanks to Quentin and Guillaume for their pull requests.',
       },
     },
     actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour' },

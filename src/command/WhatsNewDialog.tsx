@@ -3,7 +3,7 @@ import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useSessions } from '../state/sessions.ts';
 import { releaseToShow, type Release } from '../state/whats-new.ts';
-import { BranchIcon, CloseIcon, ExternalLinkIcon, FilterIcon, GaugeIcon, PaletteIcon, PhoneIcon, SparklesIcon, TidyIcon } from './Icons.tsx';
+import { AutomatonIcon, CloseIcon, ExternalLinkIcon, MessageIcon, PlayIcon, RestIcon, SoundOffIcon, SparklesIcon, TidyIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { REPOSITORY } from './SettingsDialog.tsx';
 import { type Art, ShowcaseArt } from './ShowcaseArt.tsx';
@@ -18,11 +18,11 @@ interface Item { id: string; icon: ComponentType; action?: Action }
 
 /** Each release's drawing and its points, in the order told; their words are in i18n (`showcase.whatsNew.releases`). */
 const LOOKS: Record<Release, { art: Art; items: readonly Item[] }> = {
-  '1.32': {
+  '1.33': {
     art: 'layout',
     items: [
-      { id: 'windows', icon: TidyIcon }, { id: 'list', icon: FilterIcon }, { id: 'quota', icon: GaugeIcon },
-      { id: 'settings', icon: PaletteIcon }, { id: 'telegram', icon: PhoneIcon }, { id: 'desktop', icon: BranchIcon },
+      { id: 'windows', icon: TidyIcon }, { id: 'files', icon: PlayIcon }, { id: 'aside', icon: MessageIcon },
+      { id: 'sessions', icon: RestIcon }, { id: 'mods', icon: AutomatonIcon, action: 'automata' }, { id: 'browsers', icon: SoundOffIcon },
     ],
   },
 };

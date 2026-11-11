@@ -41,7 +41,7 @@ const BellOnIcon = icon(Bell);
 const BellOffIcon = icon(BellOff);
 export const SoundIcon = ({ muted }: { muted: boolean }) => (muted ? <SoundOffIcon /> : <SoundOnIcon />);
 const SoundOnIcon = icon(Volume2);
-const SoundOffIcon = icon(VolumeX);
+export const SoundOffIcon = icon(VolumeX);
 export const PaperclipIcon = icon(Paperclip);
 export const ImageIcon = icon(Image);
 export const SearchIcon = icon(Search);

@@ -71,17 +71,16 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.32': {
-        title: 'Des fenêtres qui se rangent, une app plus claire',
+      '1.33': {
+        title: 'Tes fenêtres restent où tu les mets',
         items: {
-          windows: { title: 'Fenêtres et mods se rangent au glisser', text: 'Glisse une conversation ou un mod vers les autres : il se range dans la grille. Tire-le dehors : il flotte. Plus de bascule Grille / Libre.' },
-          list: { title: 'La liste groupée comme tu veux', text: 'L’icône filtre groupe par état ou par projet. Les tags s’affichent en entier, et en vue Tout chaque fenêtre dit son projet.' },
-          quota: { title: 'Deux anneaux pour ton quota', text: 'Les 5 heures et la semaine côte à côte dans l’en-tête : plus de limite hebdo cachée.' },
-          settings: { title: 'Des réglages mieux rangés', text: 'Une rubrique Apparence (radio à couper, prénoms à cacher dans la salle), et Automates et connexions au même endroit.' },
-          telegram: { title: 'Telegram plus calme', text: 'Une session lancée depuis le bot en Remote Control ne t’écrit plus deux fois. /follow et /unfollow choisissent ce que tu suis.' },
-          desktop: { title: 'Les conversations de Claude Desktop', text: 'Reprendre les liste aussi, et les reprend dans leur dossier et sur leur branche. Un /clear retire aussi les vieux tags.' },
+          windows: { title: 'Chaque mode garde sa disposition', text: 'Passe du focus à la salle et reviens : tes fenêtres sont où tu les as laissées. Un clic sur le fond ferme ce qui est rangé dans la grille, le libre reste.' },
+          files: { title: 'Vidéos et PDF à ouvrir', text: 'Les fichiers que tu envoies s’affichent dans la conversation : une vidéo se lit en grand, un PDF s’ouvre dans la visionneuse.' },
+          aside: { title: 'Réponds à côté', text: 'Sous une question à côté (/btw), un champ Répondre continue l’échange, sans repasser par /btw.' },
+          sessions: { title: '12 sessions, et de la place', text: 'Jusqu’à 12 sessions en même temps. À la limite, celle qui attend depuis le plus longtemps se met en veille, et reprend au message suivant.' },
+          mods: { title: 'Un mod lance un automate', text: 'Un bouton dans un mod peut démarrer un automate, après ton accord. Chaque run dit s’il est en cours, t’attend ou a fini.' },
+          browsers: { title: 'Des navigateurs muets', text: 'Une vidéo ou une musique qu’un agent teste ne sort plus dans tes haut-parleurs.' },
         },
-        thanks: 'Merci à Quentin et Guillaume pour leurs PR.',
       },
     },
     actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite' },

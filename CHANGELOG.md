@@ -1,5 +1,9 @@
 # Versions
 
+## 1.33.0
+
+- La fenêtre « Quoi de neuf » présente les nouveautés des 1.32.2 à 1.32.4 : chaque mode garde sa disposition, vidéos et PDF à ouvrir, réponse dans la question à côté, 12 sessions avec mise en veille, mods qui lancent un automate, navigateurs muets.
+
 ## 1.32.4
 
 - Un clic sur le fond ferme tout ce qui est rangé dans la grille, conversations et mods ; les fenêtres libres restent où elles sont.
