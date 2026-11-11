@@ -1,5 +1,10 @@
 # Versions
 
+## 1.33.1
+
+- La fenêtre se rouvre où on l'a laissée, à sa taille, maximisée ou non, même après une mise à jour ou un arrêt de Windows. Si son écran a été débranché, elle revient sur un écran visible (PR #46 de Quentin).
+- Windows : les mises à jour s'installent sans aucun écran et l'app se rouvre seule, comme sur Mac. Une ancienne install pour tous les utilisateurs est retirée une fois, les données restent (PR #47 de Quentin).
+
 ## 1.33.0
 
 - La fenêtre « Quoi de neuf » présente les nouveautés des 1.32.2 à 1.32.4 : chaque mode garde sa disposition, vidéos et PDF à ouvrir, réponse dans la question à côté, 12 sessions avec mise en veille, mods qui lancent un automate, navigateurs muets.
