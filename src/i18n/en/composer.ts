@@ -146,6 +146,7 @@ export const composer: Dictionary['composer'] = {
     several: 'Several choices allowed',
     other: 'Other answer',
     otherPlaceholder: 'Other answer…',
+    decline: 'Decline',
   },
   trust: {
     title: 'This folder runs code of its own',

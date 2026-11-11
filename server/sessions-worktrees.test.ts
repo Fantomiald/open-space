@@ -23,6 +23,7 @@ class FakeProcess implements ProcessHandle {
   constructor(launch: LaunchOptions, handlers: ProcessHandlers) { this.launch = launch; this.handlers = handlers; }
   send(text: string) { this.sent.push(text); return true; }
   answerPermission() {}
+  answerElicitation() {}
   refuseControl() {}
   interrupt() {}
   control() { return Promise.resolve({}); }

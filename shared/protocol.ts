@@ -49,7 +49,7 @@ export type OfficeEvent =
   /** a sub-agent finished its work */
   | { k: 'leave'; who: string; ok: boolean; tokens: number; tools: number; ms: number }
   /** questions = an AskUserQuestion call, answered with a reply instead of yes/no */
-  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[] }
+  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; declinable?: boolean }
   | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean }
   /** a turn ended */
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean }
@@ -138,12 +138,14 @@ export type SessionState = 'starting' | 'work' | 'perm' | 'wait' | 'done' | 'clo
 export interface QuestionOption { label: string; description: string }
 
 /** One question of an AskUserQuestion call (1 to 4 per call, 2 to 4 options each). */
-export interface Question { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }
+/** `hint`: what the question is about, under it (the description an MCP server gives a value). */
+export interface Question { question: string; header: string; options: QuestionOption[]; multiSelect: boolean; hint?: string }
 
 /** A tool call waiting for the user's yes or no, or, when `questions` is set, for the answers to an AskUserQuestion call. */
 /** `always`: what "Toujours" would allow for the rest of the session, in words (one line per rule). */
 /** `secrets`: the names of keys the agent asks for with `os-secret ask` (see shared/secrets.ts); `detail` is then what they are for. */
-export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[] }
+/** `declinable`: questions an MCP server asks (an elicitation), which the user may refuse to answer with a no. */
+export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; declinable?: boolean }
 
 /** Claude Code permission modes offered per session (bypassPermissions and dontAsk are left out on purpose). */
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'manual', 'plan'] as const;

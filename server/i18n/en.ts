@@ -101,6 +101,7 @@ export const en: ServerDictionary = {
     questionNotYesNo: 'This question needs an answer, not a yes or no.',
     requestYesNo: 'This request needs a yes or no.',
     chooseAnswer: 'Pick an answer before sending.',
+    notANumber: (label: string) => `“${label}” needs a number.`,
     killed: (signal: string) => `Claude Code was stopped (${signal}).`,
     exited: (code: number | null) => `Claude Code stopped (code ${code}).`,
     resumed: (title: string) => `Resumed “${title}”.`,
@@ -142,6 +143,8 @@ export const en: ServerDictionary = {
     prBubble: (base: string) => `Open a PR into ${base}`,
   },
   normalizer: {
+    yes: 'Yes',
+    no: 'No',
     peerUnknown: 'Another session',
     recipientUnknown: 'another session',
     sentTo: (recipient: string, text: string) => `→ ${recipient}: ${text}`,

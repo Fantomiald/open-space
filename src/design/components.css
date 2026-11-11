@@ -724,6 +724,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-question__recap[data-missing='true'] { border-style: dashed; color: var(--color-text-muted); }
 .cp-question__text { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: 1.3; text-wrap: balance; }
 .cp-question__hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+.cp-question__intro { display: grid; gap: var(--space-1); font-size: var(--text-md); white-space: pre-line; overflow-wrap: anywhere; }
 .cp-question__options { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
 /* every choice is a row: a mark (a dot, or a box when several choices are allowed), the label, what it means */
 .cp-question__option, .cp-question__other {

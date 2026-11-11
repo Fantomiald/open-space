@@ -15,6 +15,7 @@ const ADVANCE_MS = 220;
  */
 export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; prompt: PermissionPrompt }) {
   const answerQuestions = useSessions((s) => s.answerQuestions);
+  const answerPermission = useSessions((s) => s.answerPermission);
   const buttons = useAnswerButtons();
   const questions = prompt.questions ?? [];
   const [chosen, setChosen] = useState<Record<string, string[]>>({});
@@ -57,6 +58,7 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
   const words = t.composer.question;
   return (
     <form className="cp-question" aria-label={words.formLabel} onKeyDown={onKeyDown} onSubmit={(e) => { e.preventDefault(); if (current && many) go(step + 1); else send(); }}>
+      {prompt.declinable && prompt.detail && <div className="cp-question__intro"><span className="cp-question__topic">{prompt.tool}</span><p>{prompt.detail}</p></div>}
       {many && (
         <div className="cp-question__tabs" role="tablist" aria-label={words.tabs}>
           {questions.map((item, index) => (
@@ -95,6 +97,7 @@ export function QuestionPrompt({ sessionId, prompt }: { sessionId: string; promp
 
       <div className="cp-question__foot">
         {many && <button type="button" className="cp-button" disabled={step === 0} onClick={() => go(step - 1)}>{words.previous}</button>}
+        {prompt.declinable && <button type="button" className="cp-button" disabled={buttons.disabled} onClick={() => buttons.sent(answerPermission(sessionId, prompt.requestId, 'deny'))}>{words.decline}</button>}
         <span className="cp-question__status" aria-live="polite">
           {current && many ? words.stepOf(step + 1, questions.length) : missing === 0 ? words.ready : many ? words.stillMissing(missing) : words.pickOne}
         </span>
@@ -115,6 +118,7 @@ function QuestionStep({ item, picked, written, onPick, onWrite }: {
     <fieldset className="cp-question__item" role="tabpanel">
       <legend className="cp-sr-only">{item.header || words.question}</legend>
       <p className="cp-question__text">{item.question}</p>
+      {item.hint && <p className="cp-question__hint">{item.hint}</p>}
       {item.multiSelect && <p className="cp-question__hint">{words.several}</p>}
       <div className="cp-question__options" data-multiple={item.multiSelect === true}>
         {item.options.map((option) => (

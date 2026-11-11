@@ -148,6 +148,7 @@ export const composer = {
     several: 'Plusieurs choix possibles',
     other: 'Autre réponse',
     otherPlaceholder: 'Autre réponse…',
+    decline: 'Refuser',
   },
   trust: {
     title: 'Ce dossier fait tourner du code à lui',

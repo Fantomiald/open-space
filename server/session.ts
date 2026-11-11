@@ -14,7 +14,7 @@ import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport, quotaFromUsage } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
-import { Normalizer, describeRequest, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, elicitationContent, type ChromeSight, type ElicitationField, type ElicitationRequest, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
@@ -90,7 +90,8 @@ type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
 
 /** A request waiting for the user: what to send back, and what to show. */
 /** `given`: an `os-secret ask` (no tool call of Claude Code's), told the names given, or null when refused or cancelled */
-interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void }
+/** `fields`: an MCP server's elicitation, answered with an action and these values, not with a tool permission */
+interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void; fields?: ElicitationField[] }
 
 /** Session fields that are computed, not stored. */
 export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout' | 'suggestion'>;
@@ -453,6 +454,7 @@ export class Session {
       onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
       onRequest: (request) => this.onRequest(request),
+      onElicitation: (request) => this.onElicitation(request),
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
       onPartial: (who, text) => this.onPartial(who, text),
       onRemoteState: (state) => this.onRemoteState(state),
@@ -769,6 +771,26 @@ export class Session {
     this.deps.onAttention?.(ask.questions ? 'question' : 'permission', this.snapshot());
   }
 
+  /**
+   * An MCP server asks the user something: a yes or no when it wants no value (a confirmation, a page to open), else a
+   * question per value, which the user may also refuse.
+   */
+  private onElicitation(request: ElicitationRequest) {
+    const detail = [request.message, request.url].filter(Boolean).join('\n');
+    const questions = request.fields.map((field) => ({
+      question: field.label,
+      header: field.label,
+      ...(field.description ? { hint: field.description } : {}),
+      options: field.options.map((label) => ({ label, description: '' })),
+      multiSelect: false,
+    }));
+    const prompt: PermissionPrompt = { requestId: request.requestId, who: 'chef', tool: request.title, detail, canAlways: false, ...(questions.length ? { questions, declinable: true } : {}) };
+    this.requests.set(request.requestId, { input: {}, suggestions: [], prompt, fields: request.fields });
+    this.record({ k: 'ask', ...prompt });
+    this.apply({ type: 'permission_requested' });
+    this.deps.onAttention?.(questions.length ? 'question' : 'permission', this.snapshot());
+  }
+
   /** Removes one request (answered or withdrawn) and records how it ended. */
   private settle(requestId: string, done: Extract<OfficeEvent, { k: 'ask_done' }>) {
     if (!this.requests.delete(requestId)) return;
@@ -937,6 +959,12 @@ export class Session {
 
   answer(requestId: string, decision: PermissionDecision) {
     const request = this.pending(requestId);
+    if (request.fields) {
+      if (decision !== 'deny' && request.prompt.questions) throw new Error(st.sessions.questionNotYesNo);
+      this.process!.answerElicitation(requestId, decision === 'deny' ? { action: 'decline' } : { action: 'accept', content: {} });
+      this.settle(requestId, { k: 'ask_done', requestId, allow: decision !== 'deny' });
+      return;
+    }
     if (request.prompt.questions) throw new Error(st.sessions.questionNotYesNo);
     // a box for keys is only refused this way: they are given with secretsGiven
     if (request.given) {
@@ -959,6 +987,12 @@ export class Session {
     if (!request.prompt.questions) throw new Error(st.sessions.requestYesNo);
     const kept = Object.fromEntries(request.prompt.questions.flatMap(({ question }) => (answers[question]?.trim() ? [[question, answers[question].trim()]] : [])));
     if (Object.keys(kept).length === 0) throw new Error(st.sessions.chooseAnswer);
+    if (request.fields) {
+      const content = elicitationContent(request.fields, request.prompt.questions, kept);
+      this.process!.answerElicitation(requestId, { action: 'accept', content });
+      this.settle(requestId, { k: 'ask_done', requestId, allow: true });
+      return;
+    }
     this.process!.answerPermission(requestId, { allow: true, input: { ...request.input, answers: kept }, updates: [] });
     this.settle(requestId, { k: 'ask_done', requestId, allow: true });
   }
