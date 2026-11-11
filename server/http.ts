@@ -46,8 +46,8 @@ export interface WebServerOptions {
   log: (message: string, error?: unknown) => void;
   /** the sessions' browsers (see browser.ts) */
   /** what a session's os-secret asks for (server/secrets.ts), behind its key */
-  /** the user's mods: the folder the kit is served from, each mod's key and its files (server/mods.ts) */
-  mods?: { kitDir: string; key: (id: string) => string; file: (id: string, relative: string) => string | null };
+  /** the user's mods: the folder the kit is served from, the port they are served on, each mod's key and its files (server/mods.ts) */
+  mods?: { kitDir: string; port: number; key: (id: string) => string; file: (id: string, relative: string) => string | null };
   secrets?: {
     key: (sessionId: string) => string;
     known: (sessionId: string) => boolean;
@@ -103,15 +103,16 @@ const PAGE_CSP = [
 const bundledPageCsp = (files: string) => PAGE_CSP.replace('default-src https:', `default-src ${files} https:`).replace('connect-src https:', `connect-src ${files} https:`);
 /** An SVG a session sent is shown as a picture; opened on its own, it may not run anything either. */
 /**
- * A mod's page (shared/mods.ts): sandboxed like a published page, so with an origin of its own. It loads its own files
- * (`own`, its folder under the key that lets it in) and Open Space's kit (`kit`), and may reach the web like a page.
+ * A mod's page (shared/mods.ts), served on a port of its own under a name of its own (<mod>.localhost): an origin that
+ * is neither Open Space's nor another mod's, so its sandbox may keep it, which the players it embeds (YouTube…) need.
+ * It loads its files and the kit (`'self'`) and may reach the web like a page; only Open Space's page (`framers`) frames it.
  */
-const modCsp = (own: string, kit: string) => [
-  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms',
-  `default-src ${own} ${kit} https: data: blob: 'unsafe-inline' 'unsafe-eval'`, `connect-src ${own} https:`, "frame-ancestors 'self'", "base-uri 'none'",
+const modCsp = (framers: string) => [
+  'sandbox allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation',
+  "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'", "connect-src 'self' https:", `frame-ancestors ${framers}`, "base-uri 'none'",
 ].join('; ');
-/** A page without an origin reads its files and the kit's fonts across origins: the key in the address is what protects a mod's. */
-const ANY_ORIGIN = { 'Access-Control-Allow-Origin': '*' };
+/** Where a mod's page is served: <mod>.localhost on the mods port (any *.localhost reaches the loopback). */
+const MOD_HOST = /^([a-z0-9][a-z0-9-]{0,39})\.localhost:(\d+)$/;
 const SVG_CSP = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
 /** What claude.ai wraps a published page in (the page starts with its own <title> and <style>, without <html> nor <head>). */
 const PAGE_SKELETON = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -147,6 +148,7 @@ export function createWebServer(options: WebServerOptions) {
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${SPOTIFY_ARTWORK}`,
     "font-src 'self' data:", "media-src 'self' blob: data: https:", "worker-src 'self' blob:",
     `connect-src 'self' ws://localhost:${port} ws://127.0.0.1:${port}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
+    ...(options.mods ? [`frame-src 'self' http://*.localhost:${options.mods.port}`] : []),
   ].join('; ');
 
   /** A file sent whole, or the one range asked for ("bytes=start-end", "bytes=start-", "bytes=-suffix"). */
@@ -349,33 +351,36 @@ export function createWebServer(options: WebServerOptions) {
   }
 
   /**
-   * /mods/<key>/<mod>/<file>: a file of a mod's folder, to its page (no cookie: the key, in the address the page was
-   * given, lets it in). Asked again each time: its session changes it. /mod-kit/<file>: the kit every mod loads.
+   * The mods port, under <mod>.localhost: /mods/<key>/<mod>/<file>, a file of that mod's folder, to its page (no cookie:
+   * the key, in the address the page was given, lets it in), asked again each time since its session changes it;
+   * /mod-kit/<file>, the kit every mod loads.
    */
-  async function serveMod(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+  async function serveMod(req: http.IncomingMessage, res: http.ServerResponse) {
     const mods = options.mods;
+    const url = parseRequestUrl(req.url);
+    const named = MOD_HOST.exec(String(req.headers.host).toLowerCase());
+    if (!mods || !url || !named || Number(named[2]) !== mods.port || (req.method !== 'GET' && req.method !== 'HEAD')) { res.writeHead(404).end(); return; }
     let parts: string[];
     try { parts = url.pathname.split('/').slice(1).map(decodeURIComponent); } catch { res.writeHead(400).end(); return; }
-    if (!mods || (req.method !== 'GET' && req.method !== 'HEAD')) { res.writeHead(404).end(); return; }
     if (parts[0] === 'mod-kit') {
       const file = resolveInside(mods.kitDir, parts.slice(1).join('/'));
       if (!file || !statSync(file).isFile()) { res.writeHead(404).end(); return; }
-      await serveFile(file, res, { 'Cache-Control': 'no-cache', ...ANY_ORIGIN });
+      await serveFile(file, res, { 'Cache-Control': 'no-cache' });
       return;
     }
-    const [, key = '', id = '', ...rest] = parts;
-    const file = isModId(id) && secretsMatch(mods.key(id), key) ? mods.file(id, rest.join('/')) : null;
+    const [root = '', key = '', id = '', ...rest] = parts;
+    const file = root === 'mods' && id === named[1] && isModId(id) && secretsMatch(mods.key(id), key) ? mods.file(id, rest.join('/')) : null;
     if (!file) { res.writeHead(404).end(); return; }
-    const host = `http://${req.headers.host}`;
     if (file.endsWith('.html')) {
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store',
-        'Content-Security-Policy': modCsp(`${host}/mods/${key}/${id}/`, `${host}/mod-kit/`), 'Referrer-Policy': 'no-referrer',
+        // its origin only, never the key in its path: a player (YouTube) refuses to play for a page that sends none
+        'Content-Security-Policy': modCsp([...policy.allowedOrigins].join(' ')), 'Referrer-Policy': 'strict-origin',
       });
       res.end(await readFile(file));
       return;
     }
-    await serveFile(file, res, { 'Cache-Control': 'no-store', ...ANY_ORIGIN, ...(file.endsWith('.svg') ? { 'Content-Security-Policy': SVG_CSP } : {}) });
+    await serveFile(file, res, { 'Cache-Control': 'no-store', ...(file.endsWith('.svg') ? { 'Content-Security-Policy': SVG_CSP } : {}) });
   }
 
   async function route(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -429,7 +434,6 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }
-    if (url.pathname.startsWith('/mods/') || url.pathname.startsWith('/mod-kit/')) { await serveMod(req, res, url); return; }
     if (url.pathname.startsWith('/browser/')) { await serveBrowser(req, res, url); return; }
     if (url.pathname.startsWith('/secrets/')) { await serveSecrets(req, res, url); return; }
     if (url.pathname.startsWith('/sounds/')) {
@@ -504,5 +508,14 @@ export function createWebServer(options: WebServerOptions) {
   // a malformed request or a reset socket must never take the bridge down
   server.on('clientError', (_error, socket) => { socket.destroy(); });
 
-  return { server, wss, hooksServer };
+  // the mods alone, each under a name of its own (see serveMod)
+  const modsServer = http.createServer((req, res) => {
+    serveMod(req, res).catch((error: unknown) => {
+      log(`mod request failed: ${String(req.url).slice(0, 200)}`, error);
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
+  });
+
+  return { server, wss, hooksServer, modsServer };
 }

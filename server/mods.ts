@@ -15,8 +15,10 @@ import { moveToTrash } from './trash.ts';
 
 /** The folder the mods live in; sessions may run in it, beside the user's own folders. */
 export const modsFolder = (dataDir: string) => path.join(dataDir, 'mods');
-/** What lets a mod's page in, without a cookie (its sandbox gives it an origin of its own): part of its address. */
+/** What lets a mod's page in, without a cookie: part of its address. */
 export const modKey = (secret: string, id: string) => createHmac('sha256', secret).update(`mod:${id}`).digest('hex').slice(0, 32);
+/** Where a mod's page is served: under a name of its own, so with an origin of its own (see server/http.ts) */
+export const modUrl = (secret: string, id: string, port: number) => `http://${id}.localhost:${port}/mods/${modKey(secret, id)}/${id}/`;
 
 const GUIDE = 'GUIDE.md';
 /** in each mod's folder: the address its page is served at, for its session to test it (never served: it starts with a dot) */
@@ -62,8 +64,8 @@ export interface ModsOptions {
   /** OFFICE_DIR/mods-env.json */
   envFile: string;
   secret: string;
-  /** where Open Space answers (http://127.0.0.1:<port>): a mod's address, for its session to open it in its browser */
-  origin: string;
+  /** the port the mods' pages are served on (config.modsPort) */
+  port: number;
   onChange: (mods: ModInfo[]) => void;
   log: (message: string, error?: unknown) => void;
 }
@@ -189,7 +191,7 @@ export class Mods {
       let raw: unknown = null;
       try { raw = JSON.parse(readFileSync(manifest, 'utf8')); } catch { /* being written */ }
       mods.push({
-        ...readManifest(raw, id), id, folder: own, url: `/mods/${modKey(secret, id)}/${id}/`,
+        ...readManifest(raw, id), id, folder: own, url: modUrl(secret, id, this.options.port),
         version: changedAt(own) ?? 0,
         unread: hasNewData(changedAt(path.join(own, MOD_DATA_FOLDER)), this.seen[id]),
         envSet: Object.keys(this.env[id] ?? {}).sort(),
@@ -268,7 +270,7 @@ export class Mods {
   }
 
   private writeAddress(mod: ModInfo) {
-    try { writeFileSync(path.join(mod.folder, ADDRESS), `${this.options.origin}${mod.url}\n`); } catch (error) { this.options.log(`cannot write the address of mod ${mod.id}`, error); }
+    try { writeFileSync(path.join(mod.folder, ADDRESS), `${mod.url}\n`); } catch (error) { this.options.log(`cannot write the address of mod ${mod.id}`, error); }
   }
 
   private saveEnv = () => writeFile(this.options.envFile, `${JSON.stringify(this.env)}\n`, { mode: 0o600 });

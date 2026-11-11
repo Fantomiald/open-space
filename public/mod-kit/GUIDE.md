@@ -19,9 +19,10 @@ Un mod est une petite fenêtre flottante d'Open Space. Tu travailles dans **son 
 1. Lis la demande, puis ce fichier en entier.
 2. Remplis `mod.json` (nom, description, icône, taille qui convient au contenu). Laisse `draft: true` pendant que tu travailles : la fenêtre affiche « en fabrication ».
 3. Écris `index.html` avec les composants ci-dessous. Une donnée externe (une API) : deux façons.
-   - **Depuis la page**, si l'API accepte les appels d'un navigateur (CORS ouvert ; la page a une origine `null`) : déclare la clé dans `env` de `mod.json`, lis-la avec `await OpenSpace.env()` et appelle l'API en `https`. Branche le rechargement avec `OpenSpace.onRefresh`. Sans clé remplie, affiche un `<os-empty>` qui dit d'ouvrir les réglages du mod (l'engrenage de sa fenêtre) pour la donner.
+   - **Depuis la page**, si l'API accepte les appels d'un navigateur (CORS ouvert ; la page a son origine à elle, `http://<id>.localhost:<port>`) : déclare la clé dans `env` de `mod.json`, lis-la avec `await OpenSpace.env()` et appelle l'API en `https`. Branche le rechargement avec `OpenSpace.onRefresh`. Sans clé remplie, affiche un `<os-empty>` qui dit d'ouvrir les réglages du mod (l'engrenage de sa fenêtre) pour la donner.
    - **Par un script**, si l'API refuse les navigateurs : demande la clé avec `os-secret ask NOM --why "…"`, écris un petit script qui dépose les données dans `data/`, et dis à l'utilisateur comment il tourne (un déclencheur Open Space, par exemple).
    Dans les deux cas, jamais de clé dans un fichier du dossier.
+   Un contenu d'un autre site (une vidéo YouTube, une playlist Spotify, une carte) : son lecteur intégré, dans une `<iframe>` en `https` (l'adresse « embed » que le site donne pour l'intégrer ailleurs). Un site qui refuse d'être intégré (`X-Frame-Options`, `frame-ancestors`) reste vide dans une iframe, et sa connexion aussi : propose plutôt un lien qui l'ouvre dans le navigateur.
 4. Teste : ouvre la page dans ton navigateur à **trois largeurs**, 260, 400 et 720 px (`browser_resize`), vérifie qu'aucun texte ne déborde, qu'aucune barre de défilement horizontale n'apparaît, que les états vide et erreur s'affichent. L'adresse de la page est dans le fichier `.address` du dossier (sans cookie : elle marche dans ton navigateur). Hors d'Open Space, la page prend le style classique et ne reçoit pas les données d'`OpenSpace.watch` : teste la mise en page avec des données d'exemple, puis retire-les.
 5. Passe `draft` à `false`. Le mod apparaît dans la fenêtre de l'utilisateur.
 6. Dis en une ou deux phrases ce que fait le mod, et d'où viennent ses données.
@@ -37,7 +38,7 @@ Pour modifier un mod plus tard, la même règle : l'utilisateur te le demande da
 - **Toutes les largeurs** : de 240 à 960 px, le kit s'adapte (il mesure le mod, pas l'écran). N'impose pas de largeur fixe.
 - **Les trois états** : chargement (`<os-loading>`), vide (`<os-empty>`), erreur (`<os-error>`). Jamais une page blanche ni un « undefined ».
 - **Pas de bibliothèque externe** quand le kit suffit. Si une vraie raison l'impose, une seule, depuis un CDN en `https`, version figée.
-- **Pas de secret dans le dossier** : les clés passent par `env` et `OpenSpace.env()`. Pas d'appel à Open Space autre que ceux du kit : la page n'a ni cookie ni accès au serveur, c'est voulu.
+- **Pas de secret dans le dossier** : les clés passent par `env` et `OpenSpace.env()`. Pas d'appel à Open Space autre que ceux du kit : la page est servie à part, sans cookie ni accès au serveur d'Open Space, c'est voulu.
 - **Les textes dans la langue de l'utilisateur**, courts, sans emoji.
 - Formate nombres, sommes, dates et durées avec `OpenSpace.format` (il suit la langue d'Open Space).
 
@@ -101,7 +102,7 @@ Les composants sont des balises `os-*`. Les données passent en attribut JSON (`
 - `OpenSpace.data(nom)` : la même chose une seule fois (une promesse).
 - `OpenSpace.env()` : les variables que l'utilisateur a remplies dans les réglages du mod, `{ NOM: valeur }` (une promesse, relue à chaque appel ; `{}` hors d'Open Space). Une variable vide n'y est pas.
 - `OpenSpace.onRefresh(() => …)` : appelé quand la fenêtre rafraîchit le mod (son bouton ↻, ou le rythme `refresh`). Sans lui, la fenêtre recharge la page entière. Recharge tes données dedans, sans effacer ce qui est affiché avant d'avoir la réponse. Renvoie une promesse (une fonction `async`) : le bouton ↻ tourne jusqu'à ce qu'elle se termine. `onRefresh` renvoie de quoi arrêter.
-- `OpenSpace.store` : ce que le mod enregistre (une liste cochée, des réglages), gardé par Open Space dans son dossier (`.store/`, à ne pas écrire toi-même) et retrouvé à la réouverture. `await OpenSpace.store.get('nom')` (null si rien), `OpenSpace.store.set('nom', valeur)` (JSON, 256 Ko au plus, nom en lettres, chiffres, `-` et `_`), `OpenSpace.store.watch('nom', (valeur) => …)` pour suivre les autres fenêtres du même mod (renvoie de quoi arrêter). `localStorage` et IndexedDB ne marchent pas dans un mod.
+- `OpenSpace.store` : ce que le mod enregistre (une liste cochée, des réglages), gardé par Open Space dans son dossier (`.store/`, à ne pas écrire toi-même) et retrouvé à la réouverture. `await OpenSpace.store.get('nom')` (null si rien), `OpenSpace.store.set('nom', valeur)` (JSON, 256 Ko au plus, nom en lettres, chiffres, `-` et `_`), `OpenSpace.store.watch('nom', (valeur) => …)` pour suivre les autres fenêtres du même mod (renvoie de quoi arrêter). Préfère-le à `localStorage` : celui-ci reste dans un seul navigateur et repart à zéro si l'adresse du mod change.
 - `OpenSpace.format` : `number`, `compact` (1,3 k), `money(v, 'USD')`, `percent(0.62)`, `ago(date)`, `duration(minutes)`, `date(date)`.
 - `OpenSpace.h(tag, attributs, ...enfants)` : crée un élément.
 - `OpenSpace.ready` : une promesse tenue une fois le thème appliqué.

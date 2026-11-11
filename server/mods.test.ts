@@ -14,7 +14,7 @@ writeFileSync(path.join(kitDir, 'GUIDE.md'), '# the rules\n');
 writeFileSync(path.join(kitDir, 'starter.html'), '<!doctype html><os-loading></os-loading>\n');
 
 async function prepared(name: string, changes: ModInfo[][] = []) {
-  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), envFile: path.join(base, name, 'env.json'), secret: 'secret', origin: 'http://127.0.0.1:4848', onChange: (list) => changes.push(list), log: () => {} });
+  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), envFile: path.join(base, name, 'env.json'), secret: 'secret', port: 4850, onChange: (list) => changes.push(list), log: () => {} });
   await mods.prepare();
   after(() => mods.stop());
   return mods;
@@ -47,9 +47,9 @@ describe('mods folder', () => {
     const made = mods.create('Mes ventes du jour');
     assert.equal(made.id, 'mes-ventes-jour');
     assert.equal(made.draft, true);
-    assert.equal(made.url, `/mods/${modKey('secret', made.id)}/mes-ventes-jour/`);
+    assert.equal(made.url, `http://mes-ventes-jour.localhost:4850/mods/${modKey('secret', made.id)}/mes-ventes-jour/`);
     assert.match(readFileSync(path.join(made.folder, 'index.html'), 'utf8'), /os-loading/);
-    assert.equal(readFileSync(path.join(made.folder, '.address'), 'utf8').trim(), `http://127.0.0.1:4848${made.url}`);
+    assert.equal(readFileSync(path.join(made.folder, '.address'), 'utf8').trim(), made.url);
     assert.equal(mods.create('Mes ventes du jour').id, 'mes-ventes-jour-2');
     assert.equal(changes.at(-1)?.length, 2, 'the pages are told');
   });

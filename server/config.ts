@@ -1,6 +1,7 @@
 // Runtime configuration, read from environment variables once at startup.
 //   PORT                  bridge port (default 4848)
 //   OFFICE_HOOKS_PORT     the port that only answers webhooks, for a tunnel (default: PORT + 1)
+//   OFFICE_MODS_PORT      the port the mods' pages are served on, each under <mod>.localhost (default: PORT + 2)
 //   OFFICE_ROOTS          folders sessions may run in, separated like PATH (default: the ones chosen in the page, settings.json)
 //   OFFICE_DIR            where sessions and their logs are stored (default: ~/.open-space)
 //   OFFICE_MAX_LIVE       maximum number of claude processes alive at once (default: 8)
@@ -14,6 +15,7 @@ import { expandHomePath } from '../shared/paths.ts';
 export interface Config {
   port: number;
   hooksPort: number;
+  modsPort: number;
   /** the folders sessions may run in: OFFICE_ROOTS, or else the user's choice (set by index.ts from the settings) */
   roots: string[];
   /** set by OFFICE_ROOTS: the page cannot change them */
@@ -37,6 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, home: string, exists: (folder
   return {
     port,
     hooksPort: positiveInteger(env.OFFICE_HOOKS_PORT, port + 1),
+    modsPort: positiveInteger(env.OFFICE_MODS_PORT, port + 2),
     roots,
     rootsLocked: roots.length > 0,
     dataDir: path.resolve(expandHomePath(env.OFFICE_DIR ?? '~/.open-space', home)),

@@ -164,7 +164,8 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
   // what the page asks for, told again whenever it changes, until the page stops asking or the window closes
   useEffect(() => {
     const watched = new Map<ModData, () => void>();
-    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, '*');
+    // to the mod's own origin only: its variables never reach a page it navigated to
+    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, new URL(mod.url).origin);
     const tellTheme = () => post({ openSpace: 'theme', ...currentTheme() });
     const tell = (name: ModData) => post({ openSpace: 'data', name, value: dataFor(name, useSessions.getState()) });
     const envWaits = new Set<() => void>();
@@ -228,7 +229,7 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
       for (const stop of envWaits) stop();
       pageRefresh.current = null;
     };
-  }, [loads, mod.version, mod.id, send]);
+  }, [loads, mod.version, mod.id, mod.url, send]);
 
   const grab = (edge: Edge | null, event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || (!edge && (event.target as HTMLElement).closest(INTERACTIVE))) return;
@@ -298,7 +299,9 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
       ) : (
         <iframe
           key={`${mod.version}:${loads}`} ref={frame} className="cp-mod__page" title={mod.name} src={`${mod.url}?v=${mod.version}`}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms" referrerPolicy="no-referrer" onLoad={() => refreshed.current()}
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation"
+          allow="fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write"
+          referrerPolicy="no-referrer" onLoad={() => refreshed.current()}
         />
       ))}
       {!folded && !detached && !docked && <FreeHandles onPull={grab} />}

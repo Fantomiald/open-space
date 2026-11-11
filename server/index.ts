@@ -430,13 +430,13 @@ const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences
 prepareSounds(config.dataDir, log);
 /** the kit the mods load, and the guide their sessions read: beside the page once built, in public/ while developing */
 const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
-const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, origin: `http://${HOST}:${config.port}`, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
+const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, port: config.modsPort, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
 await mods.prepare();
-const { server, hooksServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
-  mods: { kitDir: MOD_KIT, key: (id) => modKey(secret, id), file: (id, relative) => mods.file(id, relative) },
+  mods: { kitDir: MOD_KIT, port: config.modsPort, key: (id) => modKey(secret, id), file: (id, relative) => mods.file(id, relative) },
   secrets: {
     key: (sessionId) => secretsKey(secret, sessionId),
     known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
@@ -768,12 +768,15 @@ server.once('error', (error: NodeJS.ErrnoException) => {
 
 // a port taken there only leaves the webhooks without their tunnel's door: Open Space runs on
 hooksServer.on('error', (error) => log(`webhooks port ${config.hooksPort}`, error));
+// and one taken there only leaves the mods' windows empty
+modsServer.on('error', (error) => log(`mods port ${config.modsPort}`, error));
 
 server.listen(config.port, HOST, () => {
   hooksServer.listen(config.hooksPort, HOST, () => {
     hooksPort = config.hooksPort;
     broadcast(triggersMessage());
   });
+  modsServer.listen(config.modsPort, HOST);
   const address = `http://${HOST}:${DEV ? DEV_PORT : config.port}`;
   const pairLink = `${address}/pair?secret=${secret}`;
   console.log('');
