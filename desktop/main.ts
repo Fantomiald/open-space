@@ -99,8 +99,8 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
     });
     child.once('exit', (code) => {
       bridge = null;
-      // the sessions are saved: Squirrel replaces the app and opens the new one
-      if (installing) { electronUpdater.autoUpdater.quitAndInstall(); return; }
+      // the sessions are saved: Squirrel (Mac) or the silent NSIS installer (Windows) replaces the app and opens the new one
+      if (installing) { electronUpdater.autoUpdater.quitAndInstall(true, true); return; }
       if (quitting) { app.quit(); return; }
       log(`  !  the bridge stopped (${code})`);
       if (Date.now() - startedAt < STEADY_AFTER_MS) { reject(new Error(`exit ${code}`)); return; }
