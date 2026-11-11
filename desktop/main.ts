@@ -124,13 +124,16 @@ interface WindowSaved extends Electron.Rectangle { maximized?: boolean }
 
 /** The window as it was left; its place is dropped (the size kept) when no screen shows it any more. */
 function readBounds(): Partial<WindowSaved> | undefined {
-  let saved: WindowSaved;
-  try { saved = JSON.parse(readFileSync(boundsFile, 'utf8')) as WindowSaved; } catch { return undefined; }
-  const { x, y, width, height, maximized } = saved;
+  let saved: Partial<WindowSaved> | null;
+  try { saved = JSON.parse(readFileSync(boundsFile, 'utf8')) as Partial<WindowSaved> | null; } catch { return undefined; }
+  const { x, y, width, height } = saved ?? {};
+  const isNumber = (value: unknown): value is number => Number.isFinite(value);
+  if (!(isNumber(x) && isNumber(y) && isNumber(width) && isNumber(height))) return undefined;
+  const maximized = saved?.maximized === true;
   // its title bar must be on a screen, enough of it to grab
   const seen = screen.getAllDisplays().some(({ workArea: area }) =>
     x + width > area.x + 100 && x < area.x + area.width - 100 && y >= area.y - 10 && y < area.y + area.height - 40);
-  return seen ? saved : { width, height, maximized };
+  return seen ? { x, y, width, height, maximized } : { width, height, maximized };
 }
 
 /** Writes where the window is down: its size out of the maximized state, and that state (kept while minimized). */
@@ -150,6 +153,8 @@ function showWindow() {
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: true, plugins: true, preload: path.join(OUT, 'desktop', 'preload.cjs') },
   });
   const current = window;
+  // given again once the window exists: on Windows, a place on a screen scaled unlike the main one gets a wrong size
+  if (bounds.x !== undefined) current.setBounds(bounds);
   current.once('ready-to-show', () => { if (maximized) current.maximize(); current.show(); });
   // written as it changes too: an update or a shutdown can end the app without closing the window
   let saving: NodeJS.Timeout | undefined;
