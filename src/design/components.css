@@ -29,7 +29,7 @@ h1, h2, p { margin: 0; }
 /* the pixel sky behind everything (src/room/sky.ts), over the plain gradient it stands in for */
 .cp-sky { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
 /* what floats over the room: frosted glass (see --glass-surface in tokens.css) */
-.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools, .cp-radio, .cp-status, .cp-server-empty {
+.cp-header__where, .cp-header__projects, .cp-header__tools, .cp-radio, .cp-status, .cp-server-empty, .cp-server-card {
   background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow);
 }
 /*
@@ -38,19 +38,20 @@ h1, h2, p { margin: 0; }
  * projects (when the sessions work in two folders or more), the radio; right: the tools.
  */
 .cp-header {
-  position: relative; z-index: 2;
+  /* over the windows placed by hand (z-index 4): the usage details and the radio's menu open over them */
+  position: relative; z-index: 5;
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gutter);
   padding: var(--gutter) var(--gutter) 0;
 }
-.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools, .cp-radio { height: var(--pill-height); border-radius: 999px; display: flex; align-items: center; flex-wrap: nowrap; }
+.cp-header__where, .cp-header__projects, .cp-header__tools, .cp-radio { height: var(--pill-height); border-radius: 999px; display: flex; align-items: center; flex-wrap: nowrap; }
 /* inside a pill, controls are --control-height high and sit as far from its edge top and bottom as at its ends */
-.cp-header__where, .cp-header__projects, .cp-header__windows, .cp-header__tools { gap: var(--space-1); padding: 0 var(--pill-inset); }
+.cp-header__where, .cp-header__projects, .cp-header__tools { gap: var(--space-1); padding: 0 var(--pill-inset); }
 .cp-header__where { gap: var(--space-2); }
 .cp-header__where:has(.cp-header__signal) { padding-left: var(--space-3); }
 .cp-header :is(.cp-button, .cp-icon-button, .cp-quota__trigger) { height: var(--control-height); padding-top: 0; padding-bottom: 0; }
 .cp-header .cp-icon-button { width: var(--control-height); }
-:is(.cp-header__where, .cp-header__projects, .cp-header__windows) .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
-:is(.cp-header__where, .cp-header__projects, .cp-header__windows) .cp-segmented button { height: 100%; }
+:is(.cp-header__where, .cp-header__projects) .cp-segmented { height: var(--control-height); padding: 0; border: 0; background: none; }
+:is(.cp-header__where, .cp-header__projects) .cp-segmented button { height: 100%; }
 /* the projects: as many as there are folders, so the pill scrolls sideways past what fits rather than pushing the tools down */
 .cp-header__projects { flex: 0 1 auto; min-width: 8rem; max-width: 20rem; overflow-x: auto; scrollbar-width: none; }
 .cp-header__projects .cp-segmented { flex: none; }
@@ -59,7 +60,6 @@ h1, h2, p { margin: 0; }
 /* between the two rooms and focus mode: two ways of looking, not three rooms. Same margins whichever is pressed, so the pill keeps its width. */
 .cp-header__divider { align-self: center; flex: none; width: var(--border-width); height: 1rem; margin: 0 var(--space-1); background: var(--glass-edge); }
 /* the windows can only be moved on a wide screen: the switch between grid and free windows shows there only */
-@media (max-width: 60rem) { .cp-header__windows { display: none; } }
 .cp-header__title { font-size: var(--text-md); font-weight: var(--weight-bold); letter-spacing: 0.01em; }
 /* a status light, shown only while the bridge is lost or coming back */
 .cp-header__signal { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--tone-idle); box-shadow: 0 0 0 3px var(--tone-idle-soft); }
@@ -89,7 +89,8 @@ h1, h2, p { margin: 0; }
   transition: background var(--duration) var(--easing), border-color var(--duration) var(--easing);
 }
 .cp-quota:hover .cp-quota__trigger, .cp-quota__trigger:focus-visible { background: var(--color-surface); border-color: var(--color-border); }
-/* the ring fills its outline as the five hours are used, the number in its middle */
+/* each ring fills its outline as its window is used (five hours, then the week), the number in its middle */
+.cp-quota__trigger { gap: var(--space-1); }
 .cp-quota__ring { position: relative; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; --meter-colour: var(--tone-work); }
 .cp-quota__ring[data-level='rising'] { --meter-colour: var(--tone-permission); }
 .cp-quota__ring[data-level='high'] { --meter-colour: var(--tone-error); }
@@ -168,8 +169,8 @@ h1, h2, p { margin: 0; }
   .cp-main:not([data-view='focus']) > .cp-stack[data-placed='true'] { grid-column: 1 / -1; justify-self: stretch; width: auto; margin: var(--gutter); }
   .cp-main > .cp-stack[data-placed='true'] { pointer-events: none; }
   .cp-main > .cp-stack[data-placed='true'] > * { pointer-events: auto; }
-  /* placed by hand, the windows may cover the status card */
-  .cp-main > .cp-stack[data-mode='free'] { z-index: 4; }
+  /* floating, the windows may cover the status card */
+  .cp-main > .cp-stack[data-placed='true'] { z-index: 4; }
   .cp-stack[data-columns='2'] { --columns: 2; }
   .cp-stack[data-columns='3'] { --columns: 3; }
   /* focus mode: the session list on the left, the windows (or the launcher) fill the rest */
@@ -210,6 +211,7 @@ h1, h2, p { margin: 0; }
   .cp-main[data-detail='false'] > .cp-main__content { min-height: 9rem; }
   .cp-main[data-detail='false'] ~ .cp-status { order: 2; position: static; width: auto; margin: 0 var(--gutter); flex: none; }
   .cp-main[data-detail='false'] ~ .cp-status .cp-status__body { max-height: 20vh; }
+  .cp-status__resize { display: none; }
   /* resuming: the conversations to pick from take the status card's room */
   .cp-main[data-detail='false']:has(.cp-resume__list) ~ .cp-status { display: none; }
   .cp-main[data-detail='false'] > .cp-launcher { order: 3; flex: none; margin: 0 var(--gutter); }
@@ -232,6 +234,7 @@ h1, h2, p { margin: 0; }
   /* the session's name and its controls share the first line; its state goes under the name rather than push the close button out */
   .cp-detail .cp-detail__title { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--space-1); }
   .cp-detail .cp-detail__title > .cp-badge { grid-row: 2; justify-self: start; }
+  .cp-detail .cp-detail__title > .cp-detail__project { display: none; }
   .cp-detail__title .cp-detail__controls { grid-row: 1; grid-column: 2; gap: 2px; }
   .cp-detail__title .cp-detail__controls .cp-icon-button { width: var(--control-height); height: var(--control-height); }
   /* reduced to its dot, the state fits beside the name */
@@ -357,7 +360,7 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) { .cp-stack[data-gliding='true'] > .cp-stack__slot { transition: none; } }
 /* a window carried by its title bar (or by Alt+drag): it follows the pointer, lifted, over the place it would land in */
 .cp-stack[data-dragging='true'] { user-select: none; cursor: grabbing; }
-.cp-stack__slot[data-carried] { z-index: 3; }
+.cp-stack__slot[data-carried] { z-index: 60; }
 .cp-stack[data-gliding='true'] > .cp-stack__slot[data-carried] { transition: none; }
 .cp-stack__slot[data-carried]::before {
   content: ''; position: absolute; inset: 0; border-radius: var(--radius-xl); border: var(--border-width) dashed var(--glass-edge); background: rgb(255 255 255 / 0.04);
@@ -376,11 +379,13 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-stack:has(.cp-stack__gutter[data-pulling]) { user-select: none; }
 .cp-stack:has(.cp-stack__gutter[data-pulling]) > .cp-stack__slot { transition: none; }
 /* free windows: the front one last (--z), lifted while carried, with the zone of the screen and the magnets' guides drawn */
-.cp-stack[data-mode='free'] > .cp-stack__slot { z-index: var(--z, 1); }
-.cp-stack[data-mode='free'] > .cp-stack__slot[data-zoomed='true'] { z-index: 50; }
-.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried] { z-index: 60; }
-.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried]::before { content: none; }
-.cp-stack[data-mode='free'] > .cp-stack__slot[data-carried] > * { translate: none; }
+/* a floating window over the docked ones, the last one touched in front; carried as floating, it follows the pointer itself */
+.cp-stack__slot[data-floating] { z-index: var(--z, 1); }
+.cp-stack__slot[data-zoomed='true'] { z-index: 50; }
+.cp-stack__slot[data-carried] { z-index: 60; }
+.cp-stack__slot:is([data-floating], [data-afloat])[data-carried]::before { content: none; }
+.cp-stack__slot:is([data-floating], [data-afloat])[data-carried] > * { translate: none; }
+.cp-stack[data-gliding='true'] > .cp-stack__slot[data-afloat] { transition: none; }
 .cp-stack[data-gliding='true'] > .cp-stack__slot[data-resizing] { transition: none; }
 .cp-stack__handle { position: absolute; z-index: 2; touch-action: none; }
 .cp-stack__handle[data-edge='n'] { top: -3px; left: 12px; right: 12px; height: 6px; cursor: ns-resize; }
@@ -454,8 +459,17 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .cp-detail__title { display: flex; align-items: center; gap: var(--space-3); }
 .cp-detail__title h2 { display: flex; align-items: center; gap: var(--space-1); font-size: var(--text-xl); min-width: 0; }
 .cp-detail__name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* its project, while the header shows every project: quiet, beside the name */
+.cp-detail__project {
+  display: inline-flex; align-items: center; gap: var(--space-1); flex: none; max-width: 9rem; height: var(--badge-height); padding: 0 var(--space-2);
+  border-radius: 999px; border: var(--border-width) solid var(--color-border); color: var(--color-text-muted); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cp-detail__project .cp-icon { width: 0.75rem; height: 0.75rem; flex: none; }
 .cp-detail__controls { margin-left: auto; display: flex; gap: var(--space-1); }
 .cp-detail__edit input { font-size: var(--text-md); }
+/* one tag, in place of its pill or of « + Tag »: a pill-sized field beside the others */
+.cp-detail__edit[data-kind='tag'] { display: inline-flex; }
+.cp-detail__edit[data-kind='tag'] input { height: var(--badge-height); padding: 0 var(--space-2); border-radius: 999px; font-size: var(--text-xs); }
 .cp-detail__line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
 .cp-icon-button[data-size='small'] { width: 1.75rem; height: 1.75rem; }
 .cp-icon-button:not(:hover):not(:focus-visible) .cp-icon { opacity: 0.8; }
@@ -1475,10 +1489,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 
 /* ── Where the sessions are at, pinned to the bottom left corner of the screen: what waits for the user, then who works ── */
 .cp-status {
-  position: fixed; z-index: 3; left: var(--gutter); bottom: var(--gutter); width: min(20rem, calc(100vw - 2 * var(--gutter))); display: grid; gap: var(--space-2);
+  position: fixed; z-index: 3; left: var(--gutter); bottom: var(--gutter); width: min(var(--status-width, 20rem), calc(100vw - 2 * var(--gutter))); display: grid; gap: var(--space-2);
   padding: var(--space-2) var(--space-3) var(--space-3); border-radius: var(--radius-lg);
 }
 .cp-status[data-folded='true'] { width: auto; padding-bottom: var(--space-2); }
+.cp-status__new { justify-content: center; height: var(--control-height); border-radius: 999px; }
 .cp-status__head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; border: 0; background: none; color: var(--color-text-muted); text-align: left; }
 .cp-status__head:hover { color: var(--color-text); }
 .cp-status__head .cp-icon { margin-left: auto; }
@@ -1490,7 +1505,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-status__count[data-kind='automata'] { gap: var(--space-1); grid-auto-flow: column; background: var(--tone-work-soft); color: var(--tone-work); }
 .cp-status__count svg, .cp-status__automaton svg { width: 0.85em; height: 0.85em; }
 .cp-status__automaton { display: inline-flex; flex: none; color: var(--color-text-muted); }
-.cp-status__body { display: grid; gap: var(--space-3); max-height: 18rem; overflow-y: auto; }
+.cp-status__body { display: grid; gap: var(--space-3); max-height: var(--status-height, 18rem); overflow-y: auto; }
+/* its top right corner pulls it wider and taller */
+.cp-status__resize { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; cursor: nesw-resize; touch-action: none; }
 /* a list longer than the card fades out at the edge with more beyond it (a scroll-driven mask: none when it does not scroll) */
 @property --more-above { syntax: '<length>'; inherits: false; initial-value: 0px; }
 @property --more-below { syntax: '<length>'; inherits: false; initial-value: 0px; }
@@ -1972,6 +1989,14 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 .cp-list__head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-1) 0 var(--space-3); }
 .cp-list__heading { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-bold); }
+/* how the list is grouped: a filter button beside its title, lit when not by state */
+.cp-list__grouping { margin-left: auto; }
+.cp-list__grouping > .cp-icon-button[data-pressed] { color: var(--color-accent); }
+.cp-list__check { display: inline-flex; width: 1rem; }
+/* a project's or tag's sessions waiting for the user, as a count of their own */
+.cp-list__waiting { flex: none; min-width: 1.25rem; padding: 0 var(--space-1); border-radius: 999px; background: var(--tone-permission); color: var(--color-bg); font-size: var(--text-xs); font-weight: var(--weight-bold); text-align: center; }
+.cp-list[data-narrow='true'] .cp-list__grouping { display: none; }
+.cp-list__tags { min-width: 0; display: flex; gap: var(--space-1); overflow: hidden; }
 .cp-list__new { flex: none; justify-content: center; height: var(--pill-height); margin: 0 var(--space-1); border-radius: 999px; }
 /* folded down to the faces: the title, the group names, the words and the times go, the new session is a + */
 .cp-list[data-narrow='true'] { padding-inline: var(--space-1); }
@@ -2790,6 +2815,14 @@ a.cp-button { text-decoration: none; }
 }
 .cp-server-empty > .cp-icon { width: 1.5rem; height: 1.5rem; color: var(--color-text-muted); }
 .cp-server-empty p { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+/* the automatons, once there are some: a card in the room's corner, same glass as the status card */
+.cp-server-card {
+  position: absolute; top: var(--gutter); left: var(--gutter); z-index: 1; display: flex; align-items: center; gap: var(--space-2);
+  max-width: calc(100% - 2 * var(--gutter)); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); border-radius: var(--radius-lg);
+}
+.cp-server-card > .cp-icon { flex: none; color: var(--color-text-muted); }
+.cp-server-card__text { min-width: 0; display: grid; font-size: var(--text-sm); }
+.cp-server-card__text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--text-xs); color: var(--color-text-muted); }
 .cp-hooks-guide { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
 .cp-hooks-guide__options { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .cp-hooks-guide__options > li { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-md); }
@@ -2860,14 +2893,21 @@ a.cp-button { text-decoration: none; }
   border-radius: var(--radius-xl); background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow);
 }
 .cp-mod:is([data-folded='true'], [data-building='true']) { height: auto; }
+/* docked, it sits in the sessions' grid, under the floating windows; carried, over everything */
+.cp-mod[data-docked] { z-index: 2; }
+.cp-mod[data-covered] { visibility: hidden; }
+.cp-mod[data-carried] { z-index: 70; box-shadow: var(--shadow-overlay); }
+.cp-mod__head .cp-icon-button[aria-busy='true'] .cp-icon { animation: cp-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .cp-mod__head .cp-icon-button[aria-busy='true'] .cp-icon { animation: none; opacity: 0.45; } }
 .cp-mod[data-moving='true'] { user-select: none; }
 /* the frame would take the pointer away from the window while it is carried or resized */
 .cp-mod[data-moving='true'] .cp-mod__page { pointer-events: none; }
 .cp-mod .cp-stack__handle { z-index: 3; }
-.cp-mod__head { flex: none; height: 36px; display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-1) 0 var(--space-3); cursor: grab; touch-action: none; }
+/* the same title bar as a session's window in the grid (.cp-detail__head, compact): its height, padding, title size and round buttons (MOD_HEAD) */
+.cp-mod__head { flex: none; height: 51px; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-bottom: var(--border-width) solid var(--color-border); cursor: grab; touch-action: none; }
 .cp-mod[data-moving='true'] .cp-mod__head { cursor: grabbing; }
 .cp-mod__icon { flex: none; display: flex; color: var(--color-accent); }
-.cp-mod__title { flex: 1 1 auto; min-width: 0; margin-left: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-bold); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cp-mod__title { flex: 1 1 auto; min-width: 0; font-size: var(--text-lg); font-weight: var(--weight-bold); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cp-mod__page { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: transparent; color-scheme: dark; }
 .cp-mod__building { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); font-size: var(--text-sm); color: var(--color-text-muted); }
 .cp-mod__building p { margin: 0; }

@@ -10,9 +10,8 @@ import { buildFeed } from '../state/feed.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { isWorking } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
-import { claudeMcpCommand, externalMcpConfig, folderChoices, nextStart, runsOf } from '../state/triggers.ts';
+import { folderChoices, nextStart, runsOf } from '../state/triggers.ts';
 import { Copyable } from './Copyable.tsx';
-import { ConnectionsPage } from './ConnectionsPage.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import {
@@ -28,8 +27,8 @@ import { ScheduleField } from './ScheduleField.tsx';
 import { Switch } from './Switch.tsx';
 import { useAutosave } from './useAutosave.ts';
 
-/** What the panel shows: a trigger (null: a new one), the external runs, the chat apps, or the external access. */
-type Page = { trigger: string | null } | 'runs' | 'connections' | 'access';
+/** What the panel shows: a trigger (null: a new one), or the external runs. */
+type Page = { trigger: string | null } | 'runs';
 
 export function AutomataDialog() {
   const open = useSessions((s) => s.automataOpen);
@@ -89,14 +88,12 @@ function Automata() {
           </nav>
           <nav className="cp-prefs__menu cp-team__pet" aria-label={words.title}>
             {external && <button type="button" aria-current={page === 'runs' ? 'page' : undefined} onClick={() => setPage('runs')}><AutomatonIcon /><span>{words.tabs.runs}</span></button>}
-            <button type="button" aria-current={page === 'connections' ? 'page' : undefined} onClick={() => setPage('connections')}><MessageIcon /><span>{words.tabs.connections}</span></button>
-            <button type="button" aria-current={page === 'access' ? 'page' : undefined} onClick={() => setPage('access')}><KeyIcon /><span>{words.tabs.access}</span></button>
+            {/* they live in the settings, with the webhooks' address and the external runs' folder */}
+            <button type="button" onClick={() => { close(); useSessions.getState().openSettings(true, 'connections'); }}><MessageIcon /><span>{words.tabs.connections}</span></button>
           </nav>
         </aside>
         <div className="cp-prefs__main">
           {page === 'runs' ? <RunsPage close={close} />
-            : page === 'connections' ? <ConnectionsPage close={close} />
-            : page === 'access' ? <AccessPage close={close} />
             : <TriggerPage key={trigger?.id ?? 'new'} trigger={trigger} close={close} />}
         </div>
       </div>
@@ -241,7 +238,7 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
                 {!defaults.hooksAddress && (
                   <p className="cp-trigger__note">
                     {words.hookLocalOnly}
-                    <button type="button" className="cp-link" onClick={() => { openAutomata(false); openSettings(true, 'office', 'hooksAddress'); }}>{words.hookGoPublic}</button>.
+                    <button type="button" className="cp-link" onClick={() => { openAutomata(false); openSettings(true, 'connections', 'hooksAddress'); }}>{words.hookGoPublic}</button>.
                   </p>
                 )}
               </Row>
@@ -360,34 +357,6 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
             <p className="cp-trigger__note">{words.busyRule(draft.kind === 'webhook')}</p>
           </section>
         )}
-      </div>
-    </>
-  );
-}
-
-function AccessPage({ close }: { close: () => void }) {
-  const url = useSessions((s) => s.triggers.externalMcp);
-  const setExternalMcp = useSessions((s) => s.setExternalMcp);
-  const words = t.automata.access;
-  return (
-    <>
-      <PageHead picture={<KeyIcon />} title={t.automata.tabs.access} intro={words.head} close={close}>
-        {url && <button type="button" className="cp-button" title={words.regenerateHint} onClick={() => setExternalMcp(true)}><KeyIcon /><span className="cp-team__label">{words.regenerate}</span></button>}
-      </PageHead>
-      <div className="cp-prefs__content">
-        <p className="cp-trigger__note">{words.intro}</p>
-        <div className="cp-prefs__card">
-          <Row id="access-enabled" icon={<PowerIcon />} title={url ? t.automata.triggers.fields.enabled : words.off} hint={words.local}>
-            <Switch checked={!!url} label={words.enable} onChange={(on) => setExternalMcp(on)} />
-          </Row>
-          {url && (
-            <>
-              <Row id="access-url" wide icon={<LinkIcon />} title={words.url}><Copyable text={url} /></Row>
-              <Row id="access-config" wide icon={<TuneIcon />} title={words.config}><Copyable text={externalMcpConfig(url)} block /></Row>
-              <Row id="access-command" wide icon={<SparklesIcon />} title={words.command}><Copyable text={claudeMcpCommand(url)} /></Row>
-            </>
-          )}
-        </div>
       </div>
     </>
   );

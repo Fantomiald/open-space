@@ -4,6 +4,8 @@ import type { Box } from './room-frame.ts';
 import type { Edge } from './windows.ts';
 
 type Size = { width: number; height: number };
+/** the page, and where the floating windows may start under the header (`top`, PIP_MARGIN when not told) */
+export type Surface = Size & { top?: number };
 
 /** the height of its title bar, over the page */
 export const PIP_HEAD = 36;
@@ -17,23 +19,24 @@ const OPENING = { desktop: 480, mobile: 680 } as const;
 const OPENING_TOP = 72;
 
 const within = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
+const topOf = (surface: Surface) => surface.top ?? PIP_MARGIN;
 /** the picture's height per pixel of width */
 const ratio = (format: BrowserFormat) => FORMATS[format].height / FORMATS[format].width;
 
 /** The width of a picture of `format` and the box that holds it with its title bar, no bigger than the window. */
-function sized(width: number, format: BrowserFormat, surface: Size): Size {
-  const most = Math.min(surface.width - 2 * PIP_MARGIN, (surface.height - 2 * PIP_MARGIN - PIP_HEAD) / ratio(format));
+function sized(width: number, format: BrowserFormat, surface: Surface): Size {
+  const most = Math.min(surface.width - 2 * PIP_MARGIN, (surface.height - topOf(surface) - PIP_MARGIN - PIP_HEAD) / ratio(format));
   const picture = within(width, Math.min(MIN_PICTURE[format], most), most);
   return { width: Math.round(picture), height: Math.round(picture * ratio(format) + PIP_HEAD) };
 }
 
 /** Its title bar within the window; near an edge, against it. */
-export function placePip(box: Box, surface: Size): Box {
+export function placePip(box: Box, surface: Surface): Box {
   let left = within(box.left, PIP_MARGIN, surface.width - box.width - PIP_MARGIN);
-  let top = within(box.top, PIP_MARGIN, surface.height - box.height - PIP_MARGIN);
+  let top = within(box.top, topOf(surface), surface.height - box.height - PIP_MARGIN);
   if (Math.abs(left - PIP_MARGIN) < STICK) left = PIP_MARGIN;
   if (Math.abs(surface.width - PIP_MARGIN - box.width - left) < STICK) left = surface.width - PIP_MARGIN - box.width;
-  if (Math.abs(top - PIP_MARGIN) < STICK) top = PIP_MARGIN;
+  if (Math.abs(top - topOf(surface)) < STICK) top = topOf(surface);
   if (Math.abs(surface.height - PIP_MARGIN - box.height - top) < STICK) top = surface.height - PIP_MARGIN - box.height;
   return { left: Math.round(left), top: Math.round(top), width: box.width, height: box.height };
 }
@@ -42,7 +45,7 @@ export function placePip(box: Box, surface: Size): Box {
  * Its box for `format`, the picture without bands: the size it opens at, or the one it had when the format changes,
  * kept in the corner it is closest to.
  */
-export function fitPip(previous: Box | null, format: BrowserFormat, surface: Size): Box {
+export function fitPip(previous: Box | null, format: BrowserFormat, surface: Surface): Box {
   const width = previous ? (format === 'desktop' ? Math.max(previous.width, OPENING.desktop) : (Math.max(previous.height, OPENING.mobile) - PIP_HEAD) / ratio(format)) : format === 'desktop' ? OPENING.desktop : OPENING.mobile / ratio(format);
   const size = sized(width, format, surface);
   if (!previous) return placePip({ left: 0, top: OPENING_TOP, ...size }, surface);
@@ -61,11 +64,11 @@ export function wentToPage(previous: BrowserState | undefined, next: BrowserStat
 }
 
 /** `start` pulled by `edge` by dx, dy, its picture keeping the format's proportions; the opposite side or corner stays. */
-export function resizePip(start: Box, edge: Edge, dx: number, dy: number, format: BrowserFormat, surface: Size): Box {
+export function resizePip(start: Box, edge: Edge, dx: number, dy: number, format: BrowserFormat, surface: Surface): Box {
   const across = edge === 'n' || edge === 's';
   const pulled = across ? (start.height - PIP_HEAD + (edge === 'n' ? -dy : dy)) / ratio(format) : start.width + (edge.includes('w') ? -dx : dx);
   const size = sized(pulled, format, surface);
   const left = edge.includes('w') ? start.left + start.width - size.width : across ? start.left + (start.width - size.width) / 2 : start.left;
   const top = edge.includes('n') ? start.top + start.height - size.height : start.top;
-  return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, 0, surface.height - size.height)), ...size };
+  return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, surface.top ?? 0, surface.height - size.height)), ...size };
 }

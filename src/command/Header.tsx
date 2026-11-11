@@ -3,9 +3,9 @@ import { plural, t } from '../i18n/index.ts';
 import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions, type RoomKind } from '../room/cast.ts';
 import { seatedRuns } from '../state/automata.ts';
-import { arrangementOf, selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
+import { selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { AutomatonIcon, CrewIcon, DeskIcon, FocusIcon, FreeWindowsIcon, GridIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { AutomatonIcon, DeskIcon, FocusIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
@@ -24,14 +24,13 @@ export function Header() {
   const connection = useSessions((s) => s.connection);
   const openPalette = useSessions((s) => s.openPalette);
   const openSettings = useSessions((s) => s.openSettings);
-  const openCrew = useSessions((s) => s.openCrew);
+  // off in the settings, the radio leaves its room to the rest
+  const radio = useSessions((s) => s.preferences.radio !== false);
   const automata = useSessions((s) => s.automata);
   const outdated = useSessions(selectOutdatedCount);
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
-  const windowMode = useSessions((s) => s.windowModeRequest ?? s.windowMode[arrangementOf(s.view)]);
-  const requestWindowMode = useSessions((s) => s.requestWindowMode);
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
@@ -58,25 +57,11 @@ export function Header() {
           </button>
         </nav>
       </div>
-      {/* how the windows are laid out: its own pill, as it is not a place (wide screens only, where they can be moved) */}
-      <div className="cp-header__windows">
-        <div className="cp-segmented" data-icons role="group" aria-label={words.windows}>
-          <button type="button" aria-pressed={windowMode === 'grid'} aria-label={words.gridWindows} title={words.gridWindowsTitle} onClick={() => requestWindowMode('grid')}>
-            <GridIcon />
-          </button>
-          <button type="button" aria-pressed={windowMode === 'free'} aria-label={words.freeWindows} title={words.freeWindowsTitle(MODIFIER)} onClick={() => requestWindowMode('free')}>
-            <FreeWindowsIcon />
-          </button>
-        </div>
-      </div>
       <ProjectFilter />
-      <Radio />
+      {radio && <Radio />}
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
         <ModsButton />
-        <button type="button" className="cp-button" data-variant="quiet" onClick={() => openCrew(true)} aria-label={words.crew} title={words.crewTitle}>
-          <CrewIcon />
-        </button>
         <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} aria-label={words.search} title={words.searchTitle}>
           <SearchIcon /><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
         </button>

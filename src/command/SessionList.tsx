@@ -1,21 +1,24 @@
 // Focus mode's list of every session, in place of the room: what waits for the user, who works, who is ready for a
-// message, who rests. Each with its face (the crew member's look, as in the room), its state as a sign on the face, its
-// tag, its last words and how long it has been so. A click opens it beside the open ones (or goes to it when open); a
+// message, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
+// look, as in the room), its state as a sign on the face, how long it has been so, and its tags (else its last words). A click opens it beside the open ones (or goes to it when open); a
 // group folds away, and the whole list down to the faces (remembered in this browser).
-import { useMemo, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatAge, formatAgo } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
-import { roomSessions, sessionStatus } from '../room/cast.ts';
+import { sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
+import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../state/list-groups.ts';
 import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
-import { ChevronDownIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
+import { CheckIcon, ChevronDownIcon, FilterIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
+import { useDismiss } from './useDismiss.ts';
+import { useMenuBelow } from './useMenuBelow.ts';
 import { SessionFace } from './SessionFace.tsx';
 import { TagChips } from './TagChips.tsx';
 
@@ -38,15 +41,29 @@ export function SessionList() {
     setNarrow(!narrow);
   };
   const { project } = useProjects();
-  const groups = useMemo(() => {
-    const all = Object.values(sessions).filter((session) => inProject(session, project));
-    const [waiting, working, ready] = roomSessions(all, seen, 'office');
-    const [resting] = roomSessions(all, seen, 'lounge');
-    // the triggers' runs, apart and last: what waits for an answer first
-    const automata = roomSessions(all, seen, 'automata').flat();
-    const latestFirst = (list: SessionInfo[]) => [...list].sort((a, b) => b.stateSince - a.stateSince);
-    return ([['waiting', waiting], ['working', working], ['ready', latestFirst(ready)], ['resting', latestFirst(resting)], ['automata', automata]] as const).filter(([, list]) => list.length > 0);
-  }, [sessions, seen, project]);
+  const [grouping, setGrouping] = useState<ListGrouping>(() => {
+    const stored = readPreference<string>('listGrouping', 'state');
+    return LIST_GROUPINGS.find((each) => each === stored) ?? 'state';
+  });
+  const groupBy = (next: ListGrouping) => { writePreference('listGrouping', next); setGrouping(next); };
+  // the one opened from the waiting group stays there while it is the one in front
+  const [kept, setKept] = useState<Kept | null>(null);
+  const keptNow = kept?.id === selectedId ? kept : null;
+  const groups = useMemo(
+    () => listGroups(Object.values(sessions).filter((session) => inProject(session, project)), seen, grouping, keptNow),
+    [sessions, seen, project, grouping, keptNow],
+  );
+  const open = (id: string) => {
+    const waiting = groups.find((group) => group.state === 'waiting')?.sessions ?? [];
+    const index = waiting.findIndex((session) => session.id === id);
+    setKept(index >= 0 ? { id, index } : null);
+    show(id);
+  };
+  const titleOf = (group: (typeof groups)[number]) => (group.state ? words.groups[group.state] : (group.label ?? ''));
+  const hintOf = (group: (typeof groups)[number]) => {
+    const hint = group.state ? words.hints[group.state] : '';
+    return folded.includes(group.key) && hint ? `${hint}, ${group.sessions.length}` : hint || group.sessions.length;
+  };
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);
   const words = t.session.list;
@@ -63,21 +80,23 @@ export function SessionList() {
     <nav className="cp-list" aria-label={words.title} data-narrow={narrow}>
       <div className="cp-list__head">
         <h2 className="cp-list__heading">{words.title}</h2>
+        <GroupingMenu grouping={grouping} onPick={groupBy} />
         <button type="button" className="cp-icon-button" aria-expanded={!narrow} aria-label={narrow ? words.unfold : words.fold} title={narrow ? words.unfold : words.fold} onClick={toggleNarrow}>
           {narrow ? <UnfoldListIcon /> : <FoldListIcon />}
         </button>
       </div>
       <div className="cp-list__body">
-        {groups.map(([group, list]) => (
-          <section key={group} className="cp-list__group" data-group={group}>
+        {groups.map((group) => (
+          <section key={group.key} className="cp-list__group" data-group={group.state ?? 'project'}>
             <h2 className="cp-list__title">
-              <button type="button" aria-expanded={!folded.includes(group)} aria-controls={`list-${group}`} title={words.collapse(words.groups[group])} onClick={() => fold(group)}>
-                <ChevronDownIcon /> <span>{words.groups[group]}</span>
-                <span className="cp-list__hint">{folded.includes(group) && words.hints[group] ? `${words.hints[group]}, ${list.length}` : words.hints[group] || list.length}</span>
+              <button type="button" aria-expanded={!folded.includes(group.key)} aria-controls={`list-${group.key}`} title={words.collapse(titleOf(group))} onClick={() => fold(group.key)}>
+                <ChevronDownIcon /> <span>{titleOf(group)}</span>
+                <span className="cp-list__hint">{hintOf(group)}</span>
+                {!group.state && group.waiting > 0 && <span className="cp-list__waiting" title={words.waitingCount(group.waiting)}>{group.waiting}</span>}
               </button>
             </h2>
-            <ul className="cp-list__items" id={`list-${group}`} hidden={folded.includes(group)}>
-              {list.map((session) => {
+            <ul className="cp-list__items" id={`list-${group.key}`} hidden={folded.includes(group.key)}>
+              {group.sessions.map((session) => {
                 const status = sessionStatus(session, seen);
                 const kind = attentionKind(session, seen);
                 const working = isWorking(session);
@@ -87,20 +106,21 @@ export function SessionList() {
                     <button
                       type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)}
                       title={narrow ? undefined : words.open} aria-label={narrow ? session.name : undefined}
-                      onClick={() => show(session.id)}
+                      onClick={() => open(session.id)}
                       onMouseEnter={peekAt(session.id)} onFocus={peekAt(session.id)} onMouseLeave={() => setPeek(null)} onBlur={() => setPeek(null)}
                     >
-                      <SessionFace session={session} resting={group === 'resting'} />
+                      <SessionFace session={session} resting={session.resting === true || group.state === 'resting'} />
                       <span className="cp-list__text">
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>
-                          <TagChips tags={session.tags} className="cp-list__tag" short />
                           {session.worktree && <BranchMark branch={session.worktree.branch} />}
                           {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
-                        </span>
-                        <span className="cp-list__line">
-                          <span className="cp-list__last">{session.lastMessage || stateLabel(session, kind)}</span>
                           <span className="cp-list__time">{working ? formatAge(elapsed) : formatAgo(elapsed)}</span>
+                        </span>
+                        {/* its tags say what it is about at a glance; without any, its last words */}
+                        <span className="cp-list__line" title={session.lastMessage || undefined}>
+                          {session.tags?.length ? <span className="cp-list__tags"><TagChips tags={session.tags} className="cp-list__tag" /></span>
+                            : <span className="cp-list__last">{session.lastMessage || stateLabel(session, kind)}</span>}
                         </span>
                       </span>
                     </button>
@@ -139,6 +159,34 @@ function Peek({ session, seen, now, x, y }: { session: SessionInfo; seen: SeenSe
         {stateLabel(session, attentionKind(session, seen))} · {working ? formatAge(elapsed) : formatAgo(elapsed)}
       </span>
       {session.lastMessage && <span className="cp-list__peek-last">{session.lastMessage.replace(/\*\*|`/g, '')}</span>}
+    </div>
+  );
+}
+
+/** How the list is grouped, behind a filter button: by state or by project. */
+function GroupingMenu({ grouping, onPick }: { grouping: ListGrouping; onPick: (grouping: ListGrouping) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(open, box, close);
+  useMenuBelow(open, box, menu);
+  const words = t.session.list;
+  return (
+    <div className="cp-list__grouping" ref={box}>
+      <button
+        type="button" className="cp-icon-button" data-pressed={grouping !== 'state' || undefined} aria-expanded={open} aria-haspopup="menu"
+        aria-label={words.groupBy} title={`${words.groupBy} : ${words.groupings[grouping]}`} onClick={() => setOpen(!open)}
+      ><FilterIcon /></button>
+      {open && (
+        <div ref={menu} className="cp-detail__menu" popover="manual" role="menu" aria-label={words.groupBy}>
+          {LIST_GROUPINGS.map((each) => (
+            <button key={each} type="button" role="menuitemradio" aria-checked={grouping === each} onClick={() => { onPick(each); close(); }}>
+              <span className="cp-list__check">{grouping === each && <CheckIcon />}</span>{words.groupByTitle(words.groupings[each])}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

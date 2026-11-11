@@ -222,7 +222,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       showSky(document, lighting);
       scene.visits?.step(elapsed, { free: freeRef.current, hour, enabled: state.preferences.officeLife, blocked: scene.playerSpot?.at ?? null });
       followPet(scene, room, state);
-      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(modsNews(state), state.modsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
+      paintFrame(context, backdrop, scene, sprites, furniture, { time: now, reducedMotion, tagColors: state.preferences.tagColors, hideNames: state.preferences.hideNames === true, openSessionIds: selected.current, ghostIds: ghosts.current, lighting, hour, dozing, hoveredThing: hoveredThing.current, metricsBadge: showsMetricsBadge(modsNews(state), state.modsOpen), hoveredId: hoveredId.current, festival, guests, room: decorOf(room), playerName: selfName(crewRef.current), pet: useSessions.getState().preferences.pet, waitingAutomata: waiting.current });
       // through the door: the other room opens, the user standing at its door
       if (scene.playerWentOut) { scene.playerWentOut = false; useSessions.getState().setView(room === 'office' ? 'repos' : 'salle'); }
       // through the teleporter: the other room opens, the user coming in on its twin

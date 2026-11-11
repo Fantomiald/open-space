@@ -8,8 +8,12 @@ export const automata = {
 
   room: {
     empty: 'Aucun automate pour l’instant',
-    emptyText: 'Un automate lance une session tout seul, à heure fixe ou par webhook. Ensuite, clique sur l’orbe pour les retrouver.',
+    emptyText: 'Un automate lance une session tout seul, à heure fixe ou par webhook.',
     add: 'Créer un automate',
+    count: (all: number, on: number) => `${all > 1 ? `${all} automates` : '1 automate'}${on < all ? `, ${on} actif${on > 1 ? 's' : ''}` : ''}`,
+    next: (name: string, at: string) => `Prochain : ${name} à ${at}`,
+    noNext: 'Aucun lancement prévu',
+    manage: 'Gérer',
   },
   triggers: {
     intro: 'Un déclencheur lance tout seul une session, à une heure donnée ou quand un autre programme appelle son webhook. Ses sessions vont dans la salle des serveurs ; tu y réponds comme à n’importe quelle session, ou depuis l’app Claude du téléphone avec Remote Control.',

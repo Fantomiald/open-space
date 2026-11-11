@@ -3,8 +3,9 @@
 import type { ReactNode } from 'react';
 import type { ModIcon } from '../../shared/mods.ts';
 import {
-  AppWindow, Archive, ShieldCheck, Blend, Cpu, Eraser, FileDiff, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeft, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
+  AppWindow, Archive, ShieldCheck, Blend, Cpu, Eraser, FileDiff, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
   Clock, Folder, FolderOpen, FolderPlus, FilePlus, Save, FileCode, FileBraces, FileImage, FileCog, FileLock, FileArchive, FilePlay, FileMusic, FileSpreadsheet, Copy, Languages, PartyPopper, Activity, Webhook, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, Square, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, KeyRound, PictureInPicture2, Pin, PinOff, SquareArrowOutUpRight, SquareArrowDownLeft,CodeXml, Eye, FolderSearch, type LucideIcon, List, Puzzle, Coins, ChartLine, Heart,
+  Radio, Focus, ListFilter,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -20,13 +21,14 @@ export const PlusIcon = icon(Plus);
 /** Each action of a session on its own in its thread, with its diff or what it gave back (Preferences.detailedActions). */
 export const DiffIcon = icon(FileDiff);
 /** Focus mode: the sessions as a list beside their windows. */
-export const FocusIcon = icon(PanelLeft);
+export const FocusIcon = icon(Focus);
+export const FilterIcon = icon(ListFilter);
 export const FoldListIcon = icon(PanelLeftClose);
 export const UnfoldListIcon = icon(PanelLeftOpen);
 export const InfoIcon = icon(Info);
-/** The windows laid out in a grid, or each placed by hand. */
-export const GridIcon = icon(LayoutGrid);
 export const FreeWindowsIcon = icon(AppWindow);
+/** The floating windows docked back in the grid. */
+export const TidyIcon = icon(LayoutGrid);
 export const CrewIcon = icon(Users);
 export const PetIcon = icon(PawPrint);
 export const RemoveIcon = icon(Trash2);
@@ -83,6 +85,7 @@ export const StopIcon = icon(Square);
 export const NextIcon = icon(SkipForward);
 export const PreviousIcon = icon(SkipBack);
 export const LibraryIcon = icon(ListMusic);
+export const RadioIcon = icon(Radio);
 export const SendIcon = icon(ArrowRight);
 export const MaximizeIcon = icon(Maximize2);
 export const MinimizeIcon = icon(Minimize2);

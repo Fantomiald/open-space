@@ -15,6 +15,17 @@ describe('mod windows', () => {
     assert.ok(huge.width <= 500 && huge.height <= 400 && huge.left >= 0 && huge.top >= 0);
   });
 
+  it('stays under the header, even taller than the room left under it or with the header on several lines', () => {
+    const short = { width: 1280, height: 800, top: 64 };
+    const tall = modBox({ width: 420, height: 880 }, NOT_PLACED, { left: 12, top: 72 }, short);
+    assert.equal(tall.top, 64, 'right under the header, not over it');
+    assert.ok(tall.top + tall.height <= short.height - 12, 'shorter instead, its foot in the page');
+    const wrapped = { width: 900, height: 800, top: 160 };
+    assert.equal(openingSpots([{ width: 380, height: 320 }], wrapped)[0].top, 160);
+    assert.equal(modBox({ width: 380, height: 320 }, { left: 40, top: 20, size: null, folded: false }, { left: 12, top: 72 }, wrapped).top, 160);
+    assert.equal(resizeMod({ left: 40, top: 200, width: 380, height: 356 }, 'n', 0, -150, wrapped).top, 160);
+  });
+
   it('stays where the user left it, at the size they gave it', () => {
     const box = modBox({ width: 380, height: 320 }, { left: 600, top: 300, size: { width: 500, height: 200 }, folded: false }, { left: 12, top: 72 }, page);
     assert.deepEqual(box, { left: 600, top: 300, width: 500, height: 200 + MOD_HEAD });

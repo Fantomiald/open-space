@@ -36,7 +36,11 @@
       envAsked = [];
       for (const resolve of asked) resolve({ ...(message.env ?? {}) });
     }
-    if (message.openSpace === 'refresh') for (const refresh of refreshers) refresh();
+    // the window's refresh button turns until every refresh is done (a function may return a promise)
+    if (message.openSpace === 'refresh') {
+      const runs = [...refreshers].map((refresh) => { try { return refresh(); } catch (error) { return Promise.reject(error); } });
+      Promise.allSettled(runs).then(() => say({ kind: 'refreshed' }));
+    }
     if (message.openSpace === 'store') heardStored(message.name, message.value ?? null);
   });
   // alone in a tab (opened by hand, or a test): the classic look, and no data
@@ -64,11 +68,11 @@
   });
   /**
    * Calls `refresh` when the window refreshes the mod (its ↻ button, or the pace set in its settings), instead of
-   * loading the page again. Returns what stops it.
+   * loading the page again; the button turns until the promise `refresh` returns settles. Returns what stops it.
    */
   function onRefresh(refresh) {
     refreshers.add(refresh);
-    if (refreshers.size === 1) say({ kind: 'refreshable', on: true });
+    if (refreshers.size === 1) say({ kind: 'refreshable', on: true, replies: true });
     return () => { refreshers.delete(refresh); if (!refreshers.size) say({ kind: 'refreshable', on: false }); };
   }
   // what the page saves, kept by Open Space in the mod's folder (in memory alone outside Open Space)

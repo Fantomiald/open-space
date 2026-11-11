@@ -10,7 +10,7 @@ import { FILTERS, filterCounts, isCommandQuery, searchResults, type Action, type
 import { commandsIn, useSessions } from '../state/sessions.ts';
 import { settingEntries } from '../state/settings-index.ts';
 import {
-  AutomatonIcon, BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, MOD_ICONS, ModsIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, WeekIcon,
+  AutomatonIcon, BellIcon, BranchIcon, ChartIcon, CommandIcon, CostIcon, CrewIcon, DeskIcon, EnterIcon, FocusIcon, KeyboardIcon, MOD_ICONS, ModsIcon, NotesIcon, PlusIcon, SearchIcon, SettingsIcon, SofaIcon, SoundIcon, TerminalIcon, TidyIcon, WeekIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { runOwnCommand } from './ownCommands.ts';
@@ -26,11 +26,11 @@ const MOD_ACTION = 'mod:';
 const TYPING_PAUSE_MS = 140;
 
 /** Everything the palette can do on its own, in the order shown when nothing is typed. */
-const ACTION_IDS = ['newSession', 'mods', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'office', 'lounge', 'automata', 'newAutomaton', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
+const ACTION_IDS = ['newSession', 'mods', 'usage', 'rewind', 'settings', 'crew', 'board', 'focus', 'tidyWindows', 'office', 'lounge', 'automata', 'newAutomaton', 'shortcuts', 'terminal', 'branches', 'sound', 'notifications'] as const;
 type ActionId = (typeof ACTION_IDS)[number];
 
 const ACTION_ICONS: Record<ActionId, () => ReactNode> = {
-  newSession: PlusIcon, mods: ModsIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon,
+  newSession: PlusIcon, mods: ModsIcon, usage: ChartIcon, rewind: WeekIcon, settings: SettingsIcon, crew: CrewIcon, board: NotesIcon, focus: FocusIcon, tidyWindows: TidyIcon,
   office: DeskIcon, lounge: SofaIcon, automata: AutomatonIcon, newAutomaton: PlusIcon, shortcuts: KeyboardIcon, terminal: TerminalIcon, branches: BranchIcon, sound: () => <SoundIcon muted={false} />, notifications: () => <BellIcon muted={false} />,
 };
 
@@ -137,6 +137,7 @@ function PaletteContent() {
       case 'crew': s.openCrew(true); break;
       case 'board': s.openBoard(true); break;
       case 'focus': s.setView('focus'); break;
+      case 'tidyWindows': s.tidyWindows(); break;
       case 'office': s.setView('salle'); break;
       case 'lounge': s.setView('repos'); break;
       case 'automata': s.openAutomata(true); break;

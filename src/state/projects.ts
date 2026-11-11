@@ -1,4 +1,5 @@
 import { folderName } from '../lib/format.ts';
+import { roomSessions } from '../room/cast.ts';
 import { attentionKind, type SeenSequences } from './queue.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 
@@ -11,10 +12,12 @@ export const projectOf = (session: SessionInfo) => session.worktree?.home ?? ses
 /** Whether a session belongs to the project picked in the header ('' = all of them). */
 export const inProject = (session: SessionInfo, project: string) => !project || projectOf(session) === project;
 
-/** The projects of these sessions, by name; two folders with the same name show their parent too ("web/app", "mobile/app"). */
+/** The projects of the sessions in a room, by name; two folders with the same name show their parent too ("web/app", "mobile/app"). */
 export function projectsOf(sessions: readonly SessionInfo[], seen: SeenSequences): Project[] {
   const byFolder = new Map<string, Project>();
-  for (const session of sessions) {
+  // a trigger's finished run is in no room: counted, it would make the pills disagree with the rooms
+  const placed = (['office', 'lounge', 'automata'] as const).flatMap((room) => roomSessions(sessions, seen, room).flat());
+  for (const session of placed) {
     const folder = projectOf(session);
     const project = byFolder.get(folder) ?? { folder, name: folderName(folder), count: 0, waiting: false };
     project.count += 1;

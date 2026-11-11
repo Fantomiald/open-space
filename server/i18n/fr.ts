@@ -279,9 +279,11 @@ export const fr = {
     sessionStarted: (name: string, folder: string) => `${name} démarre dans ${folder}, avec Remote Control.`,
     stopped: (name: string) => `${name} est arrêté.`,
     remoteOn: (name: string) => `Remote Control allumé pour ${name}.`,
+    following: (name: string) => `Je suis ${name}.`,
+    unfollowed: (name: string) => `Je ne suis plus ${name}.`,
     reset: 'On repart de zéro.',
-    help: 'Écris-moi en langage normal (« où en est JD ? », « dis-lui de rajouter les tests »), ou réponds à un de mes messages pour écrire à sa session.\n\n/sessions qui fait quoi\n/run <déclencheur> [texte] lancer un déclencheur\n/new <dossier> <tâche> nouvelle session, avec Remote Control\n/stop <nom> arrêter une session\n/remote <nom> allumer Remote Control\n/reset oublier notre conversation',
-    commands: { sessions: 'Qui fait quoi', run: 'Lancer un déclencheur', new: 'Nouvelle session', stop: 'Arrêter une session', remote: 'Allumer Remote Control', reset: 'Oublier la conversation', help: 'Aide' },
+    help: 'Écris-moi en langage normal (« où en est JD ? », « dis-lui de rajouter les tests »), ou réponds à un de mes messages pour écrire à sa session.\n\n/sessions qui fait quoi\n/run <déclencheur> [texte] lancer un déclencheur\n/new <dossier> <tâche> nouvelle session, avec Remote Control\n/stop <nom> arrêter une session\n/remote <nom> allumer Remote Control\n/follow <nom> me prévenir pour une session\n/unfollow <nom> ne plus me prévenir pour une session\n/reset oublier notre conversation',
+    commands: { sessions: 'Qui fait quoi', run: 'Lancer un déclencheur', new: 'Nouvelle session', stop: 'Arrêter une session', remote: 'Allumer Remote Control', follow: 'Suivre une session', unfollow: 'Ne plus suivre une session', reset: 'Oublier la conversation', help: 'Aide' },
   },
   server: {
     stoppingRetry: 'Le serveur s’arrête : réessaie une fois relancé.',

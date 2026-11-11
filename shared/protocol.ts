@@ -495,6 +495,10 @@ export interface Preferences {
   festivals: boolean;
   /** the crew without a session drops by the office now and then (src/room/visitors.ts) */
   officeLife: boolean;
+  /** the radio in the header; absent in older settings means shown */
+  radio?: boolean;
+  /** the room's labels show a session's tags alone (its name when it has none, or under the pointer); absent means off */
+  hideNames?: boolean;
   /** a new session gets a tag of one or two words from its first message (server/auto-tag.ts) */
   autoTag: boolean;
   /** the user's own rule for that tag ("the ticket key when there is one"), given to the model ('' : none) */

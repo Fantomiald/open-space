@@ -47,6 +47,8 @@ export interface FrameOptions {
   reducedMotion: boolean;
   /** Preferences.tagColors */
   tagColors: boolean;
+  /** Preferences.hideNames: a session with tags shows them alone, its name only under the pointer or without tags */
+  hideNames?: boolean;
   /** the session open in the detail panel */
   /** the sessions open in the right column: their people are framed */
   openSessionIds: readonly string[];
@@ -472,7 +474,8 @@ function tagWidth(context: Context, tag: NameTag): number {
   let width = (tag.status ? 2 + ICON_SIZE + TAG_GAP : TAG_PADDING) + textWidthOf(context, tag.name) + TAG_PADDING;
   if (tag.automaton) width += BOT_GLYPH_SIZE + TAG_GAP;
   if (tag.branch) width += TAG_GAP + BRANCH_GLYPH_WIDTH;
-  for (const { text } of tag.tags) width += SEPARATED + textWidthOf(context, text);
+  // without a name, the first tag needs no hairline before it
+  tag.tags.forEach(({ text }, index) => { width += (index > 0 || tag.name ? SEPARATED : 0) + textWidthOf(context, text); });
   if (tag.moreTags) width += TAG_GAP + textWidthOf(context, `+${tag.moreTags}`);
   if (tag.agents.length) {
     const shown = Math.min(tag.agents.length, SHOWN_AGENTS);
@@ -570,8 +573,8 @@ function paintNameTag(context: Context, sprites: SpriteSource, tag: NameTag, lef
     for (const [dx, dy] of BRANCH_GLYPH) rect(context, x + dx, glyphTop + dy, 1, 1, P.branch);
     x += BRANCH_GLYPH_WIDTH;
   }
-  for (const { text, color } of tag.tags) {
-    x = separator(context, x, top);
+  for (const [index, { text, color }] of tag.tags.entries()) {
+    if (index > 0 || tag.name) x = separator(context, x, top);
     context.fillStyle = color ?? P.sessionTag;
     context.fillText(text, x, top + 10);
     x += textWidthOf(context, text);
@@ -927,7 +930,7 @@ export function paintFrame(context: Context, backdrop: HTMLCanvasElement, scene:
     tags.push({
       x: feet.x, bottom: head - TAG_LIFT, faint: !calling && !isSelected(character) && options.hoveredId !== character.person.id,
       tag: {
-        name: character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch, automaton: character.person.automatonRole !== undefined,
+        name: options.hideNames && shownTags.shown.length > 0 && options.hoveredId !== character.person.id && !character.person.automatonRole && !character.person.automaton ? '' : character.person.name, colour: noticed ? P.tagText : P.quietTagText, status, branch: character.person.branch, automaton: character.person.automatonRole !== undefined,
         tags: shownTags.shown.map((text, index) => ({ text, color: options.tagColors ? sessionTagColors(character.person.tags)[index] : null })), moreTags: shownTags.more,
         sessionId: character.person.sessionId, agents: character.phase === 'seated' ? character.person.agents : [], framed: isSelected(character),
       },

@@ -30,9 +30,10 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
-import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, replaceIn, retile, ROOM_TILING, type Columns, type DropSlot } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, replaceIn, ROOM_TILING, type Columns, type DropSlot } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
-import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowMode, type WindowsPreference } from './windows.ts';
+import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowsPreference } from './windows.ts';
+import { dock, float, modOfSlot, modSlot, modsIn, modsOnly, openSessions, sessionsIn, switchArrangement, tidyAll, unfloat } from './docking.ts';
 import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { projectOf } from './projects.ts';
@@ -41,8 +42,8 @@ import { outKey, outSize, outTarget, parseOut, type OutTarget } from './out.ts';
 import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
 
 /** The open windows, kept in this browser so a reload finds them as they were. */
-const readLayout = () => readPreference<{ columns: string[][]; selectedId: string } | null>('layout', null);
-const writeLayout = (columns: Columns, selectedId: string | null) => writePreference('layout', columns.length && selectedId ? { columns, selectedId } : null);
+const readLayout = () => readPreference<{ columns: string[][]; selectedId: string | null } | null>('layout', null);
+const writeLayout = (columns: Columns, selectedId: string | null) => writePreference('layout', columns.length || selectedId ? { columns, selectedId } : null);
 
 /** stopped: the bridge does not answer; unpaired: it answers but this browser has no valid session cookie */
 export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
@@ -53,13 +54,15 @@ export const tilingOf = (view: View) => (view === 'focus' ? FOCUS_TILING : ROOM_
 export const arrangementOf = (view: View): Arrangement => (view === 'focus' ? 'focus' : 'room');
 export type { Arrangement };
 
-const savedWindows = sanitizeWindows(readPreference('windows', null));
+// the windows open before a reload: an arrangement saved in free mode finds them floating (sanitizeWindows)
+const savedLayout = readLayout();
+const savedWindows = sanitizeWindows(readPreference('windows', null), Array.isArray(savedLayout?.columns) ? savedLayout.columns.flat() : []);
 const writeWindows = (state: CommandPostState) =>
-  writePreference('windows', { mode: state.windowMode, free: state.free, sizes: state.gridSizes, stackWidth: state.stackWidth } satisfies WindowsPreference);
+  writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, stackWidth: state.stackWidth } satisfies WindowsPreference);
 export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
 /** The parts of the settings dialog, in the order of its menu. */
-export const SETTINGS_SECTIONS = ['general', 'sessions', 'claude', 'folders', 'office', 'notes', 'usage', 'shortcuts', 'about'] as const;
+export const SETTINGS_SECTIONS = ['general', 'office', 'sessions', 'claude', 'folders', 'connections', 'usage', 'shortcuts', 'about'] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 /** The latest search sent over every session's thread: only its answer is kept. */
@@ -194,9 +197,12 @@ export interface CommandPostState {
   quota: Quota | null;
   /** the session the keyboard, the palette and the panel's views go to: one of `openIds`, or null when none is open */
   selectedId: string | null;
-  /** the sessions shown over the room, in columns of three from the right (a click opens one beside the others, see stack.ts) */
+  /**
+   * the windows docked in the grid, in columns of three from the right over the room (a click opens one beside the
+   * others, see stack.ts): sessions, and `mod:<id>` for the mods docked there (docking.ts)
+   */
   columns: Columns;
-  /** `columns`, flat */
+  /** the sessions open: the docked ones, then the ones floating in the current arrangement */
   openIds: string[];
   /** one of several open sessions shown alone for a while, the others kept in their place (as tmux's zoom) */
   zoomedId: string | null;
@@ -206,12 +212,8 @@ export interface CommandPostState {
   gridSizes: Record<Arrangement, GridSizes | null>;
   /** the width of the windows over the room pulled by hand, in fractions of the page's (null: as many columns as they need) */
   stackWidth: number | null;
-  /** the windows of each arrangement in the grid, or placed by hand */
-  windowMode: Record<Arrangement, WindowMode>;
-  /** where the windows placed by hand are, by arrangement */
+  /** the sessions' windows floating over the grid, by arrangement */
   free: Record<Arrangement, FreeLayout>;
-  /** the mode asked for in the header, which the stack applies (it knows where the windows are on the screen) */
-  windowModeRequest: WindowMode | null;
   view: View;
   /** the folder whose sessions the header's filter keeps in sight ('' = all): the others are ghosts in the room, out of the list */
   project: string;
@@ -284,20 +286,24 @@ export interface CommandPostState {
   follow: (sessionId: string) => void;
   /** takes one of the open sessions out */
   closeOpen: (sessionId: string) => void;
-  /** sets the open windows (stack.ts makes them), kept for the next visit; each one follows its conversation */
-  arrange: (columns: Columns) => void;
-  /** a window dragged to another place of the grid */
-  moveWindow: (sessionId: string, to: DropSlot) => void;
+  /**
+   * sets the docked windows (stack.ts makes them) and, when given, the floating ones of the current arrangement, kept
+   * for the next visit; each open session follows its conversation
+   */
+  arrange: (columns: Columns, free?: FreeLayout) => void;
+  /** a docked window (a session, or `mod:<id>`) dragged to another place of the grid */
+  moveWindow: (id: string, to: DropSlot) => void;
   /** the grid of the current arrangement resized by hand */
   resizeGrid: (sizes: GridSizes | null) => void;
   setStackWidth: (width: number | null) => void;
-  requestWindowMode: (mode: WindowMode | null) => void;
-  /** the windows of the current arrangement leave the grid, each where it was (boxes in fractions of their area) */
-  freeWindows: (boxes: Record<string, Box>) => void;
-  /** the windows placed by hand go back to the grid, in the order given */
-  tidyWindows: (columns: Columns) => void;
-  /** a window placed by hand moved or resized (in fractions of its area); it comes to the front */
+  /** a session's window floating, moved or resized (in fractions of its area): out of the grid, in front of the others */
   placeWindow: (sessionId: string, box: Box) => void;
+  /** a floating window (a session, or `mod:<id>`) docked at `to`, or the first place with room; false when there is none (it stays floating) */
+  dockWindow: (id: string, to: DropSlot | null) => boolean;
+  /** a docked mod's window out of the grid (ModWindows places it where it was dropped) */
+  undockMod: (id: string) => void;
+  /** every floating window of the current arrangement docked, while the grid has room */
+  tidyWindows: () => void;
   raiseWindow: (sessionId: string) => void;
   hideUi: (hidden: boolean) => void;
   /** after the window shrank: the column that no longer fits closes */
@@ -497,9 +503,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   uiHidden: false,
   gridSizes: savedWindows.sizes,
   stackWidth: savedWindows.stackWidth,
-  windowMode: savedWindows.mode,
   free: savedWindows.free,
-  windowModeRequest: null,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
   view: (['repos', 'automates', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   project: readPreference('project', ''),
@@ -556,9 +560,19 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
-        const columns = (kept?.columns ?? []).map((column) => column.filter((id) => sessions[id])).filter((column) => column.length > 0);
-        get().arrange(columns);
-        const focused = kept && sessions[kept.selectedId] ? kept.selectedId : columns[0]?.[0];
+        // the floating windows of sessions still there (none when the layout is gone), out of the grid
+        const prune = (layout: FreeLayout): FreeLayout => {
+          const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => kept && sessions[id]));
+          return { boxes, order: layout.order.filter((id) => id in boxes) };
+        };
+        const free = { room: prune(s.free.room), focus: prune(s.free.focus) };
+        const floating = free[arrangementOf(s.view)];
+        const keeps = (id: string) => { const mod = modOfSlot(id); return mod !== null ? s.openMods.includes(mod) : !!sessions[id] && !floating.boxes[id]; };
+        const columns = (Array.isArray(kept?.columns) ? kept.columns : []).map((column) => (Array.isArray(column) ? column.filter((id) => typeof id === 'string' && keeps(id)) : [])).filter((column) => column.length > 0);
+        set({ free });
+        get().arrange(columns, floating);
+        const open = get().openIds;
+        const focused = kept?.selectedId && open.includes(kept.selectedId) ? kept.selectedId : open[0];
         if (focused) get().focus(focused);
         else set({ selectedId: null });
         // resynchronise the followed sessions: ask for what was missed while disconnected
@@ -603,9 +617,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           set({ branchSnoozes });
         }
         writeDraft(message.sessionId, '');
-        set({ sessions, logs, seen, free: withoutWindow(s.free, message.sessionId) });
-        writeWindows(get());
         if (s.openIds.includes(message.sessionId)) get().closeOpen(message.sessionId);
+        set({ sessions, logs, seen, free: withoutWindow(get().free, message.sessionId) });
+        writeWindows(get());
         break;
       }
       case 'aside': {
@@ -703,7 +717,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   select: (sessionId) => {
     set({ uiHidden: false });
-    get().arrange(sessionId ? [[sessionId]] : []);
+    // the other sessions close, docked or floating; the docked mods stay
+    const s = get(), mods = modsOnly(s.columns);
+    set({ free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } } });
+    get().arrange(sessionId ? (addTo(mods, sessionId, maxColumnsIn(s.view), tilingOf(s.view)) ?? [[sessionId]]) : mods, { boxes: {}, order: [] });
     if (sessionId) get().focus(sessionId);
     else set({ selectedId: null, searchOpen: false, panelView: 'thread' });
   },
@@ -715,9 +732,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
     const beside = s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
     if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
-    if (s.openIds.length < 2 || !s.selectedId) { s.select(sessionId); return; }
+    // no room left: it takes the place of the window in use, or of the first docked session when that one floats
+    const replaced = s.selectedId && s.columns.flat().includes(s.selectedId) ? s.selectedId : sessionsIn(s.columns)[0];
+    if (s.openIds.length < 2 || !replaced) { s.select(sessionId); return; }
     set({ zoomedId: null });
-    s.arrange(replaceIn(s.columns, s.selectedId, sessionId));
+    s.arrange(replaceIn(s.columns, replaced, sessionId));
     s.focus(sessionId);
   },
 
@@ -760,19 +779,25 @@ export const useSessions = create<CommandPostState>((set, get) => ({
 
   closeOpen: (sessionId) => {
     const s = get();
-    const next = s.selectedId === sessionId ? nextFocus(s.columns, sessionId) : s.selectedId;
-    s.arrange(removeFrom(s.columns, sessionId, tilingOf(s.view)));
+    const docked = modsOnly(s.columns).length ? s.columns.map((column) => column.filter((id) => modOfSlot(id) === null)).filter((column) => column.length > 0) : s.columns;
+    const next = s.selectedId === sessionId
+      ? ((sessionsIn(docked).includes(sessionId) ? nextFocus(docked, sessionId) : null) ?? s.openIds.filter((id) => id !== sessionId).at(-1) ?? null)
+      : s.selectedId;
+    set({ free: withoutWindow(s.free, sessionId) });
+    s.arrange(removeFrom(s.columns, sessionId, tilingOf(s.view)), get().free[arrangementOf(s.view)]);
     if (next) s.focus(next);
     else s.select(null);
     const { [sessionId]: _closed, ...keptViews } = get().keptViews;
     set({ keptViews });
   },
 
-  arrange: (columns) => {
-    const openIds = columns.flat();
+  arrange: (columns, free) => {
     const arrangement = arrangementOf(get().view);
+    const floating = free ?? get().free[arrangement];
+    const openIds = openSessions(columns, floating);
     set((state) => ({
       gridSizes: { ...state.gridSizes, [arrangement]: keepSizes(state.columns, columns, state.gridSizes[arrangement]) },
+      free: { ...state.free, [arrangement]: floating },
       columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null,
       launcherOpen: state.launcherOpen && openIds.length > 0,
     }));
@@ -781,9 +806,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     for (const sessionId of openIds) get().follow(sessionId);
   },
 
-  moveWindow: (sessionId, to) => {
+  moveWindow: (id, to) => {
     const s = get();
-    s.arrange(moveIn(s.columns, sessionId, to, maxColumnsIn(s.view), tilingOf(s.view)));
+    s.arrange(moveIn(s.columns, id, to, maxColumnsIn(s.view), tilingOf(s.view)));
   },
 
   resizeGrid: (sizes) => {
@@ -796,31 +821,33 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     writeWindows(get());
   },
 
-  requestWindowMode: (mode) => set({ windowModeRequest: mode }),
-
-  freeWindows: (boxes) => {
-    const arrangement = arrangementOf(get().view);
-    set((state) => ({
-      windowMode: { ...state.windowMode, [arrangement]: 'free' }, windowModeRequest: null,
-      free: { ...state.free, [arrangement]: { boxes: { ...state.free[arrangement].boxes, ...boxes }, order: state.openIds.filter((id) => boxes[id]) } },
-    }));
-    writeWindows(get());
-  },
-
-  tidyWindows: (columns) => {
-    const arrangement = arrangementOf(get().view);
-    get().arrange(columns);
-    set((state) => ({ windowMode: { ...state.windowMode, [arrangement]: 'grid' }, windowModeRequest: null }));
-    writeWindows(get());
-  },
-
   placeWindow: (sessionId, box) => {
-    const arrangement = arrangementOf(get().view);
-    set((state) => {
-      const { boxes, order } = state.free[arrangement];
-      return { free: { ...state.free, [arrangement]: { boxes: { ...boxes, [sessionId]: box }, order: [...order.filter((id) => id !== sessionId), sessionId] } } };
-    });
-    writeWindows(get());
+    const s = get(), arrangement = arrangementOf(s.view);
+    const placed = float(s.columns, s.free[arrangement], sessionId, box, tilingOf(s.view));
+    s.arrange(placed.columns, placed.free);
+  },
+
+  dockWindow: (id, to) => {
+    const s = get(), arrangement = arrangementOf(s.view);
+    const columns = dock(s.columns, id, to, maxColumnsIn(s.view), tilingOf(s.view));
+    if (!columns) return false;
+    s.arrange(columns, unfloat(s.free[arrangement], id));
+    return true;
+  },
+
+  undockMod: (id) => {
+    const s = get();
+    if (s.columns.flat().includes(modSlot(id))) s.arrange(removeFrom(s.columns, modSlot(id), tilingOf(s.view)));
+  },
+
+  tidyWindows: () => {
+    const s = get(), arrangement = arrangementOf(s.view);
+    const docked = new Set(modsIn(s.columns));
+    const outKeys = new Set(s.outKeys);
+    const floatingMods = s.openMods.filter((id) => !docked.has(id) && !outKeys.has(outKey({ kind: 'mod', modId: id })) && s.mods?.some((mod) => mod.id === id)).map(modSlot);
+    const tidied = tidyAll(s.columns, s.free[arrangement], floatingMods, maxColumnsIn(s.view), tilingOf(s.view));
+    set({ zoomedId: null, uiHidden: false });
+    s.arrange(tidied.columns, tidied.free);
   },
 
   raiseWindow: (sessionId) => {
@@ -838,7 +865,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const max = maxColumnsIn(s.view), tiling = tilingOf(s.view);
     const columns = fitColumns(s.columns, max, tiling);
     if (JSON.stringify(columns) === JSON.stringify(s.columns)) return;
-    for (const id of s.openIds.filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
+    // the sessions with no room left close; the mods float instead
+    for (const id of sessionsIn(s.columns).filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
     get().arrange(fitColumns(get().columns, max, tiling));
   },
 
@@ -869,6 +897,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const openMods = get().openMods.filter((each) => each !== id);
     set({ openMods });
     writePreference('mods-open', openMods);
+    get().undockMod(id);
   },
 
   createMod: (text) => {
@@ -973,14 +1002,19 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     // from one room to the other the user walks through the door; out of focus mode they are back at their desk
     set({ view, arrivedByPortal: false, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
     if (tilingOf(view) === tilingOf(s.view)) return;
-    const columns = retile(s.columns, maxColumnsIn(view), tilingOf(view));
+    const here = s.free[arrangementOf(s.view)], there = s.free[arrangementOf(view)];
+    const columns = switchArrangement(s.columns, here, there, maxColumnsIn(view), tilingOf(view));
     // the other arrangement keeps the sizes it was given: the windows are laid out again, not changed
     const sizes = s.gridSizes;
-    s.arrange(columns);
-    set({ gridSizes: sizes });
+    s.arrange(columns, there);
+    // the sessions with no room left there close
+    const open = get().openIds;
+    let free = get().free;
+    for (const id of s.openIds.filter((id) => !open.includes(id))) free = withoutWindow(free, id);
+    set({ gridSizes: sizes, free });
     writeWindows(get());
-    if (s.selectedId && !columns.flat().includes(s.selectedId)) {
-      if (columns[0]) s.focus(columns[0][0]);
+    if (s.selectedId && !open.includes(s.selectedId)) {
+      if (open[0]) s.focus(open[0]);
       else s.select(null);
     }
   },

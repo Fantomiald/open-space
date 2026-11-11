@@ -33,6 +33,14 @@ describe('the floating browser', () => {
     assert.equal(placePip({ left: 60, top: 300, width: 480, height: 306 }, screen).left, 60);
   });
 
+  it('stays under the header, which may wrap on several lines', () => {
+    const wrapped = { ...screen, top: 160 };
+    assert.equal(placePip({ left: 40, top: 20, width: 480, height: 306 }, wrapped).top, 160);
+    assert.equal(fitPip(null, 'desktop', wrapped).top, 160);
+    const phone = fitPip(null, 'mobile', { width: 800, height: 700, top: 160 });
+    assert.ok(phone.top >= 160 && phone.top + phone.height <= 700 - PIP_MARGIN);
+  });
+
   it('keeps the page’s proportions when pulled, its opposite corner in place', () => {
     const start = { left: 1000, top: 600, width: 480, height: 306 };
     const bigger = resizePip(start, 'nw', -160, 0, 'desktop', screen);

@@ -10,7 +10,9 @@ export const session = {
     newName: 'Nouveau prénom',
     tag: 'Tag de la session',
     tagPlaceholder: 'Pro, PDF, urgent…',
+    newTag: 'Tag',
     rename: 'Renommer',
+    renameHint: 'Double-clic sur le nom pour le changer',
     renameLabel: (name: string) => `Renommer ${name}`,
     search: 'Chercher dans la conversation',
     searchClose: 'Fermer la recherche',
@@ -342,8 +344,12 @@ export const session = {
   list: {
     title: 'Sessions',
     new: 'Nouvelle session',
-    groups: { waiting: 'À voir', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos', automata: 'Automates' },
-    hints: { waiting: '', working: '', ready: 'lues', resting: 'arrêtées', automata: '' },
+    groups: { waiting: 'À toi', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos', automata: 'Automates' },
+    hints: { waiting: '', working: '', ready: 'lues', resting: '', automata: '' },
+    groupBy: 'Grouper la liste',
+    groupByTitle: (by: string) => `Grouper par ${by.toLowerCase()}`,
+    groupings: { state: 'État', project: 'Projet' },
+    waitingCount: (count: number) => (count > 1 ? `${count} sessions t’attendent` : 'Une session t’attend'),
     open: 'Clic : l’ouvrir à côté des autres, ou y aller si elle est ouverte',
     collapse: (group: string) => `Replier ou déplier : ${group}`,
     fold: 'Replier la liste',
@@ -353,6 +359,7 @@ export const session = {
   /** where the sessions are at, in the corner of the screen */
   status: {
     title: 'État',
+    resize: 'Tirer pour agrandir, double-clic pour revenir à la taille de départ',
     waiting: 'À toi',
     working: 'Au travail',
     ready: 'Prêtes',
@@ -367,7 +374,7 @@ export const session = {
   todo: {
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,
     answer: (name: string) => `Répondre à ${name}`,
-    read: (name: string) => `Lire ce qu’a fait ${name}`,
+    read: (name: string) => `Lire ${name}`,
     error: (name: string) => `Voir l’erreur de ${name}`,
   },
   states: {
@@ -376,7 +383,7 @@ export const session = {
     compacting: { auto: 'Compactage auto', manual: 'Compactage' },
     work: 'Au travail',
     wait: 'Prête',
-    closed: 'Fermée',
+    closed: 'Au repos',
     done: 'Finie',
     error: 'Erreur',
   },

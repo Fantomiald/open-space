@@ -11,7 +11,7 @@ import type { Box } from '../state/room-frame.ts';
 import { showsBrowser, useSessions } from '../state/sessions.ts';
 import type { Edge } from '../state/windows.ts';
 import { BrowserScreen, FormatSwitch, LanePicker, useLanes } from './BrowserView.tsx';
-import { boxVariables } from './boxes.ts';
+import { boxVariables, floatingSurface } from './boxes.ts';
 import { FreeHandles } from './FreeHandles.tsx';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MaximizeIcon, PopOutIcon } from './Icons.tsx';
 import { OutControls } from './OutControls.tsx';
@@ -20,7 +20,6 @@ import { INTERACTIVE } from './useWindowDrag.ts';
 const NO_EVENTS: never[] = [];
 /** how far a press on its title bar goes before it carries the window rather than clicking a name */
 const CARRY_AFTER = 4;
-const surface = () => ({ width: window.innerWidth, height: window.innerHeight });
 /** where the user left it, and folded or not */
 interface Placement { box: Box | null; folded: boolean }
 
@@ -60,7 +59,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
   const words = t.session.browser;
   const format = browser ? shownFormat(browser) : 'desktop';
   const [placement, setPlacement] = useState<Placement>(() => readPreference<Placement>('pip-placement', { box: null, folded: false }));
-  const box = placement.box ?? fitPip(null, format, surface());
+  const box = placement.box ?? fitPip(null, format, floatingSurface());
   const place = (next: Placement) => { setPlacement(next); writePreference('pip-placement', next); };
   const carried = useRef<{ start: Box; x: number; y: number; edge: Edge | null; started: boolean } | null>(null);
   const [moving, setMoving] = useState(false);
@@ -70,11 +69,11 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
   useEffect(() => {
     if (fitted.current === format) return;
     fitted.current = format;
-    place({ ...placement, box: fitPip(box, format, surface()) });
+    place({ ...placement, box: fitPip(box, format, floatingSurface()) });
   });
   // a smaller window: it stays within reach
   useEffect(() => {
-    const keep = () => setPlacement((now) => (now.box ? { ...now, box: placePip(now.box, surface()) } : now));
+    const keep = () => setPlacement((now) => (now.box ? { ...now, box: placePip(now.box, floatingSurface()) } : now));
     window.addEventListener('resize', keep);
     return () => window.removeEventListener('resize', keep);
   }, []);
@@ -100,7 +99,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
       event.currentTarget.setPointerCapture(event.pointerId);
       setMoving(true);
     }
-    const next = from.edge ? resizePip(from.start, from.edge, dx, dy, format, surface()) : placePip({ ...from.start, left: from.start.left + dx, top: from.start.top + dy }, surface());
+    const next = from.edge ? resizePip(from.start, from.edge, dx, dy, format, floatingSurface()) : placePip({ ...from.start, left: from.start.left + dx, top: from.start.top + dy }, floatingSurface());
     setPlacement((now) => ({ ...now, box: next }));
   };
   const drop = () => {

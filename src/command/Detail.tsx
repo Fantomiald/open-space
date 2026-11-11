@@ -7,6 +7,9 @@ import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed, publishedPages } from '../state/feed.ts';
 import { backgroundWork, isRunning } from '../state/labels.ts';
 import { attentionKind } from '../state/queue.ts';
+import { projectOf } from '../state/projects.ts';
+import { useProjects } from '../state/useProjects.ts';
+import { defaultFolder } from '../../shared/folders.ts';
 import { useSessions } from '../state/sessions.ts';
 import { DropOverlay } from './Attachments.tsx';
 import { AsidePanel } from './AsidePanel.tsx';
@@ -18,7 +21,7 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, MaximizeIcon, MinimizeIcon, MoreIcon, PauseIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PopOutIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, FolderIcon, MaximizeIcon, MinimizeIcon, MoreIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PopOutIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
 import { OutControls } from './OutControls.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
@@ -35,8 +38,11 @@ import { sessionTagHues } from '../design/tag-colors.ts';
 
 const NO_EVENTS: never[] = [];
 
-/** What a session's head keeps out of sight, so it has room for its name: search, Remote Control, rest, switch off. */
-function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOff }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onKeys: () => void; onRest: () => void; onSwitchOff: () => void }) {
+/**
+ * What a session's head keeps out of sight, so it has room for its name: zoom (also a double click on the head), taking
+ * it out, search, Remote Control, rest, switch off. `zoom` and `popOut` are absent where they do not apply.
+ */
+function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOff, onRename, zoom, popOut }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onKeys: () => void; onRest: () => void; onSwitchOff: () => void; onRename: () => void; zoom?: { zoomed: boolean; toggle: () => void }; popOut?: () => void }) {
   const send = useSessions((s) => s.send);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -51,6 +57,9 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
       <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} title={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
       {open && (
         <div ref={menu} className="cp-detail__menu" popover="manual" role="menu" aria-label={words.more}>
+          <button type="button" role="menuitem" title={t.session.detail.renameHint} onClick={pick(onRename)}><PencilIcon />{t.session.detail.rename}</button>
+          {zoom && <button type="button" role="menuitem" title={zoom.zoomed ? t.session.detail.unzoomTitle : t.session.detail.zoomTitle} onClick={pick(zoom.toggle)}>{zoom.zoomed ? <MinimizeIcon /> : <MaximizeIcon />}{zoom.zoomed ? t.session.detail.unzoom : t.session.detail.zoom}</button>}
+          {popOut && <button type="button" role="menuitem" title={t.common.out.popOutTitle} onClick={pick(popOut)}><PopOutIcon />{t.common.out.popOut}</button>}
           <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">{shortcut('F')}</kbd></button>
           {!session.remote && (
             <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>
@@ -115,7 +124,13 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
     if (live && isolated) send({ t: 'branch', sessionId, action: 'refresh' });
   }, [sessionId, live, turns, helpers, isolated, send]);
   const openBranches = useSessions((s) => s.openBranches);
-  const [editing, setEditing] = useState<'name' | 'tag' | null>(null);
+  // its project beside its name, while the header shows them all (and they are several), unless it is the default folder
+  const { projects, project } = useProjects();
+  const usual = useSessions((s) => defaultFolder(s.roots, s.preferences.defaultFolder));
+  const folder = session ? projectOf(session) : '';
+  const projectChip = !project && projects.length > 1 && folder !== usual ? projects.find((each) => each.folder === folder)?.name : undefined;
+  // the name; all the tags at once (the head's single pill, in a small window); or one tag (`tag`: null for a new one)
+  const [editing, setEditing] = useState<'name' | 'tags' | { tag: string | null } | null>(null);
   const [switchingOff, setSwitchingOff] = useState(false);
   const [restAsked, setRestAsked] = useState(false);
   const secretsOpen = useSessions((s) => (s.secretsOpen?.sessionId === session.id ? s.secretsOpen : null));
@@ -133,23 +148,34 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
   const tags = session.tags ?? [];
   const hues = sessionTagHues(tags);
   const setTags = (next: string[]) => send({ t: 'tags', sessionId: session.id, tags: next });
-  /** The name or the tags (separated by commas, after the ones there), edited in place: Enter saves, Escape or leaving the field cancels. */
-  const field = (kind: 'name' | 'tag') => (
-    <form className="cp-detail__edit" onSubmit={(e) => {
+  /**
+   * The name, all the tags (separated by commas), or one tag, edited in place: Enter saves, Escape or leaving the field
+   * cancels. One tag left empty is taken off; a new one joins the others.
+   */
+  const field = (kind: 'name' | 'tags' | 'tag', tag: string | null = null) => (
+    <form className="cp-detail__edit" data-kind={kind} onSubmit={(e) => {
       e.preventDefault();
       const value = String(new FormData(e.currentTarget).get('value') ?? '').trim();
       if (kind === 'name' && value) send({ t: 'rename', sessionId: session.id, name: value });
-      if (kind === 'tag') setTags(parseTags(value));
+      if (kind === 'tags') setTags(parseTags(value));
+      if (kind === 'tag') {
+        const typed = parseTags(value);
+        setTags(tag === null ? parseTags([...tags, ...typed].join(',')) : tags.flatMap((each) => (each === tag ? typed : [each])));
+      }
       setEditing(null);
     }}>
       <label className="cp-sr-only" htmlFor={`${kind}-field`}>{kind === 'name' ? t.session.detail.newName : t.session.detail.tag}</label>
       <input
-        id={`${kind}-field`} name="value" defaultValue={kind === 'name' ? session.name : tags.length ? `${tags.join(', ')}, ` : ''} maxLength={kind === 'name' ? 40 : (MAX_TAG + 2) * MAX_TAGS} autoFocus
-        placeholder={kind === 'tag' ? t.session.detail.tagPlaceholder : undefined}
+        id={`${kind}-field`} name="value" autoFocus
+        defaultValue={kind === 'name' ? session.name : kind === 'tags' ? (tags.length ? `${tags.join(', ')}, ` : '') : (tag ?? '')}
+        maxLength={kind === 'name' ? 40 : kind === 'tag' ? MAX_TAG : (MAX_TAG + 2) * MAX_TAGS}
+        size={kind === 'tag' ? Math.max(6, (tag ?? '').length + 2) : undefined}
+        placeholder={kind === 'name' ? undefined : kind === 'tag' && tag === null ? t.session.detail.newTag : t.session.detail.tagPlaceholder}
         onBlur={() => setEditing(null)} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}
       />
     </form>
   );
+  const editedTag = editing !== null && typeof editing === 'object' ? editing.tag : undefined;
 
   return (
     <aside
@@ -164,48 +190,38 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
         <div className="cp-detail__title">
           {editing === 'name' ? field('name') : (
             <h2>
-              <span className="cp-detail__name">{session.name}</span>
-              <button type="button" className="cp-icon-button" data-size="small" aria-label={t.session.detail.renameLabel(session.name)} title={t.session.detail.rename} onClick={() => setEditing('name')}><PencilIcon /></button>
+              {/* a double click on the name renames it (also in the menu) */}
+              <span className="cp-detail__name" title={t.session.detail.renameHint} onDoubleClick={(e) => { e.stopPropagation(); setEditing('name'); }}>{session.name}</span>
               {/* shown only where the line under the title is hidden for room */}
               {tags.length
-                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={hues[0]} title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon /><span>{tags.join(', ')}</span></button>
-                : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}><TagIcon />{t.session.detail.tagShort}</button>}
+                ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={hues[0]} title={t.session.detail.changeTag} onClick={() => setEditing('tags')}><TagIcon /><span>{tags.join(', ')}</span></button>
+                : <button type="button" className="cp-tag cp-detail__title-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tags')}><TagIcon />{t.session.detail.tagShort}</button>}
             </h2>
           )}
+          {projectChip && <span className="cp-detail__project" title={projectOf(session)}><FolderIcon />{projectChip}</span>}
           <StateBadge session={session} kind={attentionKind(session, seen)} />
           <div className="cp-detail__controls">
-            {several && (
-              <button
-                type="button" className="cp-icon-button" data-variant="outlined" aria-pressed={zoomed}
-                aria-label={zoomed ? t.session.detail.unzoom : t.session.detail.zoom} title={zoomed ? t.session.detail.unzoomTitle : t.session.detail.zoomTitle} onClick={toggleZoom}
-              >{zoomed ? <MinimizeIcon /> : <MaximizeIcon />}</button>
-            )}
-            {isRunning(session) && (
-              <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle} disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}><PauseIcon /></button>
-            )}
             {/* on, Remote Control stays in sight with its state; off, it waits in the menu */}
             {session.remote && <RemoteButton session={session} />}
-            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onKeys={() => openSecrets(session.id)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} />
-            {detached ? <OutControls target={{ kind: 'session', sessionId: session.id }} variant="outlined" /> : (
-              <>
-                <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.common.out.popOut} title={t.common.out.popOutTitle} onClick={() => popOut({ kind: 'session', sessionId: session.id })}><PopOutIcon /></button>
-                <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={hide}><CloseIcon /></button>
-              </>
-            )}
+            <SessionMenu session={session} searchOpen={searchOpen} onSearch={() => openSearch(!searchOpen)} onKeys={() => openSecrets(session.id)} onRest={() => (backgroundWork(session).length ? setRestAsked(true) : rest())} onSwitchOff={() => setSwitchingOff(true)} onRename={() => setEditing('name')}
+              zoom={several ? { zoomed, toggle: toggleZoom } : undefined} popOut={detached ? undefined : () => popOut({ kind: 'session', sessionId: session.id })}
+            />
+            {detached ? <OutControls target={{ kind: 'session', sessionId: session.id }} variant="outlined" />
+              : <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={hide}><CloseIcon /></button>}
           </div>
         </div>
         <div className="cp-detail__line">
-          {editing === 'tag' ? field('tag') : (
+          {editing === 'tags' ? field('tags') : (
             <>
-              {tags.map((tag, index) => (
+              {tags.map((tag, index) => (editedTag === tag ? <span key={tag}>{field('tag', tag)}</span> : (
                 <span key={tag} className="cp-tag" data-hue={hues[index]} data-removable="true">
-                  <button type="button" className="cp-tag__text" title={t.session.detail.changeTag} onClick={() => setEditing('tag')}><TagIcon />{tag}</button>
+                  <button type="button" className="cp-tag__text" title={t.session.detail.changeTag} onClick={() => setEditing({ tag })}><TagIcon />{tag}</button>
                   <button type="button" className="cp-tag__remove" aria-label={t.session.detail.removeTag(tag)} title={t.session.detail.removeTag(tag)} onClick={() => setTags(withoutTag(tags, tag))}><CloseIcon /></button>
                 </span>
+              )))}
+              {tags.length < MAX_TAGS && (editedTag === null ? field('tag') : (
+                <button type="button" className="cp-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing({ tag: null })}>{tags.length ? <PlusIcon /> : <TagIcon />}{tags.length ? t.session.detail.tagShort : t.session.detail.addTag}</button>
               ))}
-              {tags.length < MAX_TAGS && (
-                <button type="button" className="cp-tag" data-empty="true" title={t.session.detail.addTag} onClick={() => setEditing('tag')}>{tags.length ? <PlusIcon /> : <TagIcon />}{tags.length ? t.session.detail.tagShort : t.session.detail.addTag}</button>
-              )}
             </>
           )}
           {session.worktree && (
@@ -227,8 +243,8 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
             </button>
           )}
           {pages.length > 0 && <PublishedPages pages={pages} />}
-          {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         </div>
+        {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
         {switchingOff && asksBeforeSwitchingOff(session) && <SwitchOffDialog session={session} onClose={() => setSwitchingOff(false)} />}
         {switchingOff && !asksBeforeSwitchingOff(session) && (
           <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>

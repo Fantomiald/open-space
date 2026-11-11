@@ -207,38 +207,17 @@ export function cascade(last: Box | null, size: Size, surface: Size): Box {
   return next.left + size.width > surface.width - GAP || next.top + size.height > surface.height - GAP ? corner : next;
 }
 
-/**
- * The windows placed by hand back in the grid, keeping its shape: each one takes the free place nearest to it (the
- * closest pairs first); a window never placed keeps its own place.
- */
-export function tidy(columns: Columns, boxes: Record<string, Box>, area: Size, tiling: Tiling, sizes: GridSizes | null): string[][] {
-  const grid = gridBoxes(columns, sizes, area, tiling);
-  const places = columns.flatMap((ids, column) => ids.map((id, row) => ({ id, column, row, box: grid[id] })));
-  const next = columns.map((ids) => ids.map(() => ''));
-  const taken = new Set<string>();
-  for (const place of places) if (!boxes[place.id]) { next[place.column][place.row] = place.id; taken.add(place.id); }
-  const centre = (box: Box) => ({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
-  const pairs = places.filter((window) => boxes[window.id]).flatMap((window) => places.filter((place) => !taken.has(place.id)).map((place) => {
-    const from = centre(boxes[window.id]), to = centre(place.box);
-    return { id: window.id, place, distance: Math.hypot(from.x - to.x, from.y - to.y) };
-  })).sort((a, b) => a.distance - b.distance);
-  const placed = new Set<string>();
-  for (const { id, place } of pairs) {
-    if (placed.has(id) || next[place.column][place.row]) continue;
-    next[place.column][place.row] = id;
-    placed.add(id);
-  }
-  return next;
-}
-
 /** The two ways the windows are laid out: over the rooms (the office and the break room share it), and in focus mode. */
 export type Arrangement = 'room' | 'focus';
-export type WindowMode = 'grid' | 'free';
-/** The windows placed by hand: their boxes in fractions of the area they float in, and their order, the front one last. */
+/**
+ * The windows floating in an arrangement (each window is docked in its grid otherwise): their boxes in fractions of the
+ * area they float in, and their order, the front one last. Only open windows have a box here.
+ */
 export interface FreeLayout { boxes: Record<string, Box>; order: string[] }
 /** How the windows were arranged by hand, kept in this browser. */
 export interface WindowsPreference {
-  mode: Record<Arrangement, WindowMode>;
+  /** 2 since each window docks or floats on its own; before, a whole arrangement was a grid or free (`mode`) */
+  version: 2;
   free: Record<Arrangement, FreeLayout>;
   sizes: Record<Arrangement, GridSizes | null>;
   /** the width of the windows over the room, in fractions of the page's */
@@ -269,20 +248,31 @@ function readSizes(raw: unknown): GridSizes | null {
   return { columns, rows: rows.map((column) => (isFractions(column) ? column : [])) };
 }
 
-/** What this browser kept, without whatever an older version or a broken value left there. */
-export function sanitizeWindows(raw: unknown): WindowsPreference {
-  const per = <T>(key: string, read: (value: unknown) => T) =>
-    Object.fromEntries(ARRANGEMENTS.map((arrangement) => [arrangement, read(field(field(raw, key), arrangement))])) as Record<Arrangement, T>;
+/**
+ * What this browser kept, without whatever an older version or a broken value left there. Saved before windows docked
+ * one by one (no `version`), an arrangement in free mode has its open windows (`open`) floating where they were, one in
+ * the grid has them all docked.
+ */
+export function sanitizeWindows(raw: unknown, open: readonly string[] = []): WindowsPreference {
+  const per = <T>(key: string, read: (value: unknown, arrangement: Arrangement) => T) =>
+    Object.fromEntries(ARRANGEMENTS.map((arrangement) => [arrangement, read(field(field(raw, key), arrangement), arrangement)])) as Record<Arrangement, T>;
   const stackWidth = field(raw, 'stackWidth');
+  const older = field(raw, 'version') !== 2;
+  const migrated = (layout: FreeLayout, arrangement: Arrangement): FreeLayout => {
+    if (!older) return layout;
+    if (field(field(raw, 'mode'), arrangement) !== 'free') return { boxes: {}, order: [] };
+    const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => open.includes(id)));
+    return { boxes, order: layout.order.filter((id) => id in boxes) };
+  };
   return {
-    mode: per('mode', (mode): WindowMode => (mode === 'free' ? 'free' : 'grid')),
-    free: per('free', readFree),
+    version: 2,
+    free: per('free', (value, arrangement) => migrated(readFree(value), arrangement)),
     sizes: per('sizes', readSizes),
     stackWidth: isFraction(stackWidth) ? stackWidth : null,
   };
 }
 
-/** A session forgotten: it leaves the windows placed by hand. */
+/** A window closed or a session forgotten: it floats nowhere any more. */
 export function withoutWindow(free: Record<Arrangement, FreeLayout>, id: string): Record<Arrangement, FreeLayout> {
   const without = ({ boxes: { [id]: _gone, ...boxes }, order }: FreeLayout) => ({ boxes, order: order.filter((other) => other !== id) });
   return { room: without(free.room), focus: without(free.focus) };

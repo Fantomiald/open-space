@@ -3,14 +3,14 @@
 import { MOD_SIZE, type ModInfo } from '../../shared/mods.ts';
 import type { Quota, SessionInfo } from '../../shared/protocol.ts';
 import { costOf, dayOf, modelName, type CostReport } from '../../shared/usage.ts';
-import { PIP_MARGIN, placePip } from './pip.ts';
+import { PIP_MARGIN, placePip, type Surface } from './pip.ts';
 import type { Box } from './room-frame.ts';
 import type { Edge } from './windows.ts';
 
 type Size = { width: number; height: number };
 
 /** the height of a window's title bar, over the mod's page */
-export const MOD_HEAD = 36;
+export const MOD_HEAD = 51;
 /** the first window opens at the top left, under the header; the next ones beside it */
 const OPENING_TOP = 72;
 const STEP = 32;
@@ -18,25 +18,28 @@ const STEP = 32;
 /** Where the user left a mod's window: `size` once they resized it (until then the mod's own size), folded to its title or not. */
 export interface ModPlacement { left: number | null; top: number | null; size: Size | null; folded: boolean }
 export const NOT_PLACED: ModPlacement = { left: null, top: null, size: null, folded: false };
+/** where a mod's placement is kept in this browser */
+export const modPlacementKey = (id: string) => `mod-placement:${id}`;
 
 const within = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
 
 /** The size of a mod's window, title bar included, no bigger than the page nor taller than its content (`tallest`, once its page told it). */
-function sized(size: Size, surface: Size, tallest = Number.POSITIVE_INFINITY): Size {
+function sized(size: Size, surface: Surface, tallest = Number.POSITIVE_INFINITY): Size {
   return {
     width: Math.round(within(size.width, Math.min(MOD_SIZE.width.min, surface.width - 2 * PIP_MARGIN), Math.min(MOD_SIZE.width.max, surface.width - 2 * PIP_MARGIN))),
-    height: Math.round(within(size.height, Math.min(MOD_SIZE.height.min, tallest), Math.min(MOD_SIZE.height.max, surface.height - 2 * PIP_MARGIN - MOD_HEAD, tallest)) + MOD_HEAD),
+    height: Math.round(within(size.height, Math.min(MOD_SIZE.height.min, tallest), Math.min(MOD_SIZE.height.max, surface.height - (surface.top ?? PIP_MARGIN) - PIP_MARGIN - MOD_HEAD, tallest)) + MOD_HEAD),
   };
 }
 
 /** The windows not placed yet, of these sizes (title bars aside): side by side from the top left, a new row when the page is full. */
-export function openingSpots(sizes: readonly Size[], surface: Size): { left: number; top: number }[] {
-  let left = PIP_MARGIN, top = OPENING_TOP, row = 0;
+export function openingSpots(sizes: readonly Size[], surface: Surface): { left: number; top: number }[] {
+  const first = Math.max(OPENING_TOP, surface.top ?? 0);
+  let left = PIP_MARGIN, top = first, row = 0;
   return sizes.map((each) => {
     const size = sized(each, surface);
     if (left > PIP_MARGIN && left + size.width > surface.width - PIP_MARGIN) { left = PIP_MARGIN; top += row + PIP_MARGIN; row = 0; }
     // past the bottom: they start over at the top, a step aside, so none hides another's title
-    if (top + MOD_HEAD > surface.height - PIP_MARGIN) { top = OPENING_TOP + STEP; left = PIP_MARGIN + STEP; }
+    if (top + MOD_HEAD > surface.height - PIP_MARGIN) { top = first + STEP; left = PIP_MARGIN + STEP; }
     const spot = { left, top };
     left += size.width + PIP_MARGIN;
     row = Math.max(row, size.height);
@@ -48,18 +51,18 @@ export function openingSpots(sizes: readonly Size[], surface: Size): { left: num
  * A mod's window: where the user left it, else at `spot` (see openingSpots); always within the page. `content`: the
  * height its page says its content needs; the window is never taller (smaller, the page scrolls).
  */
-export function modBox(mod: Pick<ModInfo, 'width' | 'height'>, placement: ModPlacement, spot: { left: number; top: number }, surface: Size, content?: number | null): Box {
+export function modBox(mod: Pick<ModInfo, 'width' | 'height'>, placement: ModPlacement, spot: { left: number; top: number }, surface: Surface, content?: number | null): Box {
   const size = sized(placement.size ?? { width: mod.width, height: content ?? mod.height }, surface, content ?? undefined);
   return placePip({ left: placement.left ?? spot.left, top: placement.top ?? spot.top, ...size }, surface);
 }
 
 /** `start` pulled by `edge` by dx, dy: the opposite side or corner stays where it is. */
-export function resizeMod(start: Box, edge: Edge, dx: number, dy: number, surface: Size, content?: number | null): Box {
+export function resizeMod(start: Box, edge: Edge, dx: number, dy: number, surface: Surface, content?: number | null): Box {
   const pulled = { width: start.width + (edge.includes('e') ? dx : edge.includes('w') ? -dx : 0), height: start.height - MOD_HEAD + (edge.includes('s') ? dy : edge.includes('n') ? -dy : 0) };
   const size = sized(pulled, surface, content ?? undefined);
   const left = edge.includes('w') ? start.left + start.width - size.width : start.left;
   const top = edge.includes('n') ? start.top + start.height - size.height : start.top;
-  return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, 0, surface.height - size.height)), ...size };
+  return { left: Math.round(within(left, 0, surface.width - size.width)), top: Math.round(within(top, surface.top ?? 0, surface.height - size.height)), ...size };
 }
 
 /** The pages waiting for the variables of a mod (the kit's OpenSpace.env): the server's answer goes to each. */

@@ -16,7 +16,7 @@ import { modeLabel, models } from '../state/labels.ts';
 import { outdatedSessions, SETTINGS_SECTIONS, useSessions, type SettingsSection } from '../state/sessions.ts';
 import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/settings-index.ts';
 import {
-  ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
+  ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, RadioIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
   OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WebhookIcon, WorkflowIcon,
 } from './Icons.tsx';
@@ -28,6 +28,7 @@ import { FoldersPicker, LANGUAGE_NAMES } from './PreferenceFields.tsx';
 import { PreviewFestival, PreviewHour } from './PreviewFields.tsx';
 import { SaveNote } from './SaveNote.tsx';
 import { Shortcuts } from './Shortcuts.tsx';
+import { AccessGroup, ConnectionsGroups } from './ConnectionsPage.tsx';
 import { Switch } from './Switch.tsx';
 import { UsagePanel } from './UsagePanel.tsx';
 import { useAutosave } from './useAutosave.ts';
@@ -38,21 +39,23 @@ export const REPOSITORY = 'https://github.com/Fantomiald/open-space';
 const IN_APP = /Electron/.test(navigator.userAgent);
 
 const SECTION_ICONS: Record<SettingsSection, () => ReactNode> = {
-  general: SettingsIcon, sessions: TuneIcon, claude: TerminalIcon, folders: FolderIcon, office: DeskIcon, notes: NotesIcon, usage: ChartIcon, shortcuts: KeyboardIcon, about: InfoIcon,
+  general: SettingsIcon, sessions: TuneIcon, claude: TerminalIcon, folders: FolderIcon, office: PaletteIcon, connections: MessageIcon, usage: ChartIcon, shortcuts: KeyboardIcon, about: InfoIcon,
 };
 
 type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
-  general: [['appearance', ['language', 'timeFormat', 'reduceMotion', 'windowStyle', 'glassOpacity', 'tagColors']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
+  general: [['appearance', ['language', 'timeFormat']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
   sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag', 'autoTagRule']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage', 'promptSuggestions']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
   ],
-  folders: [['places', ['roots', 'defaultFolder']]],
-  office: [['life', ['theme', 'festivals', 'officeLife', 'previewFestival', 'previewHour']], ['crew', ['crew']], ['automata', ['automata', 'hooksAddress']]],
-  notes: [['files', ['journalFolder', 'automataFolder']]],
+  folders: [['places', ['roots', 'defaultFolder']], ['files', ['journalFolder']]],
+  // what Open Space looks like: the windows, then the room and its people
+  office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
+  // what starts sessions without the user at the keyboard, and the chat bots and programs that reach Open Space (body())
+  connections: [['automata', ['automata', 'hooksAddress', 'automataFolder']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
 
@@ -407,6 +410,16 @@ function SettingsEditor() {
           <Switch checked={draft.officeLife} onChange={(officeLife) => change({ officeLife })} label={rows.officeLife.title} />
         </Row>
       );
+      case 'hideNames': return (
+        <Row key={id} id={id} flash={flash} icon={<TagIcon />} title={rows.hideNames.title} hint={rows.hideNames.hint}>
+          <Switch checked={draft.hideNames === true} onChange={(hideNames) => change({ hideNames })} label={rows.hideNames.title} />
+        </Row>
+      );
+      case 'radio': return (
+        <Row key={id} id={id} flash={flash} icon={<RadioIcon />} title={rows.radio.title} hint={rows.radio.hint}>
+          <Switch checked={draft.radio !== false} onChange={(radio) => change({ radio })} label={rows.radio.title} />
+        </Row>
+      );
       case 'previewFestival': return (
         <Row key={id} id={id} flash={flash} icon={<CalendarIcon />} title={rows.previewFestival.title} hint={rows.previewFestival.hint}>
           <PreviewFestival labelledBy={`setting-${id}-title`} />
@@ -507,12 +520,13 @@ function SettingsEditor() {
   const body = (shown: SettingsSection) => {
     if (shown === 'usage') return <UsagePanel />;
     if (shown === 'shortcuts') return <Shortcuts />;
-    return (LAYOUT[shown] ?? []).map(([group, rows]) => (
+    const groups = (LAYOUT[shown] ?? []).map(([group, rows]) => (
       <section key={group} className="cp-prefs__group" aria-label={words.groups[group]}>
-        {(LAYOUT[shown]?.length ?? 0) > 1 && <h4 className="cp-prefs__group-title">{words.groups[group]}</h4>}
+        {((LAYOUT[shown]?.length ?? 0) > 1 || shown === 'connections') && <h4 className="cp-prefs__group-title">{words.groups[group]}</h4>}
         <div className="cp-prefs__card">{rows.map(row)}</div>
       </section>
     ));
+    return shown === 'connections' ? <>{groups}<ConnectionsGroups /><AccessGroup /></> : groups;
   };
 
   const SectionIcon = SECTION_ICONS[section];

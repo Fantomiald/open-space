@@ -9,14 +9,14 @@ export type SettingRow = keyof typeof t.settings.prefs.rows;
 
 /** Where each row lives. A section without rows (usage, shortcuts) is found by its own name. */
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
-  language: 'general', timeFormat: 'general', reduceMotion: 'general', glassOpacity: 'general', windowStyle: 'general', tagColors: 'general', sound: 'general', notifications: 'general', terminal: 'general',
+  language: 'general', timeFormat: 'general', reduceMotion: 'office', glassOpacity: 'office', windowStyle: 'office', tagColors: 'office', sound: 'general', notifications: 'general', terminal: 'general',
   timestamps: 'general', turnDuration: 'general', detailedActions: 'general', copyOnSelect: 'general',
   model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', autoTagRule: 'sessions', remoteByDefault: 'sessions', isolate: 'sessions', accountsBrowser: 'sessions', autoPip: 'sessions',
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', promptSuggestions: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',
-  theme: 'office', festivals: 'office', officeLife: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office', automata: 'office', hooksAddress: 'office',
-  journalFolder: 'notes', automataFolder: 'notes',
+  theme: 'office', festivals: 'office', officeLife: 'office', radio: 'office', hideNames: 'office', previewFestival: 'office', previewHour: 'office', crew: 'office', automata: 'connections', hooksAddress: 'connections',
+  journalFolder: 'folders', automataFolder: 'connections',
   version: 'about', claude: 'about', account: 'about', links: 'about', dockApp: 'about',
 };
 

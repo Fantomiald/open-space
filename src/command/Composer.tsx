@@ -1,18 +1,19 @@
-import { useState } from 'react';
+import { use, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
-import { contextLevel } from '../state/labels.ts';
+import { contextLevel, isRunning } from '../state/labels.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { BackgroundTasks } from './BackgroundTasks.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
-import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
+import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PauseIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
 import { runOwnCommand } from './ownCommands.ts';
 import { TuneMenu } from './TuneMenu.tsx';
 import type { Attachments } from './useAttachments.ts';
+import { WindowCompactContext } from './useWindowDrag.ts';
 
 /**
  * The message field of a session. During a turn, what the user sends waits in a queue (kept by the server) shown above
@@ -32,11 +33,12 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const openPalette = useSessions((s) => s.openPalette);
   const showPanel = useSessions((s) => s.showPanel);
   // a small window (several open, this one not zoomed): icons beside a one-line field
-  const stacked = useSessions((s) => s.openIds.length > 1 && s.zoomedId !== session.id);
+  const stacked = use(WindowCompactContext);
   const people = useMentionable(session.id);
   const suggesting = useSessions((s) => s.preferences.promptSuggestions);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
+  const interruptible = isRunning(session);
   const queued = session.queued ?? [];
   const own = attachments.items.length ? null : ownCommand(text);
   // during a turn a plain message joins it at once; a slash command, or anything behind one, waits for its end (Session.send)
@@ -132,7 +134,13 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       {field}
       <div className="cp-composer__actions">
         {tools}
-        {!stacked && <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>}
+        {/* while it works and nothing is written, the button stops it (Escape too); a message written joins the turn */}
+        {interruptible && !ready ? (
+          <button
+            type="button" className={stacked ? 'cp-icon-button' : 'cp-button'} data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle}
+            disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}
+          ><PauseIcon />{!stacked && t.session.detail.interrupt}</button>
+        ) : !stacked && <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>}
       </div>
     </form>
   );

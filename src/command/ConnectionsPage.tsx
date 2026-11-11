@@ -1,27 +1,25 @@
-// The Connexions page of the Automates panel: the user's chat bots (Telegram now), how to make one, then for each the
-// one thing left to do (link the phone, or replace a token Telegram refuses), its settings, and its deletion, confirmed
-// in place. The other chat apps are shown as coming.
+// The connections, in the settings (Automates et connexions): the user's chat bots (Telegram now), how to make one, then
+// for each the one thing left to do (link the phone, or replace a token Telegram refuses), its settings, and its deletion,
+// confirmed in place; the other chat apps shown as coming; and the access other programs get to Open Space (its MCP).
 import { useState } from 'react';
 import { MESSENGER_MODEL, parseMessengerInput, SOON_MESSENGERS, type Messenger } from '../../shared/messengers.ts';
 import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 import { Copyable } from './Copyable.tsx';
-import { AgentIcon, BrandIcon, CrewIcon, ExternalLinkIcon, KeyIcon, MessageIcon, PlusIcon, RemoveIcon, TagIcon } from './Icons.tsx';
-import { PageHead } from './PageHead.tsx';
+import { claudeMcpCommand, externalMcpConfig } from '../state/triggers.ts';
+import { AgentIcon, BrandIcon, CrewIcon, ExternalLinkIcon, KeyIcon, LinkIcon, MessageIcon, PlusIcon, PowerIcon, RemoveIcon, SparklesIcon, TagIcon, TuneIcon } from './Icons.tsx';
 import { Row } from './PrefsRow.tsx';
 import { Switch } from './Switch.tsx';
 
 const AGENT_MODELS = [['haiku', 'Haiku'], ['sonnet', 'Sonnet'], ['opus', 'Opus']] as const;
 const BRAND_NAMES = { telegram: 'Telegram', slack: 'Slack', discord: 'Discord' } as const;
 
-export function ConnectionsPage({ close }: { close: () => void }) {
+export function ConnectionsGroups() {
   const bots = useSessions((s) => s.triggers.messengers);
   const [adding, setAdding] = useState(false);
   const words = t.automata.connections;
   return (
     <>
-      <PageHead picture={<MessageIcon />} title={t.automata.tabs.connections} intro={words.head} close={close} />
-      <div className="cp-prefs__content">
         <section className="cp-prefs__group" aria-label={words.bots}>
           <div className="cp-connections__title">
             <h4 className="cp-prefs__group-title">{bots.length ? words.bots : BRAND_NAMES.telegram}</h4>
@@ -37,8 +35,35 @@ export function ConnectionsPage({ close }: { close: () => void }) {
             {SOON_MESSENGERS.map((brand) => <span key={brand}><BrandIcon brand={brand} />{BRAND_NAMES[brand]}</span>)}
           </div>
         </section>
-      </div>
     </>
+  );
+}
+
+/** Whether other programs reach Open Space's MCP server, at which address, and how to add it to them. */
+export function AccessGroup() {
+  const url = useSessions((s) => s.triggers.externalMcp);
+  const setExternalMcp = useSessions((s) => s.setExternalMcp);
+  const words = t.automata.access;
+  return (
+    <section className="cp-prefs__group" aria-label={t.automata.tabs.access}>
+      <div className="cp-connections__title">
+        <h4 className="cp-prefs__group-title">{t.automata.tabs.access}</h4>
+        {url && <button type="button" className="cp-button" data-size="small" title={words.regenerateHint} onClick={() => setExternalMcp(true)}><KeyIcon />{words.regenerate}</button>}
+      </div>
+      <p className="cp-trigger__note">{words.intro}</p>
+      <div className="cp-prefs__card">
+        <Row id="access-enabled" icon={<PowerIcon />} title={url ? t.automata.triggers.fields.enabled : words.off} hint={words.local}>
+          <Switch checked={!!url} label={words.enable} onChange={(on) => setExternalMcp(on)} />
+        </Row>
+        {url && (
+          <>
+            <Row id="access-url" wide icon={<LinkIcon />} title={words.url}><Copyable text={url} /></Row>
+            <Row id="access-config" wide icon={<TuneIcon />} title={words.config}><Copyable text={externalMcpConfig(url)} block /></Row>
+            <Row id="access-command" wide icon={<SparklesIcon />} title={words.command}><Copyable text={claudeMcpCommand(url)} /></Row>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

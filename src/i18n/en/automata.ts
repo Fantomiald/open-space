@@ -8,8 +8,12 @@ export const automata: Dictionary['automata'] = {
 
   room: {
     empty: 'No automaton yet',
-    emptyText: 'An automaton starts a session on its own, at a set time or from a webhook. Then click the orb to find them.',
+    emptyText: 'An automaton starts a session on its own, at a set time or from a webhook.',
     add: 'Create an automaton',
+    count: (all: number, on: number) => `${all === 1 ? '1 automaton' : `${all} automatons`}${on < all ? `, ${on} on` : ''}`,
+    next: (name: string, at: string) => `Next: ${name} at ${at}`,
+    noNext: 'Nothing scheduled',
+    manage: 'Manage',
   },
   triggers: {
     intro: 'A trigger starts a session on its own, at a set time or when another program calls its webhook. Its sessions go to the server room; you answer them like any session, or from the Claude app on your phone with Remote Control.',

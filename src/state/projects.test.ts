@@ -3,9 +3,14 @@ import { describe, it } from 'node:test';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { activeProject, inProject, projectOf, projectsOf } from './projects.ts';
 
-const session = (id: string, cwd: string, extra: Partial<SessionInfo> = {}) => ({ id, cwd, state: 'wait', turns: 0, permissions: [], ...extra }) as unknown as SessionInfo;
+const session = (id: string, cwd: string, extra: Partial<SessionInfo> = {}) => ({ id, cwd, state: 'wait', turns: 0, permissions: [], subagents: [], createdAt: 0, ...extra }) as unknown as SessionInfo;
 
 describe('projects', () => {
+  it('leaves out a trigger run that is in no room', () => {
+    const done = session('t', '/code/app', { state: 'done', trigger: 'nightly' } as unknown as Partial<SessionInfo>);
+    assert.deepEqual(projectsOf([session('a', '/code/app'), done], {}).map(({ name, count }) => [name, count]), [['app', 1]]);
+  });
+
   it('counts a session on a branch of its own in the folder it was asked for', () => {
     const branch = session('b', '/code/app/.claude/worktrees/x', { worktree: { home: '/code/app' } as SessionInfo['worktree'] });
     assert.equal(projectOf(branch), '/code/app');

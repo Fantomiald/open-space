@@ -2,7 +2,8 @@
 // user's account only: it holds their tokens, never sent to the page nor readable by a session's file tools).
 //
 // Each linked bot is told, every couple of seconds, about the sessions it follows (a trigger's runs that name it, the
-// sessions it started, or every session when `allSessions`): what they wait for, with buttons to answer (a permission,
+// sessions it started, or every session when `allSessions`; not a session it started while Remote Control is on, since
+// the Claude app already shows it, unless /follow asks for it, and never one /unfollow dropped): what they wait for, with buttons to answer (a permission,
 // a question; keys are only given in Open Space), when they finish or stop on an error, and the files they send. An
 // answer given in Open Space removes the buttons. A reply to one of these messages goes to its session, files included;
 // commands start, stop and list sessions and triggers; plain words go to a small agent driving Open Space through its
@@ -123,6 +124,8 @@ export class Messengers {
   private readonly seen = new Map<string, { seq: number; busy: boolean; state: SessionInfo['state'] }>();
   /** the sessions a bot started (by `/new` or its agent): it hears of them */
   private readonly started = new Set<string>();
+  /** the sessions a bot was told to follow (`/follow`) or to leave alone (`/unfollow`), whatever else says: never both for one session */
+  private readonly forced = new Map<string, boolean>();
   private timer: NodeJS.Timeout | null = null;
   /** the plain words of each bot, answered one after the other (they resume the same conversation) */
   private readonly asking = new Map<string, Promise<unknown>>();
@@ -362,6 +365,12 @@ export class Messengers {
         else this.deps.remote(found.item.id, true);
         return reply(command === 'stop' ? words.stopped(found.item.name) : words.remoteOn(found.item.name));
       }
+      case 'follow': case 'unfollow': {
+        const found = matchByName(sessions, (session) => session.name, rest);
+        if (!found) return reply(words.whichSession(sessions.map((session) => session.name)));
+        this.forced.set(`${bot.id}|${found.item.id}`, command === 'follow');
+        return reply(command === 'follow' ? words.following(found.item.name) : words.unfollowed(found.item.name));
+      }
       case 'reset':
         bot.conversation = null;
         this.write();
@@ -437,7 +446,13 @@ export class Messengers {
   }
 
   private follows(bot: Stored, session: SessionInfo, triggers: readonly Trigger[]): { done: boolean } | null {
-    if (bot.allSessions || this.started.has(`${bot.id}|${session.id}`)) return { done: true };
+    const key = `${bot.id}|${session.id}`;
+    const forced = this.forced.get(key);
+    if (forced === false) return null;
+    if (forced || bot.allSessions) return { done: true };
+    // with Remote Control on, the user already follows a session it started in the Claude app
+    const remoteOn = session.remote ? session.remote.state !== 'failed' : !!session.remoteSession;
+    if (this.started.has(key) && !remoteOn) return { done: true };
     const trigger = session.trigger && triggers.find((each) => each.id === session.trigger!.id);
     return trigger?.messengers.includes(bot.id) ? { done: trigger.notifyDone } : null;
   }
@@ -522,4 +537,4 @@ export class Messengers {
 }
 
 /** The bot's commands, in English like Telegram's own. */
-export const COMMANDS = ['sessions', 'run', 'new', 'stop', 'remote', 'reset', 'help'] as const;
+export const COMMANDS = ['sessions', 'run', 'new', 'stop', 'remote', 'follow', 'unfollow', 'reset', 'help'] as const;

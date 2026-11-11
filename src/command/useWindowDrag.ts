@@ -15,6 +15,9 @@ export interface WindowDrag { id: string; grab: Point; pointer: Point; loose: bo
 /** What a window's title bar calls to be carried (null where windows cannot be moved). */
 export const WindowDragContext = createContext<((id: string, event: ReactPointerEvent) => void) | null>(null);
 
+/** Whether the window is small (several in the stack, or one placed by hand at a small size): a one-line message field. */
+export const WindowCompactContext = createContext(false);
+
 /** In the title bar, these keep their click. */
 export const INTERACTIVE = 'button, input, textarea, select, form, a, [role="menu"], [role="menuitem"]';
 

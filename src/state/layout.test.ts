@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { startsDrag } from '../lib/drag.ts';
 import { dropAt, FOCUS_TILING, moveIn, ROOM_TILING } from './stack.ts';
-import { cascade, clampBox, GAP, gridBoxes, keepSizes, resizeBox, resizeTrack, snapMove, sanitizeWindows, snapResize, tidy, withoutWindow, zoneAt, zoneBox } from './windows.ts';
+import { cascade, clampBox, GAP, gridBoxes, keepSizes, resizeBox, resizeTrack, snapMove, sanitizeWindows, snapResize, withoutWindow, zoneAt, zoneBox } from './windows.ts';
 import { clampRoom, DEFAULT_ROOM_FRAME, MIN_ROOM_SCALE, panRoom, roomBox, sanitizeRoomFrames, zoomRoom } from './room-frame.ts';
 
 describe('room frame', () => {
@@ -170,29 +170,26 @@ describe('new windows placed by hand', () => {
   it('back to the corner rather than out of the screen', () => assert.deepEqual(cascade({ left: 580, top: 380, width: 400, height: 300 }, size, surface), { left: 12, top: 12, width: 400, height: 300 }));
 });
 
-describe('tidying windows placed by hand', () => {
-  const area = { width: 1000, height: 600 };
-  it('each window takes the place of the grid nearest to it', () => {
-    const boxes = { a: { left: 0, top: 0, width: 494, height: 192 }, b: { left: 506, top: 0, width: 494, height: 192 } };
-    assert.deepEqual(tidy([['a'], ['b']], boxes, area, ROOM_TILING, null), [['b'], ['a']]);
-  });
-  it('a window never placed keeps its place', () => {
-    const boxes = { a: { left: 0, top: 0, width: 494, height: 192 }, b: { left: 506, top: 0, width: 494, height: 192 } };
-    assert.deepEqual(tidy([['a'], ['b', 'c']], boxes, area, ROOM_TILING, null), [['b'], ['a', 'c']]);
-  });
-});
-
 describe('how the windows were arranged, read back', () => {
-  it('nothing saved is the grid everywhere', () => {
+  const box = { left: 0.1, top: 0.2, width: 0.3, height: 0.4 };
+  it('nothing saved has every window docked', () => {
     assert.deepEqual(sanitizeWindows(undefined), {
-      mode: { room: 'grid', focus: 'grid' }, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, stackWidth: null,
+      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, stackWidth: null,
     });
   });
   it('keeps what is sound and drops the rest', () => {
-    const read = sanitizeWindows({ mode: { room: 'free', focus: 'other' }, free: { room: { boxes: { a: { left: Number.NaN }, b: { left: 0.1, top: 0.2, width: 0.3, height: 0.4 } }, order: ['b', 7] } }, stackWidth: 'wide' });
-    assert.deepEqual(read.mode, { room: 'free', focus: 'grid' });
-    assert.deepEqual(read.free.room, { boxes: { b: { left: 0.1, top: 0.2, width: 0.3, height: 0.4 } }, order: ['b'] });
+    const read = sanitizeWindows({ version: 2, free: { room: { boxes: { a: { left: Number.NaN }, b: box }, order: ['b', 7] } }, stackWidth: 'wide' });
+    assert.deepEqual(read.free.room, { boxes: { b: box }, order: ['b'] });
     assert.equal(read.stackWidth, null);
+  });
+  it('an arrangement saved in free mode has its open windows floating, one in the grid has them docked', () => {
+    const read = sanitizeWindows({ mode: { room: 'free', focus: 'grid' }, free: { room: { boxes: { a: box, gone: box }, order: ['gone', 'a'] }, focus: { boxes: { a: box }, order: ['a'] } } }, ['a', 'b']);
+    assert.deepEqual(read.free, { room: { boxes: { a: box }, order: ['a'] }, focus: { boxes: {}, order: [] } });
+  });
+  it('a broken old preference never throws', () => {
+    for (const raw of [null, 7, 'x', [], { mode: 'free', free: [] }, { mode: { room: 'free' }, free: { room: 'x' } }, { version: 2, free: { focus: { boxes: { a: 3 } } } }]) {
+      assert.deepEqual(sanitizeWindows(raw, ['a']).free.focus, { boxes: {}, order: [] });
+    }
   });
   it('keeps sizes that are fractions', () => {
     assert.deepEqual(sanitizeWindows({ sizes: { room: { columns: [0.5, 0.5], rows: [[1], [1]] }, focus: { columns: 'x' } } }).sizes, { room: { columns: [0.5, 0.5], rows: [[1], [1]] }, focus: null });
@@ -200,7 +197,7 @@ describe('how the windows were arranged, read back', () => {
   it('drops sizes that are not shares of the whole', () => {
     assert.deepEqual(sanitizeWindows({ sizes: { room: { columns: [1.5, -0.5], rows: [] }, focus: { columns: [0.5, 0.5], rows: [[0, 1], [0.5, 0.5]] } } }).sizes, { room: null, focus: { columns: [0.5, 0.5], rows: [[], [0.5, 0.5]] } });
   });
-  it('a session forgotten leaves the windows placed by hand', () => {
+  it('a window closed floats nowhere any more', () => {
     const free = { room: { boxes: { a: { left: 0, top: 0, width: 0.5, height: 0.5 } }, order: ['a'] }, focus: { boxes: {}, order: [] } };
     assert.deepEqual(withoutWindow(free, 'a'), { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } });
   });

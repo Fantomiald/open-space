@@ -114,6 +114,59 @@ describe('the chat bots', () => {
     }
   });
 
+  it('does not follow a session it started while Remote Control is on, unless told to', async () => {
+    const fake = fakeTelegram();
+    const session = { id: 's1', name: 'JD', cwd: '/work/pilou', state: 'work', stateSince: 0, permissions: [], turns: 0 } as unknown as SessionInfo;
+    const messengers = new Messengers({
+      file: path.join(base, 'messengers-follow.json'), api: fake.api,
+      sessions: () => [session], events: () => [], lastWords: () => 'Done here.', triggers: () => [],
+      answer: () => {}, reply: () => {}, send: () => {}, interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
+      startSession: async () => session, folders: () => ['/work/pilou'], saveUpload: (name) => name, attachment: () => null,
+      agent: async () => ({ text: '', conversation: null }), onChange: () => {}, log: () => {},
+    });
+    const finish = async () => {
+      const before = fake.sent('sendMessage').length;
+      session.state = 'work';
+      await messengers.tick();
+      session.state = 'wait';
+      await messengers.tick();
+      return fake.sent('sendMessage').length > before;
+    };
+    const command = async (text: string) => {
+      const before = fake.sent('sendMessage').length;
+      fake.message(text);
+      await until(() => fake.sent('sendMessage').length > before);
+    };
+    try {
+      messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: false, model: '' });
+      fake.message(`/start ${messengers.list()[0]!.linkCode}`);
+      await until(() => messengers.list()[0]!.linked);
+      assert.ok(fake.sent('setMyCommands').some((each) => JSON.stringify(each.body).includes('"unfollow"')));
+
+      await command('/new pilou do it');
+      assert.equal(await finish(), true, 'started by the bot, no Remote Control: followed as before');
+
+      session.remote = { url: 'https://claude.ai/code/x', state: 'connected' };
+      assert.equal(await finish(), false, 'Remote Control on: the Claude app has it');
+      session.remote = { url: '', state: 'failed' };
+      assert.equal(await finish(), true, 'Remote Control failed: followed again');
+      session.remote = undefined;
+      session.remoteSession = 'cse_1';
+      assert.equal(await finish(), false, 'Remote Control kept across a restart');
+
+      await command('/follow jd');
+      assert.equal(await finish(), true, '/follow overrides Remote Control');
+      await command('/unfollow jd');
+      assert.equal(await finish(), false, '/unfollow overrides the rest');
+      session.remoteSession = undefined;
+      assert.equal(await finish(), false, '/unfollow overrides having started it');
+      await command('/follow jd');
+      assert.equal(await finish(), true);
+    } finally {
+      messengers.stop();
+    }
+  });
+
   it('matches what is typed on a phone to a name', () => {
     const triggers = [{ name: 'Ticket Jira assigné' }, { name: 'Récap du matin' }];
     assert.deepEqual(matchByName(triggers, (each) => each.name, 'ticket jira assigne PROJ-12'), { item: triggers[0], rest: 'PROJ-12' });

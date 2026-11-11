@@ -262,9 +262,11 @@ export const en: ServerDictionary = {
     sessionStarted: (name: string, folder: string) => `${name} starts in ${folder}, with Remote Control.`,
     stopped: (name: string) => `${name} is stopped.`,
     remoteOn: (name: string) => `Remote Control on for ${name}.`,
+    following: (name: string) => `I follow ${name}.`,
+    unfollowed: (name: string) => `I no longer follow ${name}.`,
     reset: 'Starting over.',
-    help: 'Write to me in plain words ("where is JD at?", "tell him to add the tests"), or reply to one of my messages to write to its session.\n\n/sessions who does what\n/run <trigger> [text] start a trigger\n/new <folder> <task> new session, with Remote Control\n/stop <name> stop a session\n/remote <name> turn Remote Control on\n/reset forget our conversation',
-    commands: { sessions: 'Who does what', run: 'Start a trigger', new: 'New session', stop: 'Stop a session', remote: 'Turn Remote Control on', reset: 'Forget the conversation', help: 'Help' },
+    help: 'Write to me in plain words ("where is JD at?", "tell him to add the tests"), or reply to one of my messages to write to its session.\n\n/sessions who does what\n/run <trigger> [text] start a trigger\n/new <folder> <task> new session, with Remote Control\n/stop <name> stop a session\n/remote <name> turn Remote Control on\n/follow <name> tell me about a session\n/unfollow <name> stop telling me about a session\n/reset forget our conversation',
+    commands: { sessions: 'Who does what', run: 'Start a trigger', new: 'New session', stop: 'Stop a session', remote: 'Turn Remote Control on', follow: 'Follow a session', unfollow: 'Stop following a session', reset: 'Forget the conversation', help: 'Help' },
   },
   server: {
     stoppingRetry: 'The server is stopping: try again once it’s back.',

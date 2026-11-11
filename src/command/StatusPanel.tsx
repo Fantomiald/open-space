@@ -3,7 +3,7 @@
 // how long, then who is ready for a message (read, not stopped), and last, apart, the runs a trigger started, finished
 // to read or at work (one asking the user something stays in the first group, marked as one). A click opens the session; the title folds the panel
 // down to its counts, a group's title folds that group away (both remembered in this browser).
-import { type ReactNode, useMemo, useState } from 'react';
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatAge } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -14,7 +14,7 @@ import { attentionQueue, otherSessions } from '../state/queue.ts';
 import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { AutomatonIcon, ChevronDownIcon, ChevronUpIcon, CompactIcon } from './Icons.tsx';
+import { AutomatonIcon, ChevronDownIcon, ChevronUpIcon, CompactIcon, PlusIcon } from './Icons.tsx';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { Marquee } from './Marquee.tsx';
@@ -57,6 +57,26 @@ export function StatusPanel() {
   const seen = useSessions((s) => s.seen);
   const show = useSessions((s) => s.show);
   const openIds = useSessions((s) => s.openIds);
+  const openNewSession = useSessions((s) => s.openNewSession);
+  // pulled by its top right corner: wider, and taller for its list (a double click gives it back its own size)
+  const [size, setSize] = useState(() => readPreference<{ width: number; height: number } | null>('statusSize', null));
+  const resize = (event: ReactPointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    const card = event.currentTarget.parentElement!;
+    const body = card.querySelector<HTMLElement>('.cp-status__body');
+    const start = { x: event.clientX, y: event.clientY, width: card.offsetWidth, height: body?.offsetHeight ?? 288 };
+    let next = { width: start.width, height: start.height };
+    const move = (moved: PointerEvent) => {
+      next = {
+        width: Math.round(Math.min(Math.max(start.width + moved.clientX - start.x, 240), window.innerWidth * 0.6)),
+        height: Math.round(Math.min(Math.max(start.height - (moved.clientY - start.y), 120), window.innerHeight * 0.7)),
+      };
+      setSize(next);
+    };
+    const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); writePreference('statusSize', next); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
   const [folded, setFolded] = useState(readFolded);
   const [foldedGroups, setFoldedGroups] = useState(() => readPreference<Group[]>('statusFolded', []));
   const foldGroup = (group: Group) => {
@@ -114,7 +134,8 @@ export function StatusPanel() {
   };
   const fold = () => { setFolded(!folded); writeFolded(!folded); };
   return (
-    <section className="cp-status" aria-label={words.title} data-folded={folded}>
+    <section className="cp-status" aria-label={words.title} data-folded={folded} style={size ? ({ '--status-width': `${size.width}px`, '--status-height': `${size.height}px` } as CSSProperties) : undefined}>
+      {!folded && <span className="cp-status__resize" aria-hidden="true" title={words.resize} onPointerDown={resize} onDoubleClick={() => { writePreference('statusSize', null); setSize(null); }} />}
       <button type="button" className="cp-status__head" aria-expanded={!folded} title={folded ? words.unfold : words.fold} onClick={fold}>
         <span className="cp-status__title">{words.title}</span>
         {waiting.length > 0 && <span className="cp-status__count" data-kind="waiting" title={words.waiting}>{waiting.length}</span>}
@@ -155,6 +176,12 @@ export function StatusPanel() {
             </StatusGroup>
           )}
         </div>
+      )}
+      {/* once a window is open the launcher steps aside: a new session starts from here (or N) */}
+      {!folded && openIds.length > 0 && (
+        <button type="button" className="cp-button cp-status__new" onClick={() => openNewSession({})}>
+          <PlusIcon /> {t.session.list.new} <kbd className="cp-kbd">N</kbd>
+        </button>
       )}
     </section>
   );
