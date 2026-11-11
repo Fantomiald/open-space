@@ -9,7 +9,7 @@ describe('mods', () => {
   });
 
   it('reads a manifest half written, or wrong, as a mod that still shows', () => {
-    assert.deepEqual(readManifest(null, 'ventes'), { name: 'ventes', description: '', icon: 'puzzle', width: MOD_SIZE.width.initial, height: MOD_SIZE.height.initial, draft: false, refresh: 0, env: [] });
+    assert.deepEqual(readManifest(null, 'ventes'), { name: 'ventes', description: '', icon: 'puzzle', width: MOD_SIZE.width.initial, height: MOD_SIZE.height.initial, draft: false, refresh: 0, env: [], trigger: null });
     const read = readManifest({ name: '  Mes   apps ', description: 'x'.repeat(500), icon: 'rocket', width: 5000, height: 10, draft: true }, 'apps');
     assert.equal(read.name, 'Mes apps');
     assert.equal(read.description.length, 120);
@@ -23,6 +23,8 @@ describe('mods', () => {
   it('refreshes only at the paces the settings offer, and asks only for variables with a usable name', () => {
     assert.equal(readManifest({ refresh: 300 }, 'x').refresh, 300);
     assert.equal(readManifest({ refresh: 42 }, 'x').refresh, 0, 'a pace the settings do not offer');
+    assert.equal(readManifest({ trigger: 'f0bbff1129e1da16' }, 'x').trigger, 'f0bbff1129e1da16');
+    assert.equal(readManifest({ trigger: '../hooks' }, 'x').trigger, null, 'not a trigger id');
     const read = readManifest({ env: [{ name: 'JIRA_TOKEN', label: '  Ton token ' }, { name: 'JIRA_TOKEN' }, { name: 'bad name' }, 'x', { name: 'EMAIL' }] }, 'x');
     assert.deepEqual(read.env, [{ name: 'JIRA_TOKEN', label: 'Ton token' }, { name: 'EMAIL', label: '' }]);
   });

@@ -75,6 +75,8 @@
     if (refreshers.size === 1) say({ kind: 'refreshable', on: true, replies: true });
     return () => { refreshers.delete(refresh); if (!refreshers.size) say({ kind: 'refreshable', on: false }); };
   }
+  /** Starts the trigger named in the mod's mod.json ("trigger"), once the user confirmed it in Open Space. */
+  const runTrigger = () => say({ kind: 'run-trigger' });
   // what the page saves, kept by Open Space in the mod's folder (in memory alone outside Open Space)
   const storeAsked = new Map(); // name -> resolve functions
   const storeWatchers = new Map(); // name -> Set of functions
@@ -424,7 +426,7 @@
     }
   });
 
-  window.OpenSpace = { ready, watch, data, env, onRefresh, store, json, format, h };
+  window.OpenSpace = { ready, watch, data, env, onRefresh, runTrigger, store, json, format, h };
   // the height its content needs, for its window to fit it (until the user gives the window a size of their own)
   let told = 0;
   const measure = () => {

@@ -76,7 +76,8 @@ export function Stack() {
   const zoomedId = useSessions((s) => s.zoomedId);
   const hidden = useSessions((s) => s.uiHidden);
   const view = useSessions((s) => s.view);
-  const launcherOpen = useSessions((s) => s.launcherOpen);
+  // with only mods docked, the launcher stays among them
+  const launcherOpen = useSessions((s) => s.launcherOpen || !s.openIds.length);
   const closeLauncher = useSessions((s) => s.closeLauncher);
   const moveWindow = useSessions((s) => s.moveWindow);
   const dockWindow = useSessions((s) => s.dockWindow);
@@ -326,7 +327,7 @@ export function Stack() {
               if (movable && event.altKey) start(id, event);
             }}
           >
-            {id === LAUNCHER ? <Launcher onClose={closeLauncher} /> : <WindowCompactContext value={compact(id)}><Detail sessionId={id} /></WindowCompactContext>}
+            {id === LAUNCHER ? <Launcher onClose={openIds.length ? closeLauncher : undefined} /> : <WindowCompactContext value={compact(id)}><Detail sessionId={id} /></WindowCompactContext>}
             {placed && isFloating(id) && zoomed === null && <FreeHandles onPull={(edge, event) => pull(id, edge, event)} />}
           </div>
         ))}

@@ -1037,7 +1037,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-feed__caption { margin: 0; font-size: var(--text-sm); }
 .cp-feed__files { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* the files the user sent, on their side, the videos as thumbnails side by side: many must not take the whole thread */
-.cp-feed__item[data-kind='user'] .cp-feed__files { justify-content: flex-end; }
+.cp-feed__item[data-kind='user'] .cp-feed__files { justify-content: flex-end; align-items: flex-start; }
 .cp-feed__item[data-kind='user'] .cp-video { width: 11rem; }
 .cp-feed__item[data-kind='user'] .cp-video__open { width: 100%; }
 .cp-feed__item[data-kind='user'] .cp-video__open video { height: 6rem; max-height: none; object-fit: cover; }

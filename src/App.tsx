@@ -52,6 +52,7 @@ export function App() {
   const attention = useSessions(selectAttentionCount);
   const selectedId = useSessions((s) => s.selectedId);
   const openIds = useSessions((s) => s.openIds);
+  const docked = useSessions((s) => s.columns.length > 0);
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
@@ -208,7 +209,8 @@ export function App() {
           {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
-        {openIds.length ? <Stack /> : <Launcher />}
+        {/* docked mods keep their place in the grid, the launcher beside them */}
+        {openIds.length || docked ? <Stack /> : <Launcher />}
       </main>
       {view !== 'focus' && <StatusPanel />}
       <ModWindows />

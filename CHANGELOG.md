@@ -1,5 +1,11 @@
 # Versions
 
+## 1.32.4
+
+- Un clic sur le fond ferme tout ce qui est rangé dans la grille, conversations et mods ; les fenêtres libres restent où elles sont.
+- Mods : un mod peut lancer un automate. Son `mod.json` nomme le déclencheur (`trigger`), la page l'appelle avec `OpenSpace.runTrigger()`, et Open Space demande de confirmer avant de lancer. Le mod Sécurité s'en sert pour son bouton « Fixer les erreurs ».
+- Corrigé : avec seulement des mods rangés, ils gardent leur place dans la grille au lieu de passer en fenêtre libre ; les fichiers envoyés (PDF, zip) ne s'étirent plus à la hauteur des vidéos.
+
 ## 1.32.3
 
 - Question à côté (/btw) : un champ « Répondre… » en bas de la carte pour continuer l'échange, qui garde ce qui s'est dit jusqu'à ce qu'on la ferme.

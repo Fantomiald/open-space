@@ -32,6 +32,10 @@ export const mods: Dictionary['mods'] = {
   building: (who) => (who ? `${who} is building it…` : 'Being built…'),
   buildingText: 'The window fills in once the agent is done.',
   showSession: 'Show the session',
+  runQuestion: (trigger) => `Start “${trigger}”?`,
+  runText: (mod) => `The ${mod} mod asks to start a session with this trigger.`,
+  run: 'Start',
+  cancel: 'Cancel',
   settings: 'Settings',
   settingsTitle: (name) => `${name} settings`,
   settingsView: {
