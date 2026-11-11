@@ -537,7 +537,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'interrupt': sessions.interrupt(message.sessionId); break;
     case 'unqueue': sessions.unqueue(message.sessionId, message.queueId); break;
     case 'sendNow': sessions.sendNow(message.sessionId); break;
-    case 'aside': sessions.aside(message.sessionId, message.question); break;
+    case 'aside': sessions.aside(message.sessionId, message.question, message.follow); break;
     case 'asideClose': sessions.closeAside(message.sessionId); break;
     case 'preferences': await applyPreferences(message.preferences); break;
     case 'onboard': {

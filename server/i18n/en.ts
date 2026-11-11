@@ -1,3 +1,4 @@
+import type { AsideExchange } from '../../shared/protocol.ts';
 import type { ServerDictionary } from './index.ts';
 
 /** where an isolated session works (see WorktreeInfo) */
@@ -45,6 +46,8 @@ export const en: ServerDictionary = {
     secretsNote: (user: string) => `(Note from Open Space: ${en.prompt.secrets(user || 'the user')})\n\n`,
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
       'in the conversation, without using any tool. Your answer does not enter the main conversation.',
+    asideReply: (earlier: readonly AsideExchange[], reply: string) =>
+      `${earlier.map(({ question, answer }) => `Side question: ${question}\n\nYour answer: ${answer}`).join('\n\n')}\n\nThe user replies: ${reply}`,
     worktree: (worktree: Place) => worktreeNote(worktree),
     intoWorktree: (worktree: Place) => `(Note from Open Space: you moved to another folder. ${worktreeNote(worktree)})\n\n`,
     backHome: (folder: string) => `(Note from Open Space: your branch and its folder are gone. You now work in the project's main folder, ${folder}, with the other sessions.)\n\n`,
@@ -87,9 +90,10 @@ export const en: ServerDictionary = {
       browser: 'Process released: the next message starts with the other browser for your accounts.',
       compacted: 'Process released once the conversation was compacted.',
       moved: 'Process released to change folders.',
+      forRoom: 'Process released to make room for another session: the next message resumes the conversation.',
     },
     closing: 'This session is closing, try again in a moment.',
-    tooMany: (max: number) => `Too many active sessions (${max} at most). Close one.`,
+    tooMany: (max: number) => `Too many sessions at work (${max} at most): none is waiting, to make room. Stop one.`,
     folderGone: 'This session’s folder is no longer in the allowed roots.',
     uploadsGone: (count: number) => (count > 1 ? `${count} attached files no longer exist: the message went without them. Attach them again.` : 'An attached file no longer exists: the message went without it. Attach it again.'),
     outsideRoots: 'This folder is not in the allowed roots (OFFICE_ROOTS).',

@@ -10,7 +10,7 @@ import { buildFeed } from '../state/feed.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { isWorking } from '../state/queue.ts';
 import { useSessions } from '../state/sessions.ts';
-import { folderChoices, nextStart, runsOf } from '../state/triggers.ts';
+import { folderChoices, nextStart, runStatus, runsOf, type RunStatus } from '../state/triggers.ts';
 import { Copyable } from './Copyable.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
@@ -48,6 +48,7 @@ function Automata() {
   const external = useSessions((s) => s.preferences.automataFolder !== '' || s.automata.running.length + s.automata.recent.length > 0);
   // a robot of an external run clicked in the room opens on its run
   const fresh = useSessions((s) => s.automataFresh);
+  const sessions = useSessions((s) => s.sessions);
   const [page, setPage] = useState<Page>(() => (picked ? 'runs' : { trigger: fresh ? null : state.triggers[0]?.id ?? null }));
   const words = t.automata;
   const close = () => openAutomata(false);
@@ -81,7 +82,7 @@ function Automata() {
                   <span>{each.name}</span>
                   {!each.enabled
                     ? <small className="cp-automata__flag">{words.triggers.off}</small>
-                    : run && <span className="cp-automata__dot" data-outcome={run.outcome} title={words.triggers.outcome[run.outcome]} />}
+                    : run && <RunDot status={runStatus(run, sessions[run.sessionId ?? ''])} />}
                 </button>
               );
             })}
@@ -339,9 +340,9 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
               <ul className="cp-prefs__card cp-trigger__runs">
                 {runs.map((run) => (
                   <li key={run.id} data-outcome={run.outcome}>
-                    <span className="cp-automata__dot" data-outcome={run.outcome} aria-hidden="true" />
+                    <RunDot status={runStatus(run, sessions[run.sessionId ?? ''])} />
                     <span className="cp-trigger__run-text">
-                      <span className="cp-trigger__outcome">{words.outcome[run.outcome]}</span>
+                      <span className="cp-trigger__outcome">{words.outcome[runStatus(run, sessions[run.sessionId ?? ''])]}</span>
                       <span className="cp-trigger__run-meta">{words.source[run.source]} · {formatAgo(now - run.at)}{run.error ? ` · ${run.error}` : ''}</span>
                     </span>
                     {run.outcome === 'queued' && (
@@ -360,6 +361,11 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
       </div>
     </>
   );
+}
+
+/** A run's state as a coloured dot, its name in its title. */
+function RunDot({ status }: { status: RunStatus }) {
+  return <span className="cp-automata__dot" data-outcome={status} title={t.automata.triggers.outcome[status]} />;
 }
 
 /** A run's role, as people read it. */

@@ -1,3 +1,4 @@
+import type { AsideRunner } from './aside.ts';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -113,6 +114,25 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
 }
 
 const projectA = () => path.join(root, 'project-a');
+
+describe('side questions (/btw)', () => {
+  it('asks a reply with the exchange so far, and starts over after a new question', async () => {
+    const asked: string[] = [];
+    const askAside: AsideRunner = (request, handlers) => { asked.push(request.question); handlers.onEnd({ ok: true, text: `answer ${asked.length}` }); return { stop: () => {} }; };
+    const { manager, messages } = setup({}, undefined, undefined, undefined, undefined, { askAside });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    manager.aside(id, 'ça va ?');
+    manager.aside(id, 'vas-y', true);
+    assert.match(asked[1], /ça va \?[\s\S]*answer 1[\s\S]*vas-y$/);
+    manager.aside(id, 'et après ?', true);
+    assert.match(asked[2], /ça va \?[\s\S]*answer 1[\s\S]*vas-y[\s\S]*answer 2[\s\S]*et après \?$/);
+    const last = messages.findLast((m) => m.t === 'aside');
+    assert.deepEqual(last?.t === 'aside' && last.aside?.earlier?.map((exchange) => exchange.question), ['ça va ?', 'vas-y']);
+    manager.aside(id, 'autre chose');
+    assert.equal(asked[3], 'autre chose');
+  });
+});
 
 describe('a trigger\'s caps', () => {
   it('stops and closes a run once it has spent its cost cap, and says why', async () => {
@@ -1639,13 +1659,35 @@ describe('process life cycle', () => {
     await manager.shutdown();
   });
 
-  it('refuses to run more live processes than the limit', async () => {
+  it('refuses to run more live processes than the limit while they all work', async () => {
     const { manager } = setup({ maxLive: 2 });
     await manager.init();
     await manager.create({ cwd: projectA(), text: 'one' });
     await manager.create({ cwd: projectA(), text: 'two' });
-    await assert.rejects(manager.create({ cwd: projectA(), text: 'three' }), /Trop de sessions actives/);
+    await assert.rejects(manager.create({ cwd: projectA(), text: 'three' }), /Trop de sessions au travail/);
     assert.equal(manager.list().length, 2);
+    await manager.shutdown();
+  });
+
+  it('at the limit, lets go the process of the session waiting the longest, and none at work', async () => {
+    let clock = 1_000;
+    const { manager, processes, find } = setup({ maxLive: 2 }, undefined, () => clock);
+    await manager.init();
+    const done = (process: FakeProcess) => {
+      process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: `c${processes.indexOf(process)}` });
+      process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+    };
+    const first = await manager.create({ cwd: projectA(), text: 'one' });
+    const second = await manager.create({ cwd: projectA(), text: 'two' });
+    done(processes[0]);
+    clock += 1_000;
+    done(processes[1]);
+    await manager.create({ cwd: projectA(), text: 'three' });
+    assert.equal(processes[0].alive, false, 'waiting the longest: released');
+    assert.equal(processes[1].alive, true);
+    assert.equal(find(first.id).state, 'wait');
+    manager.send(second.id, 'more');
+    await assert.rejects(manager.create({ cwd: projectA(), text: 'four' }), /Trop de sessions au travail/, 'the other two work');
     await manager.shutdown();
   });
 

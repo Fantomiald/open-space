@@ -54,6 +54,8 @@ export interface SessionDeps {
   /** the project a folder belongs to when it is not its own (a mod's folder: the mods folder), else null */
   projectHome?: (cwd: string) => string | null;
   maxLive: number;
+  /** at the limit: lets the process of a session waiting the longest go, to start this one */
+  makeRoom?: () => void;
   idleMs: number;
   /** who the other sessions named in a message by "@" are, for Claude, woken up to be reached ('' : none named) */
   mentioned?: (text: string) => string;
@@ -174,6 +176,8 @@ export class Session {
 
   get id() { return this.info.id; }
   get alive() { return !!this.process?.alive; }
+  /** its process is alive but asked to go, having waited long enough: it no longer counts against the limit */
+  get leaving() { return !!this.process?.alive && this.stopRequest?.reason === 'idle'; }
   /** True when a SendMessage address ("uds:/tmp/…" or the path alone) is this session's live process. */
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
@@ -444,6 +448,7 @@ export class Session {
   }
 
   private startProcess() {
+    if (this.deps.liveCount() >= this.deps.maxLive) this.deps.makeRoom?.();
     if (this.deps.liveCount() >= this.deps.maxLive) throw new Error(st.sessions.tooMany(this.deps.maxLive));
     const cwd = this.deps.allowedDirectory(this.info.cwd);
     if (!cwd) throw new Error(st.sessions.folderGone);

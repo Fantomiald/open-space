@@ -88,7 +88,7 @@ export const automata: Dictionary['automata'] = {
     runs: 'Latest runs',
     noRuns: 'Not started yet.',
     openSession: 'Open the session',
-    outcome: { started: 'started', queued: 'waiting', cancelled: 'cancelled', skipped: 'skipped', failed: 'failed' },
+    outcome: { working: 'running', asking: 'waiting for you', done: 'done', queued: 'waiting', cancelled: 'cancelled', skipped: 'skipped', failed: 'failed' },
     cancelQueued: 'Cancel',
     source: { cron: 'schedule', webhook: 'webhook', manual: 'by hand', agent: 'by an agent', test: 'test' },
     busyRule: (hook: boolean): string => hook

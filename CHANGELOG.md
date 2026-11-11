@@ -1,5 +1,11 @@
 # Versions
 
+## 1.32.3
+
+- Question à côté (/btw) : un champ « Répondre… » en bas de la carte pour continuer l'échange, qui garde ce qui s'est dit jusqu'à ce qu'on la ferme.
+- Jusqu'à 12 sessions en même temps (8 avant). À la limite, la session qui attend depuis le plus longtemps est mise en veille pour faire de la place : un automate ou une nouvelle session ne sont plus refusés tant qu'une session ne fait rien. Elle reprend sa conversation au message suivant.
+- Automates : chaque run dit où il en est, en cours, attend ta réponse ou fini, au lieu de rester sur « lancé ».
+
 ## 1.32.2
 
 - Fenêtres : chaque mode garde sa grille. Passer du mode focus à la salle (bureau, repos, automates) et revenir retrouve les fenêtres où on les avait laissées, et bouger une fenêtre ou un mod d'un côté ne change plus la disposition de l'autre.

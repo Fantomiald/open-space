@@ -1,3 +1,5 @@
+import type { AsideExchange } from '../../shared/protocol.ts';
+
 /** where an isolated session works (see WorktreeInfo) */
 type Place = { branch: string; base: string; root: string; mainRoot: string };
 
@@ -54,6 +56,9 @@ export const fr = {
     secretsNote: (user: string) => `(Note d'Open Space : ${fr.prompt.secrets(user || 'l’utilisateur')})\n\n`,
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
       'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.',
+    /** a reply to a side question: the exchange so far, then the reply */
+    asideReply: (earlier: readonly AsideExchange[], reply: string) =>
+      `${earlier.map(({ question, answer }) => `Question à côté : ${question}\n\nTa réponse : ${answer}`).join('\n\n')}\n\nL’utilisateur te répond : ${reply}`,
     worktree: (worktree: Place) => worktreeNote(worktree),
     intoWorktree: (worktree: Place) => `(Note d'Open Space : tu as changé de dossier. ${worktreeNote(worktree)})\n\n`,
     backHome: (folder: string) => `(Note d'Open Space : ta branche et son dossier n’existent plus. Tu travailles maintenant dans le dossier principal du projet, ${folder}, avec les autres sessions.)\n\n`,
@@ -98,9 +103,10 @@ export const fr = {
       browser: 'Processus relâché : le prochain message part avec l’autre navigateur pour tes comptes.',
       compacted: 'Processus relâché après le compactage de la conversation.',
       moved: 'Processus relâché pour changer de dossier.',
+      forRoom: 'Processus relâché pour faire de la place à une autre session : le prochain message reprend la conversation.',
     },
     closing: 'Cette session est en train de se fermer, réessaie dans un instant.',
-    tooMany: (max: number) => `Trop de sessions actives (${max} au maximum). Ferme-en une.`,
+    tooMany: (max: number) => `Trop de sessions au travail (${max} au maximum) : aucune n’attend, pour lui faire de la place. Arrête-en une.`,
     folderGone: 'Le dossier de cette session n’est plus dans les racines autorisées.',
     uploadsGone: (count: number) => (count > 1 ? `${count} fichiers joints n’existent plus : le message est parti sans eux. Joins-les de nouveau.` : 'Un fichier joint n’existe plus : le message est parti sans lui. Joins-le de nouveau.'),
     outsideRoots: 'Ce dossier n’est pas dans les racines autorisées (OFFICE_ROOTS).',

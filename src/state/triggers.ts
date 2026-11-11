@@ -2,7 +2,8 @@
 // without a DOM.
 import { nextCronRun, parseCron } from '../../shared/cron.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
-import { MCP_SERVER_NAME, type TriggerInput, type TriggerRun } from '../../shared/triggers.ts';
+import { MCP_SERVER_NAME, type TriggerInput, type TriggerRun, type TriggerRunOutcome } from '../../shared/triggers.ts';
+import { isWorking } from './queue.ts';
 
 /** When a cron trigger starts next: a time, null when its schedule never comes, undefined when it is not a valid cron (or a webhook). */
 export function nextStart(input: Pick<TriggerInput, 'kind' | 'cron'>, now: number): number | null | undefined {
@@ -12,6 +13,14 @@ export function nextStart(input: Pick<TriggerInput, 'kind' | 'cron'>, now: numbe
 }
 
 /** The last firings of one trigger, newest first. */
+/** What became of a run: one that started a session is at work, waits for a go, or is over (its session closed or done). */
+export type RunStatus = Exclude<TriggerRunOutcome, 'started'> | 'working' | 'asking' | 'done';
+export function runStatus(run: TriggerRun, session: SessionInfo | undefined): RunStatus {
+  if (run.outcome !== 'started') return run.outcome;
+  if (session?.state === 'perm') return 'asking';
+  return session && isWorking(session) ? 'working' : 'done';
+}
+
 export const runsOf = (runs: readonly TriggerRun[], triggerId: string, max = 8) => runs.filter((run) => run.triggerId === triggerId).slice(0, max);
 
 /** The folders a trigger is likely to be made for: those of the sessions, then the allowed roots, each once. */

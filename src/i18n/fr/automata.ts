@@ -88,7 +88,7 @@ export const automata = {
     runs: 'Derniers runs',
     noRuns: 'Pas encore lancé.',
     openSession: 'Ouvrir la session',
-    outcome: { started: 'lancé', queued: 'en attente', cancelled: 'annulé', skipped: 'ignoré', failed: 'échoué' },
+    outcome: { working: 'en cours', asking: 'attend ta réponse', done: 'fini', queued: 'en attente', cancelled: 'annulé', skipped: 'ignoré', failed: 'échoué' },
     cancelQueued: 'Annuler',
     source: { cron: 'horaire', webhook: 'webhook', manual: 'à la main', agent: 'par un agent', test: 'test' },
     busyRule: (hook: boolean): string => hook

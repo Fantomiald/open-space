@@ -136,7 +136,7 @@ Le premier lancement demande ton prénom et ton perso, les dossiers où les sess
 | `OFFICE_ROOTS` | Dossiers autorisés, séparés par `:` sur macOS ou `;` sur Windows. Remplace ceux choisis dans la page | ceux de l'onboarding |
 | `OFFICE_DIR` | Où vivent tes données (équipe, sessions, journaux) | `~/.open-space` sur macOS ; `%USERPROFILE%\.open-space` sur Windows |
 | `PORT` | Port du serveur | `4848` |
-| `OFFICE_MAX_LIVE` | Sessions Claude Code qui tournent en même temps | `8` |
+| `OFFICE_MAX_LIVE` | Sessions Claude Code qui tournent en même temps | `12` |
 | `OFFICE_IDLE_MINUTES` | Au-delà, une session inactive libère son processus (elle reprend au prochain message) | `30` |
 | `OFFICE_ENV_PASSTHROUGH` | Variables de ton shell à passer en plus aux sessions | aucune |
 
