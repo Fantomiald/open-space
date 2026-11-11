@@ -134,11 +134,11 @@ describe('the open-space MCP server', () => {
     const RUN: Caller = { session: 's5' };
     assert.ok(toolsFor(S1).some((each) => each.name === 'finish_run'));
     assert.ok(!toolsFor(EXTERNAL).some((each) => ['rename_session', 'finish_run'].includes(each.name)));
-    await tool(api, 'rename_session', { name: ' EX-1549 ' }, RUN);
+    await tool(api, 'rename_session', { name: ' PROJ-1549 ' }, RUN);
     assert.equal((await tool(api, 'rename_session', { name: ' ' }, RUN)).isError, true);
     assert.equal((await tool(api, 'finish_run', {}, S1)).isError, true, 'not a run');
     assert.equal((await tool(api, 'finish_run', {}, RUN)).isError, false);
-    assert.deepEqual(done, ['rename s5 EX-1549', 'finish s5']);
+    assert.deepEqual(done, ['rename s5 PROJ-1549', 'finish s5']);
   });
 
   it('speaks MCP: initialize, tools/list, notifications without an answer, unknown methods', async () => {

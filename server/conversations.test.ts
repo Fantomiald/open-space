@@ -44,18 +44,18 @@ describe('Claude Code conversations on disk', () => {
     mkdirSync(projectFolder(searched, home), { recursive: true });
     writeFileSync(path.join(projectFolder(searched, home), `${A}.jsonl`), [
       line({ type: 'custom-title', customTitle: 'PL' }),
-      line({ type: 'user', message: { role: 'user', content: 'Est-ce que EX-1539 est faisable ?' } }),
-      line({ type: 'user', message: { role: 'user', content: 'et EX-1569 avis ?' } }),
-      line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Le Déploiement de EX-1569 attend la variable.' }] } }),
-      line({ type: 'user', message: { content: [{ type: 'tool_result', content: 'déploiement ex-1539 dans un outil' }] } }),
+      line({ type: 'user', message: { role: 'user', content: 'Est-ce que PROJ-1539 est faisable ?' } }),
+      line({ type: 'user', message: { role: 'user', content: 'et PROJ-1569 avis ?' } }),
+      line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Le Déploiement de PROJ-1569 attend la variable.' }] } }),
+      line({ type: 'user', message: { content: [{ type: 'tool_result', content: 'déploiement proj-1539 dans un outil' }] } }),
     ].join('\n'));
     const found = (query: string) => searchConversations(searched, query, new Set(), home);
-    const [hit] = await found('ex-1569 deploiement');
-    assert.equal(hit.title, 'PL · Est-ce que EX-1539 est faisable ?');
-    assert.equal(hit.match?.text.slice(hit.match.start, hit.match.start + hit.match.length), 'EX-1569', 'the first word, when the words are not side by side');
-    assert.equal((await found('EX-1569'))[0].match?.text, 'Le Déploiement de EX-1569 attend la variable.');
-    assert.deepEqual(await found('ex-1539 déploiement'), [], 'only a tool result holds both words');
-    assert.deepEqual(await searchConversations(searched, 'EX-1569', new Set([A]), home), []);
+    const [hit] = await found('proj-1569 deploiement');
+    assert.equal(hit.title, 'PL · Est-ce que PROJ-1539 est faisable ?');
+    assert.equal(hit.match?.text.slice(hit.match.start, hit.match.start + hit.match.length), 'PROJ-1569', 'the first word, when the words are not side by side');
+    assert.equal((await found('PROJ-1569'))[0].match?.text, 'Le Déploiement de PROJ-1569 attend la variable.');
+    assert.deepEqual(await found('proj-1539 déploiement'), [], 'only a tool result holds both words');
+    assert.deepEqual(await searchConversations(searched, 'PROJ-1569', new Set([A]), home), []);
   });
 
   it('puts the name of an Open Space session (its custom title) before what it was asked', async () => {

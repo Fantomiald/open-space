@@ -14,8 +14,8 @@ describe('automatic tag', () => {
   });
 
   it('follows the user\'s rule, capitals included', () => {
-    assert.equal(cleanTag('EX-1576', true), 'EX-1576');
-    assert.ok(buildTagArgs('EX-1576 fix the login', 'the ticket key').includes(tagPrompt('the ticket key')));
+    assert.equal(cleanTag('PROJ-1576', true), 'PROJ-1576');
+    assert.ok(buildTagArgs('PROJ-1576 fix the login', 'the ticket key').includes(tagPrompt('the ticket key')));
     assert.match(tagPrompt('the ticket key'), /the ticket key$/);
     assert.ok(!tagPrompt('').includes('rule'));
   });

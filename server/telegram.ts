@@ -99,7 +99,7 @@ export async function download(token: string, fileId: string): Promise<Buffer> {
 /** A text cut to what Telegram takes. */
 export const fit = (text: string, max = MAX_TEXT) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-/** A command and what follows it: "/run ticket EX-12" gives ['run', 'ticket EX-12']; null for plain words. */
+/** A command and what follows it: "/run ticket PROJ-12" gives ['run', 'ticket PROJ-12']; null for plain words. */
 export function parseCommand(text: string): [string, string] | null {
   const found = /^\/([a-z_]+)(?:@\w+)?(?:\s+([\s\S]*))?$/i.exec(text.trim());
   return found ? [found[1]!.toLowerCase(), (found[2] ?? '').trim()] : null;

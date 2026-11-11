@@ -59,23 +59,23 @@ describe('the sites kept', () => {
     assert.equal(isKept('google.com'), true);
     assert.equal(isKept('accounts.google.com'), true);
     assert.equal(isKept('.google.com'), true);
-    assert.equal(isKept('google.com.evil.io'), false);
+    assert.equal(isKept('google.com.evil.example'), false);
     assert.equal(isKept('notgoogle.com'), false);
     // a Google sign-in sets its cookies on YouTube and on the local Google too
     assert.equal(isKept('.youtube.com'), true);
     assert.equal(isKept('accounts.youtube.com'), true);
     assert.equal(isKept('.google.fr'), true);
     assert.equal(isKept('www.google.co.uk'), true);
-    assert.equal(isKept('google.fr.evil.io'), false);
+    assert.equal(isKept('google.fr.evil.example'), false);
     assert.equal(isKept('notyoutube.com'), false);
   });
 
   it('clears the cookies of the sites visited, or every one but the kept at launch', () => {
     const cookie = (domain: string) => ({ name: 'n', domain, path: '/' });
-    const cookies = [cookie('.example.org'), cookie('staging.example.org'), cookie('.google.com'), cookie('other.io')];
+    const cookies = [cookie('.example.org'), cookie('staging.example.org'), cookie('.google.com'), cookie('other.example')];
     assert.deepEqual(cookiesToClear(cookies, ['https://staging.example.org']), [cookie('.example.org'), cookie('staging.example.org')]);
     assert.deepEqual(cookiesToClear([cookie('127.0.0.1')], ['http://127.0.0.1:8766']), [cookie('127.0.0.1')]);
-    assert.deepEqual(cookiesToClear(cookies), [cookie('.example.org'), cookie('staging.example.org'), cookie('other.io')]);
+    assert.deepEqual(cookiesToClear(cookies), [cookie('.example.org'), cookie('staging.example.org'), cookie('other.example')]);
   });
 });
 
@@ -132,7 +132,7 @@ describe('the shared browser seen by one owner', () => {
     const filter = new SharedCdpFilter('s1', new SharedTabs());
     filter.fromUpstream(attached('S', 't', created(filter)));
     assert.ok(filter.fromUpstream(attached('P', 'popup', '', { openerId: 't' })).client);
-    const frame: CdpMessage = { method: 'Target.attachedToTarget', sessionId: 'S', params: { sessionId: 'F', targetInfo: { targetId: 'f', type: 'iframe', url: 'https://checkout.com/' } } };
+    const frame: CdpMessage = { method: 'Target.attachedToTarget', sessionId: 'S', params: { sessionId: 'F', targetInfo: { targetId: 'f', type: 'iframe', url: 'https://checkout.example/' } } };
     assert.ok(filter.fromUpstream(frame).client);
     assert.ok(filter.fromUpstream({ method: 'Runtime.consoleAPICalled', sessionId: 'F', params: {} }).client);
     assert.ok(filter.fromClient({ id: 9, method: 'Runtime.evaluate', sessionId: 'F', params: {} }).upstream);

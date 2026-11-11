@@ -21,7 +21,7 @@ const NO_TAG = '-';
 
 const SYSTEM_PROMPT = 'Give a short tag naming what a request is about, like a label on a folder. Answer only the tag: one word if it ' +
   'can be said in one, two at most, lowercase, no punctuation, in the request\'s language. Name the thing worked on, not the action: ' +
-  '"refonte du paywall de Lilies" gives "paywall", "fix the login crash on Android" gives "login". If the request has no subject ' +
+  '"refonte du paywall de l’app" gives "paywall", "fix the login crash on Android" gives "login". If the request has no subject ' +
   `yet (a greeting, "are you there?") or you are unsure, answer ${NO_TAG}. Never answer with a sentence`;
 
 /** The prompt with the user's rule (Preferences.autoTagRule), which wins when it applies. */
@@ -39,7 +39,7 @@ export function buildTagArgs(message: string, rule = ''): string[] {
   ];
 }
 
-/** The model's answer as a tag: two words at most, without quotes or punctuation; null for none. Capitals are kept only under the user's rule (a ticket key, « EX-1576 »). */
+/** The model's answer as a tag: two words at most, without quotes or punctuation; null for none. Capitals are kept only under the user's rule (a ticket key, « PROJ-1576 »). */
 export function cleanTag(answer: string, keepCase = false): string | null {
   const words = (keepCase ? answer : answer.toLowerCase()).replace(/[^\p{L}\p{N}\s-]/gu, ' ').split(/\s+/).filter((word) => word && word !== NO_TAG);
   if (words.length > MAX_WORDS) return null;

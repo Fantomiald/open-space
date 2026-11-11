@@ -496,8 +496,8 @@ describe('markdown', () => {
   });
 
   it('shows the sessions named with "@" and the bare addresses as links', () => {
-    const html = mdToHtml('*ok* @Ana Lou voit https://a.com/x?y=1. mail ana@lou.fr', ['Ana', 'Ana Lou']);
-    assert.match(html, /<em>ok<\/em> <span class="cp-mention"><span class="cp-at">@<\/span>Ana Lou<\/span> voit <a href="https:\/\/a.com\/x\?y=1" target="_blank"/);
+    const html = mdToHtml('*ok* @Ana Lou voit https://a.example/x?y=1. mail ana@lou.example', ['Ana', 'Ana Lou']);
+    assert.match(html, /<em>ok<\/em> <span class="cp-mention"><span class="cp-at">@<\/span>Ana Lou<\/span> voit <a href="https:\/\/a.example\/x\?y=1" target="_blank"/);
     assert.ok(!html.includes('@</span>lou'), 'not an email');
   });
 });

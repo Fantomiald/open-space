@@ -401,9 +401,9 @@ describe('the shared browser’s endpoints', () => {
 
 describe('the triggers\' webhooks and the open-space MCP server', () => {
   it('lets a webhook in under any Host with its token, and nothing else', async () => {
-    const ok = await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"EX-1"}', {}, 'tunnel.example.com');
+    const ok = await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"PROJ-1"}', {}, 'tunnel.example.com');
     assert.equal(ok.status, 202);
-    assert.deepEqual(hooked, ['{"issue":"EX-1"}']);
+    assert.deepEqual(hooked, ['{"issue":"PROJ-1"}']);
     assert.equal((await rawPost(`/hooks/${HOOK_ID}/${'u'.repeat(43)}`, '{}', {}, 'tunnel.example.com')).status, 404);
     assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{}', { Origin: 'https://evil.example' })).status, 404, 'never from a page');
     assert.equal((await rawRequest(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`)).status, 404, 'POST only');
@@ -415,8 +415,8 @@ describe('the triggers\' webhooks and the open-space MCP server', () => {
 
   it('opens a port with the webhooks alone, for a tunnel', async () => {
     const tunnel = 'hooks.example.com';
-    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"EX-2"}', {}, tunnel, hooksPort)).status, 202);
-    assert.equal(hooked.at(-1), '{"issue":"EX-2"}');
+    assert.equal((await rawPost(`/hooks/${HOOK_ID}/${HOOK_TOKEN}`, '{"issue":"PROJ-2"}', {}, tunnel, hooksPort)).status, 202);
+    assert.equal(hooked.at(-1), '{"issue":"PROJ-2"}');
     assert.equal((await rawPost(`/hooks/${HOOK_ID}/${'u'.repeat(43)}`, '{}', {}, tunnel, hooksPort)).status, 404);
     assert.equal((await rawRequest('/', `127.0.0.1:${hooksPort}`, hooksPort)).status, 404, 'not the page');
     assert.equal((await rawPost('/mcp/s1/key-of-s1', '{}', {}, `127.0.0.1:${hooksPort}`, hooksPort)).status, 404, 'not the MCP server');

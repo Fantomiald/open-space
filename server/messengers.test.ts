@@ -97,10 +97,10 @@ describe('the chat bots', () => {
 
       // a reply to one of its messages goes to its session
       fake.message('ajoute les tests', { reply_to_message: { message_id: waitId } });
-      fake.message('/run ticket jira EX-12');
+      fake.message('/run ticket jira PROJ-12');
       fake.message('il en est où JD ?');
       await until(() => done.some((each) => each.startsWith('fire')) && fake.sent('sendMessage').some((each) => String(each.body.text).startsWith('agent:')));
-      assert.ok(done.includes('fire t1 EX-12'));
+      assert.ok(done.includes('fire t1 PROJ-12'));
       assert.ok(done.includes('send s1 ajoute les tests '), done.join('\n'));
 
       // it finished
@@ -116,10 +116,10 @@ describe('the chat bots', () => {
 
   it('matches what is typed on a phone to a name', () => {
     const triggers = [{ name: 'Ticket Jira assigné' }, { name: 'Récap du matin' }];
-    assert.deepEqual(matchByName(triggers, (each) => each.name, 'ticket jira assigne EX-12'), { item: triggers[0], rest: 'EX-12' });
+    assert.deepEqual(matchByName(triggers, (each) => each.name, 'ticket jira assigne PROJ-12'), { item: triggers[0], rest: 'PROJ-12' });
     assert.deepEqual(matchByName(triggers, (each) => each.name, 'recap'), { item: triggers[1], rest: '' });
     assert.equal(matchByName(triggers, (each) => each.name, 'nothing'), null);
-    assert.deepEqual(telegram.parseCommand('/run@office_bot ticket EX-1'), ['run', 'ticket EX-1']);
+    assert.deepEqual(telegram.parseCommand('/run@office_bot ticket PROJ-1'), ['run', 'ticket PROJ-1']);
     assert.equal(telegram.parseCommand('hello'), null);
   });
 

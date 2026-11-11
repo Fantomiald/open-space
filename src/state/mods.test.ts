@@ -50,7 +50,7 @@ describe('mod windows', () => {
     const report = {
       generatedAt: now, scanning: false, hours: [], conversations: [],
       models: [{ day: '2026-11-10', model: 'claude-opus-5-5', tokens, turns: 3 }, { day: '2026-11-09', model: 'claude-haiku-5-5', tokens, turns: 1 }, { day: '2026-01-01', model: 'claude-opus-5-5', tokens, turns: 9 }],
-      projects: [{ day: '2026-11-10', project: '/Users/me/Futur/office', model: 'claude-opus-5-5', tokens }, { day: '2026-11-09', project: '/Users/me/Futur/lilies', model: 'claude-haiku-5-5', tokens }],
+      projects: [{ day: '2026-11-10', project: '/Users/me/Futur/office', model: 'claude-opus-5-5', tokens }, { day: '2026-11-09', project: '/Users/me/Futur/shop', model: 'claude-haiku-5-5', tokens }],
     };
     const costs = costsForMods(report, now, 7);
     assert.ok(costs);
@@ -58,7 +58,7 @@ describe('mod windows', () => {
     assert.equal(costs.days.at(-1)?.day, '2026-11-10');
     assert.equal(costs.today, 20);
     assert.equal(costs.total, 20.5, 'the day of January is not among the last 7');
-    assert.deepEqual(costs.projects, [{ name: 'office', usd: 20 }, { name: 'lilies', usd: 0.5 }]);
+    assert.deepEqual(costs.projects, [{ name: 'office', usd: 20 }, { name: 'shop', usd: 0.5 }]);
     assert.equal(costs.models[0].usd, 20);
     assert.equal(costsForMods(null, now), null);
   });
