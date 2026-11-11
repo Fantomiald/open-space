@@ -1,6 +1,6 @@
 # The macOS app (npm run app): release/Open Space-<version>-<arch>.dmg, plus the .zip and latest-mac.yml that
-# electron-updater reads from the GitHub release. Everything the app runs is bundled in out/ (vite.desktop.config.ts),
-# so no node_modules ships.
+# electron-updater reads from the GitHub release. The Windows app (npm run app:win): the NSIS installer, its .blockmap
+# and latest.yml. Everything the app runs is bundled in out/ (vite.desktop.config.ts), so no node_modules ships.
 appId: io.github.fantomiald.open-space
 productName: Open Space
 copyright: Fantomiald
@@ -32,10 +32,10 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: Open Space-Setup-${version}-${arch}.${ext}
+# one click, per user (no UAC): electron-updater runs it again silently for each update
 nsis:
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
 publish:
