@@ -1,5 +1,17 @@
 # Versions
 
+## 1.32.0
+
+- Un seul modèle de fenêtre : une conversation ou un mod glissé vers les autres se range dans la grille, tiré dehors il flotte. La bascule Grille / Libre disparaît. Un mod rangé ne recharge pas sa page. « Ranger les fenêtres » dans ⌘K.
+- Mode focus : la liste se groupe par état ou par projet (icône filtre), sur deux lignes avec les tags en entier. La session qu'on vient d'ouvrir reste à sa place dans « À toi ». En vue Tout, chaque fenêtre dit son projet.
+- En-tête : la jauge montre deux anneaux, les 5 heures et la plus remplie des limites longues. Le bouton Équipe part dans les Réglages, la radio se coupe dans Réglages > Apparence.
+- Haut des fenêtres allégé : Agrandir, Sortir et Renommer dans ⋯, renommer aussi au double-clic sur le nom. Interrompre passe dans le champ, à la place d'Envoyer quand le champ est vide. Les tags s'ajoutent dans un petit champ à part. L'en-tête des mods a la même hauteur et les mêmes boutons que celui des conversations, avec ⋯.
+- Réglages réorganisés : Général, Apparence (thème, ambiance, « Cacher les prénoms » dans la salle, radio), Sessions, Claude, Dossiers et notes, Automates et connexions (Telegram et accès externe y passent), Usage, Raccourcis, À propos.
+- Salle : le panneau État se redimensionne (poignée en haut à droite, double-clic pour revenir), la carte des automates dit combien sont actifs et quand part le prochain. « Lire X » dans la liste des choses à faire.
+- Telegram : une session lancée depuis le bot n'est plus suivie quand Remote Control est allumé, `/follow` et `/unfollow` choisissent.
+- Corrigé : Échap sur la jauge n'interrompt plus la session ouverte, l'en-tête reste au-dessus des fenêtres flottantes, qui ne passent plus dessous, et le bouton rafraîchir d'un mod tourne pendant le chargement.
+- Vient des PR de Quentin et GC : Reprendre liste les conversations de Claude Desktop et les reprend dans leur worktree, sur leur branche, avec une fusion vers la branche d'où elles sont parties ; un `/clear` retire les tags de la session et en propose de nouveaux au premier message.
+
 ## 1.31.0
 
 - Quoi de neuf : à la première ouverture d'une nouvelle version, une fenêtre montre ses nouveautés, avec un dessin, ses points forts et un bouton vers chaque fonction quand il y en a un. Elle ne revient pas sur un patch de la même version, et se rouvre depuis Réglages > À propos.

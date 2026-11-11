@@ -69,13 +69,17 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.31': {
-        title: 'A better start, and what changed',
+      '1.32': {
+        title: 'Windows that tidy up, a clearer app',
         items: {
-          whatsNew: { title: 'What’s new, at every update', text: 'The first time you open a new version, this window shows what changed. You’ll find it again in Settings > About.' },
-          tour: { title: 'A tour of the features', text: 'Automatons, mods, the browser in a mini window and the shortcuts, explained in a few screens. Take it again whenever you like.' },
-          onboarding: { title: 'A clearer first start', text: 'The room drawn right on the welcome, three quick settings, then the tour, which newcomers can skip.' },
+          windows: { title: 'Windows and mods tidy up as you drag', text: 'Drag a conversation or a mod onto the others: it joins the grid. Pull it out: it floats. No more Grid / Free switch.' },
+          list: { title: 'The list grouped your way', text: 'The filter icon groups by state or by project. Tags show in full, and in the All view each window names its project.' },
+          quota: { title: 'Two rings for your quota', text: 'The 5 hours and the week side by side in the header: no more hidden weekly limit.' },
+          settings: { title: 'Tidier settings', text: 'An Appearance section (radio you can turn off, first names you can hide in the room), and Automatons and connections in one place.' },
+          telegram: { title: 'A calmer Telegram', text: 'A session the bot starts in Remote Control no longer writes to you twice. /follow and /unfollow pick what you follow.' },
+          desktop: { title: 'Claude Desktop’s conversations', text: 'Resume lists them too, and picks them up in their folder and on their branch. A /clear also takes the old tags off.' },
         },
+        thanks: 'Thanks to Quentin and Guillaume for their pull requests.',
       },
     },
     actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour' },

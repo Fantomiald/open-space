@@ -71,13 +71,17 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.31': {
-        title: 'Bien démarrer, et voir ce qui change',
+      '1.32': {
+        title: 'Des fenêtres qui se rangent, une app plus claire',
         items: {
-          whatsNew: { title: 'Les nouveautés à chaque mise à jour', text: 'À la première ouverture d’une nouvelle version, cette fenêtre te montre ce qui a changé. Tu la retrouves dans Réglages > À propos.' },
-          tour: { title: 'Une visite des fonctions', text: 'Les automates, les mods, le navigateur en mini-fenêtre et les raccourcis, expliqués en quelques écrans. Tu peux la refaire quand tu veux.' },
-          onboarding: { title: 'Un premier lancement plus clair', text: 'La salle dessinée dès l’accueil, trois réglages rapides, puis la visite, que les nouveaux venus peuvent passer.' },
+          windows: { title: 'Fenêtres et mods se rangent au glisser', text: 'Glisse une conversation ou un mod vers les autres : il se range dans la grille. Tire-le dehors : il flotte. Plus de bascule Grille / Libre.' },
+          list: { title: 'La liste groupée comme tu veux', text: 'L’icône filtre groupe par état ou par projet. Les tags s’affichent en entier, et en vue Tout chaque fenêtre dit son projet.' },
+          quota: { title: 'Deux anneaux pour ton quota', text: 'Les 5 heures et la semaine côte à côte dans l’en-tête : plus de limite hebdo cachée.' },
+          settings: { title: 'Des réglages mieux rangés', text: 'Une rubrique Apparence (radio à couper, prénoms à cacher dans la salle), et Automates et connexions au même endroit.' },
+          telegram: { title: 'Telegram plus calme', text: 'Une session lancée depuis le bot en Remote Control ne t’écrit plus deux fois. /follow et /unfollow choisissent ce que tu suis.' },
+          desktop: { title: 'Les conversations de Claude Desktop', text: 'Reprendre les liste aussi, et les reprend dans leur dossier et sur leur branche. Un /clear retire aussi les vieux tags.' },
         },
+        thanks: 'Merci à Quentin et Guillaume pour leurs PR.',
       },
     },
     actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite' },

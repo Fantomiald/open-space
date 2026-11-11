@@ -2,7 +2,7 @@
  * The version whose news the "What's new" window tells, as major.minor: a patch shows its minor's news. A new minor
  * replaces it here, in i18n (`whatsNew.releases`) and in WhatsNewDialog.tsx (`LOOKS`): only the latest is ever shown.
  */
-export const RELEASES = ['1.31'] as const;
+export const RELEASES = ['1.32'] as const;
 export type Release = (typeof RELEASES)[number];
 
 /** "1.30.1" → [1, 30]; nothing for a version that is not one. */
