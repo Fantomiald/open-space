@@ -1683,7 +1683,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 /* the session's folder: the folders found under the roots, in a panel above the field, wider than it */
 .cp-folder__panel {
   position: absolute; z-index: 6; left: 0; bottom: calc(100% + var(--space-2)); display: grid; width: max-content; min-width: 100%; max-width: min(28rem, 80vw);
-  max-height: 22rem; overflow-y: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--color-surface-raised);
+  max-height: min(22rem, var(--room, 22rem)); overflow-y: auto; margin: 0; padding: var(--space-1); list-style: none; background: var(--color-surface-raised);
   border: var(--border-width) solid var(--color-border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay);
 }
 .cp-folder__option {
