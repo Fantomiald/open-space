@@ -776,7 +776,7 @@ export class Session {
    * question per value, which the user may also refuse.
    */
   private onElicitation(request: ElicitationRequest) {
-    const detail = [request.message, request.url].filter(Boolean).join('\n');
+    const detail = [request.title, request.message, request.url].filter(Boolean).join('\n');
     const questions = request.fields.map((field) => ({
       question: field.label,
       header: field.label,
@@ -784,7 +784,7 @@ export class Session {
       options: field.options.map((label) => ({ label, description: '' })),
       multiSelect: false,
     }));
-    const prompt: PermissionPrompt = { requestId: request.requestId, who: 'chef', tool: request.title, detail, canAlways: false, ...(questions.length ? { questions, declinable: true } : {}) };
+    const prompt: PermissionPrompt = { requestId: request.requestId, who: 'chef', tool: request.server, detail, canAlways: false, ...(questions.length ? { questions, declinable: true } : {}) };
     this.requests.set(request.requestId, { input: {}, suggestions: [], prompt, fields: request.fields });
     this.record({ k: 'ask', ...prompt });
     this.apply({ type: 'permission_requested' });

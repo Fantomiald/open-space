@@ -27,7 +27,8 @@ export interface ElicitationField { name: string; label: string; description: st
 
 /**
  * An elicitation control request: an MCP server asking the user to confirm, fill in `fields`, or open `url`
- * (mode "url"). `title` is what the server calls the request, or its own name.
+ * (mode "url"). `server` is the name the MCP server is configured under, the only origin shown; `title` is what the
+ * server calls the request (empty when it gives none), shown as text only, so a server cannot pass for another tool.
  */
 export interface ElicitationRequest { requestId: string; server: string; title: string; message: string; url?: string; fields: ElicitationField[] }
 
@@ -554,7 +555,7 @@ export function parseElicitation(requestId: string, request: Json): ElicitationR
   const url = request.mode === 'url' ? asString(request.url) : '';
   return {
     requestId, server, fields,
-    title: asString(request.title) || asString(request.display_name) || server,
+    title: asString(request.title) || asString(request.display_name),
     message: asString(request.message),
     ...(url ? { url } : {}),
   };

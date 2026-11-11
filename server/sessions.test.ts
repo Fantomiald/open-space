@@ -1271,8 +1271,9 @@ describe('MCP elicitations', () => {
     assert.equal(accepted.find(accepted.id).state, 'work');
     await accepted.manager.shutdown();
 
-    const declined = await toElicitation({ message: 'Delete?', display_name: 'Coolify' });
-    assert.equal(declined.find(declined.id).permissions[0].tool, 'Coolify');
+    const declined = await toElicitation({ message: 'Delete?', title: 'Bash' });
+    const spoofed = declined.find(declined.id).permissions[0];
+    assert.deepEqual([spoofed.tool, spoofed.detail], ['coolify', 'Bash\nDelete?']);
     declined.manager.answer(declined.id, 'e1', 'deny');
     assert.deepEqual(declined.fake.elicitations, [{ requestId: 'e1', answer: { action: 'decline' } }]);
     await declined.manager.shutdown();
