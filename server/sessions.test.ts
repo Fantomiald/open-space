@@ -499,6 +499,11 @@ describe('automatic tags', () => {
     const tagger = (message: string) => { asked.push(message); return new Promise<string | null>((resolve) => { answer = resolve; }); };
     return { asked, answer: (tag: string | null) => answer(tag), deps: { tagger, autoTag: () => enabled } };
   };
+  /** a turn of `conversation` (simple-turn's init names another one, which /clear would have started) */
+  const turn = (process: { handlers: ProcessHandlers }, conversation: string) => {
+    process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
+    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+  };
 
   it('tags a new session from its first message only, when the setting is on', async () => {
     const tags = tagging(true);
@@ -509,7 +514,7 @@ describe('automatic tags', () => {
     tags.answer('paywall');
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(find(id).tags, ['paywall']);
-    processes[0].feed('simple-turn');
+    turn(processes[0], id);
     manager.send(id, 'et le bouton aussi');
     assert.equal(tags.asked.length, 1);
     await manager.shutdown();
@@ -535,6 +540,25 @@ describe('automatic tags', () => {
     await second.manager.create({ cwd: projectA(), text: 'refais le paywall' });
     assert.deepEqual(off.asked, []);
     await second.manager.shutdown();
+  });
+
+  it('takes the tags off on /clear and tags the new conversation from its first plain message', async () => {
+    const tags = tagging(true);
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, tags.deps);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'refais le paywall' });
+    tags.answer('paywall');
+    await new Promise((resolve) => setImmediate(resolve));
+    turn(processes[0], id);
+    manager.send(id, '/clear');
+    turn(processes[0], 'new-conversation');
+    assert.equal(find(id).tags, undefined);
+    manager.send(id, 'la page de vente');
+    assert.deepEqual(tags.asked, ['refais le paywall', 'la page de vente']);
+    tags.answer('vente');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(find(id).tags, ['vente']);
+    await manager.shutdown();
   });
 });
 
