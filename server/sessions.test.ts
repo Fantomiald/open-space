@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import type { AccountsBrowser, ServerMessage, SessionInfo } from '../shared/protocol.ts';
-import type { CatalogProbe, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
+import type { CatalogProbe, ElicitationAnswer, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
 import { projectFolder } from './conversations.ts';
@@ -20,6 +20,7 @@ class FakeProcess implements ProcessHandle {
   sent: string[] = [];
   sentImages: number[] = [];
   answers: { requestId: string; answer: PermissionAnswer }[] = [];
+  elicitations: { requestId: string; answer: ElicitationAnswer }[] = [];
   interrupts = 0;
   remoteCalls: boolean[] = [];
   remoteTitles: string[] = [];
@@ -39,6 +40,7 @@ class FakeProcess implements ProcessHandle {
 
   send(text: string, images: readonly unknown[] = []) { this.sent.push(text); this.sentImages.push(images.length); return true; }
   answerPermission(requestId: string, answer: PermissionAnswer) { this.answers.push({ requestId, answer }); }
+  answerElicitation(requestId: string, answer: ElicitationAnswer) { this.elicitations.push({ requestId, answer }); }
   refuseControl() { /* not needed by these tests */ }
   interrupt() { this.interrupts++; }
   /** answers the control requests like Claude Code would (Remote Control, the MCP servers) */
@@ -1267,6 +1269,66 @@ describe('AskUserQuestion', () => {
   it('refuses empty answers and a reply to a yes/no request', async () => {
     const { id, manager } = await toQuestion();
     assert.throws(() => manager.reply(id, 'q1', { 'Which colour?': '  ' }), /Choisis une réponse/);
+    await manager.shutdown();
+  });
+});
+
+describe('MCP elicitations', () => {
+  async function toElicitation(request: Record<string, unknown>) {
+    const context = setup();
+    await context.manager.init();
+    const { id } = await context.manager.create({ cwd: projectA(), text: 'delete the app' });
+    const fake = context.processes[0];
+    fake.feed('simple-turn', 0, 3);
+    fake.handlers.onMessage({ type: 'control_request', request_id: 'e1', request: { subtype: 'elicitation', mcp_server_name: 'coolify', ...request } });
+    return { ...context, id, fake };
+  }
+
+  it('asks a confirmation as a yes or no, and sends back accept or decline', async () => {
+    const accepted = await toElicitation({ message: 'Delete app hello-app?', requested_schema: { type: 'object', properties: {} } });
+    const prompt = accepted.find(accepted.id).permissions[0];
+    assert.equal(accepted.find(accepted.id).state, 'perm');
+    assert.deepEqual([prompt.tool, prompt.detail, prompt.questions, prompt.canAlways], ['coolify', 'Delete app hello-app?', undefined, false]);
+    accepted.manager.answer(accepted.id, 'e1', 'allow');
+    assert.deepEqual(accepted.fake.elicitations, [{ requestId: 'e1', answer: { action: 'accept', content: {} } }]);
+    assert.deepEqual(accepted.fake.answers, []);
+    assert.equal(accepted.find(accepted.id).state, 'work');
+    await accepted.manager.shutdown();
+
+    const declined = await toElicitation({ message: 'Delete?', title: 'Bash' });
+    const spoofed = declined.find(declined.id).permissions[0];
+    assert.deepEqual([spoofed.tool, spoofed.detail], ['coolify', 'Bash\nDelete?']);
+    declined.manager.answer(declined.id, 'e1', 'deny');
+    assert.deepEqual(declined.fake.elicitations, [{ requestId: 'e1', answer: { action: 'decline' } }]);
+    await declined.manager.shutdown();
+  });
+
+  it('asks a question per value, in the server order, and sends the answers typed by the schema', async () => {
+    const { find, id, fake, manager } = await toElicitation({
+      message: 'Confirm the deletion',
+      requested_schema: { type: 'object', properties: {
+        volumes: { type: 'boolean', title: 'Delete volumes' },
+        keep: { type: 'integer', title: 'Days kept', description: 'Before the backups go' },
+        reason: { type: 'string', enum: ['test', 'old'] },
+      } },
+      property_order: ['reason', 'volumes', 'keep'],
+    });
+    const prompt = find(id).permissions[0];
+    assert.equal(prompt.declinable, true);
+    assert.deepEqual(prompt.questions?.map(({ question, options }) => [question, options.map(({ label }) => label)]), [['reason', ['test', 'old']], ['Delete volumes', ['Oui', 'Non']], ['Days kept', []]]);
+    assert.deepEqual(prompt.questions?.map(({ hint }) => hint), [undefined, undefined, 'Before the backups go']);
+    assert.throws(() => manager.answer(id, 'e1', 'allow'), /pas un oui ou un non/);
+    assert.throws(() => manager.reply(id, 'e1', { reason: 'test', 'Delete volumes': 'Oui', 'Days kept': '2.5' }), /attend un nombre/);
+    manager.reply(id, 'e1', { reason: 'test', 'Delete volumes': 'Non', 'Days kept': ' 7 ' });
+    assert.deepEqual(fake.elicitations, [{ requestId: 'e1', answer: { action: 'accept', content: { reason: 'test', volumes: false, keep: 7 } } }]);
+    assert.deepEqual(find(id).permissions, []);
+    await manager.shutdown();
+  });
+
+  it('lets the user refuse the questions', async () => {
+    const { id, fake, manager } = await toElicitation({ message: 'Name?', requested_schema: { type: 'object', properties: { name: { type: 'string' } } } });
+    manager.answer(id, 'e1', 'deny');
+    assert.deepEqual(fake.elicitations, [{ requestId: 'e1', answer: { action: 'decline' } }]);
     await manager.shutdown();
   });
 });

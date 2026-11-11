@@ -112,6 +112,7 @@ export const fr = {
     questionNotYesNo: 'Cette question attend une réponse, pas un oui ou un non.',
     requestYesNo: 'Cette demande attend un oui ou un non.',
     chooseAnswer: 'Choisis une réponse avant d’envoyer.',
+    notANumber: (label: string) => `« ${label} » attend un nombre.`,
     killed: (signal: string) => `Claude Code a été arrêté (${signal}).`,
     exited: (code: number | null) => `Claude Code s’est arrêté (code ${code}).`,
     resumed: (title: string) => `Reprise de « ${title} ».`,
@@ -158,6 +159,8 @@ export const fr = {
   },
   /** what the thread shows of tool calls, permissions and messages from other sessions */
   normalizer: {
+    yes: 'Oui',
+    no: 'Non',
     peerUnknown: 'Une autre session',
     recipientUnknown: 'une autre session',
     sentTo: (recipient: string, text: string) => `→ ${recipient} : ${text}`,

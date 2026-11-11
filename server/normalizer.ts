@@ -22,6 +22,16 @@ export interface ToolRequest { requestId: string; who: string; tool: string; inp
 
 export type AskEvent = Extract<OfficeEvent, { k: 'ask' }>;
 
+/** One value an MCP server asks for, from a property of its requested schema: `kind` says how its answer is sent back. */
+export interface ElicitationField { name: string; label: string; description: string; kind: 'boolean' | 'choice' | 'number' | 'integer' | 'text'; options: string[] }
+
+/**
+ * An elicitation control request: an MCP server asking the user to confirm, fill in `fields`, or open `url`
+ * (mode "url"). `server` is the name the MCP server is configured under, the only origin shown; `title` is what the
+ * server calls the request (empty when it gives none), shown as text only, so a server cannot pass for another tool.
+ */
+export interface ElicitationRequest { requestId: string; server: string; title: string; message: string; url?: string; fields: ElicitationField[] }
+
 /** Something the session's agent planned to do later on its own, once the tool call that plans it went through. */
 export type ScheduleChange =
   | { kind: 'wakeup'; seconds: number } | { kind: 'wakeup_stop' }
@@ -74,6 +84,8 @@ export interface NormalizerOptions {
   onCompacting?: () => void;
   onResult: (result: TurnResult) => void;
   onRequest: (request: ToolRequest) => void;
+  /** an MCP server asks the user something (an elicitation): left out, it is refused, which Claude Code takes as a cancel */
+  onElicitation?: (request: ElicitationRequest) => void;
   /** Claude Code withdrew a request (it will not wait for the answer any more) */
   onCancel: (requestId: string) => void;
   /** the text of a message still being written, so far (it then arrives whole as a `say` event) */
@@ -204,6 +216,10 @@ export class Normalizer {
   private controlRequest(message: Json): string | null {
     const requestId = asString(message.request_id);
     const request = asJson(message.request);
+    if (request.subtype === 'elicitation' && this.options.onElicitation) {
+      this.options.onElicitation(parseElicitation(requestId, request));
+      return null;
+    }
     if (request.subtype !== 'can_use_tool') return requestId;
     this.options.onRequest({
       requestId,
@@ -527,6 +543,51 @@ export function parseQuestions(input: Record<string, unknown>): Question[] | nul
     options: asArray(question.options).map(asJson).map((option) => ({ label: asString(option.label), description: asString(option.description) })).filter((option) => option.label),
   })).filter((question) => question.question && question.options.length > 0);
   return questions.length ? questions : null;
+}
+
+/** An elicitation request as Claude Code sends it: its fields in the order the server listed them (`property_order`). */
+export function parseElicitation(requestId: string, request: Json): ElicitationRequest {
+  const server = asString(request.mcp_server_name);
+  const properties = asJson(asJson(request.requested_schema).properties);
+  const listed = asArray(request.property_order).map((name) => asString(name)).filter((name) => name in properties);
+  const order = [...listed, ...Object.keys(properties).filter((name) => !listed.includes(name))];
+  const fields = order.map((name) => elicitationField(name, asJson(properties[name])));
+  const url = request.mode === 'url' ? asString(request.url) : '';
+  return {
+    requestId, server, fields,
+    title: asString(request.title) || asString(request.display_name),
+    message: asString(request.message),
+    ...(url ? { url } : {}),
+  };
+}
+
+/**
+ * The values an MCP server receives for the user's answers, by field name: `answers` are keyed by the text of the
+ * question each field was shown as (`questions`, in the order of `fields`). Fields left unanswered are left out.
+ */
+export function elicitationContent(fields: readonly ElicitationField[], questions: readonly Question[] = [], answers: Record<string, string>): Record<string, unknown> {
+  return Object.fromEntries(fields.flatMap((field, index): [string, unknown][] => {
+    const answer = answers[questions[index]?.question ?? '']?.trim();
+    if (!answer) return [];
+    if (field.kind === 'boolean') return [[field.name, answer === st.normalizer.yes]];
+    if (field.kind === 'number' || field.kind === 'integer') {
+      const value = Number(answer.replace(',', '.'));
+      if (!Number.isFinite(value) || (field.kind === 'integer' && !Number.isInteger(value))) throw new Error(st.sessions.notANumber(field.label));
+      return [[field.name, value]];
+    }
+    return [[field.name, answer]];
+  }));
+}
+
+function elicitationField(name: string, schema: Json): ElicitationField {
+  const label = asString(schema.title) || name;
+  const description = asString(schema.description);
+  const choices = asArray(schema.enum).map((choice) => asString(choice)).filter(Boolean);
+  const titled = asArray(schema.oneOf).map(asJson).map((choice) => asString(choice.const)).filter(Boolean);
+  if (choices.length || titled.length) return { name, label, description, kind: 'choice', options: choices.length ? choices : titled };
+  if (schema.type === 'boolean') return { name, label, description, kind: 'boolean', options: [st.normalizer.yes, st.normalizer.no] };
+  if (schema.type === 'number' || schema.type === 'integer') return { name, label, description, kind: schema.type, options: [] };
+  return { name, label, description, kind: 'text', options: [] };
 }
 
 /**

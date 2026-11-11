@@ -316,12 +316,16 @@ export interface ProcessHandlers {
 
 export type PermissionAnswer = { allow: true; input: Record<string, unknown>; updates: Json[] } | { allow: false };
 
+/** The user's answer to an MCP server's elicitation, as the server receives it. */
+export type ElicitationAnswer = { action: 'accept'; content: Record<string, unknown> } | { action: 'decline' };
+
 /** What a Session needs from a process: the real one below, or a scripted one in tests. */
 export interface ProcessHandle {
   readonly alive: boolean;
   /** a user message: its text (may be empty when pictures go alone) and its pictures */
   send: (text: string, images?: readonly ImageUpload[]) => boolean;
   answerPermission: (requestId: string, answer: PermissionAnswer) => void;
+  answerElicitation: (requestId: string, answer: ElicitationAnswer) => void;
   refuseControl: (requestId: string) => void;
   interrupt: () => void;
   /** A control request of ours (Remote Control, the MCP servers, the context…): resolves with Claude Code's answer. */
@@ -406,6 +410,10 @@ class ClaudeProcess implements ProcessHandle {
       ? { behavior: 'allow', updatedInput: answer.input, ...(answer.updates.length ? { updatedPermissions: answer.updates } : {}) }
       : { behavior: 'deny', message: 'The user denied this action. Do something else, or ask them.' };
     this.write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
+  }
+
+  answerElicitation(requestId: string, answer: ElicitationAnswer) {
+    this.write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: answer } });
   }
 
   /** A control request we do not handle: answered at once so Claude Code does not wait for nothing. */
