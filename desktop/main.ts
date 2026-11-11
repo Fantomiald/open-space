@@ -415,7 +415,7 @@ function watchForUpdates() {
     if (update?.state === 'downloading' && percent > update.percent) tell({ ...update, percent });
   });
   autoUpdater.on('update-downloaded', (info: { version: string }) => tell({ state: 'ready', version: info.version }));
-  // an unsigned build cannot be updated in place: the error is only logged
+  // an unsigned Mac build cannot be updated in place (Windows can): the error is only logged
   const check = () => lookForUpdate().catch((error: unknown) => log(`  !  update: ${error instanceof Error ? error.message : error}`));
   void check();
   setInterval(() => { if (update?.state !== 'ready') void check(); }, UPDATE_CHECK_MS);
