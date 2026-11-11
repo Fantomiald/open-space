@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { TEXT_EXTENSIONS, type SentFile } from '../../shared/protocol.ts';
+import { TEXT_EXTENSIONS, type SentFile, type UploadedFile } from '../../shared/protocol.ts';
+import { previewOf } from '../state/files.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { t } from '../i18n/index.ts';
 import { formatClock, formatDuration, formatSize } from '../lib/format.ts';
@@ -9,7 +10,7 @@ import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
 import { robotHead, robotLook } from '../room/robot.ts';
 import { runOfPerson } from '../../shared/automata.ts';
-import { ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
+import { ChevronDownIcon, CompactIcon, DownloadIcon, ExternalLinkIcon, FileTextIcon, PauseIcon, PeerIcon, PlayIcon, SendIcon } from './Icons.tsx';
 import { Viewer, type Viewed } from './Viewer.tsx';
 import { Prose } from './Prose.tsx';
 import { ActionBlock } from './ActionBlock.tsx';
@@ -67,7 +68,7 @@ function SentFileView({ file, onView, caption }: { file: SentFile; onView: (imag
   if (!file.stored) return <span className="cp-file" data-missing="true" title={words.missing}>{file.title}<span className="cp-file__size">{words.missing}</span></span>;
   const src = `/attachments/${file.stored}`;
   // older threads have no `video` mark: their stored name tells
-  if (file.video || /\.(mp4|m4v|webm|mov)$/.test(file.stored)) return <SentVideo src={src} title={file.title} size={file.size} caption={caption} onView={onView} />;
+  if (file.video || /\.(mp4|m4v|webm|mov)$/.test(file.stored)) return <SentVideo src={src} download={`${src}?name=${encodeURIComponent(file.title)}`} title={file.title} size={file.size} caption={caption} onView={onView} />;
   if (file.page) {
     const download = `${src}?name=${encodeURIComponent(file.title)}`;
     return (
@@ -101,6 +102,33 @@ function SentFileView({ file, onView, caption }: { file: SentFile; onView: (imag
     <a className="cp-file" href={`${src}?name=${encodeURIComponent(file.title)}`} download={file.title} title={words.download}>
       <DownloadIcon />{file.title}<span className="cp-file__size">{formatSize(file.size)}</span>
     </a>
+  );
+}
+
+/** A file the user sent with a message: a video with its first frame, a picture, a PDF, a sound or a text to open in large, any other file to download. */
+function UploadedFileView({ file, onView }: { file: UploadedFile; onView: (viewed: Viewed) => void }) {
+  const words = t.session.feed.files;
+  const src = `/uploads/${file.id.split('/').map(encodeURIComponent).join('/')}`, download = `${src}?download`;
+  const preview = previewOf(file.name);
+  if (preview === 'video') return <SentVideo src={src} download={download} title={file.name} size={file.size} caption="" onView={onView} />;
+  if (preview === 'image') {
+    return (
+      <button type="button" className="cp-file__image" title={words.open} onClick={() => onView({ src, alt: file.name, caption: file.name, kind: 'image' })}>
+        <img src={src} alt={file.name} loading="lazy" />
+      </button>
+    );
+  }
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const readable = TEXT_EXTENSIONS.has(extension) && file.size <= MAX_READ_BYTES;
+  // a sound plays in the video player
+  const kind = preview === 'pdf' ? 'pdf' : preview === 'audio' ? 'video' : readable ? (extension === 'md' || extension === 'markdown' ? 'markdown' : 'text') : null;
+  if (!kind) {
+    return <a className="cp-file" href={download} download={file.name} title={words.download}><DownloadIcon />{file.name}<span className="cp-file__size">{formatSize(file.size)}</span></a>;
+  }
+  return (
+    <button type="button" className="cp-file" title={words.open} onClick={() => onView({ src, alt: file.name, caption: file.name, kind, link: { href: download, label: words.download, download: file.name } })}>
+      {preview === 'audio' ? <PlayIcon /> : <FileTextIcon />}{file.name}<span className="cp-file__size">{formatSize(file.size)}</span>
+    </button>
   );
 }
 
@@ -138,10 +166,9 @@ function ArtifactCard({ item, speaker, onView }: { item: FeedItem & { kind: 'art
  * A video a session sent: its first frame with a play mark, a click plays it large; its name and a download button
  * under it. One the browser cannot play (a codec it lacks) is only offered for download.
  */
-function SentVideo({ src, title, size, caption, onView }: { src: string; title: string; size: number; caption: string; onView: (viewed: Viewed) => void }) {
+function SentVideo({ src, download, title, size, caption, onView }: { src: string; download: string; title: string; size: number; caption: string; onView: (viewed: Viewed) => void }) {
   const words = t.session.feed.files;
   const [playable, setPlayable] = useState(true);
-  const download = `${src}?name=${encodeURIComponent(title)}`;
   return (
     <div className="cp-video">
       {playable && (
@@ -190,7 +217,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
           )}
           {item.files.length > 0 && (
             <div className="cp-feed__files">
-              {item.files.map((file) => <span key={file.id} className="cp-file" title={file.name}><FileIcon />{file.name}<span className="cp-file__size">{formatSize(file.size)}</span></span>)}
+              {item.files.map((file) => <UploadedFileView key={file.id} file={file} onView={onView} />)}
             </div>
           )}
           {item.text && <Prose className="cp-feed__text" text={item.text} />}

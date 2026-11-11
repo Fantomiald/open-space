@@ -10,7 +10,7 @@ import { PREVIEW_TYPES, TEXT_EXTENSIONS } from '../shared/protocol.ts';
 import { SPOTIFY_ARTWORK } from '../shared/music.ts';
 import { relativePath } from './messages.ts';
 import { resolveInside } from './paths.ts';
-import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
+import { MAX_UPLOAD_BYTES, saveUpload, uploadPath } from './uploads.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
 import { isModId } from '../shared/mods.ts';
@@ -415,6 +415,20 @@ export function createWebServer(options: WebServerOptions) {
         ...(extension === 'svg' ? { 'Content-Security-Policy': SVG_CSP } : {}),
         ...(shown ? {} : { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${title}"` }),
       });
+      return;
+    }
+    if (url.pathname.startsWith('/uploads/')) {
+      // a file the user sent, shown in their message: a picture, a PDF, a video or a sound played, a text read, anything else downloaded
+      if (!hasSessionCookie(policy, req)) { res.writeHead(401).end(); return; }
+      let id = '';
+      try { id = decodeURIComponent(url.pathname.slice('/uploads/'.length)); } catch { /* a bad escape: not found */ }
+      const file = uploadPath(uploadsDir, id);
+      if (!file) { res.writeHead(404).end(); return; }
+      const extension = path.extname(file).slice(1).toLowerCase(), type = PREVIEW_TYPES[extension];
+      const download = url.searchParams.has('download');
+      if (type && !download) { serveRanges(file, req, res, { 'Content-Type': type, ...(type === 'image/svg+xml' ? { 'Content-Security-Policy': SVG_CSP } : {}) }); return; }
+      if (TEXT_EXTENSIONS.has(extension) && !download) { await serveFile(file, res, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Security-Policy': 'sandbox' }); return; }
+      serveRanges(file, req, res, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(file))}` });
       return;
     }
     if (url.pathname.startsWith('/files/')) {

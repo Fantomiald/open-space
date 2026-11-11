@@ -220,6 +220,8 @@ export interface WindowsPreference {
   version: 2;
   free: Record<Arrangement, FreeLayout>;
   sizes: Record<Arrangement, GridSizes | null>;
+  /** the grid each arrangement had last, found again when coming back to it */
+  grids: Record<Arrangement, Columns>;
   /** the width of the windows over the room, in fractions of the page's */
   stackWidth: number | null;
 }
@@ -241,6 +243,9 @@ function readFree(raw: unknown): FreeLayout {
   const order = field(raw, 'order');
   return { boxes, order: Array.isArray(order) ? order.filter((id): id is string => typeof id === 'string' && id in boxes) : [] };
 }
+
+const readGrid = (raw: unknown): string[][] =>
+  Array.isArray(raw) ? raw.map((column) => (Array.isArray(column) ? column.filter((id): id is string => typeof id === 'string') : [])).filter((column) => column.length > 0) : [];
 
 function readSizes(raw: unknown): GridSizes | null {
   const columns = field(raw, 'columns'), rows = field(raw, 'rows');
@@ -268,6 +273,7 @@ export function sanitizeWindows(raw: unknown, open: readonly string[] = []): Win
     version: 2,
     free: per('free', (value, arrangement) => migrated(readFree(value), arrangement)),
     sizes: per('sizes', readSizes),
+    grids: per('grids', readGrid),
     stackWidth: isFraction(stackWidth) ? stackWidth : null,
   };
 }

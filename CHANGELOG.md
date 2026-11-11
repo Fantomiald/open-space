@@ -1,5 +1,13 @@
 # Versions
 
+## 1.32.2
+
+- Fenêtres : chaque mode garde sa grille. Passer du mode focus à la salle (bureau, repos, automates) et revenir retrouve les fenêtres où on les avait laissées, et bouger une fenêtre ou un mod d'un côté ne change plus la disposition de l'autre.
+- Pièces jointes : elles tiennent sur une ligne qui défile au lieu de pousser la conversation, une vidéo montre sa première image, et un clic sur une vidéo ou un PDF l'ouvre en grand avant l'envoi.
+- Les fichiers qu'on envoie s'affichent dans la conversation : vidéos en vignettes à lire en grand, PDF dans la visionneuse, sons, textes et images à ouvrir, le reste à télécharger.
+- Les navigateurs intégrés n'ont plus de son : une vidéo ou une musique qu'un agent teste ne sort plus à fond dans les haut-parleurs.
+- Vient de la PR de GC : Open Space répond aux demandes des serveurs MCP qui posent une question en cours de route (élicitation).
+
 ## 1.32.1
 
 - Mods : chaque mod est servi à une adresse à lui (`<mod>.localhost`, sur le port d'Open Space + 2), qui n'est ni celle d'Open Space ni celle d'un autre mod. Il peut donc intégrer un lecteur YouTube, Spotify, une carte ou tout site qui accepte d'être intégré. Un site qui le refuse reste vide : le guide du kit dit à l'agent de proposer un lien à la place.

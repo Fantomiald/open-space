@@ -193,6 +193,9 @@ describe('the profiles swept', () => {
 });
 
 describe('the Chrome launched', () => {
+  it('never plays sound out loud', () => {
+    for (const shared of [true, false]) assert.ok(chromeArgs('/p/s1', shared).includes('--mute-audio'));
+  });
   it('keeps every window of the shared browser drawn: each owner works in a window of its own, side by side', () => {
     assert.ok(chromeArgs('/p/_shared', true).includes('--disable-backgrounding-occluded-windows'));
     assert.ok(!chromeArgs('/p/s1', false).includes('--disable-backgrounding-occluded-windows'));

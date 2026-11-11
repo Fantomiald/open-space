@@ -75,14 +75,21 @@ export function tidyAll(columns: Columns, free: FreeLayout, mods: readonly strin
 }
 
 /**
- * The grid of the other arrangement: the windows docked here and the ones floating here that do not float there, laid
- * out again for it (stack.ts retile); the ones floating there stay out of its grid.
+ * The grid of the other arrangement: the windows docked here and the ones floating here that do not float there. They
+ * find the grid it had (`kept`), without the windows closed since, the ones opened since joining it; when that grid no
+ * longer fits they are laid out again for it (stack.ts retile). The ones floating there stay out of its grid.
  */
-export function switchArrangement(columns: Columns, here: FreeLayout, there: FreeLayout, max: number, tiling: Tiling): string[][] {
+export function switchArrangement(columns: Columns, here: FreeLayout, there: FreeLayout, kept: Columns, max: number, tiling: Tiling): string[][] {
   const floatingThere = new Set(Object.keys(there.boxes));
   const landing = floatingIds(here).filter((id) => !floatingThere.has(id));
   const docked = [...columns.map((column) => column.filter((id) => !floatingThere.has(id))), landing].filter((column) => column.length > 0);
-  return retile(docked, max, tiling);
+  const wanted = new Set(docked.flat());
+  let next = kept.flat().filter((id) => !wanted.has(id)).reduce<string[][]>((grid, id) => removeFrom(grid, id, tiling), copy(kept));
+  if (!next.length || next.length > max || next.some((column) => column.length > tiling.perColumn)) return retile(docked, max, tiling);
+  // the newest joins last: in focus mode it lands in the top left corner, over the room at the end
+  const opened = docked.flat().filter((id) => !next.flat().includes(id));
+  for (const id of tiling.spread ? opened : opened.reverse()) next = addTo(next, id, max, tiling) ?? next;
+  return next;
 }
 
 /** The grid of only its mods: the sessions closed, the mods docked where they were. */

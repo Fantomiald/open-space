@@ -58,7 +58,7 @@ export type { Arrangement };
 const savedLayout = readLayout();
 const savedWindows = sanitizeWindows(readPreference('windows', null), Array.isArray(savedLayout?.columns) ? savedLayout.columns.flat() : []);
 const writeWindows = (state: CommandPostState) =>
-  writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, stackWidth: state.stackWidth } satisfies WindowsPreference);
+  writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, grids: state.grids, stackWidth: state.stackWidth } satisfies WindowsPreference);
 export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
 /** The parts of the settings dialog, in the order of its menu. */
@@ -210,6 +210,8 @@ export interface CommandPostState {
   uiHidden: boolean;
   /** the grid's columns and rows resized by hand, for each arrangement (null: shared out evenly) */
   gridSizes: Record<Arrangement, GridSizes | null>;
+  /** the grid each arrangement had last: switching back finds it as it was */
+  grids: Record<Arrangement, Columns>;
   /** the width of the windows over the room pulled by hand, in fractions of the page's (null: as many columns as they need) */
   stackWidth: number | null;
   /** the sessions' windows floating over the grid, by arrangement */
@@ -502,6 +504,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   zoomedId: null,
   uiHidden: false,
   gridSizes: savedWindows.sizes,
+  grids: savedWindows.grids,
   stackWidth: savedWindows.stackWidth,
   free: savedWindows.free,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
@@ -798,6 +801,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set((state) => ({
       gridSizes: { ...state.gridSizes, [arrangement]: keepSizes(state.columns, columns, state.gridSizes[arrangement]) },
       free: { ...state.free, [arrangement]: floating },
+      grids: { ...state.grids, [arrangement]: columns },
       columns, openIds, zoomedId: state.zoomedId && openIds.includes(state.zoomedId) && openIds.length > 1 ? state.zoomedId : null,
       launcherOpen: state.launcherOpen && openIds.length > 0,
     }));
@@ -1003,7 +1007,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ view, arrivedByPortal: false, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
     if (tilingOf(view) === tilingOf(s.view)) return;
     const here = s.free[arrangementOf(s.view)], there = s.free[arrangementOf(view)];
-    const columns = switchArrangement(s.columns, here, there, maxColumnsIn(view), tilingOf(view));
+    const columns = switchArrangement(s.columns, here, there, s.grids[arrangementOf(view)], maxColumnsIn(view), tilingOf(view));
     // the other arrangement keeps the sizes it was given: the windows are laid out again, not changed
     const sizes = s.gridSizes;
     s.arrange(columns, there);

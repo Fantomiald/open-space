@@ -5,7 +5,7 @@ import { CloseIcon, DownloadIcon } from './Icons.tsx';
 import { Prose } from './Prose.tsx';
 
 /** What the viewer shows: a picture, a page, a video, or a text file (Markdown rendered, or as it is). */
-export type ViewedKind = 'image' | 'page' | 'video' | 'markdown' | 'text';
+export type ViewedKind = 'image' | 'page' | 'pdf' | 'video' | 'markdown' | 'text';
 
 /** Something of the thread to show in large; `link`: where the original is, by default `src` itself. */
 export interface Viewed { src: string; alt: string; kind: ViewedKind; caption?: string; link?: { href: string; label: string; download?: string } }
@@ -54,6 +54,8 @@ const savedName = (viewed: Viewed) => (/\.\w+$/.test(viewed.alt) ? viewed.alt : 
 function Shown({ viewed }: { viewed: Viewed }) {
   switch (viewed.kind) {
     case 'page': return <iframe src={viewed.src} title={viewed.alt} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms" />;
+    // Chromium's own PDF viewer, which a sandboxed frame would refuse
+    case 'pdf': return <iframe src={viewed.src} title={viewed.alt} />;
     // biome-ignore lint/a11y/useMediaCaption: a video Claude made has no captions to give
     case 'video': return <video src={viewed.src} controls autoPlay playsInline />;
     case 'markdown': case 'text': return <TextFile src={viewed.src} markdown={viewed.kind === 'markdown'} />;

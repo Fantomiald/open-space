@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolveInside } from './paths.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -256,6 +257,23 @@ describe('HTTP requests', () => {
     assert.equal((await fetch(`http://127.0.0.1:${port}/upload`, { headers: own })).status, 405);
   });
 
+  it('gives back a file sent to the browser holding the cookie: a video by ranges, an unknown kind downloaded', async () => {
+    const own = { Cookie: COOKIE, Origin: `http://127.0.0.1:${port}` };
+    const sent = async (name: string, body: string) => ((await (await fetch(`http://127.0.0.1:${port}/upload?name=${encodeURIComponent(name)}`, { method: 'POST', body, headers: own })).json()) as { id: string }).id;
+    const at = (id: string) => `http://127.0.0.1:${port}/uploads/${id.split('/').map(encodeURIComponent).join('/')}`;
+    const video = at(await sent('clip final.MOV', '0123456789'));
+    assert.equal((await fetch(video)).status, 401);
+    const part = await fetch(video, { headers: { Cookie: COOKIE, Range: 'bytes=2-5' } });
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get('content-type'), 'video/quicktime');
+    assert.equal(await part.text(), '2345');
+    const archive = await fetch(at(await sent('notes.zip', 'PK')), { headers: { Cookie: COOKIE } });
+    assert.equal(archive.headers.get('content-type'), 'application/octet-stream');
+    assert.match(archive.headers.get('content-disposition') ?? '', /^attachment; filename\*=UTF-8''notes\.zip$/);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/uploads/${'0'.repeat(16)}/missing.pdf`, { headers: { Cookie: COOKIE } })).status, 404);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/uploads/..%2F..%2Fsecret.txt`, { headers: { Cookie: COOKIE } })).status, 404);
+  });
+
   it('does not follow a symlink out of dist/', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/leak.txt`);
     assert.doesNotMatch(await res.text(), /top secret/);
@@ -264,16 +282,24 @@ describe('HTTP requests', () => {
 
 describe('mods', () => {
   const ventes = () => `ventes.localhost:${modsPort}`;
+  // Windows does not resolve the subdomains of localhost: the request goes to 127.0.0.1 under the mod's name
+  const fetchMod = (target: string) => new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: modsPort, path: target, headers: { Host: ventes() } }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+    }).on('error', reject);
+  });
 
   it('serves a mod’s page under its own name to the key in its address only, sandboxed in that origin, framed by Open Space only', async () => {
-    const page = await fetch(`http://${ventes()}/mods/key-of-ventes/ventes/`);
+    const page = await fetchMod('/mods/key-of-ventes/ventes/');
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /ventes/);
-    const csp = page.headers.get('content-security-policy') ?? '';
+    assert.match(page.body, /ventes/);
+    const csp = String(page.headers['content-security-policy'] ?? '');
     assert.match(csp, /^sandbox allow-scripts allow-same-origin /);
     assert.match(csp, new RegExp(`frame-ancestors http://localhost:${port} http://127\\.0\\.0\\.1:${port};`));
-    assert.equal(page.headers.get('referrer-policy'), 'strict-origin');
-    assert.equal((await fetch(`http://${ventes()}/mods/key-of-ventes/ventes/data/today.json`)).status, 200);
+    assert.equal(page.headers['referrer-policy'], 'strict-origin');
+    assert.equal((await fetchMod('/mods/key-of-ventes/ventes/data/today.json')).status, 200);
     for (const refused of ['/mods/wrong/ventes/', '/mods/key-of-other/other/', '/mods/key-of-ventes/ventes/missing.js', '/mods/key-of-ventes/../secret.txt']) {
       assert.doesNotMatch((await rawRequest(refused, ventes(), modsPort)).body, /top secret|ventes/, refused);
     }
@@ -286,7 +312,7 @@ describe('mods', () => {
   });
 
   it('serves the kit to every mod, and lets Open Space’s page frame the mods', async () => {
-    const kit = await fetch(`http://${ventes()}/mod-kit/kit.css`);
+    const kit = await fetchMod('/mod-kit/kit.css');
     assert.equal(kit.status, 200);
     assert.equal((await rawRequest('/mod-kit/../secret.txt', ventes(), modsPort)).status, 404);
     assert.match((await fetch(`http://127.0.0.1:${port}/`)).headers.get('content-security-policy') ?? '', new RegExp(`frame-src 'self' http://\\*\\.localhost:${modsPort}`));

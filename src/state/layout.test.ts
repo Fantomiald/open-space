@@ -174,7 +174,7 @@ describe('how the windows were arranged, read back', () => {
   const box = { left: 0.1, top: 0.2, width: 0.3, height: 0.4 };
   it('nothing saved has every window docked', () => {
     assert.deepEqual(sanitizeWindows(undefined), {
-      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, stackWidth: null,
+      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, grids: { room: [], focus: [] }, stackWidth: null,
     });
   });
   it('keeps what is sound and drops the rest', () => {
@@ -190,6 +190,9 @@ describe('how the windows were arranged, read back', () => {
     for (const raw of [null, 7, 'x', [], { mode: 'free', free: [] }, { mode: { room: 'free' }, free: { room: 'x' } }, { version: 2, free: { focus: { boxes: { a: 3 } } } }]) {
       assert.deepEqual(sanitizeWindows(raw, ['a']).free.focus, { boxes: {}, order: [] });
     }
+  });
+  it('keeps each arrangement’s grid, without what is not a window', () => {
+    assert.deepEqual(sanitizeWindows({ version: 2, grids: { room: [['a', 7], [], 'x'], focus: 'x' } }).grids, { room: [['a']], focus: [] });
   });
   it('keeps sizes that are fractions', () => {
     assert.deepEqual(sanitizeWindows({ sizes: { room: { columns: [0.5, 0.5], rows: [[1], [1]] }, focus: { columns: 'x' } } }).sizes, { room: { columns: [0.5, 0.5], rows: [[1], [1]] }, focus: null });

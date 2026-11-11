@@ -1036,6 +1036,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-feed__item[data-kind='files'] { display: grid; gap: var(--space-1); }
 .cp-feed__caption { margin: 0; font-size: var(--text-sm); }
 .cp-feed__files { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* the files the user sent, on their side, the videos as thumbnails side by side: many must not take the whole thread */
+.cp-feed__item[data-kind='user'] .cp-feed__files { justify-content: flex-end; }
+.cp-feed__item[data-kind='user'] .cp-video { width: 11rem; }
+.cp-feed__item[data-kind='user'] .cp-video__open { width: 100%; }
+.cp-feed__item[data-kind='user'] .cp-video__open video { height: 6rem; max-height: none; object-fit: cover; }
 .cp-file__image { display: block; max-width: 100%; padding: 0; cursor: zoom-in; border-radius: var(--radius-md); overflow: hidden; border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface-sunken); }
 .cp-file__image:hover { border-color: var(--color-accent); }
 .cp-file__image img { display: block; max-width: 100%; max-height: 18rem; object-fit: contain; }
@@ -1069,7 +1074,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-viewer__figure { margin: 0; display: grid; gap: var(--space-2); justify-items: center; max-width: 100%; max-height: 100%; min-height: 0; }
 .cp-viewer__figure img { max-width: min(92vw, 100%); max-height: calc(100dvh - 9rem); object-fit: contain; border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface-sunken); }
 /* a published page, large: as wide as the screen allows */
-.cp-viewer__figure[data-kind='page'] { width: min(92vw, 80rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
+.cp-viewer__figure:is([data-kind='page'], [data-kind='pdf']) { width: min(92vw, 80rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
 /* a text file, large: a sheet as wide as a page of reading, that scrolls */
 .cp-viewer__figure:is([data-kind='markdown'], [data-kind='text']) { width: min(92vw, 52rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; justify-items: stretch; }
 .cp-viewer__text { margin: 0; min-height: 0; overflow: auto; padding: var(--space-5) var(--space-6); border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface); color: var(--color-text); }
@@ -1833,8 +1838,13 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 }
 
 /* ── Pictures attached to a message ── */
-.cp-attachments { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cp-attachments__item { position: relative; width: 4rem; height: 4rem; border-radius: var(--radius-sm); overflow: hidden; border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface-raised); }
+/* one row that scrolls across: many files must not take the thread's height */
+.cp-attachments { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--space-2); overflow-x: auto; scrollbar-width: thin; }
+.cp-attachments__item { flex-shrink: 0; position: relative; width: 4rem; height: 4rem; border-radius: var(--radius-sm); overflow: hidden; border: var(--border-width) solid var(--color-border-strong); background: var(--color-surface-raised); }
+.cp-attachments__item[data-kind='video'] { width: 6rem; }
+.cp-attachments__item video { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.cp-attachments__item .cp-video__play { width: 1.75rem; height: 1.75rem; }
+.cp-attachments__item .cp-video__play .cp-icon { width: 0.85rem; height: 0.85rem; }
 .cp-attachments__item img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .cp-attachments__open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 /* a file that is not a picture: its icon and its name, in a chip as tall as the thumbnails */

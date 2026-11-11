@@ -2,20 +2,25 @@ import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type Dra
 import type { ImageUpload } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { MAX_IMAGES, isPicture, prepareImage } from '../lib/images.ts';
+import { previewOf } from '../state/files.ts';
 import { useSessions } from '../state/sessions.ts';
 
 /** A picture (sent to Claude as such), or any other file (uploaded at once, Claude gets its path: see server/uploads.ts). */
 export type Attachment =
   | { id: number; kind: 'image'; name: string; preview: string; upload: ImageUpload }
-  | { id: number; kind: 'file'; name: string; size: number; uploadId: string };
+  | { id: number; kind: 'file'; name: string; size: number; uploadId: string; /** a video, a PDF or a sound, to open before it goes */ preview?: string };
 
 /** Files per message, and the size of one (as on the server, see server/uploads.ts). */
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
 
 let nextId = 0;
-/** Frees a picture's preview. */
-const release = (item: Attachment) => { if (item.kind === 'image') URL.revokeObjectURL(item.preview); };
+/** Frees a file's preview. */
+const release = (item: Attachment) => { if (item.preview) URL.revokeObjectURL(item.preview); };
+const fileOf = (file: File, id: number) => uploadFile(file).then((uploadId): Attachment => {
+  const shown = previewOf(file.name);
+  return { id, kind: 'file', name: file.name, size: file.size, uploadId, preview: shown && shown !== 'image' ? URL.createObjectURL(file) : undefined };
+});
 const hasFiles = (event: DragEvent) => [...event.dataTransfer.types].includes('Files');
 
 /** Sends a file to the server (POST /upload, with the page's cookie); its upload id. */
@@ -55,7 +60,7 @@ export function useAttachments() {
     for (const file of pictures.slice(0, pictureRoom)) {
       const id = ++nextId;
       // a picture the browser can't decode (a camera RAW like .dng) still goes, as a file
-      const asFile = () => uploadFile(file).then((uploadId): Attachment => ({ id, kind: 'file', name: file.name, size: file.size, uploadId }));
+      const asFile = () => fileOf(file, id);
       settle(prepareImage(file).then((upload): Attachment => ({ id, kind: 'image', name: file.name || words.screenshotName, preview: URL.createObjectURL(file), upload }), asFile), file.name);
     }
     const fileRoom = Math.max(0, MAX_FILES - counts.current.files);
@@ -63,7 +68,7 @@ export function useAttachments() {
     for (const file of others.slice(0, fileRoom)) {
       if (file.size > MAX_FILE_BYTES) { toast('error', words.tooBig(file.name)); continue; }
       const id = ++nextId;
-      settle(uploadFile(file).then((uploadId) => ({ id, kind: 'file', name: file.name, size: file.size, uploadId })), file.name);
+      settle(fileOf(file, id), file.name);
     }
   }, [toast]);
 

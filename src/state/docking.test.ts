@@ -80,11 +80,22 @@ describe('tidying the windows', () => {
 
 describe('the other arrangement', () => {
   it('docks there what floats here, and keeps out of its grid what floats there', () => {
-    const columns = switchArrangement([['a'], ['b']], { boxes: { c: box }, order: ['c'] }, { boxes: { b: box }, order: ['b'] }, 3, FOCUS_TILING);
+    const columns = switchArrangement([['a'], ['b']], { boxes: { c: box }, order: ['c'] }, { boxes: { b: box }, order: ['b'] }, [], 3, FOCUS_TILING);
     assert.deepEqual(columns.flat().toSorted(), ['a', 'c']);
   });
   it('docked mods follow', () => {
-    assert.deepEqual(switchArrangement([['mod:m', 'a']], none, none, 2, ROOM_TILING).flat().toSorted(), ['a', 'mod:m']);
+    assert.deepEqual(switchArrangement([['mod:m', 'a']], none, none, [], 2, ROOM_TILING).flat().toSorted(), ['a', 'mod:m']);
+  });
+  it('finds the grid it had, whatever was moved in the other one', () => {
+    const focus = [['rh'], ['juyin', 'mod:costs'], ['graffiti']];
+    assert.deepEqual(switchArrangement([['mod:costs', 'rh', 'juyin'], ['graffiti']], none, none, focus, 3, FOCUS_TILING), focus);
+  });
+  it('drops from that grid the windows closed since, and lets in the ones opened since', () => {
+    assert.deepEqual(switchArrangement([['a', 'c']], none, none, [['a', 'b']], 2, ROOM_TILING), [['a', 'c']]);
+    assert.deepEqual(switchArrangement([['a', 'b', 'c']], none, none, [['a'], ['b']], 3, FOCUS_TILING), [['c'], ['a'], ['b']]);
+  });
+  it('lays the windows out again when that grid no longer fits', () => {
+    assert.deepEqual(switchArrangement([['a', 'b']], none, none, [['a'], ['b'], ['c']], 1, FOCUS_TILING), [['b', 'a']]);
   });
 });
 

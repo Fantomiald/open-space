@@ -66,13 +66,14 @@ export function findChrome(env: NodeJS.ProcessEnv): string | null {
 /**
  * The arguments of a Chrome Open Space launches on `profile`. The shared one keeps every window drawn: each owner works
  * in a window of its own, and Chrome stops drawing a window under another one after a few seconds otherwise (checked
- * with Chrome 156), so its owner's Playwright could not click in it any more.
+ * with Chrome 156), so its owner's Playwright could not click in it any more. None plays sound: what an agent tests
+ * (a video, a song) would play out loud on the user's speakers, and the page only shows its picture.
  */
 export function chromeArgs(profile: string, shared: boolean): string[] {
   return [
     ...(process.platform === 'win32' ? ['--enable-automation'] : []),
     '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, `--window-size=${VIEWPORT.width},${VIEWPORT.height}`, `--force-device-scale-factor=${VIEWPORT.scale}`,
-    '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--hide-crash-restore-bubble',
+    '--mute-audio', '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--hide-crash-restore-bubble',
     ...(shared ? ['--disable-backgrounding-occluded-windows'] : []), 'about:blank',
   ];
 }
