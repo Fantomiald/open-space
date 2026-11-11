@@ -93,6 +93,8 @@ export interface CommandPostState {
   /** the people sessions are named after, with their look; one of them is the user (`self`) */
   crew: CrewMember[];
   crewOpen: boolean;
+  /** the news of the versions not seen yet, or the tour of the features, asked for from the settings (WhatsNewDialog.tsx) */
+  showcase: 'whatsNew' | 'tour' | null;
   settingsOpen: boolean;
   /** the part of the settings shown */
   settingsSection: SettingsSection;
@@ -346,7 +348,8 @@ export interface CommandPostState {
   /** asks for what Claude Code spent (`fresh`: read its transcripts again now) */
   loadCosts: (fresh?: boolean) => void;
   openCrew: (open: boolean) => void;
-  openSettings: (open: boolean, section?: SettingsSection, row?: string) => void;
+  openShowcase: (showcase: 'whatsNew' | 'tour' | null) => void;
+  openSettings:(open: boolean, section?: SettingsSection, row?: string) => void;
   /** runs `claude update` on the server */
   updateClaude: () => void;
   /** runs `claude auth login` (the browser opens) or `claude auth logout` on the server */
@@ -435,6 +438,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   roots: [],
   crew: [],
   crewOpen: false,
+  showcase: null,
   settingsOpen: false,
   settingsSection: 'general',
   settingsRow: null,
@@ -997,6 +1001,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   loadCosts: (fresh) => { get().send({ t: 'costs', ...(fresh ? { fresh } : {}) }); },
   setPreview: (preview) => set({ preview }),
   openCrew: (open) => set({ crewOpen: open }),
+  openShowcase: (showcase) => set({ showcase }),
   updateClaude: () => { get().send({ t: 'updateClaude' }); },
   claudeLogin: () => { get().send({ t: 'claudeLogin' }); },
   claudeLogout: () => { get().send({ t: 'claudeLogout' }); },

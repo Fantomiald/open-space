@@ -8,10 +8,13 @@ import { chibiHead } from '../room/chibi.ts';
 import { useSessions } from '../state/sessions.ts';
 import { LookEditor } from './CrewDialog.tsx';
 import { FoldersPicker, HabitsFields, LanguagePicker, PetPicker } from './PreferenceFields.tsx';
+import { ShowcaseArt } from './ShowcaseArt.tsx';
+import { ONBOARDING_SLIDES, Tour } from './Tour.tsx';
+import { markNewsSeen } from './WhatsNewDialog.tsx';
 
 /**
  * The first start: the language, who the user is (their own character, their birthday), the folders sessions may run in,
- * and how they like to work. Nothing runs before it is done; everything stays changeable afterwards (the crew editor, the
+ * how they like to work, and a tour of what Open Space does (Tour.tsx, which can be skipped). Nothing runs before it is done; everything stays changeable afterwards (the crew editor, the
  * settings). The language is saved at once and the page is mounted again in it, losing what was typed: so it comes first.
  */
 export function Onboarding() {
@@ -26,6 +29,7 @@ export function Onboarding() {
   const crew = useSessions((s) => s.crew).filter((member) => !member.self);
   const steps = t.settings.onboarding.steps;
   const [step, setStep] = useState(0);
+  const [slide, setSlide] = useState(0);
   const [name, setName] = useState('');
   const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [birthday, setBirthday] = useState('');
@@ -51,23 +55,36 @@ export function Onboarding() {
   const canGoOn = step === 1 ? name.trim() !== '' : step === 2 ? chosenRoots.length > 0 : true;
   const finish = () => {
     const defaultFolder = chosenRoots.includes(preferences.defaultFolder) ? preferences.defaultFolder : chosenRoots[0] ?? '';
+    // the news of this version would only repeat the tour
+    markNewsSeen();
     send({ t: 'onboard', self: { name: name.trim(), look, ...(birthday ? { birthday } : {}) }, preferences: { ...preferences, language, defaultFolder, roots: chosenRoots } });
   };
-  const next = () => { if (!canGoOn) return; if (step === steps.length - 1) finish(); else setStep(step + 1); };
+  const touring = step === steps.length - 1;
+  const lastSlide = slide === ONBOARDING_SLIDES.length - 1;
+  const next = () => {
+    if (!canGoOn) return;
+    if (!touring) setStep(step + 1);
+    else if (lastSlide) finish();
+    else setSlide(slide + 1);
+  };
+  const back = () => { if (touring && slide > 0) setSlide(slide - 1); else setStep(step - 1); };
 
   return (
     <main className="cp-onboarding" aria-labelledby="onboarding-title">
-      <div className="cp-onboarding__card">
+      <div className="cp-onboarding__card" data-touring={touring}>
         <ol className="cp-onboarding__steps" aria-label={t.settings.onboarding.stepsLabel}>
           {steps.map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} data-done={index < step}>{label}</li>)}
         </ol>
 
         {step === 0 && (
           <section className="cp-onboarding__page">
-            <LanguagePicker language={language} onLanguage={(next) => saveLanguage({ language: next })} />
+            <div className="cp-onboarding__hero">
+              <ShowcaseArt art="room" />
+              <LanguagePicker language={language} onLanguage={(next) => saveLanguage({ language: next })} />
+            </div>
             <h1 id="onboarding-title">{welcome.title}</h1>
-            <p>{welcome.intro}</p>
-            <p>{welcome.setup[0]}<code>CLAUDE.md</code>{welcome.setup[1]}<code>claude</code>{welcome.setup[2]}</p>
+            <p className="cp-onboarding__lead">{welcome.intro}</p>
+            <p className="cp-muted">{welcome.setup[0]}<code>CLAUDE.md</code>{welcome.setup[1]}<code>claude</code>{welcome.setup[2]}</p>
             {claude?.found
               ? <p className="cp-onboarding__check" data-ok="true">{welcome.claudeFound(claude.version)}</p>
               : <p className="cp-onboarding__check" data-ok="false">{welcome.claudeMissing[0]}<code>npm install -g @anthropic-ai/claude-code</code>{welcome.claudeMissing[1]}<code>claude</code>{welcome.claudeMissing[2]}</p>}
@@ -120,10 +137,13 @@ export function Onboarding() {
           </section>
         )}
 
+        {touring && <Tour index={slide} onIndex={setSlide} look={look} slides={ONBOARDING_SLIDES} />}
+
         <div className="cp-onboarding__actions">
-          {step > 0 && <button type="button" className="cp-button" onClick={() => setStep(step - 1)}>{t.settings.onboarding.back}</button>}
+          {touring && !lastSlide && <button type="button" className="cp-button cp-onboarding__skip" data-variant="quiet" onClick={finish}>{t.showcase.tour.skip}</button>}
+          {step > 0 && <button type="button" className="cp-button" onClick={back}>{t.settings.onboarding.back}</button>}
           <button type="button" className="cp-button" data-variant="primary" disabled={!canGoOn} onClick={next}>
-            {step === 0 ? t.settings.onboarding.start : step === steps.length - 1 ? t.settings.onboarding.finish : t.settings.onboarding.next}
+            {step === 0 ? t.settings.onboarding.start : touring ? (lastSlide ? t.settings.onboarding.finish : t.showcase.tour.next) : t.settings.onboarding.next}
           </button>
         </div>
       </div>

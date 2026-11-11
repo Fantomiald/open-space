@@ -9,7 +9,7 @@ export const settings: Dictionary['settings'] = {
   close: 'Close',
   language: 'Language / Langue',
   onboarding: {
-    steps: ['Welcome', 'You', 'Your folders', 'Your habits'],
+    steps: ['Welcome', 'You', 'Your folders', 'Your habits', 'Discover'],
     stepsLabel: 'Steps',
     welcome: {
       title: 'Welcome to your Open Space',
@@ -17,7 +17,7 @@ export const settings: Dictionary['settings'] = {
       setup: ['Your skills, your plugins, your ', ' and your Claude Code settings apply just like in your terminal: Open Space only runs the ', ' on your computer.'],
       claudeFound: (version = '') => `Claude Code ${version} is here.`,
       claudeMissing: ['Claude Code can’t be found. Install it (', '), run ', ' once in a terminal to sign in, then restart Open Space.'],
-      fewSteps: 'Four quick steps, and you can change everything later.',
+      fewSteps: 'Three quick settings, then a short tour of what you can do. You can change everything later.',
     },
     you: {
       title: 'You',
@@ -135,7 +135,7 @@ export const settings: Dictionary['settings'] = {
       agentNote: { title: 'A note for all your agents', hint: 'Added to the instructions of every new conversation.' },
       remoteByDefault: { title: 'Remote Control by default', hint: 'Each new conversation can be reached from your phone and claude.ai. It keeps its process running, so when active sessions near the limit, the next ones start without it (their button still turns it on).' },
       autoTag: { title: 'Automatic tag', hint: 'A new session gets a tag of one or two words from its first message (Haiku, less than a cent).' },
-      autoTagRule: { title: 'Rule for the tag', hint: 'What the tag should be when it applies. Otherwise it still names the subject.', placeholder: 'For a ticket, use its key (EX-1576).' },
+      autoTagRule: { title: 'Rule for the tag', hint: 'What the tag should be when it applies. Otherwise it still names the subject.', placeholder: 'For a ticket, use its key (PROJ-1576).' },
       isolate: {
         title: 'Isolate sessions',
         hint: 'A new session on a branch and in a folder of its own (a git worktree), away from the others’ files. Open Space merges when you ask.',

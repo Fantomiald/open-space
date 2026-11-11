@@ -10,7 +10,7 @@ export const settings = {
   close: 'Fermer',
   language: 'Langue / Language',
   onboarding: {
-    steps: ['Bienvenue', 'Toi', 'Tes dossiers', 'Tes habitudes'],
+    steps: ['Bienvenue', 'Toi', 'Tes dossiers', 'Tes habitudes', 'Découvrir'],
     stepsLabel: 'Étapes',
     welcome: {
       title: 'Bienvenue dans ton Open Space',
@@ -20,7 +20,7 @@ export const settings = {
       claudeFound: (version = '') => `Claude Code ${version} est bien là.`,
       // around the install command and <code>claude</code>
       claudeMissing: ['Claude Code est introuvable. Installe-le (', '), lance ', ' une fois dans un terminal pour te connecter, puis relance Open Space.'],
-      fewSteps: 'Quatre petites étapes, et tout reste modifiable ensuite.',
+      fewSteps: 'Trois réglages rapides, puis un petit tour de ce que tu peux faire. Tout reste modifiable ensuite.',
     },
     you: {
       title: 'Toi',
@@ -138,7 +138,7 @@ export const settings = {
       agentNote: { title: 'Un mot pour tous tes agents', hint: 'Ajouté aux consignes de chaque nouvelle conversation.' },
       remoteByDefault: { title: 'Remote Control par défaut', hint: 'Chaque nouvelle conversation est joignable depuis ton téléphone et claude.ai. Elle garde son process actif, donc quand les sessions actives approchent de la limite, les suivantes démarrent sans (leur bouton l’active quand même).' },
       autoTag: { title: 'Tag automatique', hint: 'Une nouvelle session reçoit un tag d’un ou deux mots tiré de son premier message (Haiku, moins d’un centime).' },
-      autoTagRule: { title: 'Consigne pour le tag', hint: 'Ce que le tag doit être quand ça s’applique. Sinon, il reste tiré du sujet.', placeholder: 'Si on parle d’un ticket, mets sa clé (EX-1576).' },
+      autoTagRule: { title: 'Consigne pour le tag', hint: 'Ce que le tag doit être quand ça s’applique. Sinon, il reste tiré du sujet.', placeholder: 'Si on parle d’un ticket, mets sa clé (PROJ-1576).' },
       isolate: {
         title: 'Isoler les sessions',
         hint: 'Une nouvelle session sur une branche et dans un dossier à elle (un worktree git), pour ne pas toucher aux fichiers des autres. Open Space fusionne quand tu le demandes.',

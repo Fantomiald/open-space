@@ -28,6 +28,7 @@ import { Stack } from './command/Stack.tsx';
 import { BareHint } from './command/BareHint.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
+import { WhatsNew } from './command/WhatsNewDialog.tsx';
 import { useAltKey } from './lib/drag.ts';
 import { defaultFolder } from './lib/format.ts';
 import { runningShells } from './state/feed.ts';
@@ -222,6 +223,7 @@ export function App() {
       <AutomataDialog />
       <ModsDialog />
       <TrustDialog />
+      {known && <WhatsNew />}
       <Toasts />
       <AttentionAnnouncer />
     </div>

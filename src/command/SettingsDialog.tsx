@@ -33,7 +33,7 @@ import { UsagePanel } from './UsagePanel.tsx';
 import { useAutosave } from './useAutosave.ts';
 import { Row } from './PrefsRow.tsx';
 
-const REPOSITORY = 'https://github.com/Fantomiald/open-space';
+export const REPOSITORY = 'https://github.com/Fantomiald/open-space';
 /** The page runs in the Mac app (its window is Electron's), not in a browser. */
 const IN_APP = /Electron/.test(navigator.userAgent);
 
@@ -490,6 +490,8 @@ function SettingsEditor() {
       case 'links': return (
         <Row key={id} id={id} flash={flash} icon={<ChangelogIcon />} title={rows.links.title}>
           <span className="cp-prefs__links">
+            <button type="button" className="cp-button" onClick={() => { close(); store().openShowcase('whatsNew'); }}>{t.showcase.whatsNew.reopen}</button>
+            <button type="button" className="cp-button" onClick={() => { close(); store().openShowcase('tour'); }}>{t.showcase.whatsNew.tour}</button>
             <a className="cp-button" href={`${REPOSITORY}/releases`} target="_blank" rel="noreferrer">{rows.links.changelog} <ExternalLinkIcon /></a>
             <a className="cp-button" href={REPOSITORY} target="_blank" rel="noreferrer">{rows.links.source} <ExternalLinkIcon /></a>
           </span>
