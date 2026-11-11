@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { isModStoreName, type ModInfo } from '../../shared/mods.ts';
 import { t } from '../i18n/index.ts';
@@ -13,6 +14,7 @@ import { boxVariables, floatingSurface } from './boxes.ts';
 import { noteFloating, useDock } from './dock.ts';
 import { FreeHandles } from './FreeHandles.tsx';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MOD_ICONS, MoreIcon, PopOutIcon, RefreshIcon, SettingsIcon } from './Icons.tsx';
+import { Modal } from './Modal.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
 import { OutControls } from './OutControls.tsx';
@@ -99,6 +101,8 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
   const [moved, setMoved] = useState<Box | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [loads, setLoads] = useState(0);
+  // the trigger its page asked to start, until the user says yes or no
+  const [asked, setAsked] = useState<{ id: string; name: string } | null>(null);
   // set while the page refreshes itself (the kit's OpenSpace.onRefresh): a refresh tells it rather than loading it again
   const pageRefresh = useRef<{ run: () => void; replies: boolean } | null>(null);
   const refresh = () => (pageRefresh.current ? pageRefresh.current.run() : setLoads((count) => count + 1));
@@ -178,6 +182,12 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
       switch (message?.openSpace) {
         case 'ready': tellTheme(); break;
         case 'escape': break;
+        case 'run-trigger': {
+          // only the trigger its mod.json names, and only once the user confirmed
+          const trigger = useSessions.getState().triggers.triggers.find((each) => each.id === mod.trigger && each.enabled);
+          if (trigger) setAsked({ id: trigger.id, name: trigger.name });
+          break;
+        }
         case 'env': {
           const stop = awaitModEnv(mod.id, (env) => { envWaits.delete(stop); post({ openSpace: 'env', env }); });
           envWaits.add(stop);
@@ -229,7 +239,7 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
       for (const stop of envWaits) stop();
       pageRefresh.current = null;
     };
-  }, [loads, mod.version, mod.id, mod.url, send]);
+  }, [loads, mod.version, mod.id, mod.url, mod.trigger, send]);
 
   const grab = (edge: Edge | null, event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || (!edge && (event.target as HTMLElement).closest(INTERACTIVE))) return;
@@ -305,6 +315,16 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
         />
       ))}
       {!folded && !detached && !docked && <FreeHandles onPull={grab} />}
+      {asked && createPortal(
+        <Modal title={words.runQuestion(asked.name)} onClose={() => setAsked(null)}>
+          <p className="cp-muted">{words.runText(mod.name)}</p>
+          <div className="cp-form__actions">
+            <button type="button" className="cp-button" onClick={() => setAsked(null)}>{words.cancel}</button>
+            <button type="button" className="cp-button" data-variant="primary" data-autofocus onClick={() => { useSessions.getState().runTrigger(asked.id); setAsked(null); }}>{words.run}</button>
+          </div>
+        </Modal>,
+        document.body,
+      )}
     </section>
   );
 }

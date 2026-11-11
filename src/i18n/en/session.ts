@@ -329,6 +329,8 @@ export const session: Dictionary['session'] = {
     close: 'Close the side question',
     withdraw: 'Withdraw the question',
     closeTitle: 'Close',
+    reply: 'Reply…',
+    replyLabel: 'Reply to the side question',
   },
   list: {
     title: 'Sessions',

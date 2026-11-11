@@ -339,6 +339,8 @@ export const session = {
     close: 'Fermer la question à côté',
     withdraw: 'Retirer la question',
     closeTitle: 'Fermer',
+    reply: 'Répondre…',
+    replyLabel: 'Répondre à la question à côté',
   },
   /** focus mode's list of sessions, beside their windows */
   list: {

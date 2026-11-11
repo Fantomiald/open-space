@@ -641,7 +641,7 @@ export type ClientMessage =
   /** sends the queued messages at once, interrupting the running turn */
   | { t: 'sendNow'; sessionId: string }
   /** a side question (/btw): answered from the session's conversation without interrupting it nor entering it */
-  | { t: 'aside'; sessionId: string; question: string }
+  | { t: 'aside'; sessionId: string; question: string; /** a reply to the side question shown: it is asked with the exchange so far */ follow?: boolean }
   /** the side question's answer is put away (and the question withdrawn if still asked) */
   | { t: 'asideClose'; sessionId: string }
   /** whether this tab is in front (visible and focused): no macOS notification while one is */
@@ -864,4 +864,5 @@ export type ServerMessage =
   | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };
 
 /** A side question (/btw) and its answer. */
-export interface Aside { question: string; answer: string; state: 'asking' | 'answered' | 'failed' }
+export interface AsideExchange { question: string; answer: string }
+export interface Aside { question: string; answer: string; state: 'asking' | 'answered' | 'failed'; /** the exchange before this question, when it replies to it */ earlier?: AsideExchange[] }

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import type { SessionInfo } from '../../shared/protocol.ts';
 import type { TriggerRun } from '../../shared/triggers.ts';
-import { claudeMcpCommand, cronOf, externalMcpConfig, folderChoices, nextStart, runsOf, scheduleOf } from './triggers.ts';
+import { claudeMcpCommand, cronOf, externalMcpConfig, folderChoices, nextStart, runStatus, runsOf, scheduleOf } from './triggers.ts';
 
 describe('the triggers in the Automates panel', () => {
   it('says when a cron trigger starts next, and nothing for a webhook or a bad schedule', () => {
@@ -35,5 +36,17 @@ describe('the triggers in the Automates panel', () => {
     assert.deepEqual(folderChoices([{ cwd: '/p/app' }, { cwd: '/p/app' }, { cwd: '/p/wt', worktree: {} as never }], ['/p']), ['/p', '/p/app']);
     assert.deepEqual(JSON.parse(externalMcpConfig('http://127.0.0.1:1/mcp/external/k')).mcpServers['open-space'].type, 'http');
     assert.equal(claudeMcpCommand('http://u'), 'claude mcp add --transport http open-space http://u');
+  });
+});
+
+describe('what became of a run', () => {
+  const run: TriggerRun = { id: 'r', triggerId: 't', at: 0, source: 'manual', outcome: 'started', sessionId: 's' };
+  const session = (state: SessionInfo['state']) => ({ state, subagents: [], queued: [] }) as unknown as SessionInfo;
+  it('is at work, asking, or over once its session closed or went', () => {
+    assert.equal(runStatus(run, session('work')), 'working');
+    assert.equal(runStatus(run, session('perm')), 'asking');
+    assert.equal(runStatus(run, session('closed')), 'done');
+    assert.equal(runStatus(run, undefined), 'done');
+    assert.equal(runStatus({ ...run, outcome: 'failed' }, undefined), 'failed');
   });
 });

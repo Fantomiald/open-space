@@ -12,7 +12,7 @@ describe('loadConfig', () => {
     assert.equal(config.port, 4848);
     assert.equal(config.hooksPort, 4849);
     assert.equal(config.modsPort, 4850);
-    assert.equal(config.maxLive, 8);
+    assert.equal(config.maxLive, 12);
     assert.equal(config.idleMs, 30 * 60_000);
     assert.deepEqual(config.passthrough, []);
   });
@@ -25,7 +25,7 @@ describe('loadConfig', () => {
 
   it('ignores invalid numbers', () => {
     const config = loadConfig({ PORT: 'abc', OFFICE_MAX_LIVE: '-3', OFFICE_IDLE_MINUTES: '1.5' }, '/h');
-    assert.deepEqual([config.port, config.maxLive, config.idleMs], [4848, 8, 30 * 60_000]);
+    assert.deepEqual([config.port, config.maxLive, config.idleMs], [4848, 12, 30 * 60_000]);
   });
 
 });

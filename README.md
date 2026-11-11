@@ -136,7 +136,7 @@ The first launch asks your first name and character, the folders sessions may wo
 | `OFFICE_ROOTS` | Allowed folders, separated by `:` on macOS or `;` on Windows. Replaces the ones chosen in the page | those from onboarding |
 | `OFFICE_DIR` | Where your data lives (crew, sessions, logs) | `~/.open-space` on macOS; `%USERPROFILE%\.open-space` on Windows |
 | `PORT` | Server port | `4848` |
-| `OFFICE_MAX_LIVE` | Claude Code sessions running at the same time | `8` |
+| `OFFICE_MAX_LIVE` | Claude Code sessions running at the same time | `12` |
 | `OFFICE_IDLE_MINUTES` | After this long, an idle session releases its process (it resumes with the next message) | `30` |
 | `OFFICE_ENV_PASSTHROUGH` | Extra variables from your shell to pass to sessions | none |
 

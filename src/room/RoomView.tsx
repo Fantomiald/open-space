@@ -12,6 +12,7 @@ import { seatedRuns } from '../state/automata.ts';
 import { ROOM_PALETTE } from '../design/room-palette.ts';
 import { t } from '../i18n/index.ts';
 import { availability } from '../state/availability.ts';
+import { sessionsIn } from '../state/docking.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useReducedMotion } from '../lib/motion.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -117,7 +118,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
   const seen = useSessions((s) => s.seen);
   const ready = useSessions((s) => s.claude !== null);
   const openIds = useSessions((s) => s.openIds);
-  const select = useSessions((s) => s.select);
+  const clearDesk = useSessions((s) => s.clearDesk);
   const show = useSessions((s) => s.show);
   /** a click opens the session alone; Shift+click adds it under the open ones (or takes it out) */
   const crew = useSessions((s) => s.crew);
@@ -281,8 +282,8 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     return { x: (event.clientX - box.left) * CANVAS_WIDTH / box.width, y: (event.clientY - box.top) * CANVAS_HEIGHT / box.height };
   };
 
-  // several sessions open are a layout the user built: a stray click must not close them all (each has its cross)
-  const leave = () => { if (useSessions.getState().openIds.length <= 1) select(null); };
+  // several sessions docked are a layout the user built: a stray click must not close them all (each has its cross)
+  const leave = () => { if (sessionsIn(useSessions.getState().columns).length <= 1) clearDesk(); };
 
   const onClick = (event: MouseEvent<HTMLCanvasElement>) => {
     if (dropped.current) { dropped.current = false; return; }

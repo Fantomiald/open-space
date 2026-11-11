@@ -35,6 +35,8 @@ export interface ModManifest {
   refresh: number;
   /** the variables its page needs (OpenSpace.env in the kit), which the user fills in its settings */
   env: ModEnvNeed[];
+  /** the trigger its page may start (the kit's OpenSpace.runTrigger), the user confirming each time; null for none */
+  trigger: string | null;
 }
 
 /** A variable a mod asks for: its name, and what it is for in the user's words (where to find it). */
@@ -76,6 +78,7 @@ export function readManifest(raw: unknown, id: string): ModManifest {
       const need = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
       return typeof need.name === 'string' && isSecretName(need.name) ? [{ name: need.name, label: text(need.label, MAX_MOD_ENV_LABEL) }] : [];
     }).filter((need, index, all) => all.findIndex((each) => each.name === need.name) === index).slice(0, MAX_MOD_ENV) : [],
+    trigger: typeof given.trigger === 'string' && /^[a-z0-9]{8,32}$/.test(given.trigger) ? given.trigger : null,
   };
 }
 

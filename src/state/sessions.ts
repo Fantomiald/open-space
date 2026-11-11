@@ -274,6 +274,8 @@ export interface CommandPostState {
   receive: (message: ServerMessage) => void;
   /** opens this session alone (null: none) */
   select: (sessionId: string | null) => void;
+  /** a click on the background: what is docked in the grid closes, conversations and mods; what floats stays */
+  clearDesk: () => void;
   /**
    * a click on a session: brought forward if it is open, else shown in place of the one the keyboard is in (in focus
    * mode, beside the open ones while there is room)
@@ -725,6 +727,16 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     set({ free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } } });
     get().arrange(sessionId ? (addTo(mods, sessionId, maxColumnsIn(s.view), tilingOf(s.view)) ?? [[sessionId]]) : mods, { boxes: {}, order: [] });
     if (sessionId) get().focus(sessionId);
+    else set({ selectedId: null, searchOpen: false, panelView: 'thread' });
+  },
+
+  clearDesk: () => {
+    const s = get();
+    set({ uiHidden: false, zoomedId: null });
+    for (const id of modsIn(s.columns)) s.closeMod(id);
+    get().arrange([]);
+    const open = get().openIds;
+    if (open.length) get().focus(open.at(-1)!);
     else set({ selectedId: null, searchOpen: false, panelView: 'thread' });
   },
 
