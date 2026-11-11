@@ -59,7 +59,7 @@ function fakeApi() {
     mods: () => mods,
     modGuide: () => '# the rules',
     createMod: async (request, bySession) => {
-      const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, refresh: 0, env: [], envSet: [], folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
+      const mod: ModInfo = { id: 'couts', name: 'couts', description: '', icon: 'puzzle', width: 380, height: 320, draft: true, refresh: 0, env: [], trigger: null, envSet: [], folder: '/mods/couts', url: '/mods/k/couts/', version: 0, unread: false };
       if (!mods.some((each) => each.id === mod.id)) mods.push(mod);
       done.push(`mod ${request}${bySession ? '' : ' by the caller'}`);
       return { mod, sessionId: bySession ? 's9' : null };
