@@ -304,7 +304,7 @@ describe('the shared browser', () => {
     const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
     const turnOf = (conversation: string) => {
       emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
-      emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+      emit({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 });
     };
     turnOf(id);
     manager.send(id, 'encore');
@@ -1120,18 +1120,17 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
-  it('gives a plain message sent during a turn to Claude Code at once, without stopping nor queueing anything', async () => {
-    const { manager, processes, find, messages } = setup();
+  it('queues a plain message sent during a turn, without stopping it', async () => {
+    const { manager, processes, find } = setup();
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'one' });
     processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
     assert.equal(find(id).state, 'work');
     manager.send(id, 'quick question');
-    assert.deepEqual(processes[0].sent, ['one', 'quick question']);
-    assert.equal(find(id).queued, undefined);
+    assert.deepEqual(processes[0].sent, ['one']);
+    assert.deepEqual(find(id).queued?.map(({ text }) => text), ['quick question']);
     assert.equal(find(id).state, 'work', 'the turn goes on');
     assert.equal(processes[0].interrupts, 0);
-    assert.ok(messages.some((m) => m.t === 'ev' && m.ev.k === 'start' && m.ev.text === 'quick question'), 'shown in the thread');
     await manager.shutdown();
   });
 

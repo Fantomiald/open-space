@@ -4,7 +4,7 @@ export const composer = {
   composer: {
     placeholderStopped: 'Écris un message pour reprendre cette session…',
     placeholderPermission: 'Une demande attend ta réponse ci-dessus (un message ici attendra la fin du tour)…',
-    placeholderBusy: (name: string) => `${name} travaille : ton message lui arrive sans l’interrompre…`,
+    placeholderBusy: (name: string) => `${name} travaille : ton message part à la fin de son tour…`,
     placeholder: 'Écris à cette session, ou / pour une commande (Entrée envoie, Maj+Entrée saute une ligne)',
     /** with several sessions open, one line */
     placeholderShort: 'Message, ou / commande',

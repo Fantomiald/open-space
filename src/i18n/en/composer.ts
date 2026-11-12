@@ -4,7 +4,7 @@ export const composer: Dictionary['composer'] = {
   composer: {
     placeholderStopped: 'Write a message to resume this session…',
     placeholderPermission: 'A request above is waiting for your answer (a message here will wait for the turn to end)…',
-    placeholderBusy: (name: string) => `${name} is working: your message reaches them without interrupting…`,
+    placeholderBusy: (name: string) => `${name} is working: your message leaves when their turn ends…`,
     placeholder: 'Write to this session, or / for a command (Enter sends, Shift+Enter adds a line)',
     placeholderShort: 'Message, or / command',
     queueLabel: 'Queued messages',

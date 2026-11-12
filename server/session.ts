@@ -235,20 +235,13 @@ export class Session {
   }
 
   /**
-   * A message from the user. During a turn, a plain one goes at once and joins it: Claude Code reads it at the turn's
-   * next step, without stopping it (checked with 2.1.302: Claude answers it, then usually goes on). A slash command,
-   * which only runs between turns, is queued (the user sees it, can take it back, or interrupt the turn to send it at
-   * once), and so is anything sent after it. Otherwise the message leaves now, after anything still queued.
+   * A message from the user. During a turn it waits in the queue (the user sees it, can take it back, or interrupt the
+   * turn to send it at once with sendNow); it leaves when the turn ends. Otherwise it leaves now, after anything still queued.
    */
   send(text: string, images: readonly ImageUpload[] = [], files: readonly string[] = []) {
     const clean = text.trim();
     if (!clean && !images.length && !files.length) return;
     if (this.stopRequest) throw new Error(st.sessions.closing);
-    if (this.busy && !this.autoCompaction && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length) {
-      this.deliver(clean, images, files, true);
-      this.publish();
-      return;
-    }
     const id = randomUUID();
     if (images.length) this.queuedImages.set(id, images);
     if (files.length) this.queuedFiles.set(id, files);
@@ -303,7 +296,7 @@ export class Session {
    */
   instruct(prompt: string, shown: string) {
     if (this.busy || this.preparing || this.stopRequest || this.info.queued?.length) throw new Error(st.worktree.waitTurn(this.info.name));
-    this.deliver(prompt, [], [], false, shown);
+    this.deliver(prompt, [], [], shown);
     this.publish();
   }
 
@@ -372,14 +365,12 @@ export class Session {
     this.publish();
   }
 
-  /** `joining`: sent during a turn, which it joins (see send) instead of starting one; `shown`: what the thread shows instead of the text. */
-  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false, shown?: string) {
+  /** `shown`: what the thread shows instead of the text. */
+  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], shown?: string) {
     this.clearIdleTimer();
     this.suggestion = undefined;
-    if (!joining) {
-      this.turnOutput = false;
-      this.interrupted = false;
-    }
+    this.turnOutput = false;
+    this.interrupted = false;
     // a message calls a resting session back from the break room, and is news to read again
     this.info.resting = undefined;
     this.info.quietFrom = undefined;
@@ -443,7 +434,7 @@ export class Session {
     if (uploaded.length) outgoing = [outgoing, st.prompt.attached(uploaded.map((upload) => upload.file))].filter(Boolean).join('\n\n');
     this.record({ k: 'start', text: shown ?? clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}) });
     if (uploaded.length < files.length) this.record({ k: 'note', text: st.sessions.uploadsGone(files.length - uploaded.length) });
-    if (!joining) this.apply({ type: spawning ? 'spawn' : 'send' });
+    this.apply({ type: spawning ? 'spawn' : 'send' });
     this.process?.send(outgoing, images);
   }
 

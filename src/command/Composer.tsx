@@ -41,8 +41,8 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const interruptible = isRunning(session);
   const queued = session.queued ?? [];
   const own = attachments.items.length ? null : ownCommand(text);
-  // during a turn a plain message joins it at once; a slash command, or anything behind one, waits for its end (Session.send)
-  const waits = busy && (session.state === 'starting' || (text.trim().startsWith('/') && !own) || queued.length > 0);
+  // during a turn a message waits for its end in the queue, unless it is one of Open Space's own commands (Session.send)
+  const waits = busy && !own;
   /** a word from a command (/copy) shown in the emptied field for a moment */
   const [note, setNote] = useState<string | null>(null);
   const say = (word: string) => { setNote(word); window.setTimeout(() => setNote(null), 2000); };
