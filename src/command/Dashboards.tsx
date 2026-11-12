@@ -3,7 +3,7 @@ import { DASHBOARD_COLUMNS, DASHBOARD_ROW, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, t
 import type { ModInfo } from '../../shared/mods.ts';
 import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
-import { addTile, cellsOf, columnWidth, DASHBOARD_GAP, gridHeight, moveTile, removeTile, resizeTile, stacked, tileBox } from '../state/dashboard-grid.ts';
+import { addTile, cellsOf, columnWidth, DASHBOARD_GAP, gridHeight, moveTile, removeTile, resizeTile, stacked, tileBox } from '../../shared/dashboard-grid.ts';
 import { MOD_HEAD } from '../state/mods.ts';
 import { useSessions } from '../state/sessions.ts';
 import { boxVariables } from './boxes.ts';

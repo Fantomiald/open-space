@@ -200,6 +200,10 @@ export const en: ServerDictionary = {
     mcp: {
       noRequest: 'Say what the mod should show or change.',
       unknown: (known: string[]) => `No such mod. ${known.length ? `The mods: ${known.join(', ')}.` : 'No mod yet.'}`,
+      unknownDashboard: (known: string[]) => `No dashboard with this id. ${known.length ? `The dashboards: ${known.join(', ')}.` : 'No dashboard yet.'}`,
+      tooManyDashboards: (max: number) => `Already ${max} dashboards: change or delete one of them.`,
+      noDashboardName: 'Give the dashboard a name.',
+      unknownTiles: (asked: string[], known: string[]) => `These mods do not exist: ${asked.join(', ')}. ${known.length ? `The mods: ${known.join(', ')}.` : 'No mod yet.'}`,
     },
   },
   /** the triggers (server/triggers.ts) and the open-space MCP server (server/mcp.ts) */

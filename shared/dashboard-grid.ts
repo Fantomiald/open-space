@@ -1,6 +1,6 @@
-// A dashboard's grid (src/command/Dashboards.tsx), as in Grafana: tiles fall up as far as they can, and a tile
+// A dashboard's grid (src/command/Dashboards.tsx, and the MCP server's save_dashboard), as in Grafana: tiles fall up as far as they can, and a tile
 // moved or resized pushes the ones in its way down. Pure functions over grid cells, and their size in pixels.
-import { DASHBOARD_COLUMNS, DASHBOARD_ROW, TILE_MIN, type DashboardTile } from '../../shared/dashboards.ts';
+import { DASHBOARD_COLUMNS, DASHBOARD_ROW, TILE_MIN, type DashboardTile } from './dashboards.ts';
 
 /** the space between two tiles, in pixels */
 export const DASHBOARD_GAP = 12;
@@ -84,3 +84,38 @@ export const gridHeight = (tiles: readonly DashboardTile[], spare = 0) => {
   const rows = Math.max(0, ...tiles.map((tile) => tile.y + tile.h)) + spare;
   return rows ? rows * (DASHBOARD_ROW + DASHBOARD_GAP) - DASHBOARD_GAP : 0;
 };
+
+/** the title bar over a mod's page, in pixels (MOD_HEAD in src/state/mods.ts) */
+const TITLE_BAR = 51;
+/** the grid width a mod's own size is turned into cells for, when nothing else tells (a laptop's page) */
+const USUAL_WIDTH = 1400;
+
+/** The cells a mod's window of this size (its page, title bar aside) takes on a usual page. */
+export const tileSizeOf = (width: number, height: number) => ({ w: cellsOf(width, columnWidth(USUAL_WIDTH)), h: cellsOf(height + TITLE_BAR, DASHBOARD_ROW) });
+
+/** A tile as asked by an agent (the MCP server's save_dashboard): only the mod is needed. */
+export interface AskedTile { mod: string; x?: number; y?: number; w?: number; h?: number }
+
+/**
+ * The tiles asked, in their order: each at its size (`sizeOf` its mod's when not given), where it says or else in the
+ * first free spot; the ones in the way pushed down, then all moved up as far as they go. The tiles of a row whose
+ * height was not given take the row's tallest one, so no hole is left under the shorter ones.
+ */
+export function arrangeTiles(asked: readonly AskedTile[], sizeOf: (mod: string) => { w: number; h: number }): DashboardTile[] {
+  let tiles: DashboardTile[] = [];
+  for (const each of asked) {
+    if (tiles.some((tile) => tile.mod === each.mod)) continue;
+    const size = sizeOf(each.mod);
+    tiles = addTile(tiles, each.mod, each.w ?? size.w, each.h ?? size.h);
+    const placed = tiles[tiles.length - 1];
+    if (placed && (each.x !== undefined || each.y !== undefined)) tiles = moveTile(tiles, each.mod, each.x ?? placed.x, each.y ?? placed.y);
+  }
+  tiles = compact(tiles);
+  for (const tile of [...tiles]) {
+    if (asked.find((each) => each.mod === tile.mod)?.h !== undefined) continue;
+    const now = tiles.find((each) => each.mod === tile.mod);
+    const tallest = Math.max(...tiles.filter((each) => each.y === now?.y).map((each) => each.h));
+    if (now && now.h < tallest) tiles = resizeTile(tiles, now.mod, now.w, tallest);
+  }
+  return tiles;
+}

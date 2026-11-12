@@ -219,6 +219,10 @@ export const fr = {
     mcp: {
       noRequest: 'Dis ce que le mod doit montrer ou changer.',
       unknown: (known: string[]) => `Pas de mod à ce nom. ${known.length ? `Les mods : ${known.join(', ')}.` : 'Aucun mod pour l’instant.'}`,
+      unknownDashboard: (known: string[]) => `Pas de dashboard à cet id. ${known.length ? `Les dashboards : ${known.join(', ')}.` : 'Aucun dashboard pour l’instant.'}`,
+      tooManyDashboards: (max: number) => `Déjà ${max} dashboards : change ou supprime l’un d’eux.`,
+      noDashboardName: 'Donne un nom au dashboard.',
+      unknownTiles: (asked: string[], known: string[]) => `Ces mods n’existent pas : ${asked.join(', ')}. ${known.length ? `Les mods : ${known.join(', ')}.` : 'Aucun mod pour l’instant.'}`,
     },
   },
   /** the triggers (server/triggers.ts) and the open-space MCP server (server/mcp.ts) */

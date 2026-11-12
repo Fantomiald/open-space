@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseDashboards } from '../../shared/dashboards.ts';
-import { addTile, compact, gridHeight, moveTile, removeTile, resizeTile, stacked } from './dashboard-grid.ts';
+import { parseDashboards } from './dashboards.ts';
+import { addTile, arrangeTiles, compact, gridHeight, moveTile, removeTile, resizeTile, stacked } from './dashboard-grid.ts';
 
 const tile = (mod: string, x: number, y: number, w = 4, h = 4) => ({ mod, x, y, w, h });
 const at = (tiles: { mod: string; x: number; y: number }[]) => Object.fromEntries(tiles.map(({ mod, x, y }) => [mod, [x, y]]));
@@ -59,5 +59,20 @@ describe('dashboards in the settings', () => {
       { id: 'main', name: 'twin', tiles: [] },
       { id: 'bad id!', name: 'x', tiles: [] },
     ]), [{ id: 'main', name: 'Mes apps', tiles: [tile('chiffres', 8, 0, 4, 3)] }]);
+  });
+});
+
+describe('dashboards an agent asks for', () => {
+  const size = () => ({ w: 6, h: 8 });
+  it('fills the rows in order when no place is given', () => {
+    assert.deepEqual(at(arrangeTiles([{ mod: 'a' }, { mod: 'b' }, { mod: 'c', w: 12, h: 4 }], size)), { a: [0, 0], b: [6, 0], c: [0, 8] });
+  });
+  it('gives the tiles of a row the same height when none was asked', () => {
+    const tiles = arrangeTiles([{ mod: 'a' }, { mod: 'b', h: 4 }, { mod: 'c' }], (mod) => ({ w: 4, h: mod === 'a' ? 9 : 6 }));
+    assert.deepEqual(tiles.map(({ mod, h }) => [mod, h]), [['a', 9], ['b', 4], ['c', 9]]);
+  });
+  it('puts a tile where it is asked, the others making room, each mod once', () => {
+    const tiles = arrangeTiles([{ mod: 'a', w: 12 }, { mod: 'b', x: 0, y: 0, w: 4, h: 4 }, { mod: 'b' }], size);
+    assert.deepEqual(at(tiles), { a: [0, 4], b: [0, 0] });
   });
 });

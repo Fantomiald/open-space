@@ -374,6 +374,7 @@ const mcpApi: OpenSpaceApi = {
     const allowed = Object.fromEntries(Object.entries(changes).filter(([key]) => (MCP_SETTINGS as readonly string[]).includes(key)));
     await applyPreferences(parsePreferences(allowed));
   },
+  saveDashboards: (dashboards) => applyPreferences({ dashboards }),
   callerFolder: (caller) => ('session' in caller ? sessions.folderOf(caller.session) ?? null : null),
   sessions: () => sessions.list(),
   lastWords: (sessionId) => {

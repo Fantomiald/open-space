@@ -1,5 +1,9 @@
 # Versions
 
+## 1.34.1
+
+- Dashboards par un agent : le serveur MCP open-space sait lister, créer, ranger et supprimer les dashboards (`list_dashboards`, `save_dashboard`, `delete_dashboard`). « Prépare-moi un dashboard avec mes chiffres et mes avis » suffit : l'agent choisit les mods, leur place et leur taille sur la grille.
+
 ## 1.34.0
 
 - Dashboards : un bouton à droite des pièces ouvre tes mods rangés sur une grille de 12 colonnes, en pleine page, qui défile vers le bas. On glisse un mod par son titre, on le redimensionne par son coin, les autres se poussent et remontent, comme dans Grafana. Plusieurs dashboards en onglets (double-clic pour renommer), gardés dans les réglages. Un mod sur un dashboard reste ouvrable en fenêtre, et inversement.

@@ -44,6 +44,7 @@ function fakeApi() {
     roles: async () => [{ name: 'home-automation', description: 'Runs the house.', model: '' }],
     settings: () => preferences,
     changeSettings: async (changes) => { preferences = { ...preferences, ...parsePreferences(changes) }; },
+    saveDashboards: async (dashboards) => { preferences = { ...preferences, dashboards }; },
     callerFolder: (caller) => ('session' in caller && caller.session === 's1' ? '/work/app' : null),
     sessions: () => live,
     lastWords: () => 'Plan ready.',
@@ -200,6 +201,22 @@ describe('the open-space MCP server', () => {
     assert.deepEqual(done, ['mod my Claude costs', 'mod my list by the caller', 'mod my tasks', 'change couts in euros']);
     assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, false);
     assert.equal((await tool(api, 'delete_mod', { id: 'couts' })).isError, true);
+  });
+
+  it('lays out dashboards of mods for an agent', async () => {
+    const { api, preferences } = fakeApi();
+    await tool(api, 'create_mod', { request: 'my Claude costs', build: 'session' });
+    assert.match((await tool(api, 'save_dashboard', { tiles: [{ mod: 'couts' }] })).text, /nom|name/i, 'a new one needs a name');
+    assert.match((await tool(api, 'save_dashboard', { name: 'Apps', tiles: [{ mod: 'ventes' }] })).text, /ventes.*couts/s, 'an unknown mod names the known ones');
+    const saved = JSON.parse((await tool(api, 'save_dashboard', { name: ' Mes  apps ', tiles: [{ mod: 'couts', x: 20, w: 6 }] })).text);
+    assert.equal(saved.name, 'Mes apps');
+    assert.deepEqual(saved.tiles, [{ mod: 'couts', x: 6, y: 0, w: 6, h: 9 }]);
+    assert.equal((await tool(api, 'save_dashboard', { id: saved.id, tiles: [{ mod: 'couts' }] })).isError, false);
+    assert.deepEqual(preferences().dashboards?.map((each) => [each.name, each.tiles[0]?.x]), [['Mes apps', 0]]);
+    assert.match((await tool(api, 'list_dashboards')).text, /"name": "couts"/);
+    assert.equal((await tool(api, 'delete_dashboard', { id: saved.id })).isError, false);
+    assert.deepEqual(preferences().dashboards, []);
+    assert.equal((await tool(api, 'delete_dashboard', { id: saved.id })).isError, true);
   });
 
   it('reads and changes the harmless settings only', async () => {

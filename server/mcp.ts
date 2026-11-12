@@ -18,6 +18,8 @@ import type { Job } from '../shared/jobs.ts';
 import type { PermissionDecision, PermissionPrompt, Preferences, SessionInfo } from '../shared/protocol.ts';
 import type { AgentRole } from '../shared/automata.ts';
 import { MAX_MOD_REQUEST, type ModInfo } from '../shared/mods.ts';
+import { arrangeTiles, tileSizeOf, type AskedTile } from '../shared/dashboard-grid.ts';
+import { DASHBOARD_COLUMNS, DASHBOARD_ROW, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, type Dashboard } from '../shared/dashboards.ts';
 import { MCP_SERVER_NAME, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
@@ -110,6 +112,8 @@ export interface OpenSpaceApi {
   modGuide: () => string;
   /** the change asked of a mod, to its open session or a new one in its folder; null when there is no such mod */
   editMod: (id: string, request: string) => Promise<{ sessionId: string } | null>;
+  /** keeps these dashboards of mods (Preferences.dashboards), every page shown them at once */
+  saveDashboards: (dashboards: Dashboard[]) => Promise<void>;
   /** puts the mod's folder in the Trash; false when there is no such mod */
   deleteMod: (id: string) => Promise<boolean>;
   /** sends a file of an allowed folder to a bot's chat */
@@ -191,6 +195,22 @@ export const TOOLS: Tool[] = [
   },
   { name: 'update_mod', description: 'Asks for a change to a mod: its session (or a new one in its folder) makes it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, request: { type: 'string', description: 'The change, in the user\'s words' } }, required: ['id', 'request'] }, annotations: write },
   { name: 'delete_mod', description: 'Deletes a mod (its folder goes to the Trash).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
+  { name: 'list_dashboards', description: 'Lists the dashboards of Open Space\'s Dashboards view: grids of mods, with each tile\'s mod and place (x, w in columns of 12; y, h in rows).', inputSchema: { type: 'object', properties: {} }, annotations: read },
+  {
+    name: 'save_dashboard',
+    description: `Makes a dashboard of mods in Open Space's Dashboards view, or replaces the tiles of one (give its id). The grid has ${DASHBOARD_COLUMNS} columns and rows of ${DASHBOARD_ROW} px (a row and its gap: 44 px, so h 8 is about 340 px high). Each tile is a mod id from list_mods; x (0 to 11) and w (2 to 12) count in columns, y and h in rows. Leave x and y out to fill the first free spot in the order given (left to right, then the next row); leave w and h out for the size of the mod's own window. Tiles in the way are pushed down and every tile moves up as far as it can, like Grafana. A mod at most once per dashboard. To lay out well: related mods side by side, wide charts w 12, small cards w 3 or 4, same height on a row.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The dashboard to change (list_dashboards); none to make a new one' },
+        name: { type: 'string', description: 'Its name, shown on its tab (needed for a new one)' },
+        tiles: { type: 'array', items: { type: 'object', properties: { mod: { type: 'string' }, x: { type: 'integer' }, y: { type: 'integer' }, w: { type: 'integer' }, h: { type: 'integer' } }, required: ['mod'] } },
+      },
+      required: ['tiles'],
+    },
+    annotations: write,
+  },
+  { name: 'delete_dashboard', description: 'Deletes a dashboard (its mods stay).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
   { name: 'get_settings', description: `Reads Open Space settings that are safe to change: ${MCP_SETTINGS.join(', ')}.`, inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'update_settings', description: `Changes some of these Open Space settings: ${MCP_SETTINGS.join(', ')}. Others are refused.`, inputSchema: { type: 'object', properties: { settings: { type: 'object' } }, required: ['settings'] }, annotations: write },
 ];
@@ -350,6 +370,35 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       return edited ? text(edited) : failure(st.mods.mcp.unknown(api.mods().map((mod) => mod.id)));
     }
     case 'delete_mod': return (await api.deleteMod(asString(args.id))) ? text('deleted') : failure(st.mods.mcp.unknown(api.mods().map((mod) => mod.id)));
+    case 'list_dashboards': {
+      const names = new Map(api.mods().map((mod) => [mod.id, mod.name]));
+      return text((api.settings().dashboards ?? []).map(({ id, name, tiles }) => ({ id, name, tiles: tiles.map((tile) => ({ ...tile, name: names.get(tile.mod) ?? null })) })));
+    }
+    case 'save_dashboard': {
+      const dashboards = api.settings().dashboards ?? [];
+      const id = asString(args.id);
+      const before = id ? dashboards.find((each) => each.id === id) : undefined;
+      if (id && !before) return failure(st.mods.mcp.unknownDashboard(dashboards.map((each) => `${each.id} (${each.name})`)));
+      if (!before && dashboards.length >= MAX_DASHBOARDS) return failure(st.mods.mcp.tooManyDashboards(MAX_DASHBOARDS));
+      const name = asString(args.name).replace(/\s+/g, ' ').trim().slice(0, MAX_DASHBOARD_NAME) || before?.name || '';
+      if (!name) return failure(st.mods.mcp.noDashboardName);
+      const mods = api.mods();
+      const cell = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+      const asked = asArray(args.tiles).filter(isJson).map((raw): AskedTile => ({ mod: asString(raw.mod), x: cell(raw.x), y: cell(raw.y), w: cell(raw.w), h: cell(raw.h) }));
+      const unknown = asked.filter((tile) => !mods.some((mod) => mod.id === tile.mod)).map((tile) => tile.mod || '?');
+      if (unknown.length) return failure(st.mods.mcp.unknownTiles(unknown, mods.map((mod) => mod.id)));
+      const tiles = arrangeTiles(asked, (mod) => { const found = mods.find((each) => each.id === mod); return tileSizeOf(found?.width ?? 380, found?.height ?? 320); });
+      const saved: Dashboard = { id: before?.id ?? `d${randomBytes(5).toString('hex')}`, name, tiles };
+      await api.saveDashboards(before ? dashboards.map((each) => (each.id === saved.id ? saved : each)) : [...dashboards, saved]);
+      return text(saved);
+    }
+    case 'delete_dashboard': {
+      const dashboards = api.settings().dashboards ?? [];
+      const id = asString(args.id);
+      if (!dashboards.some((each) => each.id === id)) return failure(st.mods.mcp.unknownDashboard(dashboards.map((each) => `${each.id} (${each.name})`)));
+      await api.saveDashboards(dashboards.filter((each) => each.id !== id));
+      return text('deleted');
+    }
     case 'get_settings': {
       const settings = api.settings();
       return text(Object.fromEntries(MCP_SETTINGS.map((key) => [key, settings[key]])));
@@ -381,7 +430,7 @@ async function answer(api: OpenSpaceApi, caller: Caller, message: unknown, versi
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: MCP_SERVER, version },
-        instructions: 'Drives Open Space, the app the sessions run in: triggers (sessions started on a schedule or by a webhook), new sessions, the crew, and a few display settings.',
+        instructions: 'Drives Open Space, the app the sessions run in: triggers (sessions started on a schedule or by a webhook), new sessions, the crew, the mods and their dashboards, and a few display settings.',
       });
     }
     case 'ping': return result(message.id, {});
