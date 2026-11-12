@@ -164,6 +164,7 @@ The first launch asks your first name and character, the folders sessions may wo
 
 ## Good to know
 
+- The [user guide](docs/guide/README.md) covers sessions, automations, Telegram, secrets, the MCP server, mods and the environment variables in detail.
 - The desktop app supports macOS and Windows. The browser driven by agents needs a Chromium browser (Chrome, Edge, Arc).
 - Open Space relies on `claude -p` in stream-json mode, some of whose options are undocumented. A newer Claude Code may break a feature: please [open an issue](https://github.com/Fantomiald/open-space/issues) if it does.
 - The changelog, the code's comments and the internal docs ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) are partly in French.
