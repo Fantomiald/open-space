@@ -1603,7 +1603,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-launcher__keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
 .cp-launcher__keys li { display: flex; align-items: center; gap: var(--space-2); }
 .cp-launcher__keys .cp-kbd { flex: none; min-width: 2.6em; text-align: center; white-space: nowrap; }
-.cp-launcher .cp-resume__list { max-height: none; }
+/* the conversations to resume scroll in their own list, the search stays above the composer:
+   the body aligns to its end, so it could not scroll back up to the first ones */
+.cp-launcher__body:has(> .cp-resume) { grid-template-rows: minmax(0, auto); }
+.cp-launcher .cp-resume { min-height: 0; grid-template-rows: minmax(0, auto) auto; }
+.cp-launcher .cp-resume__list { max-height: none; min-height: 0; overscroll-behavior: contain; }
 .cp-launcher__composer { position: relative; flex: none; padding: var(--space-3) var(--space-4) var(--space-4); }
 /* one frame for the message and its settings, like a chat field; the frame lights up while the message is typed */
 .cp-launcher__box {
