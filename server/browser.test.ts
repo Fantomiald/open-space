@@ -31,6 +31,17 @@ describe('the Playwright server of a session', () => {
     assert.deepEqual(server.args, [...(process.platform === 'win32' ? ['/d', '/c', 'npx'] : []), '-y', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
   });
 
+  it('runs through the filter that hides the session’s keys, when given one', () => {
+    const [, server] = serverOf(browserMcpConfig(ENDPOINT, { web: { command: '/usr/bin/npx', args: ['@playwright/mcp@latest'], env: { PATH: '/bin' } } }, undefined, '/data/bin/playwright-filter.mjs'));
+    assert.equal(server.command, 'node');
+    assert.deepEqual(server.args, ['/data/bin/playwright-filter.mjs', '/usr/bin/npx', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
+    assert.deepEqual(server.env, { PATH: '/bin' });
+    const shared = JSON.parse(browserMcpConfig(ENDPOINT, {}, 'http://h/shared', '/f.mjs')).mcpServers;
+    assert.ok(Object.values(shared).every((each) => (each as { args: string[] }).args[0] === '/f.mjs'));
+    const tester = JSON.parse(testerAgents(ENDPOINT, {}, { description: 'd', prompt: 'p' }, 'http://h/shared', false, '/f.mjs'))[testerAgent(1)];
+    assert.ok(tester.mcpServers.every((each: Record<string, { args: string[] }>) => Object.values(each)[0].args[0] === '/f.mjs'));
+  });
+
   it('reaches claude with --mcp-config, and the session is told its browser is shown', () => {
     const config = browserMcpConfig(ENDPOINT, {});
     const args = buildClaudeArgs({ sessionId: 's1', resume: false, model: '', permissionMode: 'auto', name: 'Ada', mcpConfig: config });
@@ -215,12 +226,20 @@ describe('the browser a key opens', () => {
 describe('the tab os-secret type types into', () => {
   const tabs = [{ id: 'a', url: 'https://tagmanager.google.com/#/container/1', title: '' }, { id: 'b', url: 'https://staging.example.org/login?next=/', title: '' }];
 
-  it('is the one on the address given, else the one shown, else the only one', () => {
-    assert.equal(typingTab(tabs, 'a', 'https://staging.example.org/')?.id, 'b');
-    assert.equal(typingTab(tabs, 'a', 'https://other.example.org/'), undefined);
-    assert.equal(typingTab(tabs, 'b', '')?.id, 'b');
-    assert.equal(typingTab(tabs, null, ''), undefined);
-    assert.equal(typingTab(tabs.slice(0, 1), null, '')?.id, 'a');
+  it('is the one on the site of the address given, else the only one', () => {
+    assert.equal(typingTab(tabs, 'https://staging.example.org')?.id, 'b');
+    assert.equal(typingTab(tabs, 'https://staging.example.org/login')?.id, 'b');
+    assert.equal(typingTab(tabs, 'https://staging.example.org/admin'), undefined);
+    assert.equal(typingTab(tabs, 'https://other.example.org/'), undefined);
+    // several tabs: never the one the view shows, which may be another site's (a tab a page opened)
+    assert.equal(typingTab(tabs, ''), undefined);
+    assert.equal(typingTab(tabs.slice(0, 1), '')?.id, 'a');
+  });
+
+  it('is never a site whose address only starts like the one given', () => {
+    const lookalikes = [{ id: 'c', url: 'https://staging.example.org.attacker.net/login', title: '' }, { id: 'd', url: 'https://staging.example.org:8443/', title: '' }, { id: 'e', url: 'http://staging.example.org/', title: '' }];
+    assert.equal(typingTab(lookalikes, 'https://staging.example.org'), undefined);
+    assert.equal(typingTab([...lookalikes, ...tabs], 'https://staging.example.org')?.id, 'b');
   });
 
   it('is told back without its query nor fragment', () => {

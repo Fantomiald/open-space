@@ -128,6 +128,15 @@ describe('what os-secret asks for', () => {
     assert.equal((await answerSecrets({ sessionId: 's', action: 'forget', form: form({ name: 'TOKEN' }) }, api)).status, 200);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'env', form: form({ name: 'TOKEN', cwd: base }) }, api)).status, 404);
   });
+
+  it('gives the filter around the session’s Playwright every key, by name, to hide them', async () => {
+    const store = new SecretStore(() => {});
+    store.set('s', [{ name: 'TOKEN', value: 'tok-123456' }, { name: 'PASSWORD', value: 'p"w' }]);
+    const reply = await answerSecrets({ sessionId: 's', action: 'values', form: form({}) }, deps(store, [base], null));
+    assert.equal(reply.status, 200);
+    assert.deepEqual(JSON.parse(reply.text), { PASSWORD: 'p"w', TOKEN: 'tok-123456' });
+    assert.deepEqual(JSON.parse((await answerSecrets({ sessionId: 'other', action: 'values', form: form({}) }, deps(store, [base], null))).text), {});
+  });
 });
 
 describe('os-secret in the browser: auth and type', () => {

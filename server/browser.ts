@@ -89,15 +89,31 @@ const SIGN_IN_TIMEOUT_MS = 20_000;
 /** How long a refused or failed sign-in's tab may take to show its page before it is closed anyway. */
 const CLOSE_WAIT_MS = 2_000;
 
-/** Whether a page has a field to type in with focus: a text input, a text area, an editable element, or a frame (its own field). */
-const FOCUSED_FIELD = `(() => { const at = document.activeElement; if (!at) return false;
-  if (at.isContentEditable || at.tagName === 'TEXTAREA' || at.tagName === 'IFRAME') return true;
-  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type); })()`;
+/**
+ * Whether a page has a field to type in with focus: a text input, a text area or an editable element, looked for down the
+ * frames of the page's own site ('frame': the focus is in a frame of another site, whose field is not checked, so refused).
+ */
+const FOCUSED_FIELD = `(() => { let doc = document; for (;;) { const at = doc.activeElement; if (!at) return false;
+  if (at.tagName === 'IFRAME') { doc = at.contentDocument; if (!doc) return 'frame'; continue; }
+  if (at.isContentEditable || at.tagName === 'TEXTAREA') return true;
+  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type); } })()`;
 
-/** The tab `os-secret type` types into: the first whose address starts with `url`, else the one shown, else the only one. */
-export function typingTab(tabs: readonly BrowserTab[], shown: string | null | undefined, url: string): BrowserTab | undefined {
-  if (url) return tabs.find((tab) => tab.url.startsWith(url));
-  return tabs.find((tab) => tab.id === shown) ?? (tabs.length === 1 ? tabs[0] : undefined);
+/** Whether `address` is on the site (scheme, host and port) of `url`, under its path. */
+function onSite(address: string, url: string): boolean {
+  try {
+    const at = new URL(address);
+    const wanted = new URL(url);
+    return at.origin === wanted.origin && at.pathname.startsWith(wanted.pathname);
+  } catch { return false; }
+}
+
+/**
+ * The tab `os-secret type` types into: the first on the site of `url`, else the only one. Never the one the view shows: a
+ * tab a page opened becomes it, while the agent goes on in its own (Playwright stays there), so it may be another site's.
+ */
+export function typingTab(tabs: readonly BrowserTab[], url: string): BrowserTab | undefined {
+  if (url) return tabs.find((tab) => onSite(tab.url, url));
+  return tabs.length === 1 ? tabs[0] : undefined;
 }
 
 /** A tab's address as `os-secret` tells it back: without its query nor fragment, which may hold a token. */
@@ -116,8 +132,11 @@ const BROWSER_FLAGS: Record<string, number> = {
 
 type McpServer = Record<string, unknown> & { command?: string; args?: string[] };
 
-/** The user's own Playwright server (from ~/.claude.json), else `npx @playwright/mcp`, pointed at `endpoint`. */
-function playwrightServer(endpoint: string, userServers: Record<string, unknown>): { name: string; server: McpServer } {
+/**
+ * The user's own Playwright server (from ~/.claude.json), else `npx @playwright/mcp`, pointed at `endpoint`, and run through
+ * `filter` (server/playwright-filter.ts), which hides the session's keys in what it answers.
+ */
+function playwrightServer(endpoint: string, userServers: Record<string, unknown>, filter?: string): { name: string; server: McpServer } {
   const found = Object.entries(userServers).find(([name, raw]) => {
     const server = asJson(raw);
     return name === 'playwright' || (Array.isArray(server.args) && server.args.some((arg) => typeof arg === 'string' && arg.includes('@playwright/mcp')));
@@ -132,7 +151,9 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
     if (flag in BROWSER_FLAGS) { if (inline === undefined) at += BROWSER_FLAGS[flag]; continue; }
     args.push(given[at]);
   }
-  return { name: found?.[0] ?? 'playwright', server: { ...base, args: [...args, '--cdp-endpoint', endpoint] } };
+  const server = { ...base, args: [...args, '--cdp-endpoint', endpoint] };
+  const filtered = filter && typeof server.command === 'string' ? { ...server, command: 'node', args: [filter, server.command, ...server.args] } : server;
+  return { name: found?.[0] ?? 'playwright', server: filtered };
 }
 
 /**
@@ -159,9 +180,9 @@ export function hasSharedBrowser(mcpConfig: string | undefined): boolean {
  * The --mcp-config of a session: its Playwright server (same name as the user's, so it takes its place) on its browser,
  * and with `sharedEndpoint` a second one on the shared browser.
  */
-export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>, sharedEndpoint?: string): string {
-  const { name, server } = playwrightServer(endpoint, userServers);
-  const shared = sharedEndpoint ? { [SHARED_SERVER]: playwrightServer(sharedEndpoint, userServers).server } : {};
+export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>, sharedEndpoint?: string, filter?: string): string {
+  const { name, server } = playwrightServer(endpoint, userServers, filter);
+  const shared = sharedEndpoint ? { [SHARED_SERVER]: playwrightServer(sharedEndpoint, userServers, filter).server } : {};
   return JSON.stringify({ mcpServers: { [name]: server, ...shared } });
 }
 
@@ -178,10 +199,10 @@ export const testerLane = (type: string) => Number(/^browser-tester-(\d+)$/.exec
  * Code runs a single server for every run of a same agent, which would have them share a tab. The server has a name
  * of its own, and the session's Playwright tools are kept from it, like the user's own Chrome when the session has it (`chrome`).
  */
-export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string, chrome = false): string {
+export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string, chrome = false, filter?: string): string {
   return JSON.stringify(Object.fromEntries(Array.from({ length: TESTERS }, (_, at) => {
     const lane = at + 1;
-    const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers);
+    const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers, filter);
     const own = `tester-browser-${lane}`;
     if (!sharedEndpoint) return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`, ...(chrome ? [`mcp__${CHROME_SERVER}`] : [])] }];
     // its tabs of the shared browser are its own too, apart from the session's
@@ -189,7 +210,7 @@ export function testerAgents(endpoint: string, userServers: Record<string, unkno
     return [testerAgent(lane), {
       description: words.description,
       prompt: `${words.prompt}${words.shared ?? ''}`.replaceAll('tester-browser', own).replaceAll(SHARED_SERVER, shared),
-      mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers).server }],
+      mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers, filter).server }],
       disallowedTools: [`mcp__${name}`, `mcp__${SHARED_SERVER}`],
     }];
   })));
@@ -391,21 +412,21 @@ export class Browsers {
   /**
    * `os-secret type` (server/secrets.ts): the key typed into the field that has focus in a tab of the session's own browser,
    * or of its own tabs in the shared one (its lane's and its testers', never another session's), as a paste would
-   * (Input.insertText), on a connection of Open Space's own. The tab whose address starts with `url`, else the one its view
-   * shows, else its only one. Answers that tab's address (shortAddress).
+   * (Input.insertText), on a connection of Open Space's own. The tab on the site of `url`, else its only one (typingTab).
+   * Answers that tab's address (shortAddress).
    */
   async typeInto(sessionId: string, value: string, url: string, shared: boolean): Promise<string> {
     const mine = shared ? this.shared : this.live.get(browserId(sessionId));
     if (!mine) throw new Error(`your ${shared ? 'shared ' : ''}browser is not open`);
     const tabs = shared ? this.sharedTabs.tabsOfSession(sessionId).flatMap((id) => this.shared?.tabs.get(id) ?? []) : [...mine.tabs.values()];
-    const shown = this.live.get(browserId(sessionId, shared ? SHARED_LANE : 0))?.active;
-    const tab = typingTab(tabs, shown, url);
-    if (!tab) throw new Error(url ? `no tab of yours is on ${url}` : tabs.length ? 'several tabs: give the address of the one to type in' : 'no tab of yours is open');
+    const tab = typingTab(tabs, url);
+    if (!tab) throw new Error(url ? `no tab of yours is on ${url}` : tabs.length ? 'several tabs: give the address of the one to type in (https://site/…)' : 'no tab of yours is open');
     const cdp = new Cdp(mine.chrome.socket, () => {}, () => {});
     try {
       await cdp.opened;
       const session = String((await cdp.send('Target.attachToTarget', { targetId: tab.id, flatten: true })).sessionId);
       const focused = asJson((await cdp.send('Runtime.evaluate', { expression: FOCUSED_FIELD, returnByValue: true }, session)).result).value;
+      if (focused === 'frame') throw new Error(`the field that has focus in ${shortAddress(tab.url)} is in a frame of another site`);
       if (focused !== true) throw new Error(`no field to type in has focus in ${shortAddress(tab.url)}: click in it first`);
       await cdp.send('Input.insertText', { text: value }, session);
     } finally {

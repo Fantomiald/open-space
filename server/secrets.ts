@@ -157,6 +157,9 @@ export async function answerSecrets({ sessionId, action, form }: SecretsRequest,
       const value = store.get(sessionId, name);
       return value === null ? missing(name) : { status: 200, text: value };
     }
+    // every key, for the filter around the session's Playwright server, which hides them in its answers (server/playwright-filter.ts)
+    case 'values':
+      return { status: 200, text: JSON.stringify(Object.fromEntries(store.names(sessionId).map((each) => [each, store.get(sessionId, each)]))) };
     case 'env': {
       const value = store.get(sessionId, name);
       if (value === null) return missing(name);
@@ -192,7 +195,7 @@ export async function answerSecrets({ sessionId, action, form }: SecretsRequest,
       const value = store.get(sessionId, name);
       if (value === null) return missing(name);
       const url = form.get('url') ?? '';
-      if (url && !isSite(url)) return { status: 400, text: 'Give the address of the tab (https://…), or none for the tab shown.' };
+      if (url && !isSite(url)) return { status: 400, text: 'Give the address of the tab (https://…), or none when you have one tab only.' };
       let tab: string;
       try { tab = await deps.type(sessionId, { value, url, shared: form.get('shared') === '1' }); } catch (error) { return { status: 409, text: `Cannot type it: ${failure(error)}` }; }
       return { status: 200, text: `${name} typed into the field that has focus in ${tab}.` };
@@ -224,7 +227,7 @@ os-secret env NAME [FILE] [--as VAR]              writes NAME into a .env file (
 os-secret run NAME... -- COMMAND...               runs COMMAND with the keys as environment variables, output masked
 os-secret cookie NAME URL [--as COOKIE]           puts the key as a cookie for URL in your Open Space browser
 os-secret auth NAME URL [--user USER]             signs your Open Space browser in to the site of URL (basic auth): the key is user:password, or the password with --user
-os-secret type NAME [URL]                         types the key into the field that has focus in your browser's tab (the one whose address starts with URL, else the one shown)
+os-secret type NAME [URL]                         types the key into the field that has focus in your browser's tab (the one on the site of URL, needed with several tabs)
   cookie, auth and type take --shared: your tabs of the shared browser instead of your own browser
 os-secret forget NAME                             forgets a key
 EOF

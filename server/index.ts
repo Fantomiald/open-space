@@ -52,6 +52,7 @@ import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './mu
 import { modKey, Mods, modsFolder } from './mods.ts';
 import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
+import { installFilter } from './playwright-filter.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
 import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
@@ -136,13 +137,15 @@ function browserMcp(sessionId: string, untrusted: boolean, chosen: AccountsBrows
   if (!browsers.available) return chrome;
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
   const shared = accounts === 'shared' ? `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}` : undefined;
-  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome') };
+  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared, playwrightFilter), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome', playwrightFilter) };
 }
 
 /** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */
 const secretStore = new SecretStore((sessionId) => sessions.secretsChanged(sessionId));
 setInterval(() => secretStore.sweep(), 60_000).unref();
 const secretsBin = installScript(config.dataDir);
+/** the filter around the sessions' Playwright servers, which hides their keys in what those answer (server/playwright-filter.ts) */
+const playwrightFilter = installFilter(config.dataDir);
 function secretsEnv(sessionId: string): Record<string, string> {
   const searchPath = buildClaudeEnvironment(process.env, config.passthrough).PATH;
   return {
