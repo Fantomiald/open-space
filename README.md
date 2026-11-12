@@ -15,6 +15,8 @@ A pixel-art office to run several Claude Code sessions at once.
 
 Each session is a character at a desk. They type while they work, raise a hand when they need you, and smile when they're done. Click one to open its thread and answer without switching windows. No more juggling six terminals to find out who is waiting on what.
 
+It also runs sessions on its own: on a schedule or a webhook, they work in a server room as little robots. And any session can build you a **mod**, a small window with the numbers you care about, to keep open or pin on a dashboard.
+
 Open Space runs the `claude` installed on your machine, so your skills, plugins, `CLAUDE.md` and settings apply just as they do in your terminal.
 
 ## Your desk
@@ -27,6 +29,7 @@ Open Space runs the `claude` installed on your machine, so your skills, plugins,
 - **Search everything** with Cmd+K on Mac or Ctrl+K on Windows: sessions, messages, commands and settings.
 - **Get notified** by a sound and a native macOS or Windows app notification when a session is done or waiting, even with the window closed.
 - **Continue on your phone** with Remote Control: one button, and the session shows up in claude.ai/code and the Claude app.
+- **Pop a window out**: a conversation, a mod or a browser leaves Open Space for a window of its own, kept above your other apps (even full screen) or not, and comes back in one click.
 
 ### Arrange it your way
 
@@ -47,6 +50,10 @@ Alt (Option on Mac) + drag moves the room; Alt + scroll or pinch zooms it. Sizes
 - **See what changed**: `+X −Y` in the header, then each file with its diff.
 - **Watch the context**: a gauge fills up and the field offers to compact. `/context`, `/mcp` and `/usage` open as views in the page.
 - **See what Claude sends you**: pictures, diagrams, videos, Markdown and HTML pages show in the thread. A page published on claude.ai shows as a live preview.
+- **Give a key without showing it.** When a session needs an API key, a box opens in the thread: you paste the value, the agent only gets its name. With `os-secret` it writes it to a `.env`, runs a command with it or sets it as a browser cookie, never reads it. Keys live in memory, 12 h at most, and go when the session switches off.
+
+![Lina asks for a Stripe test key: the box in her thread, where the value is pasted, and the agent only ever sees the name](docs/images/secret-box.png)
+
 - **Let sessions talk to each other** by first name ("ask Margot where things stand").
 - **Send a session to the break room**: it lets go of its process and comes back with your next message. **Duplicate** one to try another direction while the original carries on.
 
@@ -58,6 +65,39 @@ Several sessions in one project no longer step on each other. When another sessi
 - **Nothing is lost without you knowing.** Switching off a session whose branch has work asks what to do with it: merge then switch off, keep the branch (its work is committed, and it comes back if you resume the conversation), or throw it all away.
 - **Tidying up**: the branch pill, Cmd+K on Mac or Ctrl+K on Windows, then "Branches", or a reminder in the launcher open the project's branches, with who, how old, merged or not. The merged ones are checked, the rest waits for your word.
 - The **Isolate sessions** setting (Settings > Sessions): when the folder is taken, always, or never. The session's settings panel (Folder: Shared / Isolated) forces it for one session.
+
+## Automations
+
+![The server room: robots in their pods around a floating orb, one per scheduled session](docs/images/servers-room.png)
+
+A **trigger** starts a session on its own: at a fixed time (a 5-field cron, in your local time) or when another program calls its webhook (a Jira ticket assigned to you, a button in a mod). It has a name, a project folder, a first message, and if you like an agent of your crew or a Claude Code role (`.claude/agents/<role>.md`), a model, a permission mode and Remote Control.
+
+- **Real sessions.** A run is a normal Open Space session, so you answer, approve and resume it like the others. While it works, it stands as a robot in the server room; the portal in the office takes you there.
+- **Within limits you set**: the permission rules it gets without asking (read the code, edit files, npm scripts, commit, push, open a PR…), a ceiling in dollars and in minutes, and the keys it may use through `os-secret` without seeing them.
+- **Test before it's live**: "Run now", and for a webhook "Simulate a call", which runs it in plan mode with a sample body.
+- **From Telegram**: add your bot, and the sessions you follow send you their permissions and questions with buttons, their files and when they're done. Reply to a message to write to its session, or `/run <trigger>` and `/new <folder> <task>` to start one.
+- **From a session or another program**: the `open-space` MCP server lets a session create triggers, sessions, crew members and mods. Another program on your computer can use it too, once you turn on external access in the Automations panel.
+
+![The Automations panel: three triggers, two on a schedule and one on a webhook, with their latest runs](docs/images/automations.png)
+
+## Mods and dashboards
+
+![The office with two mods open: app reviews with a reply ready for each, and sales over the last weeks](docs/images/mods.png)
+
+A **mod** is a small window that a session codes for you from one sentence: "a mod that shows my App Store reviews, translated, with a reply ready for each". Open it when you want, place it anywhere, fold it, dock it in the grid or pop it out. To change it, ask again: the pencil button sends your request to its session.
+
+- Mods are plain HTML pages in `~/.open-space/mods/<id>/`, built with a kit of tested components that fit any width. A session or a script can write their numbers in `data/`, and the window refreshes on its own (every 1 to 60 minutes) or with its button.
+- Settings keep each mod's name, icon, refresh rate and environment variables (API keys stay out of the folder the agent reads).
+- A mod can carry a button that starts a trigger: "Suggest fixes" in a rankings mod wakes up a session that does the research.
+- Each mod runs on its own origin, so it can embed a YouTube player or another site that allows it.
+
+![The Dashboards view: six mods on a grid, reviews, sales, rankings and what expires soon](docs/images/dashboard.png)
+
+**Dashboards** put your mods on a 12-column grid, like Grafana, full width and scrolling down. Drag a tile by its title, resize it by its corner, and keep several dashboards. A tile and the mod's window are independent: open one without losing the other.
+
+## A browser for each session
+
+Each session gets its own Chromium browser, driven through Playwright. When it opens a page, a mini window shows it live: move it, resize it, click in it if the agent is stuck on a login, or open the full view in the thread (desktop 1920×1080 or mobile 390×844). For a broader check, four testers (`browser-tester-1` to `-4`) run four journeys at once, each in its own browser.
 
 ## Your crew
 
@@ -73,7 +113,7 @@ Pick a pet among 25: a cat, a dog (7 breeds), a fox, an owl, a dragon, a slime, 
 
 ![The six themes in turn: space shuttle, neon Tokyo, dungeon, beach bar, pirate ship and treehouse](docs/images/themes.gif)
 
-Six themes under **Settings > Office**: a space shuttle, a neon Tokyo street, a dungeon, a beach bar, a pirate ship and a treehouse. Walls, floor, furniture, sky and lights all change, in the office and in the break room.
+Seven themes under **Settings > Office**: a space shuttle, a neon Tokyo street, a dungeon, a beach bar, a pirate ship, a treehouse and a hacker cellar. Walls, floor, furniture, sky and lights all change, in the office and in the break room.
 
 ![The sky over the office from dawn to night: clouds by day, then stars, the moon and the lamps on](docs/images/sky.gif)
 

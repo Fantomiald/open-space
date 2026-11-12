@@ -15,6 +15,8 @@ Un bureau en pixel art pour piloter plusieurs sessions Claude Code en même temp
 
 Chaque session est un perso assis à son poste. Il tape quand il travaille, lève la main quand il a besoin de toi, sourit quand il a fini. Un clic sur lui ouvre son fil, et tu réponds sans changer de fenêtre. Plus besoin de jongler entre six terminaux pour savoir qui attend quoi.
 
+Il lance aussi des sessions tout seul : à heure fixe ou sur un webhook, elles travaillent en petits robots dans une salle des serveurs. Et n'importe quelle session peut te coder un **mod**, une petite fenêtre avec les chiffres qui t'intéressent, à garder ouverte ou à poser sur un dashboard.
+
 Open Space lance le `claude` installé sur ta machine : tes skills, tes plugins, ton `CLAUDE.md` et tes réglages s'appliquent comme dans ton terminal.
 
 ## Ton poste
@@ -27,6 +29,7 @@ Open Space lance le `claude` installé sur ta machine : tes skills, tes plugins,
 - **Tout chercher** avec Cmd+K sur Mac ou Ctrl+K sur Windows : sessions, messages, commandes et réglages.
 - **Être prévenu** par un son et une notification native de l’app macOS ou Windows quand une session a fini ou t'attend, même fenêtre fermée.
 - **Continuer sur ton téléphone** avec Remote Control : un bouton, et la session apparaît dans claude.ai/code et l'app Claude.
+- **Sortir une fenêtre** : une conversation, un mod ou un navigateur sort d'Open Space dans sa propre fenêtre, gardée au-dessus de tes autres apps (même en plein écran) ou non, et revient d'un clic.
 
 ### Range-le à ta façon
 
@@ -47,6 +50,10 @@ Alt (Option sur Mac) + glisser déplace la salle ; Alt + molette ou le pincement
 - **Voir ce qui a changé** : `+X −Y` dans l'en-tête, puis chaque fichier avec son diff.
 - **Surveiller le contexte** : une jauge se remplit et le champ propose de compacter. `/context`, `/mcp` et `/usage` s'ouvrent en vues dans la page.
 - **Voir ce que Claude t'envoie** : images, schémas, vidéos, pages Markdown et HTML s'affichent dans le fil. Une page publiée sur claude.ai s'affiche en aperçu vivant.
+- **Donner une clé sans la montrer.** Quand une session a besoin d'une clé d'API, une boîte s'ouvre dans le fil : tu colles la valeur, l'agent n'en a que le nom. Avec `os-secret`, il l'écrit dans un `.env`, lance une commande avec, ou la pose en cookie dans son navigateur, sans jamais la lire. Les clés restent en mémoire, 12 h au plus, et partent quand la session s'éteint.
+
+![Lina demande une clé de test Stripe : la boîte dans son fil, où l'on colle la valeur, et l'agent n'en voit que le nom](docs/images/secret-box.png)
+
 - **Faire parler les sessions entre elles** par leur prénom (« demande à Margot où elle en est »).
 - **Envoyer une session en salle de repos** : elle libère son processus et revient avec ton prochain message. **La dupliquer** pour tenter une autre piste pendant que l'originale continue.
 
@@ -58,6 +65,39 @@ Plusieurs sessions dans le même projet ne se marchent plus dessus. Quand une au
 - **Rien ne se perd sans que tu le saches.** Éteindre une session dont la branche a du travail demande quoi en faire : fusionner puis éteindre, garder la branche (son travail est commité, elle revient si tu reprends la conversation), ou tout jeter.
 - **Le ménage** : la pastille de branche, Cmd+K sur Mac ou Ctrl+K sur Windows, puis « Branches », ou un rappel dans le lanceur ouvrent les branches du projet, avec qui, depuis quand, fusionnée ou non. Les fusionnées sont cochées, le reste attend ton accord.
 - Le réglage **Isoler les sessions** (Réglages > Sessions) : quand le dossier est déjà pris, toujours, ou jamais. Le panneau des réglages de la session (Dossier : Partagé / Isolé) force le choix pour une session.
+
+## Automates
+
+![La salle des serveurs : des robots dans leurs capsules autour d'une orbe qui flotte, un par session lancée par un déclencheur](docs/images/servers-room.png)
+
+Un **déclencheur** lance une session tout seul : à heure fixe (un cron à 5 champs, à ton heure) ou quand un autre programme appelle son webhook (un ticket Jira qui t'est assigné, un bouton dans un mod). Il a un nom, un dossier de projet, un message de départ, et au choix un agent de ton équipe ou un rôle Claude Code (`.claude/agents/<rôle>.md`), un modèle, un mode de permission et Remote Control.
+
+- **De vraies sessions.** Un run est une session Open Space normale : tu y réponds, tu valides, tu la reprends comme les autres. Pendant qu'il travaille, il se tient en robot dans la salle des serveurs ; le portail du bureau t'y emmène.
+- **Dans les limites que tu fixes** : les règles de permission qu'il a sans demander (lire le code, modifier les fichiers, scripts npm, commit, push, ouvrir une PR…), un plafond en dollars et en minutes, et les clés qu'il peut utiliser avec `os-secret` sans les voir.
+- **Tester avant de l'allumer** : « Lancer maintenant », et pour un webhook « Simuler un appel », qui le lance en mode plan avec un faux corps.
+- **Depuis Telegram** : ajoute ton bot, et les sessions que tu suis t'envoient leurs permissions et leurs questions avec des boutons, leurs fichiers et leur fin. Réponds à un message pour écrire à sa session, ou `/run <déclencheur>` et `/new <dossier> <tâche>` pour en lancer une.
+- **Depuis une session ou un autre programme** : le serveur MCP `open-space` permet à une session de créer des déclencheurs, des sessions, des membres d'équipe et des mods. Un autre programme de ton ordinateur peut s'en servir aussi, une fois l'accès externe activé dans le panneau Automates.
+
+![Le panneau Automates : trois déclencheurs, deux à heure fixe et un sur webhook, avec leurs derniers départs](docs/images/automations.png)
+
+## Mods et dashboards
+
+![Le bureau avec deux mods ouverts : les avis App Store avec une réponse prête pour chacun, et les ventes des dernières semaines](docs/images/mods.png)
+
+Un **mod** est une petite fenêtre qu'une session te code à partir d'une phrase : « un mod qui montre mes avis App Store, traduits, avec une réponse prête pour chacun ». Ouvre-le quand tu veux, place-le où tu veux, replie-le, range-le dans la grille ou sors-le. Pour le changer, redemande : le bouton crayon envoie ta demande à sa session.
+
+- Les mods sont de simples pages HTML dans `~/.open-space/mods/<id>/`, faites avec un kit de composants testés à toutes les largeurs. Une session ou un script écrit leurs chiffres dans `data/`, et la fenêtre se rafraîchit toute seule (toutes les 1 à 60 minutes) ou avec son bouton.
+- Les réglages gardent le nom, l'icône, le rythme et les variables d'environnement de chaque mod (les clés d'API restent hors du dossier que lit l'agent).
+- Un mod peut porter un bouton qui lance un déclencheur : « Proposer des fixes » dans un mod de classements réveille une session qui fait la recherche.
+- Chaque mod a son origine à lui : il peut intégrer un lecteur YouTube ou un autre site qui l'autorise.
+
+![La vue Dashboards : six mods sur une grille, avis, ventes, classements et ce qui expire bientôt](docs/images/dashboard.png)
+
+Les **dashboards** posent tes mods sur une grille de 12 colonnes, façon Grafana, en pleine largeur et qui défile vers le bas. Une tuile se déplace par son titre et se redimensionne par son coin, et tu peux en avoir plusieurs. Une tuile et la fenêtre du mod sont indépendantes : ouvrir l'une ne retire pas l'autre.
+
+## Un navigateur par session
+
+Chaque session a son propre navigateur Chromium, qu'elle pilote avec Playwright. Quand elle ouvre une page, une mini-fenêtre la montre en direct : déplace-la, redimensionne-la, clique dedans si l'agent bloque sur une connexion, ou ouvre la vue complète dans le fil (ordinateur 1920×1080 ou mobile 390×844). Pour un test plus large, quatre testeurs (`browser-tester-1` à `-4`) font quatre parcours en même temps, chacun dans son navigateur.
 
 ## Ton équipe
 
@@ -73,7 +113,7 @@ Choisis un animal parmi 25 : un chat, un chien (7 races), un renard, un hibou, u
 
 ![Les six thèmes l'un après l'autre : navette spatiale, Tokyo néon, donjon, plage, bateau pirate et cabane en forêt](docs/images/themes.gif)
 
-Six thèmes dans **Réglages > Bureau** : une navette spatiale, une rue de Tokyo au néon, un donjon, un bar de plage, un bateau pirate et une cabane en forêt. Murs, sol, meubles, ciel et lumières changent, au bureau comme en salle de repos.
+Sept thèmes dans **Réglages > Bureau** : une navette spatiale, une rue de Tokyo au néon, un donjon, un bar de plage, un bateau pirate, une cabane en forêt et une cave de hackers. Murs, sol, meubles, ciel et lumières changent, au bureau comme en salle de repos.
 
 ![Le ciel au-dessus du bureau de l'aube à la nuit : des nuages le jour, puis les étoiles, la lune et les lampes allumées](docs/images/sky.gif)
 

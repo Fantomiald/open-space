@@ -98,7 +98,7 @@ export const automata: Dictionary['automata'] = {
 
   connections: {
     head: 'Get your sessions on your phone, and drive them from there.',
-    intro: 'Your Telegram bot tells you when a session needs you (with buttons to answer), when it is done, and sends you its files. You can also just talk to it: "where is JD at?", "start a session on pilou".',
+    intro: 'Your Telegram bot tells you when a session needs you (with buttons to answer), when it is done, and sends you its files. You can also just talk to it: "where is Lina at?", "start a session on shop".',
     bots: 'Your bots',
     soon: 'Soon',
     add: 'Add a bot',

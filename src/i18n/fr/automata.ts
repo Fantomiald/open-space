@@ -98,7 +98,7 @@ export const automata = {
 
   connections: {
     head: 'Reçois tes sessions sur ton téléphone, et pilote-les de là.',
-    intro: 'Ton bot Telegram te prévient quand une session a besoin de toi (avec des boutons pour répondre), quand elle a fini, et t’envoie ses fichiers. Tu peux aussi lui parler normalement : « où en est JD ? », « lance une session sur pilou ».',
+    intro: 'Ton bot Telegram te prévient quand une session a besoin de toi (avec des boutons pour répondre), quand elle a fini, et t’envoie ses fichiers. Tu peux aussi lui parler normalement : « où en est Lina ? », « lance une session sur shop ».',
     bots: 'Tes bots',
     soon: 'Bientôt',
     add: 'Ajouter un bot',
