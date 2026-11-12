@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { automatonPersonId, roleLabel, type AutomatonRun } from '../../shared/automata.ts';
 import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
 import { ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, MAX_RUN_COST, MAX_RUN_MINUTES, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { formatAgo, formatClock, formatDuration, homeRelative } from '../lib/format.ts';
+import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { allRuns, roleOf } from '../state/automata.ts';
 import { buildFeed } from '../state/feed.ts';
@@ -15,7 +16,7 @@ import { Copyable } from './Copyable.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import {
-  AutomatonIcon, BrandIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
+  AutomatonIcon, BrandIcon, ChevronDownIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
   PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TimerIcon, TuneIcon, WebhookIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
@@ -34,6 +35,9 @@ export function AutomataDialog() {
   const open = useSessions((s) => s.automataOpen);
   return open ? <Automata /> : null;
 }
+
+/** The list's groups: the scheduled triggers, then those a webhook starts. */
+const GROUPS = [{ kind: 'cron', title: () => t.automata.triggers.scheduled }, { kind: 'webhook', title: () => t.automata.triggers.hooked }] as const;
 
 const KindIcon = ({ trigger }: { trigger: Pick<Trigger, 'kind'> }) => (trigger.kind === 'webhook' ? <WebhookIcon /> : <ClockIcon />);
 
@@ -55,6 +59,13 @@ function Automata() {
   const last = useMemo(() => lastRuns(state.runs), [state.runs]);
   const shown = typeof page === 'string' ? undefined : page.trigger;
   const trigger = shown ? state.triggers.find((each) => each.id === shown) ?? null : null;
+  // the groups folded in this browser
+  const [folded, setFolded] = useState<Trigger['kind'][]>(() => readPreference<Trigger['kind'][]>('automataFolded', []));
+  const fold = (kind: Trigger['kind']) => {
+    const next = folded.includes(kind) ? folded.filter((each) => each !== kind) : [...folded, kind];
+    setFolded(next);
+    writePreference('automataFolded', next);
+  };
 
   // a trigger just made shows once the server tells it; one removed gives way to the first left
   const known = useRef(new Set(state.triggers.map((each) => each.id)));
@@ -74,16 +85,32 @@ function Automata() {
             <PlusIcon /><span className="cp-team__label">{words.triggers.add}</span>
           </button>
           <nav className="cp-prefs__menu cp-automata__menu" aria-label={words.tabs.triggers}>
-            {state.triggers.map((each) => {
-              const run = last.get(each.id);
+            {GROUPS.map(({ kind, title }) => {
+              // the ones that run first, those paused under them
+              const group = state.triggers.filter((each) => each.kind === kind).sort((a, b) => Number(b.enabled) - Number(a.enabled));
+              if (!group.length) return null;
+              const isFolded = folded.includes(kind);
               return (
-                <button key={each.id} type="button" aria-current={shown === each.id ? 'page' : undefined} data-off={!each.enabled || undefined} onClick={() => setPage({ trigger: each.id })}>
-                  <KindIcon trigger={each} />
-                  <span>{each.name}</span>
-                  {!each.enabled
-                    ? <small className="cp-automata__flag">{words.triggers.off}</small>
-                    : run && <RunDot status={runStatus(run, sessions[run.sessionId ?? ''])} />}
-                </button>
+                <Fragment key={kind}>
+                  <button
+                    type="button" className="cp-automata__heading" aria-expanded={!isFolded}
+                    title={isFolded ? words.triggers.unfold(title()) : words.triggers.fold(title())} onClick={() => fold(kind)}
+                  >
+                    <span>{title()}</span><small>{group.length}</small><ChevronDownIcon />
+                  </button>
+                  {group.map((each) => {
+                    const run = last.get(each.id);
+                    return (
+                      <button key={each.id} type="button" aria-current={shown === each.id ? 'page' : undefined} data-off={!each.enabled || undefined} data-folded={(isFolded && shown !== each.id) || undefined} onClick={() => setPage({ trigger: each.id })}>
+                        <KindIcon trigger={each} />
+                        <span>{each.name}</span>
+                        {!each.enabled
+                          ? <small className="cp-automata__flag">{words.triggers.off}</small>
+                          : run && <RunDot status={runStatus(run, sessions[run.sessionId ?? ''])} />}
+                      </button>
+                    );
+                  })}
+                </Fragment>
               );
             })}
           </nav>

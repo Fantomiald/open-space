@@ -20,6 +20,10 @@ export const automata = {
     none: 'Aucun déclencheur pour l’instant.',
     add: 'Nouveau déclencheur',
     off: 'en pause',
+    scheduled: 'Programmés',
+    hooked: 'Par webhook',
+    fold: (group: string) => `Replier « ${group} »`,
+    unfold: (group: string) => `Déplier « ${group} »`,
     webhook: 'Webhook',
     cron: (expression: string) => `Cron ${expression}`,
     fields: {

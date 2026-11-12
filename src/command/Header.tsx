@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { hasNews, unreadMods } from '../../shared/dashboards.ts';
 import { plural, t } from '../i18n/index.ts';
 import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions, type RoomKind } from '../room/cast.ts';
@@ -16,6 +17,7 @@ const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['a
 const PALETTE_KEYS = `${MODIFIER} K`;
 const FOCUS_KEYS = `${MODIFIER} .`;
 const SETTINGS_KEYS = `${MODIFIER} ,`;
+export const DASHBOARDS_BAR = 'cp-dashboards-bar';
 
 export function Header() {
   const view = useSessions((s) => s.view);
@@ -31,6 +33,11 @@ export function Header() {
   const appReady = useSessions((s) => s.appUpdate?.state === 'ready');
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
+  // a mod on a dashboard has something new: a dot on the dashboards' button, until they are shown
+  const dashboardsNews = useSessions((s) => {
+    const unread = unreadMods(s.mods);
+    return s.view !== 'dashboards' && unread.size > 0 && (s.preferences.dashboards ?? []).some((dashboard) => hasNews(dashboard, unread));
+  });
   // how many sessions each room holds, the way the rooms themselves place them
   const counts = useMemo(() => {
     const list = Object.values(sessions);
@@ -51,7 +58,7 @@ export function Header() {
               <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
             </button>
           ))}
-          <button type="button" aria-pressed={view === 'dashboards'} aria-label={words.dashboards} title={words.dashboardsTitle} onClick={() => setView('dashboards')}>
+          <button type="button" aria-pressed={view === 'dashboards'} aria-label={dashboardsNews ? words.dashboardsNews : words.dashboards} title={dashboardsNews ? words.dashboardsNews : words.dashboardsTitle} data-news={dashboardsNews || undefined} onClick={() => setView('dashboards')}>
             <DashboardIcon />
           </button>
           <span className="cp-header__divider" aria-hidden="true" />
@@ -62,6 +69,8 @@ export function Header() {
       </div>
       <ProjectFilter />
       {radio && <Radio />}
+      {/* the dashboards' tabs and buttons, put here by Dashboards.tsx: the grid keeps the whole page under the header */}
+      {view === 'dashboards' && <div className="cp-header__dashboards" id={DASHBOARDS_BAR} />}
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
         <ModsButton />

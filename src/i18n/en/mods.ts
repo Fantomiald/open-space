@@ -63,6 +63,7 @@ export const mods: Dictionary['mods'] = {
   dashboards: {
     label: 'Dashboards',
     firstName: 'My dashboard',
+    tabNews: (name) => `${name}: something new in a mod`,
     newName: (count) => `Dashboard ${count}`,
     create: 'New dashboard',
     rename: 'Rename',

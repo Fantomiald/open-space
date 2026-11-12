@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { DASHBOARD_COLUMNS, DASHBOARD_ROW, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, type Dashboard, type DashboardTile } from '../../shared/dashboards.ts';
+import { DASHBOARD_COLUMNS, DASHBOARD_ROW, hasNews, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, unreadMods, type Dashboard, type DashboardTile } from '../../shared/dashboards.ts';
 import type { ModInfo } from '../../shared/mods.ts';
 import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -7,6 +8,7 @@ import { addTile, cellsOf, columnWidth, DASHBOARD_GAP, gridHeight, moveTile, rem
 import { MOD_HEAD } from '../state/mods.ts';
 import { useSessions } from '../state/sessions.ts';
 import { boxVariables } from './boxes.ts';
+import { DASHBOARDS_BAR } from './Header.tsx';
 import { CloseIcon, GripIcon, MOD_ICONS, ModsIcon, PencilIcon, PlusIcon, RefreshIcon, RemoveIcon, SettingsIcon } from './Icons.tsx';
 import { ActionMenu } from './ModWindows.tsx';
 import { Modal } from './Modal.tsx';
@@ -47,6 +49,11 @@ export function Dashboards() {
   const shown = dashboards.find((each) => each.id === chosen) ?? dashboards[0];
   const [renaming, setRenaming] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const mods = useSessions((s) => s.mods);
+  const unread = unreadMods(mods);
+  // the bar goes up in the header (Header.tsx makes its place while the dashboards are shown), so the grid has the page
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => setBar(document.getElementById(DASHBOARDS_BAR)), []);
 
   const save = (next: Dashboard[]) => { setPending(next); setPreferences({ dashboards: next }); };
   const choose = (id: string) => { setChosen(id); writePreference('dashboard', id); setRenaming(false); };
@@ -72,13 +79,13 @@ export function Dashboards() {
 
   return (
     <section className="cp-dashboards" aria-label={words.label}>
-      <div className="cp-dashboards__bar">
+      {bar && createPortal(<>
         {dashboards.length > 0 && (
           <div className="cp-segmented cp-dashboards__tabs" role="tablist" aria-label={words.label}>
             {dashboards.map((each) => (each.id === shown?.id && renaming ? (
               <NameField key={each.id} name={each.name} onDone={rename} />
             ) : (
-              <button key={each.id} type="button" role="tab" aria-selected={each.id === shown?.id} onClick={() => choose(each.id)} onDoubleClick={() => { choose(each.id); setRenaming(true); }}>
+              <button key={each.id} type="button" role="tab" aria-selected={each.id === shown?.id} data-news={(each.id !== shown?.id && hasNews(each, unread)) || undefined} title={each.id !== shown?.id && hasNews(each, unread) ? words.tabNews(each.name || words.firstName) : undefined} onClick={() => choose(each.id)} onDoubleClick={() => { choose(each.id); setRenaming(true); }}>
                 {each.name || words.firstName}
               </button>
             )))}
@@ -98,7 +105,7 @@ export function Dashboards() {
         )}
         <span className="cp-dashboards__spacer" />
         <AddMod placed={shown?.tiles ?? []} onAdd={change} />
-      </div>
+      </>, bar)}
       <Grid key={shown?.id ?? 'none'} tiles={shown?.tiles ?? []} onChange={change} />
       {removing && shown && (
         <Modal title={words.removeQuestion(shown.name)} onClose={() => setRemoving(false)}>
@@ -277,11 +284,15 @@ function Tile({ mod, box, carried, narrow, onPress, onFollow, onDrop, onTakeOff 
   const show = useSessions((s) => s.show);
   const Icon = MOD_ICONS[mod.icon];
   const carry = { onPointerMove: onFollow, onPointerUp: onDrop, onPointerCancel: onDrop };
+  // shown, the mod counts as seen at once (useModPage.tsx): the dot stays on its title until the pointer comes over it
+  const [fresh, setFresh] = useState(mod.unread);
+  useEffect(() => { if (mod.unread) setFresh(true); }, [mod.unread]);
   return (
-    <section className="cp-mod cp-dashboards__tile" aria-label={words.dashboards.tileLabel(mod.name)} data-carried={carried || undefined} data-building={mod.draft} style={boxVariables(box)}>
+    <section className="cp-mod cp-dashboards__tile" aria-label={words.dashboards.tileLabel(mod.name)} data-carried={carried || undefined} data-building={mod.draft} style={boxVariables(box)} onPointerEnter={() => setFresh(false)}>
       <header className="cp-mod__head" data-fixed={narrow || undefined} onPointerDown={(event) => onPress(false, event)} {...carry}>
         <span className="cp-mod__icon"><Icon /></span>
         <span className="cp-mod__title">{mod.name}</span>
+        {fresh && <span className="cp-dashboards__news" role="img" aria-label={words.unread} title={words.unread} />}
         <div className="cp-detail__controls">
           {!mod.draft && <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.reload} title={words.reloadTitle(mod.refresh)} aria-busy={refreshing || undefined} onClick={refreshNow}><RefreshIcon /></button>}
           <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.settings} title={words.settingsTitle(mod.name)} onClick={() => openModSettings(mod.id)}><SettingsIcon /></button>

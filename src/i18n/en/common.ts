@@ -22,7 +22,7 @@ export const common: Dictionary['common'] = {
   quota: {
     heading: 'Your plan',
     windows: {
-      five_hour: '5 hours', seven_day: '7 days', seven_day_opus: '7 days, Opus', seven_day_sonnet: '7 days, Sonnet', seven_day_fable: '7 days, Fable', seven_day_overage_included: '7 days, included',
+      five_hour: '5 hours', seven_day: '7 days', seven_day_opus: '7 days, Opus', seven_day_sonnet: '7 days, Sonnet', seven_day_fable: '7 days, Fable',
     },
     resetsAt: (when) => `Resets ${when}`,
     resetUnknown: 'Reset time unknown',
@@ -36,6 +36,7 @@ export const common: Dictionary['common'] = {
     automata: "Automatons' room",
     dashboards: 'Dashboards',
     dashboardsTitle: 'Dashboards: your mods laid out on a grid',
+    dashboardsNews: 'Dashboards: something new in a mod',
     focus: 'Focus',
     focusTitle: (keys) => `Focus: the sessions as a list, without the room (${keys})`,
     projects: 'Projects',

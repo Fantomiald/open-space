@@ -102,6 +102,9 @@ export interface SessionManagerDeps {
 /** The answer of a side question is sent at most this often while it is written. */
 const ASIDE_EVERY_MS = 80;
 
+
+/** "Overage included": a weekly bucket Claude Code reports beside the model's own, with the same figures and no clear meaning to the user. */
+const HIDDEN_WINDOW = 'seven_day_overage_included';
 export class SessionManager {
   private sessions = new Map<string, Session>();
   private logs = new Map<string, SessionLog>();
@@ -433,9 +436,10 @@ export class SessionManager {
    */
   private setQuota(quota: Quota) {
     const now = this.now();
-    const kept = (this.quota?.windows ?? []).filter((window) => !quota.windows.some((fresh) => fresh.name === window.name)
+    const windows = quota.windows.filter((window) => window.name !== HIDDEN_WINDOW);
+    const kept = (this.quota?.windows ?? []).filter((window) => window.name !== HIDDEN_WINDOW && !windows.some((fresh) => fresh.name === window.name)
       && (window.resetsAt === null || (window.resetsAt < 1e12 ? window.resetsAt * 1000 : window.resetsAt) > now));
-    this.quota = { ...quota, windows: [...quota.windows, ...kept] };
+    this.quota = { ...quota, windows: [...windows, ...kept] };
     this.deps.broadcast({ t: 'quota', quota: this.quota });
     this.save();
   }

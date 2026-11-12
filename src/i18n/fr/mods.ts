@@ -69,6 +69,7 @@ export const mods = {
   dashboards: {
     label: 'Dashboards',
     firstName: 'Mon dashboard',
+    tabNews: (name: string) => `${name} : du nouveau dans un mod`,
     newName: (count: number) => `Dashboard ${count}`,
     create: 'Nouveau dashboard',
     rename: 'Renommer',

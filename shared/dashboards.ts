@@ -47,3 +47,9 @@ export function parseDashboards(raw: unknown): Dashboard[] | null {
     return [{ id: given.id, name, tiles }];
   }).slice(0, MAX_DASHBOARDS);
 }
+
+/** A mod on this dashboard has something new the user has not seen (its id is in `unread`). */
+export const hasNews = (dashboard: Dashboard, unread: ReadonlySet<string>) => dashboard.tiles.some((tile) => unread.has(tile.mod));
+
+/** The mods with something new, by id. */
+export const unreadMods = (mods: readonly { id: string; unread: boolean }[] | null) => new Set((mods ?? []).filter((mod) => mod.unread).map((mod) => mod.id));

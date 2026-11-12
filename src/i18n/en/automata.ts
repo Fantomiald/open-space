@@ -20,6 +20,10 @@ export const automata: Dictionary['automata'] = {
     none: 'No trigger yet.',
     add: 'New trigger',
     off: 'paused',
+    scheduled: 'Scheduled',
+    hooked: 'By webhook',
+    fold: (group) => `Fold “${group}”`,
+    unfold: (group) => `Unfold “${group}”`,
     webhook: 'Webhook',
     cron: (expression: string) => `Cron ${expression}`,
     fields: {

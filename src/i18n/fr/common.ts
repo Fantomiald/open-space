@@ -20,7 +20,7 @@ export const common = {
   quota: {
     heading: 'Ton abonnement',
     windows: {
-      five_hour: '5 heures', seven_day: '7 jours', seven_day_opus: '7 jours, Opus', seven_day_sonnet: '7 jours, Sonnet', seven_day_fable: '7 jours, Fable', seven_day_overage_included: '7 jours, inclus',
+      five_hour: '5 heures', seven_day: '7 jours', seven_day_opus: '7 jours, Opus', seven_day_sonnet: '7 jours, Sonnet', seven_day_fable: '7 jours, Fable',
     } as Readonly<Record<string, string>>,
     resetsAt: (when: string) => `Repart à zéro ${when}`,
     resetUnknown: 'Heure de remise à zéro inconnue',
@@ -34,6 +34,7 @@ export const common = {
     automata: 'Salle des automates',
     dashboards: 'Dashboards',
     dashboardsTitle: 'Dashboards : tes mods rangés sur une grille',
+    dashboardsNews: 'Dashboards : du nouveau dans un mod',
     focus: 'Focus',
     focusTitle: (keys: string) => `Focus : les sessions en liste, sans la salle (${keys})`,
     projects: 'Projets',
