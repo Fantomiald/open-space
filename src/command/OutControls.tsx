@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { putBack } from '../net/out.ts';
 import type { OutTarget } from '../state/out.ts';
@@ -17,13 +18,19 @@ export function OutControls({ target, variant }: { target: OutTarget; variant: '
   return (
     <>
       {onTop !== null && (
-        <button
-          type="button" className="cp-icon-button" {...look} aria-pressed={onTop} aria-label={words.pin} title={onTop ? words.unpin : words.pin}
-          onClick={() => { void desktop?.keepOnTop(!onTop).then(setOnTop); }}
-        >{onTop ? <PinIcon /> : <UnpinIcon />}</button>
+        <Tooltip text={onTop ? words.unpin : words.pin}>
+          <button
+            type="button" className="cp-icon-button" {...look} aria-pressed={onTop} aria-label={words.pin}
+            onClick={() => { void desktop?.keepOnTop(!onTop).then(setOnTop); }}
+          >{onTop ? <PinIcon /> : <UnpinIcon />}</button>
+        </Tooltip>
       )}
-      <button type="button" className="cp-icon-button" {...look} aria-label={words.putBack} title={words.putBack} onClick={() => putBack(target)}><PutBackIcon /></button>
-      <button type="button" className="cp-icon-button" {...look} aria-label={words.close} title={words.close} onClick={() => window.close()}><CloseIcon /></button>
+      <Tooltip text={words.putBack}>
+        <button type="button" className="cp-icon-button" {...look} aria-label={words.putBack} onClick={() => putBack(target)}><PutBackIcon /></button>
+      </Tooltip>
+      <Tooltip text={words.close}>
+        <button type="button" className="cp-icon-button" {...look} aria-label={words.close} onClick={() => window.close()}><CloseIcon /></button>
+      </Tooltip>
     </>
   );
 }
