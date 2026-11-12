@@ -212,8 +212,12 @@ h1, h2, p { margin: 0; }
   .cp-main[data-detail='false'] ~ .cp-status { order: 2; position: static; width: auto; margin: 0 var(--gutter); flex: none; }
   .cp-main[data-detail='false'] ~ .cp-status .cp-status__body { max-height: 20vh; }
   .cp-status__resize { display: none; }
-  /* resuming: the conversations to pick from take the status card's room */
+  /*
+   * resuming: the conversations to pick from take the status card's room and, on a short screen (a small phone with
+   * its browser's bars), what the room keeps for itself, so the field and its Resume button stay on screen
+   */
   .cp-main[data-detail='false']:has(.cp-resume__list) ~ .cp-status { display: none; }
+  .cp-main[data-detail='false']:has(.cp-resume__list) > .cp-main__content { min-height: 0; }
   .cp-main[data-detail='false'] > .cp-launcher { order: 3; flex: none; margin: 0 var(--gutter); }
   /* the launcher shrinks to its field (and the conversations to resume): the keyboard shortcuts mean nothing on a phone */
   .cp-main .cp-launcher__intro { display: none; }
