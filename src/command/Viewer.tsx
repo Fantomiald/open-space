@@ -59,8 +59,74 @@ function Shown({ viewed }: { viewed: Viewed }) {
     // biome-ignore lint/a11y/useMediaCaption: a video Claude made has no captions to give
     case 'video': return <video src={viewed.src} controls autoPlay playsInline />;
     case 'markdown': case 'text': return <TextFile src={viewed.src} markdown={viewed.kind === 'markdown'} />;
-    case 'image': return <img src={viewed.src} alt={viewed.alt} />;
+    case 'image': return <ZoomableImage key={viewed.src} src={viewed.src} alt={viewed.alt} />;
   }
+}
+
+const MAX_SCALE = 8;
+const DOUBLE_CLICK_SCALE = 2.5;
+
+/**
+ * A picture that zooms where the pointer is, like any image viewer: the wheel or a trackpad pinch zooms in and out,
+ * a drag moves it once zoomed, a double click goes from fit to zoomed and back.
+ */
+function ZoomableImage({ src, alt }: { src: string; alt: string }) {
+  const image = useRef<HTMLImageElement>(null);
+  const [view, setView] = useState<ImageView>({ scale: 1, x: 0, y: 0 });
+  const [drag, setDrag] = useState<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+
+  const zoomAt = (pointerX: number, pointerY: number, scale: (current: number) => number) =>
+    setView((current) => zoomedView(current, image.current?.getBoundingClientRect(), pointerX, pointerY, scale(current.scale)));
+
+  // React's wheel listener is passive, so it could not stop the page from scrolling
+  useEffect(() => {
+    const element = image.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      // a pinch comes as a wheel with ctrlKey and small steps
+      const speed = event.ctrlKey ? 0.01 : 0.002;
+      setView((current) => zoomedView(current, element.getBoundingClientRect(), event.clientX, event.clientY, current.scale * Math.exp(-event.deltaY * speed)));
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const zoomed = view.scale > 1;
+  return (
+    <img
+      ref={image}
+      src={src}
+      alt={alt}
+      className="cp-viewer__zoomable"
+      data-zoomed={zoomed}
+      data-dragging={drag !== null}
+      draggable={false}
+      style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+      onDoubleClick={(e) => zoomAt(e.clientX, e.clientY, (scale) => (scale > 1 ? 1 : DOUBLE_CLICK_SCALE))}
+      onPointerDown={(e) => {
+        if (!zoomed || e.button !== 0) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setDrag({ pointerX: e.clientX, pointerY: e.clientY, x: view.x, y: view.y });
+      }}
+      onPointerMove={(e) => {
+        if (drag) setView((current) => ({ ...current, x: drag.x + e.clientX - drag.pointerX, y: drag.y + e.clientY - drag.pointerY }));
+      }}
+      onPointerUp={() => setDrag(null)}
+      onPointerCancel={() => setDrag(null)}
+    />
+  );
+}
+
+type ImageView = { scale: number; x: number; y: number };
+
+/** The view at `scale` that keeps the image point under the pointer where it is; the transform's origin is the image's top left corner. */
+function zoomedView(current: ImageView, rect: DOMRect | undefined, pointerX: number, pointerY: number, scale: number): ImageView {
+  const next = Math.min(MAX_SCALE, Math.max(1, scale));
+  if (!rect || next === 1) return { scale: 1, x: 0, y: 0 };
+  const imageX = (pointerX - rect.left) / current.scale;
+  const imageY = (pointerY - rect.top) / current.scale;
+  return { scale: next, x: current.x + pointerX - imageX * next - rect.left, y: current.y + pointerY - imageY * next - rect.top };
 }
 
 type Read = { status: 'loading' } | { status: 'read'; text: string } | { status: 'failed' };

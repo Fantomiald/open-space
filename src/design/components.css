@@ -1074,6 +1074,11 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-viewer__figure { margin: 0; display: grid; gap: var(--space-2); justify-items: center; max-width: 100%; max-height: 100%; min-height: 0; }
 .cp-viewer__figure img { max-width: min(92vw, 100%); max-height: calc(100dvh - 9rem); object-fit: contain; border-radius: var(--radius-md); box-shadow: var(--shadow-overlay); background: var(--color-surface-sunken); }
 /* a published page, large: as wide as the screen allows */
+.cp-viewer__zoomable { transform-origin: 0 0; cursor: zoom-in; touch-action: none; user-select: none; }
+.cp-viewer__zoomable[data-zoomed='true'] { cursor: grab; position: relative; z-index: 1; }
+.cp-viewer__zoomable[data-dragging='true'] { cursor: grabbing; }
+/* the bar and the cross stay above a zoomed picture */
+.cp-viewer__bar, .cp-viewer__close { position: relative; z-index: 2; }
 .cp-viewer__figure:is([data-kind='page'], [data-kind='pdf']) { width: min(92vw, 80rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; }
 /* a text file, large: a sheet as wide as a page of reading, that scrolls */
 .cp-viewer__figure:is([data-kind='markdown'], [data-kind='text']) { width: min(92vw, 52rem); height: 100%; grid-template-rows: minmax(0, 1fr) auto; justify-items: stretch; }

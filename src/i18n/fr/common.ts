@@ -20,7 +20,7 @@ export const common = {
   quota: {
     heading: 'Ton abonnement',
     windows: {
-      five_hour: '5 heures', seven_day: '7 jours', seven_day_opus: '7 jours, Opus', seven_day_sonnet: '7 jours, Sonnet', seven_day_fable: '7 jours, Fable',
+      five_hour: '5 heures', seven_day: '7 jours', seven_day_opus: '7 jours, Opus', seven_day_sonnet: '7 jours, Sonnet', seven_day_fable: '7 jours, Fable', seven_day_overage_included: '7 jours, inclus',
     } as Readonly<Record<string, string>>,
     resetsAt: (when: string) => `Repart à zéro ${when}`,
     resetUnknown: 'Heure de remise à zéro inconnue',
