@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { folderName, homeRelative, splitPath } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
@@ -23,6 +23,16 @@ export function FolderPicker({ directories, value, placeholder, onChange, field 
   useDismiss(open, box, close);
   const matches = useMemo(() => matchFolders(directories, typed ? value : ''), [directories, value, typed]);
   const shown = open && matches.length > 0;
+  // the list never runs past what holds it: the launcher clips what overflows it, and a short window (Windows' title bar
+  // and scaling) leaves less than the list's full height above the field
+  const [room, setRoom] = useState<number>();
+  useLayoutEffect(() => {
+    if (!shown) return;
+    const measure = () => { if (box.current) setRoom(roomFor(box.current, Boolean(field))); };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [shown, field]);
   useEffect(() => { if (active >= 0) document.getElementById(`folder-option-${active}`)?.scrollIntoView({ block: 'nearest' }); }, [active]);
 
   const pick = (directory: string) => { onChange(homeRelative(directory)); close(); };
@@ -49,7 +59,7 @@ export function FolderPicker({ directories, value, placeholder, onChange, field 
         onChange={(e) => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(-1); }}
       />
       {shown && (
-        <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list}>
+        <ul className="cp-folder__panel" id="folder-picker" role="listbox" aria-label={t.composer.folderPicker.list} style={room === undefined ? undefined : ({ '--room': `${room}px` } as CSSProperties)}>
           {matches.map((directory, index) => {
             const { folder, name } = splitPath(homeRelative(directory));
             return (
@@ -66,4 +76,20 @@ export function FolderPicker({ directories, value, placeholder, onChange, field 
       )}
     </div>
   );
+}
+
+/** The height free for the list, above the field (below it for `field`), inside the nearest ancestor that clips and the window. */
+function roomFor(element: HTMLElement, below: boolean): number {
+  let top = 0;
+  let bottom = window.innerHeight;
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(parent);
+    if (overflowX === 'visible' && overflowY === 'visible') continue;
+    const bounds = parent.getBoundingClientRect();
+    top = Math.max(top, bounds.top);
+    bottom = Math.min(bottom, bounds.bottom);
+  }
+  const gap = 12; // the list's offset from the field, and a little air
+  const rect = element.getBoundingClientRect();
+  return Math.max(0, Math.floor(below ? bottom - rect.bottom - gap : rect.top - top - gap));
 }
