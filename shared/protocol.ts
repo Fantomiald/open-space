@@ -1,6 +1,7 @@
 // The contract between the browser and the bridge (the Node server driving Claude Code).
 // Everything goes through one JSON WebSocket. Erasable syntax only: Node reads this file as is
 // (no compilation step), and so does Vite.
+import type { Dashboard } from './dashboards.ts';
 import type { AgentRole, AutomataState } from './automata.ts';
 import type { TriggerInput, TriggersState, TriggerTag } from './triggers.ts';
 import type { SecretEntry } from './secrets.ts';
@@ -558,6 +559,8 @@ export interface Preferences {
   isolate: IsolateMode;
   /** where the sessions of trusted folders reach the user's signed-in accounts (see AccountsBrowser) */
   accountsBrowser: AccountsBrowser;
+  /** the dashboards of mods (shared/dashboards.ts); absent until the first one is made */
+  dashboards?: Dashboard[];
 }
 
 /**

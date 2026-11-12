@@ -48,7 +48,8 @@ const writeLayout = (columns: Columns, selectedId: string | null) => writePrefer
 /** stopped: the bridge does not answer; unpaired: it answers but this browser has no valid session cookie */
 export type Connection = 'connecting' | 'live' | 'stopped' | 'unpaired';
 /** The office, the break room, or focus mode: the sessions listed beside their windows, without the room. */
-export type View = 'salle' | 'repos' | 'automates' | 'focus';
+/** the rooms, the dashboards of mods (src/command/Dashboards.tsx), and focus mode */
+export type View = 'salle' | 'repos' | 'automates' | 'dashboards' | 'focus';
 
 export const tilingOf = (view: View) => (view === 'focus' ? FOCUS_TILING : ROOM_TILING);
 export const arrangementOf = (view: View): Arrangement => (view === 'focus' ? 'focus' : 'room');
@@ -510,7 +511,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   stackWidth: savedWindows.stackWidth,
   free: savedWindows.free,
   // 'bureau' (the old pixel office) and anything unknown open the meeting room
-  view: (['repos', 'automates', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
+  view: (['repos', 'automates', 'dashboards', 'focus'] as const).find((view) => view === readPreference<string>('view', 'salle')) ?? 'salle',
   project: readPreference('project', ''),
   enteredThroughDoor: false,
   arrivedByPortal: false,
@@ -1015,8 +1016,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const s = get();
     writePreference('view', view);
     if (view !== 'focus') set({ launcherOpen: false });
-    // from one room to the other the user walks through the door; out of focus mode they are back at their desk
-    set({ view, arrivedByPortal: false, enteredThroughDoor: s.view !== 'focus' && view !== 'focus' ? true : s.enteredThroughDoor });
+    // from one room to the other the user walks through the door; out of focus mode or the dashboards they are back at their desk
+    const room = (each: View) => each !== 'focus' && each !== 'dashboards';
+    set({ view, arrivedByPortal: false, enteredThroughDoor: room(s.view) && room(view) ? true : s.enteredThroughDoor });
     if (tilingOf(view) === tilingOf(s.view)) return;
     const here = s.free[arrangementOf(s.view)], there = s.free[arrangementOf(view)];
     const columns = switchArrangement(s.columns, here, there, s.grids[arrangementOf(view)], maxColumnsIn(view), tilingOf(view));

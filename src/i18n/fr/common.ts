@@ -32,6 +32,8 @@ export const common = {
     office: 'Bureau',
     lounge: 'Salle de repos',
     automata: 'Salle des automates',
+    dashboards: 'Dashboards',
+    dashboardsTitle: 'Dashboards : tes mods rangés sur une grille',
     focus: 'Focus',
     focusTitle: (keys: string) => `Focus : les sessions en liste, sans la salle (${keys})`,
     projects: 'Projets',

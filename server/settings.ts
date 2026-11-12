@@ -10,6 +10,7 @@ import { isAutomataFolder } from '../shared/automata.ts';
 import { hooksAddressOf } from '../shared/triggers.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
+import { parseDashboards } from '../shared/dashboards.ts';
 import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 import { expandHomePath, isFullPath } from '../shared/paths.ts';
@@ -65,6 +66,8 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (ISOLATE_MODES.some((mode) => mode === raw.isolate)) found.isolate = raw.isolate as Preferences['isolate'];
   if (ACCOUNTS_BROWSERS.some((browser) => browser === raw.accountsBrowser)) found.accountsBrowser = raw.accountsBrowser as Preferences['accountsBrowser'];
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
+  const dashboards = parseDashboards(raw.dashboards);
+  if (dashboards) found.dashboards = dashboards;
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && isFullPath(root)).map((root) => path.resolve(expandHomePath(root, home))))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;

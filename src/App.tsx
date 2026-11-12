@@ -4,6 +4,7 @@ import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { AutomataDialog } from './command/AutomataDialog.tsx';
 import { ModsDialog } from './command/ModsPanel.tsx';
 import { ModWindows } from './command/ModWindows.tsx';
+import { Dashboards } from './command/Dashboards.tsx';
 import { BrowserPip } from './command/BrowserPip.tsx';
 import { SearchPalette } from './command/SearchPalette.tsx';
 import { CopyOnSelect } from './command/CopyOnSelect.tsx';
@@ -56,7 +57,7 @@ export function App() {
   const live = useSessions((s) => s.connection === 'live');
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
-  const bare = useSessions((s) => s.uiHidden && s.view !== 'focus');
+  const bare = useSessions((s) => s.uiHidden && s.view !== 'focus' && s.view !== 'dashboards');
   usePageStyle();
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
@@ -159,8 +160,8 @@ export function App() {
       }
       // Tab, outside a field: everything but the room steps aside to see and click it, and comes back (Shift+Tab still
       // moves the focus). In the message field it does nothing, so a Tab pressed while writing neither hides the
-      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it. Focus mode has no room to see.
-      if (e.key === 'Tab' && state.view !== 'focus' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !document.querySelector('dialog[open]')) {
+      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it. Focus mode and the dashboards have no room to see.
+      if (e.key === 'Tab' && state.view !== 'focus' && state.view !== 'dashboards' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !document.querySelector('dialog[open]')) {
         const target = e.target instanceof HTMLElement ? e.target : null;
         if (target?.matches('.cp-composer textarea')) {
           e.preventDefault();
@@ -190,6 +191,8 @@ export function App() {
         e.preventDefault();
         // Shift+N: a session at once, in the project picked in the header (else the default folder) with the default model and mode, opened to write to it; N: the launcher's field
         const { preferences } = state;
+        // the dashboards hold no session: back to the office to write it
+        if (state.view === 'dashboards') state.setView('salle');
         if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, activeProject(projectsOf(Object.values(state.sessions), state.seen), state.project) || preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
         else state.openNewSession({});
       }
@@ -197,6 +200,14 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // a session or a mod's window opened from the dashboards (the search, the mods' dialog, a notification) is shown in the office
+  useEffect(() => useSessions.subscribe((s, before) => {
+    if (s.view !== 'dashboards') return;
+    const session = s.selectedId && s.selectedId !== before.selectedId;
+    const mod = s.openMods.some((id) => !before.openMods.includes(id));
+    if (session || mod) s.setView('salle');
+  }), []);
 
   useEffect(() => {
     const onResize = () => useSessions.getState().fitOpen();
@@ -214,14 +225,14 @@ export function App() {
       <ConnectionBanner />
       <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
+          {view === 'focus' ? <SessionList /> : view === 'dashboards' ? <Dashboards /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
-        {/* docked mods keep their place in the grid, the launcher beside them */}
-        {openIds.length || docked ? <Stack /> : <Launcher />}
+        {/* docked mods keep their place in the grid, the launcher beside them; the dashboards are the mods alone */}
+        {view === 'dashboards' ? null : openIds.length || docked ? <Stack /> : <Launcher />}
       </main>
-      {view !== 'focus' && <StatusPanel />}
-      <ModWindows />
+      {view !== 'focus' && view !== 'dashboards' && <StatusPanel />}
+      {view !== 'dashboards' && <ModWindows />}
       <BrowserPip />
       {bare && <BareHint />}
       <SearchPalette />

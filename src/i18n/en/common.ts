@@ -34,6 +34,8 @@ export const common: Dictionary['common'] = {
     office: 'Office',
     lounge: 'Break room',
     automata: "Automatons' room",
+    dashboards: 'Dashboards',
+    dashboardsTitle: 'Dashboards: your mods laid out on a grid',
     focus: 'Focus',
     focusTitle: (keys) => `Focus: the sessions as a list, without the room (${keys})`,
     projects: 'Projects',

@@ -5,7 +5,7 @@ import { roomSessions, type RoomKind } from '../room/cast.ts';
 import { seatedRuns } from '../state/automata.ts';
 import { selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { AutomatonIcon, DeskIcon, FocusIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
+import { AutomatonIcon, DashboardIcon, DeskIcon, FocusIcon, SearchIcon, SettingsIcon, SofaIcon } from './Icons.tsx';
 import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
@@ -51,6 +51,9 @@ export function Header() {
               <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
             </button>
           ))}
+          <button type="button" aria-pressed={view === 'dashboards'} aria-label={words.dashboards} title={words.dashboardsTitle} onClick={() => setView('dashboards')}>
+            <DashboardIcon />
+          </button>
           <span className="cp-header__divider" aria-hidden="true" />
           <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} title={words.focusTitle(FOCUS_KEYS)} onClick={() => setView('focus')}>
             <FocusIcon />
