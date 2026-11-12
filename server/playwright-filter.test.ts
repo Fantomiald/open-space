@@ -18,7 +18,7 @@ process.stdin.on('end', () => {
   const text = '- textbox "Password": hunter2-staging\n- textbox "Quoted": "say \\"hi\\""';
   fs.writeFileSync(path.join(dir, 'page-1.yml'), text + '\n');
   fs.writeFileSync(path.join(dir, 'shot.png'), 'hunter2-staging');
-  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text }] } }) + '\n');
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text }, { type: 'image', data: 'iVBORw0KGgoabc', mimeType: 'image/png' }] } }) + '\n');
   process.stdout.write('not json hunter2-staging\n');
   process.exitCode = 3;
 });`;
@@ -33,7 +33,7 @@ describe('the filter around a session’s Playwright server', { skip: process.pl
     base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'office-filter-')));
     server = http.createServer((req, res) => {
       asked.push(`${req.method} ${req.url} ${req.headers.origin ?? 'no origin'}`);
-      res.end(JSON.stringify({ STAGING_PASSWORD: 'hunter2-staging', GREETING: 'say "hi"' }));
+      res.end(JSON.stringify({ STAGING_PASSWORD: 'hunter2-staging', GREETING: 'say "hi"', PIN: 'abc' }));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     endpoint = `http://127.0.0.1:${(server.address() as AddressInfo).port}/secrets/s/key`;
@@ -62,6 +62,8 @@ describe('the filter around a session’s Playwright server', { skip: process.pl
     const hidden = '- textbox "Password": <secret>STAGING_PASSWORD</secret>\n- textbox "Quoted": "<secret>GREETING</secret>"';
     assert.equal(JSON.parse(answer).result.content[0].text, hidden);
     assert.equal(plain, 'not json <secret>STAGING_PASSWORD</secret>');
+    // a key this short is found by chance anywhere, and a picture's base64 is never touched
+    assert.equal(JSON.parse(answer).result.content[1].data, 'iVBORw0KGgoabc');
     // Playwright's own default folder, given to it so that both agree on where its files are
     const files = path.join(base, 'project', '.playwright-mcp');
     assert.equal(readFileSync(path.join(files, 'page-1.yml'), 'utf8'), `${hidden}\n`);

@@ -16,6 +16,8 @@ const ASK_TIMEOUT_MS = 2000;
 // a file written during a scan is looked at again by the next one
 const SCAN_SLACK_MS = 2000;
 const TEXT_FILE = /\.(ya?ml|md|txt|log|json)$/i;
+// as the mask of os-secret run: a shorter value is found by chance everywhere (a screenshot's base64, any word)
+const MIN_HIDDEN = 4;
 
 const [command, ...given] = process.argv.slice(2);
 if (!command) { process.stderr.write('usage: node playwright-filter.mjs COMMAND [ARGS...]\n'); process.exit(2); }
@@ -38,7 +40,7 @@ function askKeys() {
       answer.setEncoding('utf8');
       answer.on('data', (chunk) => { body += chunk; });
       answer.on('end', () => {
-        try { if (answer.statusCode === 200) for (const [name, value] of Object.entries(JSON.parse(body))) if (typeof value === 'string' && value) keys.set(value, name); } catch {}
+        try { if (answer.statusCode === 200) for (const [name, value] of Object.entries(JSON.parse(body))) if (typeof value === 'string' && value.length >= MIN_HIDDEN) keys.set(value, name); } catch {}
         resolve();
       });
       answer.on('error', () => resolve());
@@ -54,13 +56,15 @@ function askKeys() {
 function hide(text) {
   let out = text;
   for (const [value, name] of [...keys].sort(([a], [b]) => b.length - a.length)) {
-    for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) out = out.replaceAll(form, '<secret>' + name + '</secret>');
+    // split and join rather than replaceAll: the node on PATH may be older than 15
+    for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) out = out.split(form).join('<secret>' + name + '</secret>');
   }
   return out;
 }
 
+// an image's base64 is left whole: a match in it is chance, and replacing it breaks the picture
 const hideIn = (node) => typeof node === 'string' ? hide(node) : Array.isArray(node) ? node.map(hideIn)
-  : node && typeof node === 'object' ? Object.fromEntries(Object.entries(node).map(([key, value]) => [key, hideIn(value)])) : node;
+  : node && typeof node === 'object' ? Object.fromEntries(Object.entries(node).map(([key, value]) => [key, node.type === 'image' && key === 'data' ? value : hideIn(value)])) : node;
 
 /** A message of the server (a line of JSON): the keys replaced in its strings, so that it stays valid JSON. */
 function hideInMessage(line) {
@@ -96,6 +100,9 @@ const pass = (line) => {
     await askKeys();
     if (keys.size) hideInFiles();
     process.stdout.write((keys.size ? hideInMessage(line) : line) + '\n');
+  }).catch((error) => {
+    // this message is dropped (it may hold a key), never the ones after it
+    process.stderr.write('playwright-filter: ' + (error && error.message) + '\n');
   });
 };
 child.stdout.setEncoding('utf8');

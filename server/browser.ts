@@ -465,6 +465,8 @@ export class Browsers {
     let tab = '';
     let targetId = '';
     let navigating = false;
+    // the page's own answer once signed in: a 403 or 500 after the login is no way in
+    let status = 0;
     // the origins given the login (authAnswer)
     const answered = new Set<string>();
     let done!: { resolve: () => void; reject: (error: Error) => void };
@@ -486,10 +488,13 @@ export class Browsers {
       } else if (method === 'Fetch.requestPaused') {
         const page = params.resourceType === 'Document' && params.frameId === targetId;
         void cdp.send(page ? 'Fetch.continueRequest' : 'Fetch.failRequest', page ? { requestId } : { requestId, errorReason: 'Aborted' }, tab).catch(() => {});
+      } else if (method === 'Network.responseReceived' && params.type === 'Document' && params.frameId === targetId) {
+        status = Number(asJson(params.response).status) || 0;
       } else if (method === 'Page.loadEventFired' && navigating) {
         // not at Page.navigate's answer: Chrome may still be committing the page then, and ignores a close meanwhile
         loaded();
-        if (answered.size) done.resolve();
+        if (answered.size && status >= 400) done.reject(new Error(`the site took the login but answered ${status}`));
+        else if (answered.size) done.resolve();
         else done.reject(new Error('this page asked for no login (or this browser is signed in to it already): give the address of a page behind the password prompt'));
       }
     }, () => done.reject(new Error('browser closed')));
@@ -499,6 +504,7 @@ export class Browsers {
       targetId = String((await cdp.send('Target.createTarget', { url: HELPER_TAB, background: true })).targetId);
       tab = String((await cdp.send('Target.attachToTarget', { targetId, flatten: true })).sessionId);
       await cdp.send('Page.enable', {}, tab);
+      await cdp.send('Network.enable', {}, tab);
       await cdp.send('Emulation.setScriptExecutionDisabled', { value: true }, tab);
       await cdp.send('Fetch.enable', { handleAuthRequests: true, patterns: [{ urlPattern: '*' }] }, tab);
       navigating = true;
