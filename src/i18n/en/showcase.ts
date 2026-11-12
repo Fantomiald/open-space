@@ -69,17 +69,15 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.34': {
-        title: 'Your mods on dashboards',
+      '1.35': {
+        title: 'What needs your eye',
         items: {
-          dashboards: { title: 'Dashboards of mods', text: 'A new button beside the rooms: your mods laid out on a grid, full page. Make several and switch between them with their tabs.' },
-          grid: { title: 'A grid like Grafana', text: 'Drag a mod by its title, pull its corner to resize it: the others make room and move back up. A mod can still open in its own window.' },
-          focus: { title: 'A session per project, in one move', text: 'In focus mode, each project has its “+”, and Alt+1 to 9 starts a session there.' },
-          resume: { title: 'Resume, clearer', text: 'The list scrolls all the way up, and a badge marks the conversations archived in Claude Desktop.' },
-          viewer: { title: 'Zoom into images', text: 'In the viewer, the wheel or a pinch zooms into an image.' },
-          folders: { title: 'The folder picker fits', text: 'The list of folders no longer spills out of the launcher.' },
+          news: { title: 'The orange dot leads you', text: 'A mod has news: the dot lights up on the Dashboards button, on the tab that holds it, then beside its title until you hover it.' },
+          bar: { title: 'More room for dashboards', text: 'Their tabs move up into the top bar: the grid takes the whole page.' },
+          automata: { title: 'Automatons sorted', text: 'Scheduled on one side, by webhook on the other, the active ones on top, and each group folds.' },
+          keys: { title: 'Your keys in the browser', text: 'os-secret signs a session’s browser in to a protected site or types a password, without the agent ever seeing the key.' },
         },
-        thanks: 'Thanks to Quentin for focus mode, Resume and the folder picker (PRs #48 to #51).',
+        thanks: 'Thanks to Jean-Baptiste for keys in the browser (PR #39).',
       },
     },
     actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour', dashboards: 'Open dashboards' },

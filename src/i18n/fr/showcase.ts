@@ -71,17 +71,15 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.34': {
-        title: 'Tes mods sur des dashboards',
+      '1.35': {
+        title: 'Ce qui demande ton œil',
         items: {
-          dashboards: { title: 'Des dashboards de mods', text: 'Un nouveau bouton à droite des pièces : tes mods rangés sur une grille, en pleine page. Fais-en plusieurs et passe de l’un à l’autre par leurs onglets.' },
-          grid: { title: 'Une grille comme Grafana', text: 'Glisse un mod par son titre, tire son coin pour le redimensionner : les autres se poussent et remontent. Un mod reste ouvrable en fenêtre à côté.' },
-          focus: { title: 'Une session par projet, d’un geste', text: 'En focus, chaque projet a son « + », et Alt+1 à 9 y lance une session.' },
-          resume: { title: 'Reprendre, plus clair', text: 'La liste défile jusqu’en haut, et un badge marque les conversations archivées dans Claude Desktop.' },
-          viewer: { title: 'Zoom dans les images', text: 'Dans la visionneuse, la molette ou le pinch zoome sur une image.' },
-          folders: { title: 'Le choix du dossier tient', text: 'La liste des dossiers ne déborde plus du lanceur.' },
+          news: { title: 'Le point orange te guide', text: 'Un mod a du nouveau : le point s’allume sur le bouton Dashboards, sur l’onglet qui le contient, puis à côté de son titre jusqu’à ce que tu le survoles.' },
+          bar: { title: 'Plus de place pour les dashboards', text: 'Leurs onglets montent dans la barre du haut : la grille prend toute la page.' },
+          automata: { title: 'Automates rangés', text: 'Programmés d’un côté, par webhook de l’autre, les actifs en haut, et chaque groupe se replie.' },
+          keys: { title: 'Tes clés dans le navigateur', text: 'os-secret connecte le navigateur d’une session à un site protégé ou tape un mot de passe, sans que l’agent voie jamais la clé.' },
         },
-        thanks: 'Merci à Quentin pour le focus, Reprendre et le choix du dossier (PR #48 à #51).',
+        thanks: 'Merci à Jean-Baptiste pour les clés dans le navigateur (PR #39).',
       },
     },
     actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite', dashboards: 'Ouvrir les dashboards' },

@@ -1,5 +1,12 @@
 # Versions
 
+## 1.35.0
+
+- Dashboards : un point orange suit ce qui a du nouveau, sur le bouton Dashboards, sur l'onglet du dashboard qui contient le mod, puis à côté du titre de sa tuile jusqu'au survol. Les onglets et boutons des dashboards montent dans la barre du haut, à la place de la radio et des projets (la musique continue) : la grille gagne une ligne.
+- Automates : la liste est rangée en « Programmés » et « Par webhook », les actifs en haut et ceux en pause en bas ; chaque groupe se replie, et le navigateur s'en souvient.
+- La jauge d'usage n'affiche plus la fenêtre « 7 jours, inclus » (overage included), qui doublait celle de Fable.
+- os-secret dans le navigateur : `os-secret auth` connecte le navigateur de la session à un site en basic auth, `os-secret type` tape une clé dans le champ mot de passe cliqué, `os-secret cookie --shared` pose un cookie dans le navigateur partagé. Les serveurs Playwright passent par un filtre qui remplace les clés par `<secret>NOM</secret>` (PR #39 de Jean-Baptiste).
+
 ## 1.34.1
 
 - Dashboards par un agent : le serveur MCP open-space sait lister, créer, ranger et supprimer les dashboards (`list_dashboards`, `save_dashboard`, `delete_dashboard`). « Prépare-moi un dashboard avec mes chiffres et mes avis » suffit : l'agent choisit les mods, leur place et leur taille sur la grille.

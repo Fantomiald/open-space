@@ -3,7 +3,7 @@ import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useSessions } from '../state/sessions.ts';
 import { releaseToShow, type Release } from '../state/whats-new.ts';
-import { CloseIcon, DashboardIcon, ExternalLinkIcon, FocusIcon, FolderOpenIcon, GripIcon, ImageIcon, KeepIcon, SparklesIcon } from './Icons.tsx';
+import { AutomatonIcon, CloseIcon, DashboardIcon, ExternalLinkIcon, KeyIcon, SparklesIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { REPOSITORY } from './SettingsDialog.tsx';
 import { type Art, ShowcaseArt } from './ShowcaseArt.tsx';
@@ -18,11 +18,10 @@ interface Item { id: string; icon: ComponentType; action?: Action }
 
 /** Each release's drawing and its points, in the order told; their words are in i18n (`showcase.whatsNew.releases`). */
 const LOOKS: Record<Release, { art: Art; items: readonly Item[] }> = {
-  '1.34': {
+  '1.35': {
     art: 'mods',
     items: [
-      { id: 'dashboards', icon: DashboardIcon, action: 'dashboards' }, { id: 'grid', icon: GripIcon }, { id: 'focus', icon: FocusIcon },
-      { id: 'resume', icon: KeepIcon }, { id: 'viewer', icon: ImageIcon }, { id: 'folders', icon: FolderOpenIcon },
+      { id: 'news', icon: SparklesIcon, action: 'dashboards' }, { id: 'bar', icon: DashboardIcon }, { id: 'automata', icon: AutomatonIcon, action: 'automata' }, { id: 'keys', icon: KeyIcon },
     ],
   },
 };
