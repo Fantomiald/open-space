@@ -11,8 +11,8 @@ export type ListGrouping = (typeof LIST_GROUPINGS)[number];
 
 export type StateGroup = 'waiting' | 'working' | 'ready' | 'resting' | 'automata';
 
-/** A group of the list: a state, or a project (`label`); `waiting`: how many wait for the user. */
-export interface ListGroup { key: string; state?: StateGroup; label?: string; sessions: SessionInfo[]; waiting: number }
+/** A group of the list: a state, or a project (`label`, its `folder`); `waiting`: how many wait for the user. */
+export interface ListGroup { key: string; state?: StateGroup; label?: string; folder?: string; sessions: SessionInfo[]; waiting: number }
 
 /** The session just opened from the waiting group, kept there until another is opened, at the place it had. */
 export interface Kept { id: string; index: number }
@@ -40,9 +40,9 @@ export function listGroups(all: readonly SessionInfo[], seen: SeenSequences, gro
   const byKey = new Map<string, ListGroup>();
   for (const [, list] of states) {
     for (const session of list) {
-      const label = folderName(projectOf(session));
-      const key = `project:${projectOf(session)}`;
-      const group = byKey.get(key) ?? { key, label, sessions: [], waiting: 0 };
+      const folder = projectOf(session);
+      const key = `project:${folder}`;
+      const group = byKey.get(key) ?? { key, label: folderName(folder), folder, sessions: [], waiting: 0 };
       group.sessions.push(session);
       if (attentionKind(session, seen) !== null) group.waiting += 1;
       byKey.set(key, group);

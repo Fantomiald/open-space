@@ -178,6 +178,14 @@ export function App() {
           return;
         }
       }
+      // Alt+1…9 (by the key's place, whatever the layout): a new request in the header's first, second… project.
+      // Not while typing: on a Mac, Alt+digit types characters ({ on a French keyboard).
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (digit && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
+        const target = projectsOf(Object.values(state.sessions), state.seen)[Number(digit[1]) - 1];
+        if (target) { e.preventDefault(); state.openNewSession({ folder: target.folder }); }
+        return;
+      }
       if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
         e.preventDefault();
         // Shift+N: a session at once, in the project picked in the header (else the default folder) with the default model and mode, opened to write to it; N: the launcher's field

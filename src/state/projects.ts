@@ -32,5 +32,11 @@ export function projectsOf(sessions: readonly SessionInfo[], seen: SeenSequences
   return projects.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** The digit of ⌥1…⌥9 that opens a new session in a project: its place among the header's projects, the first nine. */
+export function projectDigit(projects: readonly Project[], folder: string): number | null {
+  const index = projects.findIndex((project) => project.folder === folder);
+  return index >= 0 && index < 9 ? index + 1 : null;
+}
+
 /** The project picked, while sessions of two projects or more are there; otherwise none: the filter is not shown. */
 export const activeProject = (projects: readonly Project[], picked: string) => (projects.length > 1 && projects.some((project) => project.folder === picked) ? picked : '');

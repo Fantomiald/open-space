@@ -1,17 +1,19 @@
 // Focus mode's list of every session, in place of the room: what waits for the user, who works, who is ready for a
 // message, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
 // look, as in the room), its state as a sign on the face, how long it has been so, and its tags (else its last words). A click opens it beside the open ones (or goes to it when open); a
-// group folds away, and the whole list down to the faces (remembered in this browser).
+// group folds away, and the whole list down to the faces (remembered in this browser). A project's + (on hover, or
+// Alt+its digit, App.tsx) opens a new session in its folder.
 import { useCallback, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatAge, formatAgo } from '../lib/format.ts';
+import { OPTION } from '../lib/platform.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
 import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../state/list-groups.ts';
-import { inProject } from '../state/projects.ts';
+import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
@@ -53,6 +55,8 @@ export function SessionList() {
     () => listGroups(Object.values(sessions).filter((session) => inProject(session, project)), seen, grouping, keptNow),
     [sessions, seen, project, grouping, keptNow],
   );
+  // the digits of Alt+1…9 follow the header's projects (by name), not the list's order, which moves with who waits
+  const projects = useMemo(() => projectsOf(Object.values(sessions), seen), [sessions, seen]);
   const open = (id: string) => {
     const waiting = groups.find((group) => group.state === 'waiting')?.sessions ?? [];
     const index = waiting.findIndex((session) => session.id === id);
@@ -94,6 +98,7 @@ export function SessionList() {
                 <span className="cp-list__hint">{hintOf(group)}</span>
                 {!group.state && group.waiting > 0 && <span className="cp-list__waiting" title={words.waitingCount(group.waiting)}>{group.waiting}</span>}
               </button>
+              {group.folder && <NewInProject folder={group.folder} label={titleOf(group)} digit={projectDigit(projects, group.folder)} onOpen={openNewSession} />}
             </h2>
             <ul className="cp-list__items" id={`list-${group.key}`} hidden={folded.includes(group.key)}>
               {group.sessions.map((session) => {
@@ -140,6 +145,17 @@ export function SessionList() {
         <PlusIcon /> <span className="cp-list__new-label">{words.new}</span> <kbd className="cp-kbd">N</kbd>
       </button>
     </nav>
+  );
+}
+
+/** A project's +, shown when its title is under the pointer (or focused): a new session in its folder, with its shortcut. */
+function NewInProject({ folder, label, digit, onOpen }: { folder: string; label: string; digit: number | null; onOpen: (draft: { folder: string }) => void }) {
+  const words = t.session.list;
+  const keys = digit ? `${OPTION}+${digit}` : '';
+  return (
+    <button type="button" className="cp-list__add" aria-label={words.newIn(label)} title={keys ? `${words.newIn(label)} (${keys})` : words.newIn(label)} onClick={() => onOpen({ folder })}>
+      {keys && <kbd className="cp-kbd">{keys}</kbd>}<PlusIcon />
+    </button>
   );
 }
 

@@ -93,7 +93,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   useEffect(() => {
     if (!draft) return;
     setResuming(draft.resumeIn !== undefined);
-    if (draft.resumeIn) setFolder(draft.resumeIn);
+    if (draft.resumeIn || draft.folder) setFolder(draft.resumeIn || draft.folder || '');
     if (draft.command) setText(draft.command);
     if (draft.person) setAsked(draft.person);
     field.current?.focus();

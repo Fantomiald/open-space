@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { SessionInfo } from '../../shared/protocol.ts';
-import { activeProject, inProject, projectOf, projectsOf } from './projects.ts';
+import { activeProject, inProject, projectDigit, projectOf, projectsOf } from './projects.ts';
 
 const session = (id: string, cwd: string, extra: Partial<SessionInfo> = {}) => ({ id, cwd, state: 'wait', turns: 0, permissions: [], subagents: [], createdAt: 0, ...extra }) as unknown as SessionInfo;
 
@@ -26,6 +26,15 @@ describe('projects', () => {
   it('sorts by name, tells same-named folders apart and flags the one waiting for the user', () => {
     const projects = projectsOf([session('a', '/web/app'), session('b', '/mobile/app', { state: 'perm', permissions: [{}] } as unknown as Partial<SessionInfo>), session('c', '/code/blog')], {});
     assert.deepEqual(projects.map(({ name, waiting }) => [name, waiting]), [['blog', false], ['mobile/app', true], ['web/app', false]]);
+  });
+
+  it('gives the first nine projects, by name, the digit of their shortcut', () => {
+    const projects = projectsOf([session('a', '/code/site'), session('b', '/code/app')], {});
+    assert.equal(projectDigit(projects, '/code/app'), 1);
+    assert.equal(projectDigit(projects, '/code/site'), 2);
+    assert.equal(projectDigit(projects, '/code/gone'), null);
+    const many = projectsOf(Array.from({ length: 10 }, (_, index) => session(String(index), `/code/p${index}`)), {});
+    assert.equal(projectDigit(many, '/code/p9'), null);
   });
 
   it('keeps every session in sight with no project picked, or only one project there', () => {

@@ -346,6 +346,7 @@ export const session = {
   list: {
     title: 'Sessions',
     new: 'Nouvelle session',
+    newIn: (project: string) => `Nouvelle session dans ${project}`,
     groups: { waiting: 'À toi', working: 'Au travail', ready: 'Prêtes', resting: 'Au repos', automata: 'Automates' },
     hints: { waiting: '', working: '', ready: 'lues', resting: '', automata: '' },
     groupBy: 'Grouper la liste',
