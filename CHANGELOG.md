@@ -1,5 +1,10 @@
 # Versions
 
+## 1.35.2
+
+- Message envoyé pendant qu'une session travaille : il attend de nouveau dans la file, au-dessus du champ, et part à la fin du tour. « Envoyer maintenant » interrompt le tour et l'envoie tout de suite. Avant, il se glissait dans le tour en cours et passait souvent inaperçu.
+- Image en grand : un clic zoome là où on clique, un autre dézoome, glisser déplace l'image zoomée. Plus de défilement parasite, et la barre « Ouvrir l'original » et la croix restent lisibles par-dessus l'image.
+
 ## 1.35.1
 
 - Mods : les réglages d'un mod choisissent ce que fait son bouton ↻ : recharger la page, ou relancer un automate. Dans ce cas le bouton tourne pendant que l'automate travaille, puis la page se recharge à la fin du run. Le rafraîchissement tout seul (toutes les 5 min…) ne fait toujours que recharger, pour ne pas lancer une session à chaque fois.
