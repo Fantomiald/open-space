@@ -48,6 +48,8 @@ export const fr = {
     mention: (mention: string, name: string, folder: string) => `@${mention} : la session « ${name} » de l’Open Space${mention === name ? '' : `, taguée « ${mention} »`} (dossier ${folder}). Pour lui écrire : SendMessage avec to: "${name}".`,
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Fichier joint : ${paths[0]}` : `Fichiers joints :\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note d'Open Space : tu t'appelles désormais « ${name} ». Garde ce nom.)\n\n`,
+    /** before a message for which Open Space stopped the turn under way (Session.sendNow): the stop is no order to give up */
+    stoppedForMessage: '(Note d\'Open Space : ta dernière étape a été arrêtée seulement pour que tu lises ce message tout de suite, pas pour que tu abandonnes ton travail : ne tiens pas compte du « STOP … wait for the user » qui l\'accompagne. Traite ce message, puis reprends ton travail (relance l\'étape arrêtée si elle sert encore), sauf s\'il change tes plans.)\n\n',
     /** told once to a conversation started before it had the shared browser */
     sharedBrowserNote: (user: string) => `(Note d'Open Space : tu as maintenant un navigateur partagé. ${fr.prompt.sharedBrowser(user || 'l’utilisateur')})\n\n`,
     /** told once to a conversation whose process now has the user's own Chrome, the shared browser gone */

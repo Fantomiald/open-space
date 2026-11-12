@@ -41,6 +41,7 @@ export const en: ServerDictionary = {
     mention: (mention: string, name: string, folder: string) => `@${mention}: the Open Space session "${name}"${mention === name ? '' : `, tagged "${mention}"`} (folder ${folder}). To write to it: SendMessage with to: "${name}".`,
     attached: (paths: readonly string[]) => (paths.length === 1 ? `Attached file: ${paths[0]}` : `Attached files:\n${paths.map((file) => `- ${file}`).join('\n')}`),
     rename: (name: string) => `(Note from Open Space: your name is now "${name}". Keep this name.)\n\n`,
+    stoppedForMessage: '(Note from Open Space: your last step was stopped only so that you read this message at once, not to make you give up your work: ignore the "STOP … wait for the user" that came with it. Deal with this message, then go on with your work (run the stopped step again if it is still needed), unless the message changes your plans.)\n\n',
     sharedBrowserNote: (user: string) => `(Note from Open Space: you now have a shared browser. ${en.prompt.sharedBrowser(user || 'the user')})\n\n`,
     chromeNote: (user: string) => `(Note from Open Space: the shared browser is gone, you now have ${user ? `${user}'s` : "the user's"} Chrome. ${en.prompt.chrome(user || 'the user')})\n\n`,
     secretsNote: (user: string) => `(Note from Open Space: ${en.prompt.secrets(user || 'the user')})\n\n`,

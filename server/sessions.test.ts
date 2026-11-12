@@ -14,6 +14,7 @@ import { saveUpload } from './uploads.ts';
 import { SecretStore } from './secrets.ts';
 import { SessionManager, type SessionManagerDeps } from './sessions.ts';
 import { browserMcpConfig } from './browser.ts';
+import { st } from './i18n/index.ts';
 
 /** A scripted stand-in for the claude process: the tests feed it captured lines and watch what the session writes back. */
 class FakeProcess implements ProcessHandle {
@@ -302,16 +303,17 @@ describe('the shared browser', () => {
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
     const emit = (message: Record<string, unknown>) => processes[0].handlers.onMessage(message);
-    const turnOf = (conversation: string) => {
+    // a turn that ends: a message after it starts the next one (one sent during a turn would stop it)
+    const turnOf = (conversation: string, said = 'ok') => {
       emit({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
-      emit({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+      emit({ type: 'result', subtype: 'success', is_error: false, result: said, duration_ms: 5 });
     };
     turnOf(id);
     manager.send(id, 'encore');
     assert.equal(processes[0].sent.at(-1), 'encore', 'the same conversation: its system prompt has the rules');
     turnOf(id);
     manager.send(id, '/clear');
-    turnOf('new-conversation');
+    turnOf('new-conversation', '');
     assert.equal(find(id).toldSharedBrowser, undefined);
     manager.send(id, 'tu vois GTM ?');
     assert.match(processes[0].sent.at(-1)!, /navigateur partagé[\s\S]*tu vois GTM \?$/);
@@ -1012,11 +1014,11 @@ describe('a normal turn', () => {
     // looks busy (a turn the CLI never ends): "send now" interrupts, then sends the queue anyway
     emit({ type: 'assistant', message: { content: [{ type: 'text', text: 'On it' }] } });
     assert.equal(find(id).state, 'work');
-    manager.send(id, 'urgent');
+    manager.send(id, '/compact');
     manager.sendNow(id);
     assert.equal(processes[0].interrupts, 1);
     await new Promise((resolve) => setTimeout(resolve, 80));
-    assert.deepEqual(processes[0].sent, ['hi', 'urgent']);
+    assert.deepEqual(processes[0].sent, ['hi', '/compact']);
     assert.equal(find(id).queued, undefined);
     await manager.shutdown();
   });
@@ -1120,18 +1122,77 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
-  it('gives a plain message sent during a turn to Claude Code at once, without stopping nor queueing anything', async () => {
+  it('stops the step under way for a plain message sent during a turn, then sends it, and the ones sent meanwhile, as soon as the turn ends', async () => {
+    const { manager, processes, find, messages, attention } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    // Claude at work, waiting on CI with one long command: Claude Code would only read a message once it returns
+    processes[0].feed('simple-turn', 0, 7);
+    assert.equal(find(id).state, 'work');
+    manager.send(id, 'stop waiting for CI, go now');
+    assert.equal(processes[0].interrupts, 1, 'the turn is stopped');
+    assert.deepEqual(processes[0].sent, ['one'], 'nothing written to a turn being stopped');
+    manager.send(id, 'and close the PR');
+    assert.equal(processes[0].interrupts, 1, 'once');
+    assert.deepEqual(find(id).queued?.map(({ text }) => text), ['stop waiting for CI, go now', 'and close the PR']);
+    processes[0].feed('simple-turn', 7);
+    assert.deepEqual(processes[0].sent, ['one', `${st.prompt.stoppedForMessage}stop waiting for CI, go now\n\nand close the PR`], 'Claude is told why its step stopped');
+    assert.equal(find(id).queued, undefined);
+    assert.equal(find(id).state, 'work', 'a new turn, on the message');
+    assert.deepEqual(attention, [], 'a stop for a message is no end of work to tell');
+    const starts = messages.flatMap((m) => (m.t === 'ev' && m.sessionId === id && m.ev.k === 'start' ? [m.ev.text] : []));
+    assert.deepEqual(starts, ['one', 'stop waiting for CI, go now\n\nand close the PR'], 'the thread shows the words, not the note');
+    await manager.shutdown();
+  });
+
+  it('cancels a permission waiting for an answer when a message comes instead, and sends the message', async () => {
     const { manager, processes, find, messages } = setup();
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'one' });
     processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
-    assert.equal(find(id).state, 'work');
-    manager.send(id, 'quick question');
-    assert.deepEqual(processes[0].sent, ['one', 'quick question']);
-    assert.equal(find(id).queued, undefined);
-    assert.equal(find(id).state, 'work', 'the turn goes on');
+    processes[0].handlers.onMessage({ type: 'control_request', request_id: 'r1', request: { subtype: 'can_use_tool', tool_name: 'Bash', input: { command: 'gh pr merge 12' }, tool_use_id: 't1' } });
+    assert.equal(find(id).state, 'perm');
+    manager.rename(id, 'Zard');
+    manager.send(id, 'no, wait for my review');
+    assert.equal(processes[0].interrupts, 1);
+    processes[0].feed('simple-turn', 11);
+    assert.ok(messages.some((m) => m.t === 'ev' && m.ev.k === 'ask_done' && m.ev.requestId === 'r1' && m.ev.cancelled), 'the request is gone');
+    assert.deepEqual(processes[0].sent, ['one', `${st.prompt.rename('Zard')}${st.prompt.stoppedForMessage}no, wait for my review`], 'with the other notes, just before the words');
+    assert.deepEqual(find(id).permissions, []);
+    await manager.shutdown();
+  });
+
+  it('lets a message join the turn without stopping it while sub-agents are at work, so their work is not lost', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    processes[0].handlers.onMessage({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'agent-1', name: 'Agent', input: { subagent_type: 'Explore', description: 'Look', prompt: 'Go' } }] } });
+    assert.equal(find(id).subagents.length, 1);
+    manager.send(id, 'also look at the tests');
     assert.equal(processes[0].interrupts, 0);
-    assert.ok(messages.some((m) => m.t === 'ev' && m.ev.k === 'start' && m.ev.text === 'quick question'), 'shown in the thread');
+    assert.deepEqual(processes[0].sent, ['one', 'also look at the tests'], 'Claude Code reads it at its next step');
+    assert.equal(find(id).queued, undefined);
+    assert.equal(find(id).state, 'work');
+    await manager.shutdown();
+  });
+
+  it('keeps what is queued after a stop for a message until the next turn ends: that stop is over', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    processes[0].feed('simple-turn', 0, 7);
+    manager.send(id, 'two');
+    processes[0].feed('simple-turn', 7);
+    assert.equal(processes[0].sent.length, 2);
+    processes[0].feed('simple-turn', 1, 7);
+    manager.send(id, '/compact');
+    // the stop's fallback (an interrupt with no turn to end) comes after its turn ended: nothing left for it to send
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(processes[0].sent.length, 2, 'a command never goes into a turn');
+    assert.deepEqual(find(id).queued?.map(({ text }) => text), ['/compact']);
+    processes[0].feed('simple-turn', 7);
+    assert.equal(processes[0].sent.at(-1), '/compact', 'sent once its turn ended');
     await manager.shutdown();
   });
 
@@ -1139,13 +1200,29 @@ describe('a normal turn', () => {
     const { manager, processes, find } = setup();
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'one' });
-    processes[0].feed('simple-turn', 0, 7);
+    // sent while it starts: it waits for the end of the turn
     manager.send(id, 'stop, do this instead');
+    processes[0].feed('simple-turn', 0, 7);
+    assert.equal(processes[0].interrupts, 0);
     manager.sendNow(id);
     assert.equal(processes[0].interrupts, 1);
     processes[0].feed('simple-turn', 7);
-    assert.deepEqual(processes[0].sent, ['one', 'stop, do this instead']);
+    assert.deepEqual(processes[0].sent, ['one', `${st.prompt.stoppedForMessage}stop, do this instead`]);
     assert.equal(find(id).queued, undefined);
+    await manager.shutdown();
+  });
+
+  it('tells nothing of a stop for a message the user took back before the turn ended', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'one' });
+    processes[0].feed('simple-turn', 0, 7);
+    manager.send(id, 'oops');
+    manager.unqueue(id, find(id).queued![0].id);
+    processes[0].feed('simple-turn', 7);
+    assert.equal(find(id).state, 'wait');
+    manager.send(id, 'later');
+    assert.deepEqual(processes[0].sent, ['one', 'later']);
     await manager.shutdown();
   });
 

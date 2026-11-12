@@ -3,8 +3,9 @@ import { type Dictionary, plural } from '../index.ts';
 export const composer: Dictionary['composer'] = {
   composer: {
     placeholderStopped: 'Write a message to resume this session…',
-    placeholderPermission: 'A request above is waiting for your answer (a message here will wait for the turn to end)…',
-    placeholderBusy: (name: string) => `${name} is working: your message reaches them without interrupting…`,
+    placeholderPermission: 'A request above is waiting for your answer (a message here cancels it and leaves at once)…',
+    placeholderBusy: (name: string) => `${name} is working: your message stops what they are doing so they read it at once…`,
+    placeholderJoining: (name: string) => `Sub-agents are working: your message reaches ${name} without interrupting them…`,
     placeholder: 'Write to this session, or / for a command (Enter sends, Shift+Enter adds a line)',
     placeholderShort: 'Message, or / command',
     queueLabel: 'Queued messages',

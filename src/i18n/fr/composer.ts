@@ -3,8 +3,10 @@ import { plural } from '../index.ts';
 export const composer = {
   composer: {
     placeholderStopped: 'Écris un message pour reprendre cette session…',
-    placeholderPermission: 'Une demande attend ta réponse ci-dessus (un message ici attendra la fin du tour)…',
-    placeholderBusy: (name: string) => `${name} travaille : ton message lui arrive sans l’interrompre…`,
+    placeholderPermission: 'Une demande attend ta réponse ci-dessus (un message ici l’annule et part tout de suite)…',
+    placeholderBusy: (name: string) => `${name} travaille : ton message arrête ce qu’il fait pour qu’il le lise tout de suite…`,
+    /** while sub-agents work: the message joins the turn without stopping them (Session.send) */
+    placeholderJoining: (name: string) => `Des sous-agents travaillent : ton message arrive à ${name} sans les interrompre…`,
     placeholder: 'Écris à cette session, ou / pour une commande (Entrée envoie, Maj+Entrée saute une ligne)',
     /** with several sessions open, one line */
     placeholderShort: 'Message, ou / commande',

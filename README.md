@@ -39,7 +39,7 @@ Alt (Option on Mac) + drag moves the room; Alt + scroll or pinch zooms it. Sizes
 ## In the conversation
 
 - **Answer without a terminal**: permissions (Yes, No, Always) and Claude's questions, one tab each as in Claude Code.
-- **Write while a session works.** Your message joins the running turn (Claude reads it at its next step). `/btw your question` asks something on the side without cluttering the thread.
+- **Write while a session works.** Your message stops what it is doing (a long command, a CI being watched) so Claude reads it at once, then goes on unless you changed its plans; while sub-agents work, it joins the turn without stopping them. `/btw your question` asks something on the side without cluttering the thread.
 - **Attach any file**: paste a screenshot with Cmd+V on Mac or Ctrl+V on Windows, drop files, or use the paperclip. Pictures go as pictures, a zip or a PDF goes as its path.
 - **Type `/`** to pick a command or a skill of the session's folder, with its options. Type `!` to run a shell command in that folder.
 - **Change the model, the effort and the permissions** of a session in one panel, even mid-task.

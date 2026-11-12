@@ -39,7 +39,7 @@ Alt (Option sur Mac) + glisser déplace la salle ; Alt + molette ou le pincement
 ## Dans la conversation
 
 - **Répondre sans terminal** : les autorisations (Oui, Non, Toujours) et les questions de Claude, une par onglet comme dans Claude Code.
-- **Écrire pendant qu'une session travaille.** Ton message rejoint le tour en cours (Claude le lit à sa prochaine étape). `/btw ta question` pose une question à côté sans encombrer le fil.
+- **Écrire pendant qu'une session travaille.** Ton message arrête ce qu'elle fait (une commande longue, une CI surveillée) pour que Claude le lise tout de suite, puis il reprend, sauf si tu as changé ses plans ; pendant que des sous-agents travaillent, il rejoint le tour sans les arrêter. `/btw ta question` pose une question à côté sans encombrer le fil.
 - **Joindre n'importe quel fichier** : coller une capture avec Cmd+V sur Mac ou Ctrl+V sur Windows, glisser des fichiers, ou passer par le trombone. Les images partent comme images, un zip ou un PDF part avec son chemin.
 - **Taper `/`** pour choisir une commande ou un skill du dossier de la session, avec ses options. Taper `!` pour lancer une commande shell dans ce dossier.
 - **Changer le modèle, l'effort et les permissions** d'une session dans un seul panneau, même en pleine tâche.

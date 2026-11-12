@@ -127,12 +127,14 @@ export class Session {
   private schedules: Schedules = noSchedules();
   private stopRequest: StopRequest = null;
   private interrupted = false;
-  /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
+  /** the turn was stopped for the queue to leave at once (sendNow): its next message tells Claude why */
+  private stoppedForQueue = false;
   private finishing = false;
   /** a trigger's caps (0: none), and what the run spent so far at list prices */
   private caps = { cost: 0, minutes: 0 };
   private spent = 0;
   private capped = false;
+  /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
   private queuedImages = new Map<string, readonly ImageUpload[]>();
   /** the other files of the queued messages, by queue id, as their upload ids (same) */
   private queuedFiles = new Map<string, readonly string[]>();
@@ -229,22 +231,26 @@ export class Session {
     }
   }
 
-  /** True while a turn runs: a message sent now waits in the queue until the turn ends. */
+  /** True while a turn runs: a message sent now stops it, joins it or waits for its end (see send). */
   private get busy() {
     return !!this.process?.alive && (this.context.state === 'starting' || this.context.state === 'work' || this.context.state === 'perm');
   }
 
   /**
-   * A message from the user. During a turn, a plain one goes at once and joins it: Claude Code reads it at the turn's
-   * next step, without stopping it (checked with 2.1.302: Claude answers it, then usually goes on). A slash command,
-   * which only runs between turns, is queued (the user sees it, can take it back, or interrupt the turn to send it at
-   * once), and so is anything sent after it. Otherwise the message leaves now, after anything still queued.
+   * A message from the user. During a turn, a plain one stops the step under way and leaves as soon as the turn ends,
+   * with those sent meanwhile (sendNow): Claude Code only reads a message between two steps, so one long command (a
+   * CI watched for ten minutes, a sleep) would keep it unread. While sub-agents are at work, it joins the turn instead,
+   * without stopping them: Claude Code reads it at the turn's next step (checked with 2.1.302: Claude answers it, then
+   * usually goes on). A slash command, which only runs between turns, is queued (the user sees it, can take it back, or
+   * interrupt the turn to send it at once), and so is anything sent after it, while the process starts or while Open
+   * Space compacts. Otherwise the message leaves now, after anything still queued.
    */
   send(text: string, images: readonly ImageUpload[] = [], files: readonly string[] = []) {
     const clean = text.trim();
     if (!clean && !images.length && !files.length) return;
     if (this.stopRequest) throw new Error(st.sessions.closing);
-    if (this.busy && !this.autoCompaction && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length) {
+    const midTurn = this.busy && !this.autoCompaction && this.context.state !== 'starting' && !clean.startsWith('/') && !this.info.queued?.length;
+    if (midTurn && this.info.subagents.length) {
       this.deliver(clean, images, files, true);
       this.publish();
       return;
@@ -253,6 +259,7 @@ export class Session {
     if (images.length) this.queuedImages.set(id, images);
     if (files.length) this.queuedFiles.set(id, files);
     this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}) }];
+    if (midTurn) this.sendNow();
     if (this.busy || this.preparing) { this.publish(); return; }
     this.sendQueued();
   }
@@ -351,9 +358,12 @@ export class Session {
     if (this.preparing) return;
     if (!this.busy) { this.sendQueued(); return; }
     this.interrupt();
+    this.stoppedForQueue = true;
     // an interrupt with no turn to stop (the session looked busy, Claude Code was waiting) never ends one: the queue
-    // then leaves anyway, Claude Code takes it as soon as it can
-    const timer = setTimeout(() => { if (this.busy && this.info.queued?.length && this.process?.alive) this.sendQueued(); }, this.deps.graceMs ?? GRACE_MS);
+    // then leaves anyway, Claude Code takes it as soon as it can. A turn that did end took the queue with it: what was
+    // queued since waits for the end of the next one
+    const turns = this.info.turns;
+    const timer = setTimeout(() => { if (this.info.turns === turns && this.busy && this.info.queued?.length && this.process?.alive) this.sendQueued(); }, this.deps.graceMs ?? GRACE_MS);
     timer.unref();
   }
 
@@ -365,15 +375,20 @@ export class Session {
     const firstCommand = queued.findIndex(isCommand);
     const count = firstCommand === 0 ? 1 : firstCommand === -1 ? queued.length : firstCommand;
     const batch = queued.slice(0, count);
+    const note = this.stoppedForQueue ? st.prompt.stoppedForMessage : undefined;
     // the queue only shrinks once the message has left: a refusal (too many live sessions) keeps it
-    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []), batch.flatMap((message) => this.queuedFiles.get(message.id) ?? []));
+    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []), batch.flatMap((message) => this.queuedFiles.get(message.id) ?? []), false, undefined, note);
+    this.stoppedForQueue = false;
     for (const message of batch) { this.queuedImages.delete(message.id); this.queuedFiles.delete(message.id); }
     this.info.queued = queued.length > count ? queued.slice(count) : undefined;
     this.publish();
   }
 
-  /** `joining`: sent during a turn, which it joins (see send) instead of starting one; `shown`: what the thread shows instead of the text. */
-  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false, shown?: string) {
+  /**
+   * `joining`: sent during a turn, which it joins (see send) instead of starting one; `shown`: what the thread shows
+   * instead of the text; `note`: for Claude only, just before the text (not before a slash command, which must come first).
+   */
+  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], joining = false, shown?: string, note?: string) {
     this.clearIdleTimer();
     this.suggestion = undefined;
     if (!joining) {
@@ -402,10 +417,10 @@ export class Session {
       }
       this.info.error = undefined;
     }
-    let outgoing = clean;
+    let outgoing = note && !command ? note + clean : clean;
     // a slash command must stay first in its message: the new name and the commands run with "!" then go with the next plain message
     if (this.info.introducedAs !== this.info.name && !command) {
-      outgoing = renameNote(this.info.name) + clean;
+      outgoing = renameNote(this.info.name) + outgoing;
       this.info.introducedAs = this.info.name;
     }
     // moved since it last worked (into its worktree, back to the main checkout): told where it now is
@@ -946,6 +961,8 @@ export class Session {
     if (this.context.state !== 'wait') return;
     // queued messages leave at once: the session works again, nothing to tell the user
     if (this.info.queued?.length) { this.sendQueued(); return; }
+    // stopped for a message taken back meanwhile: the next one is not why
+    this.stoppedForQueue = false;
     this.armIdleTimer();
     // a turn the user stopped themselves needs no telling either
     if (tell) this.deps.onAttention?.('finished', this.snapshot());

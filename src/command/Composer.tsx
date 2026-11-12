@@ -41,7 +41,8 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const interruptible = isRunning(session);
   const queued = session.queued ?? [];
   const own = attachments.items.length ? null : ownCommand(text);
-  // during a turn a plain message joins it at once; a slash command, or anything behind one, waits for its end (Session.send)
+  // during a turn a plain message stops it and leaves at once (it joins it while sub-agents work); a slash command, or
+  // anything behind one, waits for its end (Session.send)
   const waits = busy && (session.state === 'starting' || (text.trim().startsWith('/') && !own) || queued.length > 0);
   /** a word from a command (/copy) shown in the emptied field for a moment */
   const [note, setNote] = useState<string | null>(null);
@@ -83,9 +84,10 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
 
   const words = t.composer.composer;
   const placeholder = note ?? (shellCommand !== null ? words.placeholderShell : stopped ? words.placeholderStopped
-    : session.state === 'perm' ? words.placeholderPermission
-      : busy ? words.placeholderBusy(session.name)
-        : stacked ? words.placeholderShort : words.placeholder);
+    : busy && session.state !== 'starting' && session.subagents.length > 0 ? words.placeholderJoining(session.name)
+      : session.state === 'perm' ? words.placeholderPermission
+        : busy ? words.placeholderBusy(session.name)
+          : stacked ? words.placeholderShort : words.placeholder);
 
   const sendLabel = shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send;
   const field = (
