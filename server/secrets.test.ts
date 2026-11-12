@@ -155,13 +155,17 @@ describe('os-secret in the browser: auth and type', () => {
     store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'STAGING_PASSWORD', value: 'pw:123456' }, { name: 'TOKEN', value: 'tok-123456' }]);
     const logins: unknown[] = [];
     const api = deps(store, [base], null, [], logins);
-    const signed = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org/en', shared: '1' }) }, api);
+    const signed = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org/en' }) }, api);
     assert.equal(signed.status, 200);
-    assert.match(signed.text, /https:\/\/staging\.example\.org in your shared browser/);
+    assert.match(signed.text, /https:\/\/staging\.example\.org in your browser/);
     assert.doesNotMatch(signed.text, /pw-123456/);
-    assert.deepEqual(logins, [{ url: 'https://staging.example.org/en', username: 'qa', password: 'pw-123456', shared: true }]);
+    assert.deepEqual(logins, [{ url: 'https://staging.example.org/en', username: 'qa', password: 'pw-123456' }]);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_PASSWORD', url: 'https://staging.example.org', user: 'qa' }) }, api)).status, 200);
-    assert.deepEqual(logins[1], { url: 'https://staging.example.org', username: 'qa', password: 'pw:123456', shared: false });
+    assert.deepEqual(logins[1], { url: 'https://staging.example.org', username: 'qa', password: 'pw:123456' });
+    // Chrome keeps a login until it closes: in the shared browser, it would stay after the session
+    const shared = await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'https://staging.example.org', shared: '1' }) }, api);
+    assert.equal(shared.status, 400);
+    assert.match(shared.text, /your own browser only/);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'TOKEN', url: 'https://staging.example.org' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'TOKEN', url: 'https://staging.example.org', user: 'a:b' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'auth', form: form({ name: 'STAGING_LOGIN', url: 'file:///etc' }) }, api)).status, 400);
@@ -180,9 +184,9 @@ describe('os-secret in the browser: auth and type', () => {
     const done = await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY', url: 'https://example.org/', shared: '1' }) }, api);
     assert.equal(done.status, 200);
     assert.equal(done.text, 'API_KEY typed into the field that has focus in https://example.org/form.');
-    assert.deepEqual(typed, [{ value: 'ak-123456', url: 'https://example.org/', shared: true }]);
-    assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY' }) }, api)).status, 200);
-    assert.deepEqual(typed[1], { value: 'ak-123456', url: '', shared: false });
+    assert.deepEqual(typed, [{ value: 'ak-123456', url: 'https://example.org/', shared: true, anyField: false }]);
+    assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY', any: '1' }) }, api)).status, 200);
+    assert.deepEqual(typed[1], { value: 'ak-123456', url: '', shared: false, anyField: true });
     assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY', url: 'javascript:alert(1)' }) }, api)).status, 400);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'MISSING' }) }, api)).status, 404);
     const unfocused = await answerSecrets({ sessionId: 's', action: 'type', form: form({ name: 'API_KEY' }) }, { ...api, type: async () => { throw new Error('no field to type in has focus in https://example.org/form: click in it first'); } });
@@ -240,19 +244,21 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
 
   it('passes the browser commands their flags, in any order', async () => {
     store.set('s', [{ name: 'STAGING_LOGIN', value: 'qa:pw-123456' }, { name: 'STAGING_PASSWORD', value: 'pw-123456' }]);
-    const signed = await run(['auth', 'STAGING_LOGIN', 'https://staging.example.org', '--shared']);
+    const signed = await run(['auth', 'STAGING_LOGIN', 'https://staging.example.org']);
     assert.equal(signed.code, 0, signed.err);
     assert.equal((await run(['auth', 'STAGING_PASSWORD', '--user', 'qa', 'https://staging.example.org'])).code, 0);
     assert.deepEqual(logins, [
-      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456', shared: true },
-      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456', shared: false },
+      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456' },
+      { url: 'https://staging.example.org', username: 'qa', password: 'pw-123456' },
     ]);
+    assert.equal((await run(['auth', 'STAGING_LOGIN', 'https://staging.example.org', '--shared'])).code, 1);
     assert.equal((await run(['cookie', 'STAGING_PASSWORD', '--shared', 'https://staging.example.org', '--as', 'sid'])).code, 0);
     assert.deepEqual(cookies, [{ name: 'sid', value: 'pw-123456', url: 'https://staging.example.org', shared: true }]);
     const done = await run(['type', 'STAGING_PASSWORD', '--shared']);
     assert.equal(done.code, 0, done.err);
     assert.match(done.out, /typed into the field that has focus in https:\/\/example\.org\/form/);
-    assert.deepEqual(typed, [{ value: 'pw-123456', url: '', shared: true }]);
+    assert.equal((await run(['type', '--any-field', 'STAGING_PASSWORD', 'https://example.org/'])).code, 0);
+    assert.deepEqual(typed, [{ value: 'pw-123456', url: '', shared: true, anyField: false }, { value: 'pw-123456', url: 'https://example.org/', shared: false, anyField: true }]);
   });
 
   it('fails outside Open Space and on a refused request', async () => {

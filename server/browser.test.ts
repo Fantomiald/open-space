@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, authAnswer, browserKey, browserMcpConfig, Browsers, chromeArgs, FOCUSED_FIELD, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -220,6 +220,48 @@ describe('the browser a key opens', () => {
     const browsers = new Browsers({ chrome: null, folder: os.tmpdir(), sessionAlive: () => false, onState: () => {}, log: () => {} });
     await assert.rejects(browsers.version('s1', SHARED_LANE), /no such browser/);
     await assert.rejects(browsers.version('s1', TESTERS + 1), /no such browser/);
+  });
+});
+
+describe('the field os-secret type types into', () => {
+  // the check run in the page, on a document of our own
+  const focused = (doc: unknown) => new Function('document', `return ${FOCUSED_FIELD}`)(doc);
+  const input = (type: string) => ({ tagName: 'INPUT', type });
+
+  it('is a password field, else another field to write in', () => {
+    assert.equal(focused({ activeElement: input('password') }), 'password');
+    assert.equal(focused({ activeElement: input('text') }), 'text');
+    assert.equal(focused({ activeElement: { tagName: 'TEXTAREA' } }), 'text');
+    assert.equal(focused({ activeElement: { tagName: 'DIV', isContentEditable: true } }), 'text');
+    assert.equal(focused({ activeElement: input('submit') }), false);
+    assert.equal(focused({ activeElement: { tagName: 'BODY' } }), false);
+    assert.equal(focused({ activeElement: null }), false);
+  });
+
+  it('is looked for in the frames of the page’s site and in web components, never in another site’s frame', () => {
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: { activeElement: input('password') } } }), 'password');
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: { activeElement: { tagName: 'BODY' } } } }), false, 'no field in the frame');
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: null } }), 'frame');
+    assert.equal(focused({ activeElement: { tagName: 'LOGIN-FORM', shadowRoot: { activeElement: input('password') } } }), 'password');
+    assert.equal(focused({ activeElement: { tagName: 'LOGIN-FORM', shadowRoot: null } }), false, 'a closed shadow root');
+  });
+});
+
+describe('the login os-secret auth gives a password prompt', () => {
+  const site = 'https://staging.example.org/en';
+
+  it('goes to the site’s own host, once per origin', () => {
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org' }, new Set()), 'login');
+    // http://site asking, then sending to https://site: Chrome asks again, for another origin of the same site
+    assert.equal(authAnswer('http://staging.example.org', { source: 'Server', origin: 'https://staging.example.org' }, new Set(['http://staging.example.org'])), 'login');
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org' }, new Set(['https://staging.example.org'])), 'refused');
+  });
+
+  it('never goes to another host nor to a proxy', () => {
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://login.example.net' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org.example.net' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, { source: 'Proxy', origin: 'https://staging.example.org' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, {}, new Set()), 'elsewhere');
   });
 });
 

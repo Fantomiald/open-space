@@ -111,10 +111,10 @@ export interface SecretsApiDeps {
   ask: (sessionId: string, names: string[], why: string) => Promise<string[] | null>;
   /** puts a cookie in the session's own browser, or the shared one */
   setCookie: (sessionId: string, cookie: { name: string; value: string; url: string }, shared: boolean) => Promise<void>;
-  /** signs the session's own browser (or the shared one) in to a site with basic auth */
-  signIn: (sessionId: string, login: { url: string; username: string; password: string; shared: boolean }) => Promise<void>;
-  /** types a value into the field that has focus in one of the session's tabs (`url`: the tab whose address starts with it); answers that tab's address */
-  type: (sessionId: string, input: { value: string; url: string; shared: boolean }) => Promise<string>;
+  /** signs the session's own browser in to a site with basic auth */
+  signIn: (sessionId: string, login: { url: string; username: string; password: string }) => Promise<void>;
+  /** types a value into the field that has focus in one of the session's tabs (`url`: the tab on its site), a password field unless `anyField`; answers that tab's address */
+  type: (sessionId: string, input: { value: string; url: string; shared: boolean; anyField: boolean }) => Promise<string>;
 }
 
 /** The login of an `os-secret auth` key: the password alone with `user`, else "user:password" (null when it is not one). */
@@ -187,9 +187,10 @@ export async function answerSecrets({ sessionId, action, form }: SecretsRequest,
       if (!isSite(url)) return { status: 400, text: SITE_WANTED };
       const login = loginOf(value, form.get('user') || undefined);
       if (!login) return { status: 400, text: form.get('user') ? 'A user name has no colon.' : `${name} is not a login: give it as user:password, or give the user with --user.` };
-      const shared = form.get('shared') === '1';
-      try { await deps.signIn(sessionId, { url, ...login, shared }); } catch (error) { return { status: 409, text: `Cannot sign in: ${failure(error)}` }; }
-      return { status: 200, text: `Signed in to ${new URL(url).origin} in your ${shared ? 'shared ' : ''}browser: its pages send the login by themselves until that browser closes.` };
+      // Chrome keeps the login until it closes: in the shared browser, it would stay after the session
+      if (form.get('shared') === '1') return { status: 400, text: 'auth signs in your own browser only: the shared one would keep the login after you.' };
+      try { await deps.signIn(sessionId, { url, ...login }); } catch (error) { return { status: 409, text: `Cannot sign in: ${failure(error)}` }; }
+      return { status: 200, text: `Signed in to ${new URL(url).origin} in your browser: its pages send the login by themselves until that browser closes.` };
     }
     case 'type': {
       const value = store.get(sessionId, name);
@@ -197,7 +198,7 @@ export async function answerSecrets({ sessionId, action, form }: SecretsRequest,
       const url = form.get('url') ?? '';
       if (url && !isSite(url)) return { status: 400, text: 'Give the address of the tab (https://…), or none when you have one tab only.' };
       let tab: string;
-      try { tab = await deps.type(sessionId, { value, url, shared: form.get('shared') === '1' }); } catch (error) { return { status: 409, text: `Cannot type it: ${failure(error)}` }; }
+      try { tab = await deps.type(sessionId, { value, url, shared: form.get('shared') === '1', anyField: form.get('any') === '1' }); } catch (error) { return { status: 409, text: `Cannot type it: ${failure(error)}` }; }
       return { status: 200, text: `${name} typed into the field that has focus in ${tab}.` };
     }
     case 'forget':
@@ -227,8 +228,8 @@ os-secret env NAME [FILE] [--as VAR]              writes NAME into a .env file (
 os-secret run NAME... -- COMMAND...               runs COMMAND with the keys as environment variables, output masked
 os-secret cookie NAME URL [--as COOKIE]           puts the key as a cookie for URL in your Open Space browser
 os-secret auth NAME URL [--user USER]             signs your Open Space browser in to the site of URL (basic auth): the key is user:password, or the password with --user
-os-secret type NAME [URL]                         types the key into the field that has focus in your browser's tab (the one on the site of URL, needed with several tabs)
-  cookie, auth and type take --shared: your tabs of the shared browser instead of your own browser
+os-secret type NAME [URL] [--any-field]           types the key into the password field that has focus in your browser's tab (the one on the site of URL, needed with several tabs); --any-field: another field too
+  cookie and type take --shared: your tabs of the shared browser instead of your own browser
 os-secret forget NAME                             forgets a key
 EOF
 }
@@ -250,16 +251,17 @@ case "$command" in
     done
     reply env --data-urlencode "name=$name" --data-urlencode "file=$file" --data-urlencode "as=$as" ;;
   cookie|auth|type)
-    name=""; url=""; as=""; user=""; shared=""
+    name=""; url=""; as=""; user=""; shared=""; any=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --as) as=$2; shift; shift ;;
         --user) user=$2; shift; shift ;;
         --shared) shared=1; shift ;;
+        --any-field) any=1; shift ;;
         *) if [ -z "$name" ]; then name=$1; else url=$1; fi; shift ;;
       esac
     done
-    reply "$command" --data-urlencode "name=$name" --data-urlencode "url=$url" --data-urlencode "as=$as" --data-urlencode "user=$user" --data-urlencode "shared=$shared" ;;
+    reply "$command" --data-urlencode "name=$name" --data-urlencode "url=$url" --data-urlencode "as=$as" --data-urlencode "user=$user" --data-urlencode "shared=$shared" --data-urlencode "any=$any" ;;
   forget) reply forget --data-urlencode "name=$1" ;;
   run)
     # names are environment variable names (checked by Open Space), so a plain list splits safely

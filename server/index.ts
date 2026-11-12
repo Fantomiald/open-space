@@ -454,8 +454,8 @@ const { server, hooksServer, modsServer } = createWebServer({ policy, port: conf
       store: secretStore, roots: () => config.roots,
       ask: (id, names, why) => sessions.askSecrets(id, names, why),
       setCookie: (id, cookie, shared) => { browserOf(id, shared); return browsers.setCookie(id, cookie, shared); },
-      signIn: (id, { url, username, password, shared }) => { browserOf(id, shared); return browsers.signIn(id, url, { username, password }, shared); },
-      type: (id, { value, url, shared }) => { browserOf(id, shared); return browsers.typeInto(id, value, url, shared); },
+      signIn: (id, { url, username, password }) => { browserOf(id, false); return browsers.signIn(id, url, { username, password }); },
+      type: (id, { value, url, shared, anyField }) => { browserOf(id, shared); return browsers.typeInto(id, value, url, shared, anyField); },
     }),
   },
   hooks: async (id, token, body) => {

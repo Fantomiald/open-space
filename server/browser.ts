@@ -90,13 +90,27 @@ const SIGN_IN_TIMEOUT_MS = 20_000;
 const CLOSE_WAIT_MS = 2_000;
 
 /**
- * Whether a page has a field to type in with focus: a text input, a text area or an editable element, looked for down the
- * frames of the page's own site ('frame': the focus is in a frame of another site, whose field is not checked, so refused).
+ * The field that has focus in a page, looked for down the frames of the page's own site and the web components (open shadow
+ * roots): 'password', 'text' (another input, a text area, an editable element), 'frame' (the focus is in a frame of another
+ * site, whose field is not checked) or false.
  */
-const FOCUSED_FIELD = `(() => { let doc = document; for (;;) { const at = doc.activeElement; if (!at) return false;
-  if (at.tagName === 'IFRAME') { doc = at.contentDocument; if (!doc) return 'frame'; continue; }
-  if (at.isContentEditable || at.tagName === 'TEXTAREA') return true;
-  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type); } })()`;
+export const FOCUSED_FIELD = `(() => { let root = document; for (;;) { const at = root.activeElement; if (!at) return false;
+  if (at.shadowRoot && at.shadowRoot.activeElement) { root = at.shadowRoot; continue; }
+  if (at.tagName === 'IFRAME') { root = at.contentDocument; if (!root) return 'frame'; continue; }
+  if (at.tagName === 'INPUT' && at.type === 'password') return 'password';
+  if (at.isContentEditable || at.tagName === 'TEXTAREA') return 'text';
+  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type) ? 'text' : false; } })()`;
+
+/**
+ * What `os-secret auth` answers a password prompt met on the way to `site`: the login ('login') when the site's own host asks
+ * (any scheme or port: http://site sending to https://site is asked again), once per origin; the same origin asking again
+ * has refused it ('refused'); another host or a proxy never gets it ('elsewhere').
+ */
+export function authAnswer(site: string, challenge: { source?: unknown; origin?: unknown }, answered: ReadonlySet<string>): 'login' | 'refused' | 'elsewhere' {
+  const origin = typeof challenge.origin === 'string' ? challenge.origin : '';
+  if (challenge.source !== 'Server' || !URL.canParse(origin) || new URL(origin).hostname !== new URL(site).hostname) return 'elsewhere';
+  return answered.has(origin) ? 'refused' : 'login';
+}
 
 /** Whether `address` is on the site (scheme, host and port) of `url`, under its path. */
 function onSite(address: string, url: string): boolean {
@@ -412,10 +426,10 @@ export class Browsers {
   /**
    * `os-secret type` (server/secrets.ts): the key typed into the field that has focus in a tab of the session's own browser,
    * or of its own tabs in the shared one (its lane's and its testers', never another session's), as a paste would
-   * (Input.insertText), on a connection of Open Space's own. The tab on the site of `url`, else its only one (typingTab).
-   * Answers that tab's address (shortAddress).
+   * (Input.insertText), on a connection of Open Space's own. The tab on the site of `url`, else its only one (typingTab). A
+   * password field only, unless `anyField`: another field may show the key back on the page. Answers the tab's address (shortAddress).
    */
-  async typeInto(sessionId: string, value: string, url: string, shared: boolean): Promise<string> {
+  async typeInto(sessionId: string, value: string, url: string, shared: boolean, anyField = false): Promise<string> {
     const mine = shared ? this.shared : this.live.get(browserId(sessionId));
     if (!mine) throw new Error(`your ${shared ? 'shared ' : ''}browser is not open`);
     const tabs = shared ? this.sharedTabs.tabsOfSession(sessionId).flatMap((id) => this.shared?.tabs.get(id) ?? []) : [...mine.tabs.values()];
@@ -427,7 +441,8 @@ export class Browsers {
       const session = String((await cdp.send('Target.attachToTarget', { targetId: tab.id, flatten: true })).sessionId);
       const focused = asJson((await cdp.send('Runtime.evaluate', { expression: FOCUSED_FIELD, returnByValue: true }, session)).result).value;
       if (focused === 'frame') throw new Error(`the field that has focus in ${shortAddress(tab.url)} is in a frame of another site`);
-      if (focused !== true) throw new Error(`no field to type in has focus in ${shortAddress(tab.url)}: click in it first`);
+      if (focused !== 'password' && focused !== 'text') throw new Error(`no field to type in has focus in ${shortAddress(tab.url)}: click in it first`);
+      if (focused === 'text' && !anyField) throw new Error(`the field that has focus in ${shortAddress(tab.url)} is not a password field: add --any-field to type the key into it (the page may show it back)`);
       await cdp.send('Input.insertText', { text: value }, session);
     } finally {
       cdp.close();
@@ -436,20 +451,22 @@ export class Browsers {
   }
 
   /**
-   * A site's basic-auth login (`os-secret auth`, server/secrets.ts) in the session's own browser or the shared one. A tab of
-   * Open Space's own, on a connection of its own, opens the address and answers the site's password prompt (Fetch auth, at the
+   * A site's basic-auth login (`os-secret auth`, server/secrets.ts) in the session's own browser: never the shared one, where
+   * Chrome would keep it after the session (no CDP call clears its login cache). A tab of Open Space's own, on a connection of
+   * its own, opens the address and answers the password prompts of the site's host only (authAnswer; Fetch auth, at the
    * request stage: a 401 paused at the response stage never reaches the prompt, checked with Chrome 156). Only that page
-   * loads, its scripts off: nothing of the site runs there (no tag, no analytics hit), and the login is in no address.
-   * Chrome keeps it for that site (by its realm, whatever the path) and sends it by itself with every page and call
-   * afterwards, in memory only, until that Chrome closes. The shared browser clears what the site leaves, like an owner's visit.
+   * loads, its scripts off: nothing of the site runs there (no tag, no analytics hit), and the login is in no address. A page
+   * that asks for no login is a failure. Chrome keeps it for that site (by its realm, whatever the path) and sends it by
+   * itself with every page and call afterwards, in memory only, until that Chrome closes.
    */
-  async signIn(sessionId: string, site: string, login: { username: string; password: string }, shared: boolean) {
-    const chrome = shared ? (await this.ensureShared()).chrome : (await this.ensure(sessionId)).chrome;
-    if (shared) this.visitedBy(sessionId, site);
+  async signIn(sessionId: string, site: string, login: { username: string; password: string }) {
+    const { chrome } = await this.ensure(sessionId);
     const refused = () => new Error('the site refused this user and password');
     let tab = '';
     let targetId = '';
-    let prompts = 0;
+    let navigating = false;
+    // the origins given the login (authAnswer)
+    const answered = new Set<string>();
     let done!: { resolve: () => void; reject: (error: Error) => void };
     let loaded!: () => void;
     const settled = new Promise<void>((resolve) => { loaded = resolve; });
@@ -460,17 +477,20 @@ export class Browsers {
       if (session !== tab) return;
       const requestId = params.requestId;
       if (method === 'Fetch.authRequired') {
-        // asked again for the same page: the site refused the login
-        const again = ++prompts > 1;
-        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: again ? { response: 'CancelAuth' } : { response: 'ProvideCredentials', ...login } }, tab).catch(() => {});
-        if (again) done.reject(refused());
+        const challenge = asJson(params.authChallenge);
+        const answer = authAnswer(site, challenge, answered);
+        if (answer === 'login') answered.add(String(challenge.origin));
+        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: answer === 'login' ? { response: 'ProvideCredentials', ...login } : { response: 'CancelAuth' } }, tab).catch(() => {});
+        if (answer === 'refused') done.reject(refused());
+        if (answer === 'elsewhere') done.reject(new Error(`${challenge.source === 'Proxy' ? 'a proxy' : String(challenge.origin)} asked for the login, not ${new URL(site).origin}: not given`));
       } else if (method === 'Fetch.requestPaused') {
         const page = params.resourceType === 'Document' && params.frameId === targetId;
         void cdp.send(page ? 'Fetch.continueRequest' : 'Fetch.failRequest', page ? { requestId } : { requestId, errorReason: 'Aborted' }, tab).catch(() => {});
-      } else if (method === 'Page.loadEventFired') {
+      } else if (method === 'Page.loadEventFired' && navigating) {
         // not at Page.navigate's answer: Chrome may still be committing the page then, and ignores a close meanwhile
         loaded();
-        done.resolve();
+        if (answered.size) done.resolve();
+        else done.reject(new Error('this page asked for no login (or this browser is signed in to it already): give the address of a page behind the password prompt'));
       }
     }, () => done.reject(new Error('browser closed')));
     let timer: NodeJS.Timeout | undefined;
@@ -481,6 +501,7 @@ export class Browsers {
       await cdp.send('Page.enable', {}, tab);
       await cdp.send('Emulation.setScriptExecutionDisabled', { value: true }, tab);
       await cdp.send('Fetch.enable', { handleAuthRequests: true, patterns: [{ urlPattern: '*' }] }, tab);
+      navigating = true;
       cdp.send('Page.navigate', { url: site }, tab).then(({ errorText }) => {
         if (errorText) done.reject(errorText === 'net::ERR_INVALID_AUTH_CREDENTIALS' ? refused() : new Error(String(errorText)));
       }, (error: Error) => done.reject(error));
