@@ -388,6 +388,7 @@ const mcpApi: OpenSpaceApi = {
   answer: (sessionId, requestId, decision) => sessions.answer(sessionId, requestId, decision),
   reply: (sessionId, requestId, answers) => sessions.reply(sessionId, requestId, answers),
   interrupt: (sessionId) => sessions.interrupt(sessionId),
+  rest: async (sessionId) => { await sessions.rest(sessionId); await browsers.stopSession(sessionId); },
   remote: (sessionId, enabled) => { void sessions.remoteControl(sessionId, enabled); },
   rename: (sessionId, name) => sessions.rename(sessionId, name),
   finish: (sessionId) => sessions.finishAfterTurn(sessionId),

@@ -20,7 +20,7 @@ const SYSTEM_PROMPT = [
   'The user writes to you from their phone (Telegram). You act through the open-space tools only:',
   '- list_sessions: who does what. Each session has a name (like JD), a folder (cwd), a state (work: at work; perm: waits for the user; wait: done with its turn), what it waits for, and lastWords, what it said last.',
   '- send_message: passes a request to a session, as if the user typed it in Open Space.',
-  '- stop_session, set_remote (Remote Control: to follow and answer a session in the Claude app of the phone).',
+  '- stop_session (interrupts a turn, the session stays live), rest_session (puts it to rest, which frees its place), set_remote (Remote Control: to follow and answer a session in the Claude app of the phone).',
   '- create_session: starts a session in an absolute project folder (take it from the sessions\' folders, or ask); remote: true when the user wants Remote Control or to follow it from the phone.',
   '- list_triggers, run_trigger: the automations. list_crew: the names sessions take.',
   '- send_file: sends the user a file (a screenshot, a video, a PDF) by its absolute path.',

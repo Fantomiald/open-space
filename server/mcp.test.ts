@@ -52,6 +52,7 @@ function fakeApi() {
     answer: (id, requestId, decision) => { done.push(`answer ${id} ${requestId} ${decision}`); },
     reply: (id, requestId, answers) => { done.push(`reply ${id} ${requestId} ${JSON.stringify(answers)}`); },
     interrupt: (id) => { done.push(`stop ${id}`); },
+    rest: async (id) => { done.push(`rest ${id}`); },
     remote: (id, enabled) => { done.push(`remote ${id} ${enabled}`); },
     rename: (id, name) => { done.push(`rename ${id} ${name}`); },
     finish: (id) => { done.push(`finish ${id}`); },
@@ -110,9 +111,18 @@ describe('the open-space MCP server', () => {
     await tool(api, 'answer_permission', { sessionId: 's5', requestId: 'r2', answers: { 'Which?': 'A' } }, EXTERNAL);
     assert.equal((await tool(api, 'answer_permission', { sessionId: 's5', requestId: 'r3', decision: 'allow' }, EXTERNAL)).isError, true);
     await tool(api, 'send_message', { sessionId: 's5', text: 'Go' }, EXTERNAL);
-    await tool(api, 'stop_session', { sessionId: 's5' }, EXTERNAL);
+    const stopped = await tool(api, 'stop_session', { sessionId: 's5' }, EXTERNAL);
+    assert.match(stopped.text, /keeps its place.*rest_session/);
     assert.equal((await tool(api, 'stop_session', { sessionId: 'nope' }, EXTERNAL)).isError, true);
-    assert.deepEqual(done, ['answer s5 r1 allow', 'reply s5 r2 {"Which?":"A"}', 'send s5 Go', 'stop s5']);
+    await tool(api, 'rest_session', { sessionId: 's5' }, EXTERNAL);
+    assert.equal((await tool(api, 'rest_session', { sessionId: 'nope' }, EXTERNAL)).isError, true);
+    assert.deepEqual(done, ['answer s5 r1 allow', 'reply s5 r2 {"Which?":"A"}', 'send s5 Go', 'stop s5', 'rest s5']);
+  });
+
+  it('gives rest_session to those who follow the sessions, never to a session', () => {
+    assert.ok(toolsFor(EXTERNAL).some((each) => each.name === 'rest_session'));
+    assert.ok(toolsFor(BOT).some((each) => each.name === 'rest_session'));
+    assert.ok(!toolsFor(S1).some((each) => each.name === 'rest_session'));
   });
 
   it('lets a messenger\'s agent follow, write to and stop the sessions, send files, but never answer them; a session send files too', async () => {
