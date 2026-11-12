@@ -300,7 +300,7 @@ function PeerMessage({ item, speaker }: { item: FeedItem & { kind: 'peer' }; spe
     return (
       <li className="cp-feed__item" data-kind="peer" data-subagent="true">
         <details className="cp-fold">
-          <summary className="cp-fold__summary">{t.session.feed.subagentMessage(item.subagent.name)}<span className="cp-fold__preview">{item.text.split('\n')[0]}</span></summary>
+          <summary className="cp-fold__summary"><span className="cp-fold__label">{t.session.feed.subagentMessage(item.subagent.name)}</span><span className="cp-fold__preview">{item.text.split('\n')[0]}</span></summary>
           <Prose className="cp-feed__text" text={item.text} />
         </details>
       </li>

@@ -1129,6 +1129,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-fold__summary::before { content: ''; flex: none; width: 0.35rem; height: 0.35rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--duration) var(--easing); }
 .cp-fold[open] > .cp-fold__summary::before { transform: rotate(45deg); }
 .cp-fold__summary:hover { color: var(--color-text); }
+.cp-fold__label { flex: none; white-space: nowrap; }
 .cp-fold__preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8; }
 .cp-fold[open] .cp-fold__preview { display: none; }
 .cp-fold > .cp-feed__text { padding-left: var(--space-4); border-left: var(--border-width) solid var(--color-border); margin-left: 0.15rem; }

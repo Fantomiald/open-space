@@ -1,5 +1,9 @@
 # Versions
 
+## 1.35.3
+
+- Message replié d'un sous-agent : le titre « Message de … » reste sur une ligne. Avant, un aperçu long l'écrasait jusqu'à une lettre par ligne.
+
 ## 1.35.2
 
 - Message envoyé pendant qu'une session travaille : il attend de nouveau dans la file, au-dessus du champ, et part à la fin du tour. « Envoyer maintenant » interrompt le tour et l'envoie tout de suite. Avant, il se glissait dans le tour en cours et passait souvent inaperçu.
