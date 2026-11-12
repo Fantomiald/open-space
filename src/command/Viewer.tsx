@@ -64,16 +64,18 @@ function Shown({ viewed }: { viewed: Viewed }) {
 }
 
 const MAX_SCALE = 8;
-const DOUBLE_CLICK_SCALE = 2.5;
+const CLICK_SCALE = 2.5;
+/** how far the pointer may move, in px, for a press to still be a click rather than a drag */
+const CLICK_SLOP = 4;
 
 /**
  * A picture that zooms where the pointer is, like any image viewer: the wheel or a trackpad pinch zooms in and out,
- * a drag moves it once zoomed, a double click goes from fit to zoomed and back.
+ * a drag moves it once zoomed, a click goes from fit to zoomed and back.
  */
 function ZoomableImage({ src, alt }: { src: string; alt: string }) {
   const image = useRef<HTMLImageElement>(null);
   const [view, setView] = useState<ImageView>({ scale: 1, x: 0, y: 0 });
-  const [drag, setDrag] = useState<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ pointerX: number; pointerY: number; x: number; y: number; moved: boolean } | null>(null);
 
   const zoomAt = (pointerX: number, pointerY: number, scale: (current: number) => number) =>
     setView((current) => zoomedView(current, image.current?.getBoundingClientRect(), pointerX, pointerY, scale(current.scale)));
@@ -100,19 +102,24 @@ function ZoomableImage({ src, alt }: { src: string; alt: string }) {
       alt={alt}
       className="cp-viewer__zoomable"
       data-zoomed={zoomed}
-      data-dragging={drag !== null}
+      data-dragging={drag?.moved === true}
       draggable={false}
       style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
-      onDoubleClick={(e) => zoomAt(e.clientX, e.clientY, (scale) => (scale > 1 ? 1 : DOUBLE_CLICK_SCALE))}
       onPointerDown={(e) => {
-        if (!zoomed || e.button !== 0) return;
+        if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        setDrag({ pointerX: e.clientX, pointerY: e.clientY, x: view.x, y: view.y });
+        setDrag({ pointerX: e.clientX, pointerY: e.clientY, x: view.x, y: view.y, moved: false });
       }}
       onPointerMove={(e) => {
-        if (drag) setView((current) => ({ ...current, x: drag.x + e.clientX - drag.pointerX, y: drag.y + e.clientY - drag.pointerY }));
+        if (!drag) return;
+        const moved = drag.moved || Math.hypot(e.clientX - drag.pointerX, e.clientY - drag.pointerY) > CLICK_SLOP;
+        if (moved !== drag.moved) setDrag({ ...drag, moved });
+        if (moved && zoomed) setView((current) => ({ ...current, x: drag.x + e.clientX - drag.pointerX, y: drag.y + e.clientY - drag.pointerY }));
       }}
-      onPointerUp={() => setDrag(null)}
+      onPointerUp={(e) => {
+        if (drag && !drag.moved) zoomAt(e.clientX, e.clientY, (scale) => (scale > 1 ? 1 : CLICK_SCALE));
+        setDrag(null);
+      }}
       onPointerCancel={() => setDrag(null)}
     />
   );
