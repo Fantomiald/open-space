@@ -69,18 +69,19 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.33': {
-        title: 'Your windows stay where you put them',
+      '1.34': {
+        title: 'Your mods on dashboards',
         items: {
-          windows: { title: 'Each mode keeps its layout', text: 'Go from focus mode to the room and back: your windows are where you left them. A click on the background closes what is docked in the grid, floating windows stay.' },
-          files: { title: 'Videos and PDFs to open', text: 'The files you send show in the conversation: a video plays large, a PDF opens in the viewer.' },
-          aside: { title: 'Reply aside', text: 'Under a side question (/btw), a Reply field keeps the exchange going, no need to type /btw again.' },
-          sessions: { title: '12 sessions, and room', text: 'Up to 12 sessions at once. At the limit, the one waiting the longest goes to sleep, and resumes on the next message.' },
-          mods: { title: 'A mod starts an automation', text: 'A button in a mod can start an automation, once you agree. Each run says whether it is running, waiting for you or done.' },
-          browsers: { title: 'Muted browsers', text: 'A video or a song an agent tests no longer plays on your speakers.' },
+          dashboards: { title: 'Dashboards of mods', text: 'A new button beside the rooms: your mods laid out on a grid, full page. Make several and switch between them with their tabs.' },
+          grid: { title: 'A grid like Grafana', text: 'Drag a mod by its title, pull its corner to resize it: the others make room and move back up. A mod can still open in its own window.' },
+          focus: { title: 'A session per project, in one move', text: 'In focus mode, each project has its “+”, and Alt+1 to 9 starts a session there.' },
+          resume: { title: 'Resume, clearer', text: 'The list scrolls all the way up, and a badge marks the conversations archived in Claude Desktop.' },
+          viewer: { title: 'Zoom into images', text: 'In the viewer, the wheel or a pinch zooms into an image.' },
+          folders: { title: 'The folder picker fits', text: 'The list of folders no longer spills out of the launcher.' },
         },
+        thanks: 'Thanks to Quentin for focus mode, Resume and the folder picker (PRs #48 to #51).',
       },
     },
-    actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour' },
+    actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour', dashboards: 'Open dashboards' },
   },
 };

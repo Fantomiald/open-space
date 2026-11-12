@@ -71,18 +71,19 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.33': {
-        title: 'Tes fenêtres restent où tu les mets',
+      '1.34': {
+        title: 'Tes mods sur des dashboards',
         items: {
-          windows: { title: 'Chaque mode garde sa disposition', text: 'Passe du focus à la salle et reviens : tes fenêtres sont où tu les as laissées. Un clic sur le fond ferme ce qui est rangé dans la grille, le libre reste.' },
-          files: { title: 'Vidéos et PDF à ouvrir', text: 'Les fichiers que tu envoies s’affichent dans la conversation : une vidéo se lit en grand, un PDF s’ouvre dans la visionneuse.' },
-          aside: { title: 'Réponds à côté', text: 'Sous une question à côté (/btw), un champ Répondre continue l’échange, sans repasser par /btw.' },
-          sessions: { title: '12 sessions, et de la place', text: 'Jusqu’à 12 sessions en même temps. À la limite, celle qui attend depuis le plus longtemps se met en veille, et reprend au message suivant.' },
-          mods: { title: 'Un mod lance un automate', text: 'Un bouton dans un mod peut démarrer un automate, après ton accord. Chaque run dit s’il est en cours, t’attend ou a fini.' },
-          browsers: { title: 'Des navigateurs muets', text: 'Une vidéo ou une musique qu’un agent teste ne sort plus dans tes haut-parleurs.' },
+          dashboards: { title: 'Des dashboards de mods', text: 'Un nouveau bouton à droite des pièces : tes mods rangés sur une grille, en pleine page. Fais-en plusieurs et passe de l’un à l’autre par leurs onglets.' },
+          grid: { title: 'Une grille comme Grafana', text: 'Glisse un mod par son titre, tire son coin pour le redimensionner : les autres se poussent et remontent. Un mod reste ouvrable en fenêtre à côté.' },
+          focus: { title: 'Une session par projet, d’un geste', text: 'En focus, chaque projet a son « + », et Alt+1 à 9 y lance une session.' },
+          resume: { title: 'Reprendre, plus clair', text: 'La liste défile jusqu’en haut, et un badge marque les conversations archivées dans Claude Desktop.' },
+          viewer: { title: 'Zoom dans les images', text: 'Dans la visionneuse, la molette ou le pinch zoome sur une image.' },
+          folders: { title: 'Le choix du dossier tient', text: 'La liste des dossiers ne déborde plus du lanceur.' },
         },
+        thanks: 'Merci à Quentin pour le focus, Reprendre et le choix du dossier (PR #48 à #51).',
       },
     },
-    actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite' },
+    actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite', dashboards: 'Ouvrir les dashboards' },
   },
 };

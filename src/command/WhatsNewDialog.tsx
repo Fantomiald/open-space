@@ -3,7 +3,7 @@ import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useSessions } from '../state/sessions.ts';
 import { releaseToShow, type Release } from '../state/whats-new.ts';
-import { AutomatonIcon, CloseIcon, ExternalLinkIcon, MessageIcon, PlayIcon, RestIcon, SoundOffIcon, SparklesIcon, TidyIcon } from './Icons.tsx';
+import { CloseIcon, DashboardIcon, ExternalLinkIcon, FocusIcon, FolderOpenIcon, GripIcon, ImageIcon, KeepIcon, SparklesIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { REPOSITORY } from './SettingsDialog.tsx';
 import { type Art, ShowcaseArt } from './ShowcaseArt.tsx';
@@ -13,16 +13,16 @@ import { SLIDES, Tour } from './Tour.tsx';
 export const SEEN_KEY = 'whats-new';
 export const markNewsSeen = () => writePreference(SEEN_KEY, __APP_VERSION__);
 
-type Action = 'automata' | 'mods' | 'settings' | 'tour';
+type Action = 'automata' | 'mods' | 'settings' | 'tour' | 'dashboards';
 interface Item { id: string; icon: ComponentType; action?: Action }
 
 /** Each release's drawing and its points, in the order told; their words are in i18n (`showcase.whatsNew.releases`). */
 const LOOKS: Record<Release, { art: Art; items: readonly Item[] }> = {
-  '1.33': {
-    art: 'layout',
+  '1.34': {
+    art: 'mods',
     items: [
-      { id: 'windows', icon: TidyIcon }, { id: 'files', icon: PlayIcon }, { id: 'aside', icon: MessageIcon },
-      { id: 'sessions', icon: RestIcon }, { id: 'mods', icon: AutomatonIcon, action: 'automata' }, { id: 'browsers', icon: SoundOffIcon },
+      { id: 'dashboards', icon: DashboardIcon, action: 'dashboards' }, { id: 'grid', icon: GripIcon }, { id: 'focus', icon: FocusIcon },
+      { id: 'resume', icon: KeepIcon }, { id: 'viewer', icon: ImageIcon }, { id: 'folders', icon: FolderOpenIcon },
     ],
   },
 };
@@ -32,6 +32,7 @@ function act(action: Action) {
   if (action === 'automata') store.openAutomata(true);
   else if (action === 'mods') store.openModsPanel(true);
   else if (action === 'tour') store.openShowcase('tour');
+  else if (action === 'dashboards') store.setView('dashboards');
   else store.openSettings(true, 'sessions', 'autoTag');
 }
 

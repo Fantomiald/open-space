@@ -1,5 +1,13 @@
 # Versions
 
+## 1.34.0
+
+- Dashboards : un bouton à droite des pièces ouvre tes mods rangés sur une grille de 12 colonnes, en pleine page, qui défile vers le bas. On glisse un mod par son titre, on le redimensionne par son coin, les autres se poussent et remontent, comme dans Grafana. Plusieurs dashboards en onglets (double-clic pour renommer), gardés dans les réglages. Un mod sur un dashboard reste ouvrable en fenêtre, et inversement.
+- Focus : un « + » par projet et Alt+1…9 pour y lancer une session, sans voler les caractères quand on écrit (PR #51 de Quentin).
+- Reprendre : la liste des conversations défile jusqu'en haut, et un badge « archivée » marque celles archivées dans Claude Desktop (PR #49 et #50 de Quentin).
+- Sélecteur de dossier : la liste tient dans le lanceur (PR #48 de Quentin).
+- Visionneuse : zoom à la molette et au pinch sur les images ; libellé de la fenêtre de quota seven_day_overage_included.
+
 ## 1.33.1
 
 - La fenêtre se rouvre où on l'a laissée, à sa taille, maximisée ou non, même après une mise à jour ou un arrêt de Windows. Si son écran a été débranché, elle revient sur un écran visible (PR #46 de Quentin).
