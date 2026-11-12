@@ -65,7 +65,7 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
   useEffect(() => { setPlacement(readPreference(placementKey(mod.id), NOT_PLACED)); }, [placedByStack, docked]);
   const [, setSurface] = useState(floatingSurface);
   const folded = !detached && !docked && placement.folded;
-  const { page, question, fit, refreshNow, refreshing } = useModPage(mod, !folded);
+  const { page, question, fit, refreshNow, refreshing, refreshTitle } = useModPage(mod, !folded);
   // `fit`: the height its page says its content needs; the window fits it until the user resizes it, and is never taller
   const box = modBox(mod, placement, spot, floatingSurface(), fit);
   const place = (next: ModPlacement) => { setPlacement(next); writePreference(placementKey(mod.id), next); };
@@ -144,7 +144,7 @@ export function ModWindow({ mod, depth, spot, detached = false }: { mod: ModInfo
         <span className="cp-mod__icon"><Icon /></span>
         <span className="cp-mod__title">{mod.name}</span>
         <div className="cp-detail__controls">
-          {!building && button(words.reload, words.reloadTitle(mod.refresh), refreshNow, <RefreshIcon />, refreshing)}
+          {!building && button(words.reload, refreshTitle, refreshNow, <RefreshIcon />, refreshing)}
           <ActionMenu
             items={[
               { label: words.settings, title: words.settingsTitle(mod.name), icon: <SettingsIcon />, run: () => openModSettings(mod.id) },

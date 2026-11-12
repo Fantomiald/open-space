@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { isModStoreName, type ModInfo } from '../../shared/mods.ts';
+import type { SessionState } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { awaitModEnv, costsForMods, isModData, MOD_TOKENS, onModStore, quotaForMods, sessionsForMods, type ModData } from '../state/mods.ts';
 import { useSessions, type CommandPostState } from '../state/sessions.ts';
@@ -11,6 +12,10 @@ const COSTS_EVERY_MS = 60_000;
 /** the refresh button turns at least this long, so a quick refresh is still seen, and at most this long */
 const REFRESH_SHOWN_MS = 600;
 const REFRESH_CAP_MS = 10_000;
+/** a refresh that runs a trigger turns while its run works, at most this long */
+const RUN_CAP_MS = 30 * 60_000;
+/** a run still at it: the page loads again once it leaves these */
+const RUN_BUSY: readonly SessionState[] = ['starting', 'work', 'perm'];
 
 /** What Open Space tells a mod's page asking for `name`. */
 function dataFor(name: ModData, s: CommandPostState) {
@@ -37,7 +42,8 @@ function currentTheme() {
 /**
  * A mod's page wherever it is shown (its window, a dashboard's tile): the sandboxed frame (an origin of its own, see
  * server/http.ts), the look of the user's windows and the data the page asks for (the kit's OpenSpace.watch), its
- * refresh (the button, and the pace of its settings while `paced`), and the trigger it asks to start.
+ * refresh (the button, and the pace of its settings while `paced`), and the trigger it asks to start. The button runs
+ * the mod's refresh trigger when its settings name one: it turns while the run works, then the page loads again.
  */
 export function useModPage(mod: ModInfo, paced: boolean) {
   const words = t.mods;
@@ -54,8 +60,39 @@ export function useModPage(mod: ModInfo, paced: boolean) {
   // the refresh asked by the button, until the page loaded again or said it refreshed itself
   const [refreshing, setRefreshing] = useState(false);
   const refreshed = useRef<() => void>(() => {});
+  const refreshTrigger = useSessions((s) => s.triggers.triggers.find((each) => each.id === mod.refreshTrigger) ?? null);
+  // stops following the run the button started, when it is shown no more
+  const stopRun = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopRun.current?.(), []);
+  const runThenReload = (id: string) => {
+    const since = Date.now();
+    setRefreshing(true);
+    let runId: string | null = null;
+    const end = () => {
+      stop();
+      clearTimeout(cap);
+      stopRun.current = null;
+      setRefreshing(false);
+      refresh();
+    };
+    // the firing asked for, then the session it started, until that session no longer works
+    const follow = (s: CommandPostState) => {
+      const run = runId ? s.triggers.runs.find((each) => each.id === runId) : s.triggers.runs.find((each) => each.triggerId === id && each.source === 'manual' && each.at >= since - 1000);
+      if (!run) return;
+      runId = run.id;
+      if (run.outcome === 'queued') return;
+      if (run.outcome !== 'started' || !run.sessionId) return end();
+      const state = s.sessions[run.sessionId]?.state;
+      if (state && !RUN_BUSY.includes(state)) end();
+    };
+    const stop = useSessions.subscribe(follow);
+    const cap = setTimeout(end, RUN_CAP_MS);
+    stopRun.current = () => { stop(); clearTimeout(cap); };
+    useSessions.getState().runTrigger(id);
+  };
   const refreshNow = () => {
     if (refreshing) return;
+    if (refreshTrigger) return runThenReload(refreshTrigger.id);
     const since = Date.now();
     setRefreshing(true);
     let done = false;
@@ -179,5 +216,6 @@ export function useModPage(mod: ModInfo, paced: boolean) {
     </Modal>,
     document.body,
   );
-  return { page, question, fit, refreshNow, refreshing };
+  const refreshTitle = refreshTrigger ? words.rerunTitle(refreshTrigger.name) : words.reloadTitle(mod.refresh);
+  return { page, question, fit, refreshNow, refreshing, refreshTitle };
 }

@@ -4,7 +4,7 @@ import { isSecretName, type SecretEntry } from '../../shared/secrets.ts';
 import { t } from '../i18n/index.ts';
 import { modsNews } from '../room/metrics.ts';
 import { useSessions } from '../state/sessions.ts';
-import { BackIcon, KeyIcon, MOD_ICONS, ModsIcon, PencilIcon, RefreshIcon, RemoveIcon, SendIcon, SettingsIcon } from './Icons.tsx';
+import { BackIcon, KeyIcon, MOD_ICONS, ModsIcon, PencilIcon, PlayIcon, RefreshIcon, RemoveIcon, SendIcon, SettingsIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { SecretRows } from './SecretPrompt.tsx';
 
@@ -107,7 +107,8 @@ function ModCard({ mod }: { mod: ModInfo }) {
 const withValue = (rows: readonly SecretEntry[]) => rows.map((row) => ({ name: row.name.trim(), value: row.value })).filter((row) => row.name);
 
 /**
- * A mod's settings, in place of the list: its name, description and icon, how often its window refreshes it, and the
+ * A mod's settings, in place of the list: its name, description and icon, how often its window refreshes it and what
+ * its refresh button does (load the page again, or run a trigger then load it), and the
  * variables its page reads (the ones it asks for in its mod.json first). Saved at once, then back to the list.
  */
 function ModSettingsView({ mod }: { mod: ModInfo }) {
@@ -119,6 +120,9 @@ function ModSettingsView({ mod }: { mod: ModInfo }) {
   const [description, setDescription] = useState(mod.description);
   const [icon, setIcon] = useState<ModIcon>(mod.icon);
   const [refresh, setRefresh] = useState(mod.refresh);
+  const triggers = useSessions((s) => s.triggers.triggers);
+  // one gone since it was chosen: the button only reloads
+  const [refreshTrigger, setRefreshTrigger] = useState(triggers.some((each) => each.id === mod.refreshTrigger) ? mod.refreshTrigger : null);
   const asked = mod.env.map((need) => need.name);
   const [rows, setRows] = useState<SecretEntry[]>(() => {
     const names = [...asked, ...mod.envSet.filter((each) => !asked.includes(each))];
@@ -135,7 +139,7 @@ function ModSettingsView({ mod }: { mod: ModInfo }) {
     if (!valid) return;
     // a variable asked for but left empty, never given: nothing to keep
     const env = entries.filter((row) => row.value || mod.envSet.includes(row.name));
-    configureMod(mod.id, { name: name.trim(), description: description.trim(), icon, refresh, env });
+    configureMod(mod.id, { name: name.trim(), description: description.trim(), icon, refresh, refreshTrigger, env });
     back();
   };
   const Icon = MOD_ICONS[icon];
@@ -186,6 +190,14 @@ function ModSettingsView({ mod }: { mod: ModInfo }) {
             </div>
             <small>{refresh ? words.refreshHint(refresh) : words.refreshNever}</small>
           </div>
+          <label className="cp-mod-settings__field">
+            <span className="cp-mod-settings__label"><PlayIcon />{words.button}</span>
+            <select value={refreshTrigger ?? ''} onChange={(event) => setRefreshTrigger(event.target.value || null)}>
+              <option value="">{words.buttonReload}</option>
+              {triggers.map((each) => <option key={each.id} value={each.id}>{words.buttonRun(each.name)}</option>)}
+            </select>
+            <small>{refreshTrigger ? words.buttonRunHint : words.buttonReloadHint}</small>
+          </label>
         </div>
       </section>
 

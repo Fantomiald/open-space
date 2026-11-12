@@ -26,12 +26,13 @@ describe('mods folder', () => {
     const made = mods.create('settings test');
     const manifest = path.join(made.folder, 'mod.json');
     writeFileSync(manifest, JSON.stringify({ name: 'Old', width: 500, env: [{ name: 'TOKEN', label: 'Ton token' }] }));
-    await mods.configure(made.id, { name: 'Tickets', description: 'Mes tickets', icon: 'list', refresh: 300, env: [{ name: 'TOKEN', value: 'abc' }, { name: 'EMAIL', value: 'me@x.y' }] });
+    await mods.configure(made.id, { name: 'Tickets', description: 'Mes tickets', icon: 'list', refresh: 300, refreshTrigger: '916f9cd5fbc90b8c', env: [{ name: 'TOKEN', value: 'abc' }, { name: 'EMAIL', value: 'me@x.y' }] });
     const written = JSON.parse(readFileSync(manifest, 'utf8'));
-    assert.deepEqual(written, { name: 'Tickets', width: 500, env: [{ name: 'TOKEN', label: 'Ton token' }], description: 'Mes tickets', icon: 'list', refresh: 300 });
+    assert.deepEqual(written, { name: 'Tickets', width: 500, env: [{ name: 'TOKEN', label: 'Ton token' }], description: 'Mes tickets', icon: 'list', refresh: 300, refreshTrigger: '916f9cd5fbc90b8c' });
+    assert.equal(mods.list().find((mod) => mod.id === made.id)?.refreshTrigger, '916f9cd5fbc90b8c');
     assert.doesNotMatch(readFileSync(manifest, 'utf8'), /abc/, 'no value in the folder its agent reads');
     assert.deepEqual(mods.list().find((mod) => mod.id === made.id)?.envSet, ['EMAIL', 'TOKEN']);
-    await mods.configure(made.id, { name: 'Tickets', description: '', icon: 'list', refresh: 0, env: [{ name: 'TOKEN', value: '' }] });
+    await mods.configure(made.id, { name: 'Tickets', description: '', icon: 'list', refresh: 0, refreshTrigger: null, env: [{ name: 'TOKEN', value: '' }] });
     assert.deepEqual(mods.envOf(made.id), { TOKEN: 'abc' }, 'kept without a new value, forgotten when left out');
     const again = await prepared('settings');
     assert.deepEqual(again.envOf(made.id), { TOKEN: 'abc' }, 'read back after a restart');

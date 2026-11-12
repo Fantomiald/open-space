@@ -512,16 +512,17 @@ function parseMusicAction(value: unknown): MusicAction | null {
   }
 }
 
-/** A mod's settings: a name, a known icon and pace, and distinct variables (a value of '' keeps the one given before). */
+/** A mod's settings: a name, a known icon and pace, a trigger's id or null for its refresh button, and distinct variables (a value of '' keeps the one given before). */
 function parseModSettings(raw: unknown): ModSettings | null {
   if (!isJson(raw)) return null;
   const name = boundedString(raw.name, MAX_MOD_NAME)?.trim(), description = boundedString(raw.description, MAX_MOD_DESCRIPTION)?.trim();
   const icon = MOD_ICONS.find((each) => each === raw.icon), refresh = MOD_REFRESH.find((each) => each === raw.refresh);
   const env = Array.isArray(raw.env) && raw.env.length <= MAX_MOD_ENV ? raw.env.map((entry) =>
     isJson(entry) && typeof entry.name === 'string' && isSecretName(entry.name) && typeof entry.value === 'string' && entry.value.length <= MAX_SECRET_LENGTH ? { name: entry.name, value: entry.value } : null) : null;
-  if (!name || description === undefined || !icon || refresh === undefined || !env || env.some((entry) => !entry)) return null;
+  const refreshTrigger = raw.refreshTrigger === null ? null : typeof raw.refreshTrigger === 'string' && TRIGGER_ID.test(raw.refreshTrigger) ? raw.refreshTrigger : undefined;
+  if (!name || description === undefined || !icon || refresh === undefined || refreshTrigger === undefined || !env || env.some((entry) => !entry)) return null;
   const entries = env as { name: string; value: string }[];
-  return new Set(entries.map((entry) => entry.name)).size === entries.length ? { name, description, icon, refresh, env: entries } : null;
+  return new Set(entries.map((entry) => entry.name)).size === entries.length ? { name, description, icon, refresh, refreshTrigger, env: entries } : null;
 }
 
 /** A key given in the box: a variable name and a value, never trimmed (a token is taken as pasted). */

@@ -232,7 +232,7 @@ export class Mods {
   }
 
   /**
-   * What the user set in a mod's settings: its name, description, icon and pace in its mod.json (the rest of the file
+   * What the user set in a mod's settings: its name, description, icon, pace and refresh trigger in its mod.json (the rest of the file
    * as its agent wrote it), its variables here. A variable left out is forgotten; one given without a value keeps its own.
    */
   async configure(id: string, settings: ModSettings) {
@@ -241,8 +241,8 @@ export class Mods {
     const manifest = path.join(own, 'mod.json');
     let raw: Record<string, unknown> = {};
     try { raw = asJson(JSON.parse(await readFile(manifest, 'utf8'))); } catch { /* rewritten whole */ }
-    const { name, description, icon, refresh } = settings;
-    await writeFile(manifest, `${JSON.stringify({ ...raw, name, description, icon, refresh }, null, 2)}\n`);
+    const { name, description, icon, refresh, refreshTrigger } = settings;
+    await writeFile(manifest, `${JSON.stringify({ ...raw, name, description, icon, refresh, refreshTrigger }, null, 2)}\n`);
     const before = this.env[id] ?? {};
     const after = Object.fromEntries(settings.env.flatMap(({ name, value }) => {
       const kept = value || before[name];

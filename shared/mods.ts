@@ -1,6 +1,7 @@
 // Mods: small pages the user's agents write, each in a folder of OFFICE_DIR/mods (mod.json + index.html), shown by the
 // page as floating windows. Here: what a mod is, and how its manifest is read. Pure, shared by the server and the page.
 import { isSecretName } from './secrets.ts';
+import { TRIGGER_ID } from './triggers.ts';
 
 /** The pictures a mod may wear in the panel and on its window (src/command/ModIcon.tsx). */
 export const MOD_ICONS = ['puzzle', 'chart', 'bars', 'coins', 'timer', 'list', 'bell', 'calendar', 'star', 'heart', 'bolt', 'globe', 'note', 'terminal'] as const;
@@ -37,6 +38,8 @@ export interface ModManifest {
   env: ModEnvNeed[];
   /** the trigger its page may start (the kit's OpenSpace.runTrigger), the user confirming each time; null for none */
   trigger: string | null;
+  /** the trigger its refresh button starts (instead of loading the page again), the page loading again once its run is over; null: the button only reloads */
+  refreshTrigger: string | null;
 }
 
 /** A variable a mod asks for: its name, and what it is for in the user's words (where to find it). */
@@ -57,11 +60,13 @@ export interface ModInfo extends ModManifest {
 }
 
 /** What the settings change in a mod: written in its mod.json, but `env`, kept by Open Space (a value of '' keeps the one given before). */
-export interface ModSettings { name: string; description: string; icon: ModIcon; refresh: number; env: { name: string; value: string }[] }
+export interface ModSettings { name: string; description: string; icon: ModIcon; refresh: number; refreshTrigger: string | null; env: { name: string; value: string }[] }
 
 const within = (value: unknown, { min, max, initial }: { min: number; max: number; initial: number }) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.round(Math.min(Math.max(value, min), max)) : initial;
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+const triggerId = (value: unknown) => (typeof value === 'string' && TRIGGER_ID.test(value) ? value : null);
 
 /** A manifest as written in mod.json, whatever is missing or wrong replaced: a mod half written still shows. */
 export function readManifest(raw: unknown, id: string): ModManifest {
@@ -78,7 +83,8 @@ export function readManifest(raw: unknown, id: string): ModManifest {
       const need = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
       return typeof need.name === 'string' && isSecretName(need.name) ? [{ name: need.name, label: text(need.label, MAX_MOD_ENV_LABEL) }] : [];
     }).filter((need, index, all) => all.findIndex((each) => each.name === need.name) === index).slice(0, MAX_MOD_ENV) : [],
-    trigger: typeof given.trigger === 'string' && /^[a-z0-9]{8,32}$/.test(given.trigger) ? given.trigger : null,
+    trigger: triggerId(given.trigger),
+    refreshTrigger: triggerId(given.refreshTrigger),
   };
 }
 

@@ -2992,7 +2992,8 @@ a.cp-button { text-decoration: none; }
 .cp-mod-settings__field { display: grid; grid-template-columns: 9rem minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-3); padding: var(--space-3) var(--space-4); font-size: var(--text-sm); }
 .cp-mod-settings__field + .cp-mod-settings__field { border-top: var(--border-width) solid var(--color-border); }
 .cp-mod-settings__field > span { font-weight: var(--weight-medium); }
-.cp-mod-settings__field > input { width: 100%; height: var(--control-height); padding-block: 0; }
+.cp-mod-settings__field > input, .cp-mod-settings__field > select { width: 100%; height: var(--control-height); padding-block: 0; }
+.cp-mod-settings__field > select { text-overflow: ellipsis; }
 .cp-mod-settings__field > small { grid-column: 2; font-size: var(--text-xs); color: var(--color-text-muted); }
 .cp-mod-settings__label { display: inline-flex; align-items: center; gap: var(--space-2); }
 .cp-mod-settings__label .cp-icon { color: var(--color-text-muted); }

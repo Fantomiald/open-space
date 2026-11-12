@@ -278,7 +278,7 @@ function Tile({ mod, box, carried, narrow, onPress, onFollow, onDrop, onTakeOff 
   onPress: (resize: boolean, event: ReactPointerEvent<HTMLElement>) => void; onFollow: (event: ReactPointerEvent<HTMLElement>) => void; onDrop: () => void; onTakeOff: () => void;
 }) {
   const words = t.mods;
-  const { page, question, refreshNow, refreshing } = useModPage(mod, true);
+  const { page, question, refreshNow, refreshing, refreshTitle } = useModPage(mod, true);
   const openModSettings = useSessions((s) => s.openModSettings);
   const writer = useSessions((s) => Object.values(s.sessions).find((session) => session.cwd === mod.folder));
   const show = useSessions((s) => s.show);
@@ -294,7 +294,7 @@ function Tile({ mod, box, carried, narrow, onPress, onFollow, onDrop, onTakeOff 
         <span className="cp-mod__title">{mod.name}</span>
         {fresh && <span className="cp-dashboards__news" role="img" aria-label={words.unread} title={words.unread} />}
         <div className="cp-detail__controls">
-          {!mod.draft && <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.reload} title={words.reloadTitle(mod.refresh)} aria-busy={refreshing || undefined} onClick={refreshNow}><RefreshIcon /></button>}
+          {!mod.draft && <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.reload} title={refreshTitle} aria-busy={refreshing || undefined} onClick={refreshNow}><RefreshIcon /></button>}
           <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.settings} title={words.settingsTitle(mod.name)} onClick={() => openModSettings(mod.id)}><SettingsIcon /></button>
           <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.dashboards.takeOff} title={words.dashboards.takeOffTitle(mod.name)} onClick={onTakeOff}><CloseIcon /></button>
         </div>

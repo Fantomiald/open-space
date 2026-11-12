@@ -156,12 +156,13 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'cleanBranches', cwd: '/p', branches: [{ branch: 'os/lina', folder: null, head: 'HEAD', dirty: 0 }] }), null);
   });
 
-  it('takes a mod’s settings with a known icon and pace and distinct variables, and drops the others', () => {
-    const settings = { name: ' Tickets ', description: '', icon: 'list', refresh: 300, env: [{ name: 'TOKEN', value: '' }] };
+  it('takes a mod’s settings with a known icon and pace, a trigger id or null, and distinct variables, and drops the others', () => {
+    const settings = { name: ' Tickets ', description: '', icon: 'list', refresh: 300, refreshTrigger: null, env: [{ name: 'TOKEN', value: '' }] };
     assert.deepEqual(parseClientMessage({ t: 'configureMod', id: 'tickets', settings }), { t: 'configureMod', id: 'tickets', settings: { ...settings, name: 'Tickets' } });
-    for (const wrong of [{ name: '  ' }, { icon: 'rocket' }, { refresh: 42 }, { env: [{ name: 'bad name', value: 'x' }] }, { env: [{ name: 'A', value: '1' }, { name: 'A', value: '2' }] }]) {
+    for (const wrong of [{ name: '  ' }, { icon: 'rocket' }, { refresh: 42 }, { refreshTrigger: '../x' }, { refreshTrigger: undefined }, { env: [{ name: 'bad name', value: 'x' }] }, { env: [{ name: 'A', value: '1' }, { name: 'A', value: '2' }] }]) {
       assert.equal(parseClientMessage({ t: 'configureMod', id: 'tickets', settings: { ...settings, ...wrong } }), null, JSON.stringify(wrong));
     }
+    assert.equal(parseClientMessage({ t: 'configureMod', id: 'tickets', settings: { ...settings, refreshTrigger: '916f9cd5fbc90b8c' } })?.t, 'configureMod');
     assert.equal(parseClientMessage({ t: 'configureMod', id: '../x', settings }), null);
     assert.deepEqual(parseClientMessage({ t: 'modEnv', id: 'tickets' }), { t: 'modEnv', id: 'tickets' });
   });
