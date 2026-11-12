@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { accountsBrowserOf, browserKey, browserMcpConfig, Browsers, chromeArgs, keyEvent, PICTURE_HEAD, picturePart, testerAgent, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, authAnswer, browserKey, browserMcpConfig, Browsers, chromeArgs, FOCUSED_FIELD, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -29,6 +29,17 @@ describe('the Playwright server of a session', () => {
     assert.equal(name, 'playwright');
     assert.equal(server.command, process.platform === 'win32' ? 'cmd.exe' : 'npx');
     assert.deepEqual(server.args, [...(process.platform === 'win32' ? ['/d', '/c', 'npx'] : []), '-y', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
+  });
+
+  it('runs through the filter that hides the session’s keys, when given one', () => {
+    const [, server] = serverOf(browserMcpConfig(ENDPOINT, { web: { command: '/usr/bin/npx', args: ['@playwright/mcp@latest'], env: { PATH: '/bin' } } }, undefined, '/data/bin/playwright-filter.mjs'));
+    assert.equal(server.command, 'node');
+    assert.deepEqual(server.args, ['/data/bin/playwright-filter.mjs', '/usr/bin/npx', '@playwright/mcp@latest', '--cdp-endpoint', ENDPOINT]);
+    assert.deepEqual(server.env, { PATH: '/bin' });
+    const shared = JSON.parse(browserMcpConfig(ENDPOINT, {}, 'http://h/shared', '/f.mjs')).mcpServers;
+    assert.ok(Object.values(shared).every((each) => (each as { args: string[] }).args[0] === '/f.mjs'));
+    const tester = JSON.parse(testerAgents(ENDPOINT, {}, { description: 'd', prompt: 'p' }, 'http://h/shared', false, '/f.mjs'))[testerAgent(1)];
+    assert.ok(tester.mcpServers.every((each: Record<string, { args: string[] }>) => Object.values(each)[0].args[0] === '/f.mjs'));
   });
 
   it('reaches claude with --mcp-config, and the session is told its browser is shown', () => {
@@ -209,5 +220,72 @@ describe('the browser a key opens', () => {
     const browsers = new Browsers({ chrome: null, folder: os.tmpdir(), sessionAlive: () => false, onState: () => {}, log: () => {} });
     await assert.rejects(browsers.version('s1', SHARED_LANE), /no such browser/);
     await assert.rejects(browsers.version('s1', TESTERS + 1), /no such browser/);
+  });
+});
+
+describe('the field os-secret type types into', () => {
+  // the check run in the page, on a document of our own
+  const focused = (doc: unknown) => new Function('document', `return ${FOCUSED_FIELD}`)(doc);
+  const input = (type: string) => ({ tagName: 'INPUT', type });
+
+  it('is a password field, else another field to write in', () => {
+    assert.equal(focused({ activeElement: input('password') }), 'password');
+    assert.equal(focused({ activeElement: input('text') }), 'text');
+    assert.equal(focused({ activeElement: { tagName: 'TEXTAREA' } }), 'text');
+    assert.equal(focused({ activeElement: { tagName: 'DIV', isContentEditable: true } }), 'text');
+    assert.equal(focused({ activeElement: input('submit') }), false);
+    assert.equal(focused({ activeElement: { tagName: 'BODY' } }), false);
+    assert.equal(focused({ activeElement: null }), false);
+  });
+
+  it('is looked for in the frames of the page’s site and in web components, never in another site’s frame', () => {
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: { activeElement: input('password') } } }), 'password');
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: { activeElement: { tagName: 'BODY' } } } }), false, 'no field in the frame');
+    assert.equal(focused({ activeElement: { tagName: 'IFRAME', contentDocument: null } }), 'frame');
+    assert.equal(focused({ activeElement: { tagName: 'LOGIN-FORM', shadowRoot: { activeElement: input('password') } } }), 'password');
+    assert.equal(focused({ activeElement: { tagName: 'LOGIN-FORM', shadowRoot: null } }), false, 'a closed shadow root');
+  });
+});
+
+describe('the login os-secret auth gives a password prompt', () => {
+  const site = 'https://staging.example.org/en';
+
+  it('goes to the site’s own host, once per origin', () => {
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org' }, new Set()), 'login');
+    // http://site asking, then sending to https://site: Chrome asks again, for another origin of the same site
+    assert.equal(authAnswer('http://staging.example.org', { source: 'Server', origin: 'https://staging.example.org' }, new Set(['http://staging.example.org'])), 'login');
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org' }, new Set(['https://staging.example.org'])), 'refused');
+  });
+
+  it('never goes to another host nor to a proxy', () => {
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://login.example.net' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, { source: 'Server', origin: 'https://staging.example.org.example.net' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, { source: 'Proxy', origin: 'https://staging.example.org' }, new Set()), 'elsewhere');
+    assert.equal(authAnswer(site, {}, new Set()), 'elsewhere');
+  });
+});
+
+describe('the tab os-secret type types into', () => {
+  const tabs = [{ id: 'a', url: 'https://tagmanager.google.com/#/container/1', title: '' }, { id: 'b', url: 'https://staging.example.org/login?next=/', title: '' }];
+
+  it('is the one on the site of the address given, else the only one', () => {
+    assert.equal(typingTab(tabs, 'https://staging.example.org')?.id, 'b');
+    assert.equal(typingTab(tabs, 'https://staging.example.org/login')?.id, 'b');
+    assert.equal(typingTab(tabs, 'https://staging.example.org/admin'), undefined);
+    assert.equal(typingTab(tabs, 'https://other.example.org/'), undefined);
+    // several tabs: never the one the view shows, which may be another site's (a tab a page opened)
+    assert.equal(typingTab(tabs, ''), undefined);
+    assert.equal(typingTab(tabs.slice(0, 1), '')?.id, 'a');
+  });
+
+  it('is never a site whose address only starts like the one given', () => {
+    const lookalikes = [{ id: 'c', url: 'https://staging.example.org.attacker.net/login', title: '' }, { id: 'd', url: 'https://staging.example.org:8443/', title: '' }, { id: 'e', url: 'http://staging.example.org/', title: '' }];
+    assert.equal(typingTab(lookalikes, 'https://staging.example.org'), undefined);
+    assert.equal(typingTab([...lookalikes, ...tabs], 'https://staging.example.org')?.id, 'b');
+  });
+
+  it('is told back without its query nor fragment', () => {
+    assert.equal(shortAddress('https://staging.example.org/login?token=abc#x'), 'https://staging.example.org/login');
+    assert.equal(shortAddress('about:blank#open-space-helper'), 'about:blank');
   });
 });

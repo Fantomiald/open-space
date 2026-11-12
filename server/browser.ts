@@ -20,7 +20,7 @@ import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserT
 import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import type { AccountsBrowser } from '../shared/protocol.ts';
 import { asArray, asJson, isJson } from './json.ts';
-import { cookiesToClear, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
+import { cookiesToClear, hostOf, isKept, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
 import { signalTree } from './process-tree.ts';
 
@@ -78,6 +78,63 @@ export function chromeArgs(profile: string, shared: boolean): string[] {
   ];
 }
 
+/**
+ * The address a tab Open Space opens for itself starts on (an `os-secret auth` sign-in): no view shows it, and its closing does
+ * not stop a session's browser left with blank tabs only. In the shared browser it has no owner, like any tab without one.
+ */
+export const HELPER_TAB = 'about:blank#open-space-helper';
+
+/** How long a site may take to answer `os-secret auth`'s sign-in (Browsers.signIn). */
+const SIGN_IN_TIMEOUT_MS = 20_000;
+/** How long a refused or failed sign-in's tab may take to show its page before it is closed anyway. */
+const CLOSE_WAIT_MS = 2_000;
+
+/**
+ * The field that has focus in a page, looked for down the frames of the page's own site and the web components (open shadow
+ * roots): 'password', 'text' (another input, a text area, an editable element), 'frame' (the focus is in a frame of another
+ * site, whose field is not checked) or false.
+ */
+export const FOCUSED_FIELD = `(() => { let root = document; for (;;) { const at = root.activeElement; if (!at) return false;
+  if (at.shadowRoot && at.shadowRoot.activeElement) { root = at.shadowRoot; continue; }
+  if (at.tagName === 'IFRAME') { root = at.contentDocument; if (!root) return 'frame'; continue; }
+  if (at.tagName === 'INPUT' && at.type === 'password') return 'password';
+  if (at.isContentEditable || at.tagName === 'TEXTAREA') return 'text';
+  return at.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(at.type) ? 'text' : false; } })()`;
+
+/**
+ * What `os-secret auth` answers a password prompt met on the way to `site`: the login ('login') when the site's own host asks
+ * (any scheme or port: http://site sending to https://site is asked again), once per origin; the same origin asking again
+ * has refused it ('refused'); another host or a proxy never gets it ('elsewhere').
+ */
+export function authAnswer(site: string, challenge: { source?: unknown; origin?: unknown }, answered: ReadonlySet<string>): 'login' | 'refused' | 'elsewhere' {
+  const origin = typeof challenge.origin === 'string' ? challenge.origin : '';
+  if (challenge.source !== 'Server' || !URL.canParse(origin) || new URL(origin).hostname !== new URL(site).hostname) return 'elsewhere';
+  return answered.has(origin) ? 'refused' : 'login';
+}
+
+/** Whether `address` is on the site (scheme, host and port) of `url`, under its path. */
+function onSite(address: string, url: string): boolean {
+  try {
+    const at = new URL(address);
+    const wanted = new URL(url);
+    return at.origin === wanted.origin && at.pathname.startsWith(wanted.pathname);
+  } catch { return false; }
+}
+
+/**
+ * The tab `os-secret type` types into: the first on the site of `url`, else the only one. Never the one the view shows: a
+ * tab a page opened becomes it, while the agent goes on in its own (Playwright stays there), so it may be another site's.
+ */
+export function typingTab(tabs: readonly BrowserTab[], url: string): BrowserTab | undefined {
+  if (url) return tabs.find((tab) => onSite(tab.url, url));
+  return tabs.length === 1 ? tabs[0] : undefined;
+}
+
+/** A tab's address as `os-secret` tells it back: without its query nor fragment, which may hold a token. */
+export function shortAddress(url: string): string {
+  try { const at = new URL(url); return at.origin === 'null' ? url.split(/[?#]/)[0] : `${at.origin}${at.pathname}`; } catch { return url.split(/[?#]/)[0]; }
+}
+
 /** The key in the CDP endpoint given to a session: without it, another program of the machine cannot launch its browser. */
 export const browserKey = (secret: string, sessionId: string) => createHmac('sha256', secret).update(`browser:${sessionId}`).digest('hex').slice(0, 32);
 
@@ -89,8 +146,11 @@ const BROWSER_FLAGS: Record<string, number> = {
 
 type McpServer = Record<string, unknown> & { command?: string; args?: string[] };
 
-/** The user's own Playwright server (from ~/.claude.json), else `npx @playwright/mcp`, pointed at `endpoint`. */
-function playwrightServer(endpoint: string, userServers: Record<string, unknown>): { name: string; server: McpServer } {
+/**
+ * The user's own Playwright server (from ~/.claude.json), else `npx @playwright/mcp`, pointed at `endpoint`, and run through
+ * `filter` (server/playwright-filter.ts), which hides the session's keys in what it answers.
+ */
+function playwrightServer(endpoint: string, userServers: Record<string, unknown>, filter?: string): { name: string; server: McpServer } {
   const found = Object.entries(userServers).find(([name, raw]) => {
     const server = asJson(raw);
     return name === 'playwright' || (Array.isArray(server.args) && server.args.some((arg) => typeof arg === 'string' && arg.includes('@playwright/mcp')));
@@ -105,7 +165,9 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
     if (flag in BROWSER_FLAGS) { if (inline === undefined) at += BROWSER_FLAGS[flag]; continue; }
     args.push(given[at]);
   }
-  return { name: found?.[0] ?? 'playwright', server: { ...base, args: [...args, '--cdp-endpoint', endpoint] } };
+  const server = { ...base, args: [...args, '--cdp-endpoint', endpoint] };
+  const filtered = filter && typeof server.command === 'string' ? { ...server, command: 'node', args: [filter, server.command, ...server.args] } : server;
+  return { name: found?.[0] ?? 'playwright', server: filtered };
 }
 
 /**
@@ -132,9 +194,9 @@ export function hasSharedBrowser(mcpConfig: string | undefined): boolean {
  * The --mcp-config of a session: its Playwright server (same name as the user's, so it takes its place) on its browser,
  * and with `sharedEndpoint` a second one on the shared browser.
  */
-export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>, sharedEndpoint?: string): string {
-  const { name, server } = playwrightServer(endpoint, userServers);
-  const shared = sharedEndpoint ? { [SHARED_SERVER]: playwrightServer(sharedEndpoint, userServers).server } : {};
+export function browserMcpConfig(endpoint: string, userServers: Record<string, unknown>, sharedEndpoint?: string, filter?: string): string {
+  const { name, server } = playwrightServer(endpoint, userServers, filter);
+  const shared = sharedEndpoint ? { [SHARED_SERVER]: playwrightServer(sharedEndpoint, userServers, filter).server } : {};
   return JSON.stringify({ mcpServers: { [name]: server, ...shared } });
 }
 
@@ -151,10 +213,10 @@ export const testerLane = (type: string) => Number(/^browser-tester-(\d+)$/.exec
  * Code runs a single server for every run of a same agent, which would have them share a tab. The server has a name
  * of its own, and the session's Playwright tools are kept from it, like the user's own Chrome when the session has it (`chrome`).
  */
-export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string, chrome = false): string {
+export function testerAgents(endpoint: string, userServers: Record<string, unknown>, words: { description: string; prompt: string; shared?: string }, sharedEndpoint?: string, chrome = false, filter?: string): string {
   return JSON.stringify(Object.fromEntries(Array.from({ length: TESTERS }, (_, at) => {
     const lane = at + 1;
-    const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers);
+    const { name, server } = playwrightServer(`${endpoint}/lane/${lane}`, userServers, filter);
     const own = `tester-browser-${lane}`;
     if (!sharedEndpoint) return [testerAgent(lane), { description: words.description, prompt: words.prompt.replaceAll('tester-browser', own), mcpServers: [{ [own]: server }], disallowedTools: [`mcp__${name}`, ...(chrome ? [`mcp__${CHROME_SERVER}`] : [])] }];
     // its tabs of the shared browser are its own too, apart from the session's
@@ -162,7 +224,7 @@ export function testerAgents(endpoint: string, userServers: Record<string, unkno
     return [testerAgent(lane), {
       description: words.description,
       prompt: `${words.prompt}${words.shared ?? ''}`.replaceAll('tester-browser', own).replaceAll(SHARED_SERVER, shared),
-      mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers).server }],
+      mcpServers: [{ [own]: server }, { [shared]: playwrightServer(`${sharedEndpoint}/lane/${lane}`, userServers, filter).server }],
       disallowedTools: [`mcp__${name}`, `mcp__${SHARED_SERVER}`],
     }];
   })));
@@ -348,9 +410,116 @@ export class Browsers {
    * A cookie of `os-secret cookie` (server/secrets.ts) in the session's own browser, launched if needed. A session cookie:
    * it goes with the browser, nothing of the key stays in the profile.
    */
-  async setCookie(sessionId: string, cookie: { name: string; value: string; url: string }) {
-    const live = await this.ensure(sessionId);
-    await live.chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
+  async setCookie(sessionId: string, cookie: { name: string; value: string; url: string }, shared = false) {
+    // the user's own accounts (Google…) are kept in the shared browser: no session overwrites them, as its filter refuses too
+    if (shared && isKept(hostOf(cookie.url))) throw new Error('that site holds your own accounts in the shared browser');
+    const chrome = shared ? (await this.ensureShared()).chrome : (await this.ensure(sessionId)).chrome;
+    if (shared) this.visitedBy(sessionId, cookie.url);
+    await chrome.cdp.send('Storage.setCookies', { cookies: [cookie] });
+  }
+
+  /** A site a session reached in the shared browser without a tab (a cookie or a login it set): cleared when it goes, and at the next launch. */
+  private visitedBy(sessionId: string, url: string) {
+    this.visited(this.sharedTabs.visitAs(browserId(sessionId), url));
+  }
+
+  /**
+   * `os-secret type` (server/secrets.ts): the key typed into the field that has focus in a tab of the session's own browser,
+   * or of its own tabs in the shared one (its lane's and its testers', never another session's), as a paste would
+   * (Input.insertText), on a connection of Open Space's own. The tab on the site of `url`, else its only one (typingTab). A
+   * password field only, unless `anyField`: another field may show the key back on the page. Answers the tab's address (shortAddress).
+   */
+  async typeInto(sessionId: string, value: string, url: string, shared: boolean, anyField = false): Promise<string> {
+    const mine = shared ? this.shared : this.live.get(browserId(sessionId));
+    if (!mine) throw new Error(`your ${shared ? 'shared ' : ''}browser is not open`);
+    const tabs = shared ? this.sharedTabs.tabsOfSession(sessionId).flatMap((id) => this.shared?.tabs.get(id) ?? []) : [...mine.tabs.values()];
+    const tab = typingTab(tabs, url);
+    if (!tab) throw new Error(url ? `no tab of yours is on ${url}` : tabs.length ? 'several tabs: give the address of the one to type in (https://site/…)' : 'no tab of yours is open');
+    const cdp = new Cdp(mine.chrome.socket, () => {}, () => {});
+    try {
+      await cdp.opened;
+      const session = String((await cdp.send('Target.attachToTarget', { targetId: tab.id, flatten: true })).sessionId);
+      const focused = asJson((await cdp.send('Runtime.evaluate', { expression: FOCUSED_FIELD, returnByValue: true }, session)).result).value;
+      if (focused === 'frame') throw new Error(`the field that has focus in ${shortAddress(tab.url)} is in a frame of another site`);
+      if (focused !== 'password' && focused !== 'text') throw new Error(`no field to type in has focus in ${shortAddress(tab.url)}: click in it first`);
+      if (focused === 'text' && !anyField) throw new Error(`the field that has focus in ${shortAddress(tab.url)} is not a password field: add --any-field to type the key into it (the page may show it back)`);
+      await cdp.send('Input.insertText', { text: value }, session);
+    } finally {
+      cdp.close();
+    }
+    return shortAddress(tab.url);
+  }
+
+  /**
+   * A site's basic-auth login (`os-secret auth`, server/secrets.ts) in the session's own browser: never the shared one, where
+   * Chrome would keep it after the session (no CDP call clears its login cache). A tab of Open Space's own, on a connection of
+   * its own, opens the address and answers the password prompts of the site's host only (authAnswer; Fetch auth, at the
+   * request stage: a 401 paused at the response stage never reaches the prompt, checked with Chrome 156). Only that page
+   * loads, its scripts off: nothing of the site runs there (no tag, no analytics hit), and the login is in no address. A page
+   * that asks for no login is a failure. Chrome keeps it for that site (by its realm, whatever the path) and sends it by
+   * itself with every page and call afterwards, in memory only, until that Chrome closes.
+   */
+  async signIn(sessionId: string, site: string, login: { username: string; password: string }) {
+    const { chrome } = await this.ensure(sessionId);
+    const refused = () => new Error('the site refused this user and password');
+    let tab = '';
+    let targetId = '';
+    let navigating = false;
+    // the page's own answer once signed in: a 403 or 500 after the login is no way in
+    let status = 0;
+    // the origins given the login (authAnswer)
+    const answered = new Set<string>();
+    let done!: { resolve: () => void; reject: (error: Error) => void };
+    let loaded!: () => void;
+    const settled = new Promise<void>((resolve) => { loaded = resolve; });
+    const outcome = new Promise<void>((resolve, reject) => { done = { resolve, reject }; });
+    // awaited below: a failure before that (the browser closing meanwhile) must not end Open Space as an unhandled rejection
+    outcome.catch(() => {});
+    const cdp = new Cdp(chrome.socket, (method, params, session) => {
+      if (session !== tab) return;
+      const requestId = params.requestId;
+      if (method === 'Fetch.authRequired') {
+        const challenge = asJson(params.authChallenge);
+        const answer = authAnswer(site, challenge, answered);
+        if (answer === 'login') answered.add(String(challenge.origin));
+        void cdp.send('Fetch.continueWithAuth', { requestId, authChallengeResponse: answer === 'login' ? { response: 'ProvideCredentials', ...login } : { response: 'CancelAuth' } }, tab).catch(() => {});
+        if (answer === 'refused') done.reject(refused());
+        if (answer === 'elsewhere') done.reject(new Error(`${challenge.source === 'Proxy' ? 'a proxy' : String(challenge.origin)} asked for the login, not ${new URL(site).origin}: not given`));
+      } else if (method === 'Fetch.requestPaused') {
+        const page = params.resourceType === 'Document' && params.frameId === targetId;
+        void cdp.send(page ? 'Fetch.continueRequest' : 'Fetch.failRequest', page ? { requestId } : { requestId, errorReason: 'Aborted' }, tab).catch(() => {});
+      } else if (method === 'Network.responseReceived' && params.type === 'Document' && params.frameId === targetId) {
+        status = Number(asJson(params.response).status) || 0;
+      } else if (method === 'Page.loadEventFired' && navigating) {
+        // not at Page.navigate's answer: Chrome may still be committing the page then, and ignores a close meanwhile
+        loaded();
+        if (answered.size && status >= 400) done.reject(new Error(`the site took the login but answered ${status}`));
+        else if (answered.size) done.resolve();
+        else done.reject(new Error('this page asked for no login (or this browser is signed in to it already): give the address of a page behind the password prompt'));
+      }
+    }, () => done.reject(new Error('browser closed')));
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await cdp.opened;
+      targetId = String((await cdp.send('Target.createTarget', { url: HELPER_TAB, background: true })).targetId);
+      tab = String((await cdp.send('Target.attachToTarget', { targetId, flatten: true })).sessionId);
+      await cdp.send('Page.enable', {}, tab);
+      await cdp.send('Network.enable', {}, tab);
+      await cdp.send('Emulation.setScriptExecutionDisabled', { value: true }, tab);
+      await cdp.send('Fetch.enable', { handleAuthRequests: true, patterns: [{ urlPattern: '*' }] }, tab);
+      navigating = true;
+      cdp.send('Page.navigate', { url: site }, tab).then(({ errorText }) => {
+        if (errorText) done.reject(errorText === 'net::ERR_INVALID_AUTH_CREDENTIALS' ? refused() : new Error(String(errorText)));
+      }, (error: Error) => done.reject(error));
+      timer = setTimeout(() => done.reject(new Error('the site did not answer')), SIGN_IN_TIMEOUT_MS);
+      await outcome;
+    } finally {
+      clearTimeout(timer);
+      // a refused login still shows Chrome's 401 page: closed once there too, if it comes
+      await Promise.race([settled, new Promise((resolve) => setTimeout(resolve, CLOSE_WAIT_MS))]);
+      if (targetId) await cdp.send('Target.closeTarget', { targetId }).catch((error) => this.deps.log('cannot close the sign-in tab', error));
+      cdp.close();
+    }
   }
 
   /** What Playwright asks for before connecting: the browser's own /json/version, with its WebSocket address. */
@@ -595,6 +764,13 @@ export class Browsers {
       return;
     }
     const info = asJson(params.targetInfo);
+    // Open Space's own tab, known by its first address (Chrome may tell it only once the tab exists): out of the view
+    if ((method === 'Target.targetCreated' || method === 'Target.targetInfoChanged') && info.url === HELPER_TAB) {
+      if (!live.tabs.delete(String(info.targetId))) return;
+      if (live.active === info.targetId) this.show(id, live, [...live.tabs.keys()].at(-1) ?? null);
+      else this.deps.onState(id, this.state(id));
+      return;
+    }
     if (method === 'Target.targetCreated' && info.type === 'page') {
       const tab = { id: String(info.targetId), url: String(info.url ?? ''), title: String(info.title ?? '') };
       live.tabs.set(tab.id, tab);

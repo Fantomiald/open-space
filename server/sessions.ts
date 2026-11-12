@@ -346,7 +346,7 @@ export class SessionManager {
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
       onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
       onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
-      sharedBrowser: () => hasSharedBrowser(this.launchedBrowsers.get(info.id)?.mcpConfig),
+      sharedBrowser: () => this.hasSharedBrowser(info.id),
       chrome: () => !!this.launchedBrowsers.get(info.id)?.chrome,
       ...(this.deps.secrets ? { secretNames: () => this.deps.secrets?.store.names(info.id) ?? [] } : {}),
       identity: this.deps.identity,
@@ -419,6 +419,9 @@ export class SessionManager {
 
   /** the session has a Claude Code process running */
   isAlive(sessionId: string): boolean { return !!this.sessions.get(sessionId)?.alive; }
+
+  /** Whether the session's process was given the shared browser (server/shared-browser.ts). */
+  hasSharedBrowser(sessionId: string): boolean { return hasSharedBrowser(this.launchedBrowsers.get(sessionId)?.mcpConfig); }
   getCommands(): SlashCommand[] { return this.commands; }
   getFolderCommands(): Record<string, SlashCommand[]> { return Object.fromEntries(this.folderCommands); }
   getModels(): ModelChoice[] { return this.models; }

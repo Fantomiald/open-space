@@ -52,6 +52,7 @@ import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './mu
 import { modKey, Mods, modsFolder } from './mods.ts';
 import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
+import { installFilter } from './playwright-filter.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
 import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
@@ -136,13 +137,15 @@ function browserMcp(sessionId: string, untrusted: boolean, chosen: AccountsBrows
   if (!browsers.available) return chrome;
   const endpoint = `http://${HOST}:${config.port}/browser/${sessionId}/cdp/${browserKey(secret, sessionId)}`;
   const shared = accounts === 'shared' ? `http://${HOST}:${config.port}/browser/${sessionId}/shared/${sharedKey(sessionId)}` : undefined;
-  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome') };
+  return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared, playwrightFilter), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome', playwrightFilter) };
 }
 
 /** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */
 const secretStore = new SecretStore((sessionId) => sessions.secretsChanged(sessionId));
 setInterval(() => secretStore.sweep(), 60_000).unref();
 const secretsBin = installScript(config.dataDir);
+/** the filter around the sessions' Playwright servers, which hides their keys in what those answer (server/playwright-filter.ts) */
+const playwrightFilter = installFilter(config.dataDir);
 function secretsEnv(sessionId: string): Record<string, string> {
   const searchPath = buildClaudeEnvironment(process.env, config.passthrough).PATH;
   return {
@@ -433,6 +436,12 @@ prepareSounds(config.dataDir, log);
 const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
 const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, port: config.modsPort, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
 await mods.prepare();
+/** Checks a session may use its browser for `os-secret` (the shared one: only if it was given it). */
+function browserOf(sessionId: string, shared: boolean) {
+  if (!browsers.available) throw new Error(st.sessions.noBrowser);
+  if (shared && !sessions.hasSharedBrowser(sessionId)) throw new Error('this session has no shared browser');
+}
+
 const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
@@ -444,10 +453,9 @@ const { server, hooksServer, modsServer } = createWebServer({ policy, port: conf
     answer: (sessionId, action, form) => answerSecrets({ sessionId, action, form }, {
       store: secretStore, roots: () => config.roots,
       ask: (id, names, why) => sessions.askSecrets(id, names, why),
-      setCookie: (id, cookie) => {
-        if (!browsers.available) throw new Error(st.sessions.noBrowser);
-        return browsers.setCookie(id, cookie);
-      },
+      setCookie: (id, cookie, shared) => { browserOf(id, shared); return browsers.setCookie(id, cookie, shared); },
+      signIn: (id, { url, username, password }) => { browserOf(id, false); return browsers.signIn(id, url, { username, password }); },
+      type: (id, { value, url, shared, anyField }) => { browserOf(id, shared); return browsers.typeInto(id, value, url, shared, anyField); },
     }),
   },
   hooks: async (id, token, body) => {

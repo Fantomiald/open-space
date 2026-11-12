@@ -20,7 +20,7 @@ export const KEPT_SITES: readonly string[] = ['google.com', 'youtube.com'];
 const LOCAL_GOOGLE = /(?:^|\.)google\.(?:com?\.)?[a-z]{2}$/;
 
 const NONCE = /#os-([0-9a-f]{16})$/;
-const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ''; } };
+export const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ''; } };
 /** A web page's origin (its storage is the origin's, port included), none for another scheme. */
 const originOf = (url: string) => { try { return /^https?:$/.test(new URL(url).protocol) ? new URL(url).origin : ''; } catch { return ''; } };
 
@@ -87,8 +87,13 @@ export class SharedTabs {
   /** A page an owner's tab went to: its site is cleared when the owner goes. Its origin, unless kept or not on the web. */
   visit(targetId: string, url: string): string | undefined {
     const owner = this.owners.get(targetId);
+    return owner ? this.visitAs(owner, url) : undefined;
+  }
+
+  /** A site an owner reached without a tab of its own (`os-secret cookie` or `auth`): cleared when it goes, like its visits. */
+  visitAs(owner: string, url: string): string | undefined {
     const origin = originOf(url);
-    if (!owner || !origin || isKept(hostOf(origin))) return undefined;
+    if (!origin || isKept(hostOf(origin))) return undefined;
     const origins = this.visited.get(owner) ?? new Set<string>();
     origins.add(origin);
     this.visited.set(owner, origins);
