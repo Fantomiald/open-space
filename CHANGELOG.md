@@ -1,5 +1,9 @@
 # Versions
 
+## 1.35.1
+
+- Mods : les réglages d'un mod choisissent ce que fait son bouton ↻ : recharger la page, ou relancer un automate. Dans ce cas le bouton tourne pendant que l'automate travaille, puis la page se recharge à la fin du run. Le rafraîchissement tout seul (toutes les 5 min…) ne fait toujours que recharger, pour ne pas lancer une session à chaque fois.
+
 ## 1.35.0
 
 - Dashboards : un point orange suit ce qui a du nouveau, sur le bouton Dashboards, sur l'onglet du dashboard qui contient le mod, puis à côté du titre de sa tuile jusqu'au survol. Les onglets et boutons des dashboards montent dans la barre du haut, à la place de la radio et des projets (la musique continue) : la grille gagne une ligne.
