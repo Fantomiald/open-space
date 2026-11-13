@@ -1520,6 +1520,7 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-status__count[data-kind='waiting'] { background: var(--tone-permission); color: var(--color-accent-text); }
 .cp-status__count[data-kind='working'] { background: var(--tone-work-soft); color: var(--tone-work); }
 .cp-status__count[data-kind='ready'] { background: var(--tone-idle-soft); color: var(--tone-idle); }
+.cp-status__count[data-kind='pending'] { background: var(--tone-permission-soft); color: var(--tone-permission); }
 .cp-status__count[data-kind='automata'] { gap: var(--space-1); grid-auto-flow: column; background: var(--tone-work-soft); color: var(--tone-work); }
 .cp-status__count svg, .cp-status__automaton svg { width: 0.85em; height: 0.85em; }
 .cp-status__automaton { display: inline-flex; flex: none; color: var(--color-text-muted); }
@@ -1561,6 +1562,18 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-status__item[data-kind='error'] .cp-status__dot { background: var(--tone-error); }
 .cp-status__item[data-kind='ready'] .cp-status__dot { background: var(--tone-idle); }
 .cp-status__item[data-kind='working'] .cp-status__dot { background: var(--tone-work); animation: cp-status-pulse 1.6s ease-in-out infinite; }
+.cp-status__item[data-kind='pending'] .cp-status__dot { background: var(--tone-permission); }
+.cp-status__item[data-kind='git'] .cp-status__dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--tone-idle); }
+/* a pending line: the row, then its two small actions */
+.cp-status__pending { display: flex; align-items: center; gap: var(--space-1); }
+.cp-status__pending .cp-status__item { flex: 1; min-width: 0; }
+/* what is left pending is the point of the row: it gets a line of its own, under the name */
+.cp-status__pending .cp-status__label { flex-direction: column; align-items: stretch; gap: 0; }
+.cp-status__head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.cp-status__head .cp-status__time { margin-left: auto; }
+.cp-status__pending .cp-status__notes { flex: none; min-width: 0; }
+.cp-status__action { flex: none; width: 1.75rem; height: 1.75rem; color: var(--color-text-muted); }
+.cp-status__action .cp-icon { width: 0.875rem; height: 0.875rem; }
 .cp-status__compact { display: inline-grid; place-items: center; width: 0.875rem; color: var(--tone-compact); }
 .cp-status__compact .cp-icon { width: 0.875rem; height: 0.875rem; }
 .cp-status__item[data-kind='compacting'] .cp-status__notes { color: var(--tone-compact); }

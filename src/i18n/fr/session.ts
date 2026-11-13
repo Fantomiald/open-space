@@ -373,6 +373,16 @@ export const session = {
     scheduled: (count: number) => (count === 1 ? '1 réveil prévu' : `${count} réveils prévus`),
     fold: 'Replier',
     unfold: 'Déplier',
+    pending: 'En suspens',
+  },
+  /** what a session leaves pending, in the Status panel (src/state/pending.ts) */
+  pending: {
+    dirty: (count: number) => (count === 1 ? '1 fichier pas commité' : `${count} fichiers pas commités`),
+    unpushed: (count: number) => (count === 1 ? '1 commit pas poussé' : `${count} commits pas poussés`),
+    neverPushed: 'branche jamais poussée',
+    resume: 'Reprendre',
+    resumeText: (text: string) => `Reprends : ${text}`,
+    dismiss: 'Écarter',
   },
   todo: {
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,

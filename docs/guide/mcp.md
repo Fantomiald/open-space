@@ -58,6 +58,7 @@ The key is kept in `mcp-key` under `OFFICE_DIR`.
 | `answer_permission` | External | Answers what a session waits for: a permission with `allow`, `deny` or `always` (when offered), or a question with its answers. A request for keys can only be answered in Open Space. |
 | `send_file` | Session, bot | Sends a file to your Telegram chat by its absolute path, with an optional caption. The bot is optional when you have only one. |
 | `rename_session` | Session | Renames the calling session. |
+| `set_pending` | Session | Sets what the calling session leaves pending, one short line per item (8 at most), replacing the previous list: a PR to open, a key to provide. An empty list clears it. The lines show in the Status panel, under « Left pending ». |
 | `finish_run` | Session | For a trigger's run only: says the task is done. The session closes at the end of the turn, and its conversation stays in Resume. Anywhere else it returns an error. |
 
 No tool switches a session off: do that from the interface. See [Sessions](sessions.md).

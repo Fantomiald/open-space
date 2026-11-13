@@ -1,5 +1,9 @@
 # Versions
 
+## Non publiée
+
+- En suspens : le panneau État a une section de plus, ce que les sessions laissent derrière elles. Ce que l'agent dit rester à faire (outil MCP `set_pending` : une PR à ouvrir, une clé à fournir), avec depuis quand, puis ce que git dit de son dossier : fichiers pas commités, commits pas poussés, branche jamais poussée. Une ligne se reprend d'un clic (le message « Reprends : … » part à la session) ou s'écarte ; ce que dit git disparaît une fois commité et poussé.
+
 ## 1.35.4
 
 - Bulles d'aide : survoler une icône (Réglages, Focus, Mods, Interrompre…) affiche son nom après un court instant, aux couleurs d'Open Space et sans sortir de la fenêtre. Elle s'affiche aussi au clavier (Tab) et se ferme avec Échap (PR #54 de Guillaume).

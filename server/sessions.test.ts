@@ -1,10 +1,11 @@
 import type { AsideRunner } from './aside.ts';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import type { AccountsBrowser, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, GitPending, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { CatalogProbe, ElicitationAnswer, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
@@ -114,6 +115,14 @@ function setup(overrides: Partial<Config> = {}, dataDir = path.join(base, `data-
 }
 
 const projectA = () => path.join(root, 'project-a');
+
+async function until(condition: () => boolean, ms = 3000) {
+  const deadline = Date.now() + ms;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('condition not met in time');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 describe('side questions (/btw)', () => {
   it('asks a reply with the exchange so far, and starts over after a new question', async () => {
@@ -676,6 +685,99 @@ describe('tags', () => {
     await second.manager.init();
     assert.deepEqual(second.find(id).tags, ['urgent']);
     await second.manager.shutdown();
+  });
+});
+
+describe('what a session leaves pending', () => {
+  const turn = (process: { handlers: ProcessHandlers }, conversation: string) => {
+    process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
+    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 5 });
+  };
+
+  it('keeps the list across a restart, lets the user set a line aside, and empties it with none', async () => {
+    const dataDir = path.join(base, `data-pending-${++counter}`);
+    const first = setup({}, dataDir);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'hi' });
+    first.manager.setPending(id, ['Pas poussé', 'PR à ouvrir']);
+    await first.manager.shutdown();
+    const second = setup({}, dataDir);
+    await second.manager.init();
+    const kept = second.find(id).pending ?? [];
+    assert.deepEqual(kept.map((item) => item.text), ['Pas poussé', 'PR à ouvrir']);
+    second.manager.dismissPending(id, kept[0].id);
+    assert.deepEqual(second.find(id).pending?.map((item) => item.text), ['PR à ouvrir']);
+    second.manager.setPending(id, []);
+    assert.equal(second.find(id).pending, undefined);
+    await second.manager.shutdown();
+  });
+
+  it('forgets the list on /clear, with the conversation', async () => {
+    const { manager, processes, find } = setup({});
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'hi' });
+    turn(processes[0], id);
+    manager.setPending(id, ['Pas poussé']);
+    manager.send(id, '/clear');
+    turn(processes[0], 'new-conversation');
+    assert.equal(find(id).pending, undefined);
+    await manager.shutdown();
+  });
+
+  it('reads what git says its folder holds after a turn, and forgets it once all is committed', async () => {
+    const folder = path.join(root, `project-git-${++counter}`);
+    mkdirSync(folder, { recursive: true });
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd: folder, stdio: 'ignore' });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(path.join(folder, 'notes.md'), 'draft\n');
+    const { manager, processes, find } = setup({});
+    await manager.init();
+    const { id } = await manager.create({ cwd: folder, text: 'hi' });
+    turn(processes[0], id);
+    await until(() => find(id).git !== undefined);
+    assert.deepEqual(find(id).git, { dirty: 1, unpushed: 0, noUpstream: false, branch: 'main' });
+    git('add', '.');
+    git('commit', '-q', '-m', 'notes');
+    git('branch', '-q', 'keep');
+    manager.send(id, 'again');
+    turn(processes[0], id);
+    await until(() => find(id).git === undefined);
+    await manager.shutdown();
+  });
+
+  it('keeps what the latest read of git says when an older one ends after it', async () => {
+    const reads: ((git: GitPending | null) => void)[] = [];
+    const readGit = () => new Promise<GitPending | null>((resolve) => reads.push(resolve));
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { readGit });
+    await manager.init();
+    const folder = path.join(root, `project-reads-${++counter}`);
+    mkdirSync(folder, { recursive: true });
+    const { id } = await manager.create({ cwd: folder, text: 'hi' });
+    turn(processes[0], id);
+    await until(() => reads.length === 1);
+    manager.send(id, 'again');
+    turn(processes[0], id);
+    await until(() => reads.length === 2);
+    reads[1](null);
+    reads[0]({ dirty: 1, unpushed: 0, noUpstream: false, branch: 'main' });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(find(id).git, undefined);
+    await manager.shutdown();
+  });
+
+  it('never reads git in a folder that was not trusted', async () => {
+    const folder = path.join(root, `project-hooks-${++counter}`);
+    mkdirSync(path.join(folder, '.claude'), { recursive: true });
+    writeFileSync(path.join(folder, '.claude', 'settings.json'), JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'echo hi' }] }] } }));
+    const read: string[] = [];
+    const readGit = async (cwd: string) => { read.push(cwd); return null; };
+    const { manager, processes, find } = setup({}, undefined, undefined, path.join(base, 'no-home'), undefined, { readGit });
+    await manager.init();
+    const { id } = await manager.create({ cwd: folder, text: 'hi', trust: 'restricted' });
+    turn(processes[0], id);
+    await until(() => find(id).state === 'wait');
+    assert.deepEqual(read, []);
+    await manager.shutdown();
   });
 });
 

@@ -176,8 +176,8 @@ export interface LaunchOptions {
  *   Claude Code also needs the account in Anthropic's rollout (growthbook flag tengu_chomp_inflection), else it sends none:
  *   CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=1 skips that check (checked with 2.1.311).
  */
-/** What a trigger's run does to its own session without asking: name itself, say it is done (server/mcp.ts). */
-const RUN_TOOLS = ['rename_session', 'finish_run'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
+/** What a trigger's run does to its own session without asking: name itself, say it is done, say what is left pending (server/mcp.ts). */
+const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 
 export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
   const args = [
@@ -207,7 +207,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.promptSuggestions) args.push('--prompt-suggestions');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run, !!options.openSpaceMcp));
   return args;
 }
 
@@ -228,9 +228,9 @@ export function hiddenRules(files: readonly string[]): string[] {
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false, run = false): string {
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false, run = false, pending = false): string {
   const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared, chrome);
-  return [identity, ...(worktree ? [st.prompt.worktree(worktree)] : []), ...(run ? [st.prompt.run] : [])].join('\n\n');
+  return [identity, ...(pending ? [st.prompt.pending(user.trim())] : []), ...(worktree ? [st.prompt.worktree(worktree)] : []), ...(run ? [st.prompt.run] : [])].join('\n\n');
 }
 
 /**

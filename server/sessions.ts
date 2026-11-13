@@ -18,7 +18,7 @@ import type { SecretStore } from './secrets.ts';
 import type { SecretEntry } from '../shared/secrets.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
-import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, InspectView, McpAction, MergeProblem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, GitPending, InspectView, McpAction, MergeProblem, PendingItem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
@@ -29,6 +29,8 @@ import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
 import { storedTags } from '../shared/tags.ts';
+import { cleanPending } from '../shared/pending.ts';
+import { readGitPending } from './pending-git.ts';
 import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
@@ -97,6 +99,8 @@ export interface SessionManagerDeps {
   openSpaceMcp?: (sessionId: string, untrusted: boolean) => string | undefined;
   /** the keys the user gives the sessions, and the variables that let a session's os-secret reach them (server/secrets.ts) */
   secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
+  /** what git says a folder holds that is not committed or not pushed (server/pending-git.ts) */
+  readGit?: (cwd: string) => Promise<GitPending | null>;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -108,6 +112,8 @@ const HIDDEN_WINDOW = 'seven_day_overage_included';
 export class SessionManager {
   private sessions = new Map<string, Session>();
   private logs = new Map<string, SessionLog>();
+  /** the latest read of git for each session: an older read that ends after it is dropped (refreshGit) */
+  private gitReads = new Map<string, number>();
   private commandNames: string[] = [];
   private commandDetails = new Map<string, SlashCommand>();
   /** the commands of each session folder, as probed (see probeFolder) */
@@ -163,6 +169,7 @@ export class SessionManager {
     this.save();
     this.sweep();
     await this.checkWorktrees();
+    for (const id of this.sessions.keys()) void this.refreshGit(id);
     void this.fillContexts();
     void this.probeAll();
     // Remote Control was on when the server stopped: back on, on the same session of claude.ai
@@ -814,6 +821,7 @@ export class SessionManager {
   private onTurnEnd(id: string, how: TurnEnd) {
     if (how === 'done') this.idleCompactPaused = false;
     if (this.switchingBrowsers.has(id)) this.switchBrowsers(id);
+    void this.refreshGit(id);
     const session = this.sessions.get(id);
     const worktree = session?.snapshot().worktree;
     if (!session || !worktree) return;
@@ -823,6 +831,16 @@ export class SessionManager {
       session.setWorktree({ ...worktree, merge: how === 'interrupted' ? undefined : { step: 'failed', problem: { kind: 'stopped' }, ...(worktree.merge.thenOff ? { thenOff: true } : {}) } });
     }
     void this.refreshBranch(id);
+  }
+
+  /** Looks again at what git says the session's folder holds that is not committed or not pushed; never in a folder not trusted, whose git config could run code. */
+  private async refreshGit(id: string) {
+    const info = this.sessions.get(id)?.snapshot();
+    if (!info || info.untrusted) return;
+    const read = (this.gitReads.get(id) ?? 0) + 1;
+    this.gitReads.set(id, read);
+    const git = await (this.deps.readGit ?? readGitPending)(info.cwd);
+    if (this.gitReads.get(id) === read) this.sessions.get(id)?.setGit(git);
   }
 
   private isBusy(info: SessionInfo) { return info.state === 'starting' || info.state === 'work' || info.state === 'perm' || !!info.background; }
@@ -1101,6 +1119,8 @@ export class SessionManager {
   }
 
   setTags(id: string, tags: readonly string[]) { this.session(id).setTags(tags); }
+  setPending(id: string, items: readonly unknown[]) { this.session(id).setPending(items); }
+  dismissPending(id: string, itemId: string) { this.session(id).dismissPending(itemId); }
   rest(id: string) { return this.session(id).rest(); }
   remoteControl(id: string, enabled: boolean) { return this.session(id).setRemote(enabled); }
   inspect(id: string, view: InspectView) { return this.session(id).inspect(view); }
@@ -1243,6 +1263,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,
     tags: storedTags(raw).length ? storedTags(raw) : undefined,
+    pending: parsePending(raw.pending),
     resting: raw.resting === true || undefined,
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
@@ -1260,6 +1281,14 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,
   };
+}
+
+/** The pending lines of a saved session, with their ids and ages; undefined when none is valid. */
+function parsePending(raw: unknown): PendingItem[] | undefined {
+  const items = asArray(raw).filter(isJson).filter((item) => /^[\w-]{1,40}$/.test(asString(item.id)) && asNumber(item.since) > 0);
+  const previous = items.map((item) => ({ id: asString(item.id), text: asString(item.text), since: asNumber(item.since) }));
+  const kept = cleanPending(previous.map((item) => item.text), 0, previous);
+  return kept.length ? kept : undefined;
 }
 
 /** What a saved session keeps of the trigger that started it. */

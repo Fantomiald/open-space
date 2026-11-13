@@ -322,6 +322,10 @@ export interface SessionInfo {
   tags?: string[];
   /** runs without its folder's own settings (hooks, MCP servers): the folder was not trusted */
   untrusted?: boolean;
+  /** what its agent says it leaves pending (set_pending tool, shared/pending.ts), oldest first; absent: nothing */
+  pending?: PendingItem[];
+  /** what git says its folder holds that is not committed or not pushed (server/pending-git.ts); absent: nothing, or not a repository */
+  git?: GitPending;
   /** put to rest by the user: its process is released and it waits in the break room until it gets a message */
   resting?: boolean;
   /** messages sent during a turn, oldest first: they leave together when the turn ends */
@@ -393,6 +397,12 @@ export interface SessionInfo {
   /** what it does without asking, on top of its mode (its trigger's rules), given with --allowedTools at every launch */
   allowedTools?: string[];
 }
+
+/** A line a session leaves pending: `since` is when its agent first said it (epoch ms). */
+export interface PendingItem { id: string; text: string; since: number }
+
+/** What git says the session's folder holds that is not yet safe elsewhere. */
+export interface GitPending { dirty: number; unpushed: number; noUpstream: boolean; branch: string }
 
 export interface RemoteControl { url: string; state: 'connecting' | 'connected' | 'failed' }
 
@@ -661,6 +671,7 @@ export type ClientMessage =
   | { t: 'rename'; sessionId: string; name: string }
   /** the session's tags, all of them (an empty list takes them all off) */
   | { t: 'tags'; sessionId: string; tags: string[] }
+  | { t: 'dismissPending'; sessionId: string; id: string }
   /** the browser of the user's accounts this session uses, whatever the setting (the setting's own: it follows the setting again) */
   | { t: 'accountsBrowser'; sessionId: string; browser: AccountsBrowser }
   /** sends the session to the break room (its process is released; a message calls it back) */

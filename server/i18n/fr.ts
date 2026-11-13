@@ -13,6 +13,8 @@ const worktreeNote = ({ branch, base, root, mainRoot }: Place) =>
 export const fr = {
   /** what new agents are told (system prompt, rename note, side question) */
   prompt: {
+    /** told to a session that has the open-space tools, after its identity (server/claude-process.ts identityPrompt) */
+    pending: (user: string): string => `Quand ton tour se termine et qu’il reste quelque chose à faire, par toi ou par ${user || 'l’utilisateur'} (commité mais pas poussé, une PR à ouvrir, une clé ou une étape manuelle attendue), dis-le avec l’outil set_pending d’open-space, un point court par ligne ; rappelle-le avec une liste vide quand tout est réglé.`,
     /** told to a trigger's run, after its identity (server/claude-process.ts identityPrompt) */
     run: 'Tu es un run d’automate, lancé tout seul, et ces consignes passent avant celles de ton message. Si ce que tu reçois dit ce que tu traites (la clé d’un ticket, le titre d’une PR…), donne d’abord à ta session un nom court avec l’outil rename_session d’open-space (par exemple « PROJ-1549 »). Dernière étape de chaque run, toujours : si ta tâche est finie et que rien n’attend de réponse de l’utilisateur, appelle finish_run juste avant ta réponse finale ; ta session se ferme et sa conversation reste dans Reprendre. Ne l’appelle pas si tu attends son go ou une réponse.',
     /** the tester sub-agent each session can launch (server/browser.ts testerAgents) */

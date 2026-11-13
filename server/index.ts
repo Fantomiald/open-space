@@ -391,6 +391,7 @@ const mcpApi: OpenSpaceApi = {
   rest: async (sessionId) => { await sessions.rest(sessionId); await browsers.stopSession(sessionId); },
   remote: (sessionId, enabled) => { void sessions.remoteControl(sessionId, enabled); },
   rename: (sessionId, name) => sessions.rename(sessionId, name),
+  setPending: (sessionId, items) => sessions.setPending(sessionId, items),
   finish: (sessionId) => sessions.finishAfterTurn(sessionId),
   sendFile: async (botId, file, caption) => {
     const allowed = [...config.roots, attachmentsFolder(config.dataDir), uploadsFolder(config.dataDir)];
@@ -567,6 +568,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tags': sessions.setTags(message.sessionId, message.tags); break;
+    case 'dismissPending': sessions.dismissPending(message.sessionId, message.id); break;
     case 'accountsBrowser': sessions.setAccountsBrowser(message.sessionId, message.browser); break;
     case 'rest': await sessions.rest(message.sessionId); browsers.stopSession(message.sessionId); break;
     case 'forget': await sessions.forget(message.sessionId, message.branch); await browsers.forget(message.sessionId); break;

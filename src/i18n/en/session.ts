@@ -361,6 +361,15 @@ export const session: Dictionary['session'] = {
     scheduled: (count: number) => (count === 1 ? '1 planned wake-up' : `${count} planned wake-ups`),
     fold: 'Fold',
     unfold: 'Unfold',
+    pending: 'Left pending',
+  },
+  pending: {
+    dirty: (count: number) => (count === 1 ? '1 file not committed' : `${count} files not committed`),
+    unpushed: (count: number) => (count === 1 ? '1 commit not pushed' : `${count} commits not pushed`),
+    neverPushed: 'branch never pushed',
+    resume: 'Pick up',
+    resumeText: (text: string) => `Pick this up: ${text}`,
+    dismiss: 'Set aside',
   },
   todo: {
     allow: (tool, name) => `Allow ${tool ?? 'an action'} for ${name}`,

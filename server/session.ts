@@ -6,7 +6,8 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
+import { cleanPending } from '../shared/pending.ts';
+import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, GitPending, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import { agentLaunch } from './conversations.ts';
@@ -521,6 +522,7 @@ export class Session {
       this.info.toldChrome = undefined;
       this.info.toldSecrets = undefined;
       this.info.tags = undefined;
+      this.info.pending = undefined;
       this.deps.onCleared?.();
       this.record({ k: 'cleared' });
       this.cleared = true;
@@ -1070,6 +1072,28 @@ export class Session {
   /** The browser of the user's accounts it uses, whatever the setting; undefined: the setting's (see SessionManager.switchBrowsers). */
   setAccountsBrowser(browser: AccountsBrowser | undefined) {
     this.info.accountsBrowser = browser;
+    this.publish();
+  }
+
+  /** Replaces what the session leaves pending with these lines (shared/pending.ts); a line said again keeps its age. */
+  setPending(items: readonly unknown[]) {
+    const kept = cleanPending(items, this.now(), this.info.pending);
+    this.info.pending = kept.length ? kept : undefined;
+    this.publish();
+  }
+
+  /** The user sets a pending line aside. */
+  dismissPending(id: string) {
+    const kept = this.info.pending?.filter((item) => item.id !== id) ?? [];
+    this.info.pending = kept.length ? kept : undefined;
+    this.publish();
+  }
+
+  /** What git says its folder holds (server/pending-git.ts), null: nothing; published only when it changes. */
+  setGit(git: GitPending | null) {
+    const next = git ?? undefined;
+    if (JSON.stringify(next) === JSON.stringify(this.info.git)) return;
+    this.info.git = next;
     this.publish();
   }
 

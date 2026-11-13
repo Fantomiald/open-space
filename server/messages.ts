@@ -273,6 +273,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'rest': return sessionId ? { t: 'rest', sessionId } : null;
     case 'tags': return sessionId && Array.isArray(raw.tags) ? { t: 'tags', sessionId, tags: storedTags({ tags: raw.tags }) } : null;
+    case 'dismissPending': {
+      const id = boundedString(raw.id, 40);
+      return sessionId && id ? { t: 'dismissPending', sessionId, id } : null;
+    }
     case 'accountsBrowser': {
       const browser = ACCOUNTS_BROWSERS.find((each) => each === raw.browser);
       return sessionId && browser ? { t: 'accountsBrowser', sessionId, browser } : null;

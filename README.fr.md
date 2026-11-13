@@ -23,7 +23,7 @@ Open Space lance le `claude` installé sur ta machine : tes skills, tes plugins,
 
 ![Cmd+. remplace la salle par le mode focus : les sessions à gauche, les conversations côte à côte ; Tab les écarte pour voir la salle](docs/images/focus.gif)
 
-- **Voir qui a besoin de toi.** Le panneau État liste ce qui t'attend et depuis quand, qui travaille, et qui est prêt pour un nouveau message.
+- **Voir qui a besoin de toi.** Le panneau État liste ce qui t'attend et depuis quand, qui travaille, qui est prêt pour un nouveau message, et ce que les sessions laissent en suspens : ce qu'elles disent rester à faire, les fichiers pas commités et les commits pas poussés de leur dossier.
 - **Ouvrir jusqu'à six conversations** côte à côte. Tab les fait glisser hors de vue pour voir la salle, Tab les ramène.
 - **Le mode focus** (Cmd+. sur Mac, Ctrl+. sur Windows) remplace la salle par la liste de tes sessions, rangées selon ce qu'elles attendent. La liste se replie aux seules têtes quand tu veux de la place.
 - **Tout chercher** avec Cmd+K sur Mac ou Ctrl+K sur Windows : sessions, messages, commandes et réglages.

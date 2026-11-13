@@ -103,6 +103,8 @@ export interface OpenSpaceApi {
   rest: (sessionId: string) => Promise<void>;
   remote: (sessionId: string, enabled: boolean) => void;
   rename: (sessionId: string, name: string) => void;
+  /** replaces what the session leaves pending with these lines, untrusted (shared/pending.ts tidies them) */
+  setPending: (sessionId: string, items: unknown[]) => void;
   /** closes the session once its turn ends */
   finish: (sessionId: string) => void;
   /** the user's bots, to name in a trigger's `messengers` */
@@ -182,6 +184,12 @@ export const TOOLS: Tool[] = [
   { name: 'set_remote', for: FOLLOWERS, description: 'Turns Remote Control on or off for a session, to follow and answer it from the Claude app of the phone.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['sessionId', 'enabled'] }, annotations: write },
   // what a session does to itself only, nothing of the user's: read-only to Claude Code, so that a run in plan mode may too
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
+  {
+    name: 'set_pending', for: ['session'],
+    description: 'Sets what is left pending in your session, replacing the previous list: things you or the user still have to do (committed but not pushed, a PR to open, waiting for a key or a manual step). Call it at the end of a turn when something remains; call it with an empty list once all is settled. One short line per item.',
+    inputSchema: { type: 'object', properties: { items: { type: 'array', items: { type: 'string' }, description: 'One short line per item, at most 8' } }, required: ['items'] },
+    annotations: read,
+  },
   { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
   {
     name: 'send_file', for: ['session', 'messenger'],
@@ -305,8 +313,12 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
     case 'stop_session': api.interrupt(session().id); return text('stopped: the session keeps its place among the live ones (rest_session frees it)');
     case 'rest_session': await api.rest(session().id); return text('resting');
     case 'set_remote': api.remote(session().id, args.enabled === true); return text(args.enabled === true ? 'on' : 'off');
-    case 'rename_session': case 'finish_run': {
+    case 'rename_session': case 'finish_run': case 'set_pending': {
       if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
+      if (name === 'set_pending') {
+        api.setPending(caller.session, Array.isArray(args.items) ? args.items : []);
+        return text('saved');
+      }
       if (name === 'rename_session') {
         const named = asString(args.name).trim();
         if (!named) return failure(st.triggers.mcp.noName);

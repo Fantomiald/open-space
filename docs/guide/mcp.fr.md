@@ -58,6 +58,7 @@ La clé est gardée dans `mcp-key` sous `OFFICE_DIR`.
 | `answer_permission` | Externe | Répond à ce qu'une session attend : une permission avec `allow`, `deny` ou `always` (quand c'est proposé), ou une question avec ses réponses. Une demande de clés ne se répond que dans Open Space. |
 | `send_file` | Session, bot | Envoie un fichier dans ta conversation Telegram par son chemin absolu, avec une légende facultative. Le bot est facultatif quand tu n'en as qu'un. |
 | `rename_session` | Session | Renomme la session qui appelle. |
+| `set_pending` | Session | Dit ce que la session qui appelle laisse en suspens, une ligne courte par point (8 au plus), à la place de la liste d'avant : une PR à ouvrir, une clé à fournir. Une liste vide l'efface. Les lignes s'affichent dans le panneau État, sous « En suspens ». |
 | `finish_run` | Session | Pour le run d'un déclencheur seulement : dit que la tâche est faite. La session se ferme à la fin du tour, et sa conversation reste dans Reprendre. Ailleurs, il renvoie une erreur. |
 
 Aucun outil n'éteint une session : ça se fait depuis l'interface. Voir [Sessions](sessions.fr.md).
