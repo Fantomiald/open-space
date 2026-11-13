@@ -1,5 +1,11 @@
 # Versions
 
+## 1.35.4
+
+- Bulles d'aide : survoler une icône (Réglages, Focus, Mods, Interrompre…) affiche son nom après un court instant, aux couleurs d'Open Space et sans sortir de la fenêtre. Elle s'affiche aussi au clavier (Tab) et se ferme avec Échap (PR #54 de Guillaume).
+- MCP : `rest_session` met une session au repos, comme le bouton Repos, et libère sa place parmi les sessions actives. Le bot Telegram s'en sert quand tu lui demandes de faire de la place ; `stop_session` interrompt seulement le tour (PR #53 de Guillaume).
+- Guide d'utilisation en français et en anglais dans `docs/guide/` : sessions, automates, Telegram, clés, serveur MCP, mods, variables d'environnement (PR #55 de Guillaume).
+
 ## 1.35.3
 
 - Message replié d'un sous-agent : le titre « Message de … » reste sur une ligne. Avant, un aperçu long l'écrasait jusqu'à une lettre par ligne.
