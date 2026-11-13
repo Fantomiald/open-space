@@ -564,7 +564,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;
-    case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
+    case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, fastMode: message.fastMode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tags': sessions.setTags(message.sessionId, message.tags); break;
     case 'accountsBrowser': sessions.setAccountsBrowser(message.sessionId, message.browser); break;

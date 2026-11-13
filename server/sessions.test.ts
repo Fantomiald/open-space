@@ -1590,6 +1590,33 @@ describe('process life cycle', () => {
     await manager.shutdown();
   });
 
+  it('starts in fast mode, turns it off and on at once, says why Claude Code does not serve it, and stays as it was when refused', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), model: 'opus', fastMode: true, text: 'hello' });
+    assert.equal(processes[0].launch.fastMode, true);
+    assert.equal(find(id).fastMode, true);
+    const turn = (state: string, reason?: string) => processes.at(-1)!.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5, fast_mode_state: state, ...(reason ? { fast_mode_disabled_reason: reason } : {}) });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id, fast_mode_state: 'off', fast_mode_disabled_reason: 'extra_usage_disabled' });
+    assert.equal(find(id).fastModeBlocked, 'extra_usage_disabled');
+    turn('on');
+    assert.equal(find(id).fastModeBlocked, undefined);
+    turn('cooldown');
+    assert.equal(find(id).fastModeBlocked, 'cooldown');
+    await manager.tune(id, { fastMode: false });
+    assert.deepEqual(processes[0].controls.at(-1), { subtype: 'apply_flag_settings', settings: { fastMode: false } });
+    assert.equal(find(id).fastMode, undefined);
+    assert.equal(find(id).fastModeBlocked, undefined, 'off: nothing to explain');
+    turn('off', 'sdk_opt_in_required');
+    assert.equal(find(id).fastModeBlocked, undefined);
+    await manager.tune(id, { fastMode: true });
+    assert.deepEqual(processes[0].controls.at(-1), { subtype: 'apply_flag_settings', settings: { fastMode: true } });
+    processes[0].refused.add('apply_flag_settings');
+    await assert.rejects(manager.tune(id, { fastMode: false }));
+    assert.equal(find(id).fastMode, true);
+    await manager.shutdown();
+  });
+
   it('turns ultracode on at once, launches with it afterwards, changes the permission mode, and stays off when Claude Code refuses ultracode', async () => {
     const { manager, processes, find } = setup();
     await manager.init();

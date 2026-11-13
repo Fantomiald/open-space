@@ -34,13 +34,27 @@ export const composer: Dictionary['composer'] = {
     resting: 'resting, will be woken up',
   },
   tune: {
-    title: 'Model, effort, permissions and ultracode',
+    title: 'Model, effort, permissions, ultracode and fast mode',
     model: 'Model',
     effort: 'Effort',
     permissions: 'Permissions',
     defaultEffort: 'auto',
     efforts: { low: 'low', medium: 'medium', high: 'high', xhigh: 'extra high', max: 'max' },
     ultracode: 'ultracode',
+    fast: 'fast mode',
+    /** why Claude Code does not serve fast mode while it is on (its fast_mode_disabled_reason, or a cooldown) */
+    fastBlocked: {
+      cooldown: 'Paused after a rate limit, back shortly.',
+      extra_usage_disabled: 'Needs usage credits, turned off for this account.',
+      free: 'Needs a paid subscription.',
+      preference: 'Turned off by your organization.',
+      model_not_allowed: 'Not allowed for this model.',
+      not_first_party: 'Not available with this provider.',
+      disabled_by_env: 'Not available with this Claude Code setup.',
+      network_error: 'Claude Code could not check it (network).',
+      pending: 'Claude Code is checking it.',
+      unknown: 'Not available for now.',
+    },
   },
   launcher: {
     label: 'New session',

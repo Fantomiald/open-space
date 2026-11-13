@@ -121,6 +121,7 @@ describe('parseCatalog', () => {
       models: [
         { value: 'default', displayName: 'Default (recommended)', description: 'Opus 5.5', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'turbo'] },
         { value: 'haiku', displayName: 'Haiku 5.5', supportsEffort: false },
+        { value: 'opus', displayName: 'Opus', supportsEffort: false, supportsFastMode: true },
       ],
     });
     assert.deepEqual(catalog.commands, [
@@ -130,6 +131,7 @@ describe('parseCatalog', () => {
     assert.deepEqual(catalog.models, [
       { value: 'default', label: 'Default (recommended)', description: 'Opus 5.5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
       { value: 'haiku', label: 'Haiku 5.5', efforts: [] },
+      { value: 'opus', label: 'Opus', efforts: [], fast: true },
     ]);
   });
 
@@ -149,6 +151,11 @@ describe('parseCatalog', () => {
     const args = buildClaudeArgs({ ...base, ultracode: true, settings: { alwaysThinkingEnabled: false, outputStyle: 'Concis' } });
     assert.deepEqual(JSON.parse(args[args.indexOf('--settings') + 1]), { alwaysThinkingEnabled: false, outputStyle: 'Concis', ultracode: true });
     assert.ok(!buildClaudeArgs({ ...base, settings: {} }).includes('--settings'), 'nothing chosen: Claude Code’s own files');
+  });
+
+  it('passes fast mode as a setting: in claude -p, its own opt-in', () => {
+    const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', fastMode: true, ultracode: true, permissionMode: 'auto', name: 'Ana' });
+    assert.deepEqual(JSON.parse(args[args.indexOf('--settings') + 1]), { ultracode: true, fastMode: true });
   });
 
   it('passes ultracode as a setting, next to the effort', () => {

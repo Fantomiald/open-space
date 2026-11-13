@@ -5,7 +5,7 @@ import type { ModIcon } from '../../shared/mods.ts';
 import {
   AppWindow, Archive, ShieldCheck, Blend, Cpu, Eraser, FileDiff, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
   Clock, Folder, FolderOpen, FolderPlus, FilePlus, Save, FileCode, FileBraces, FileImage, FileCog, FileLock, FileArchive, FilePlay, FileMusic, FileSpreadsheet, Copy, Languages, PartyPopper, Activity, Webhook, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, Square, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, KeyRound, PictureInPicture2, Pin, PinOff, SquareArrowOutUpRight, SquareArrowDownLeft,CodeXml, Eye, FolderSearch, type LucideIcon, List, Puzzle, Coins, ChartLine, Heart,
-  Radio, Focus, ListFilter, LayoutDashboard, GripVertical,
+  Radio, Focus, ListFilter, LayoutDashboard, GripVertical, FastForward,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -95,6 +95,8 @@ export const MaximizeIcon = icon(Maximize2);
 export const MinimizeIcon = icon(Minimize2);
 export const TuneIcon = icon(SlidersHorizontal);
 export const UltracodeIcon = icon(Zap);
+/** Claude Code's fast mode, in the model's menu. */
+export const FastIcon = icon(FastForward);
 /** The festivals and the hour of the room, to try them. */
 export const CalendarIcon = icon(CalendarHeart);
 export const SettingsIcon = icon(Settings);

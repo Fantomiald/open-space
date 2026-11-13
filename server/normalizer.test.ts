@@ -33,6 +33,33 @@ function replay(fixture: string, agentLaunch?: (agentId: string) => AgentLaunch 
   return { ...created, refused };
 }
 
+describe('Normalizer on fast mode', () => {
+  const blocks = (messages: Record<string, unknown>[]) => {
+    const seen: (string | undefined)[] = [];
+    const normalizer = new Normalizer({
+      emit: () => {}, onInit: () => {}, onCommands: () => {}, onQuota: () => {}, onResult: () => {}, onRequest: () => {}, onCancel: () => {}, onPartial: () => {},
+      names: new Set(), onFastMode: (blocked) => seen.push(blocked),
+    });
+    for (const message of messages) normalizer.handle(asJson(message));
+    return seen;
+  };
+
+  it('tells why it does not serve, at the start and at each turn’s end, and nothing when Claude Code says nothing', () => {
+    assert.deepEqual(blocks([
+      { type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: 'c', fast_mode_state: 'off', fast_mode_disabled_reason: 'extra_usage_disabled' },
+      { type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5, fast_mode_state: 'on' },
+      { type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5, fast_mode_state: 'cooldown' },
+      { type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5, fast_mode_state: 'off' },
+      { type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 },
+    ]), ['extra_usage_disabled', undefined, 'cooldown', 'unknown']);
+  });
+
+  it('reads a real start without the opt-in (2.1.305)', () => {
+    const lines = readFileSync(new URL('./fixtures/bash-background.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(blocks(lines)[0], 'sdk_opt_in_required');
+  });
+});
+
 describe('Normalizer on a real turn that edits and writes files (2.1.318)', () => {
   const { events } = replay('edit-turn');
   const acts = events.filter((event) => event.k === 'act');
