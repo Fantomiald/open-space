@@ -83,6 +83,8 @@ export interface NormalizerOptions {
   /** Claude Code started compacting the conversation (it ends with a compact event) */
   onCompacting?: () => void;
   onResult: (result: TurnResult) => void;
+  /** why Claude Code does not serve fast mode (undefined: it does), told at the start and at each turn's end */
+  onFastMode?: (blocked: string | undefined) => void;
   onRequest: (request: ToolRequest) => void;
   /** an MCP server asks the user something (an elicitation): left out, it is refused, which Claude Code takes as a cancel */
   onElicitation?: (request: ElicitationRequest) => void;
@@ -188,6 +190,7 @@ export class Normalizer {
         // the window of the model that answered (Claude Code tells it per model at a turn's end)
         const windows = Object.values(asJson(message.modelUsage)).map((usage) => asNumber(asJson(usage).contextWindow)).filter(Boolean);
         if (windows.length) this.options.onContext?.({ max: Math.max(...windows) });
+        this.tellFastMode(message);
         this.options.onResult({
           ok: !message.is_error && message.subtype === 'success', text: asString(message.result), ms: asNumber(message.duration_ms),
         });
@@ -243,6 +246,13 @@ export class Normalizer {
     this.options.onPartial(who, text);
   }
 
+  /** fast_mode_state of an init or a result: 'on' serves; 'cooldown' after a rate limit; 'off' with its reason. */
+  private tellFastMode(message: Json) {
+    const state = asString(message.fast_mode_state);
+    if (!state) return;
+    this.options.onFastMode?.(state === 'on' ? undefined : state === 'cooldown' ? state : asString(message.fast_mode_disabled_reason) || 'unknown');
+  }
+
   private system(message: Json) {
     switch (message.subtype) {
       case 'init':
@@ -253,6 +263,7 @@ export class Normalizer {
           conversationId: asString(message.session_id),
           version: asString(message.claude_code_version),
         });
+        this.tellFastMode(message);
         this.options.emit({ k: 'init', model: asString(message.model) });
         break;
       case 'status':

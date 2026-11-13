@@ -315,6 +315,13 @@ export interface SessionInfo {
   effort?: Effort;
   /** Claude Code's ultracode: a workflow of several agents on every task, at any effort */
   ultracode?: boolean;
+  /** Claude Code's fast mode, asked for: faster answers from the models that take it (in claude -p, this setting is its opt-in) */
+  fastMode?: boolean;
+  /**
+   * why Claude Code does not serve fast mode while it is asked for: its fast_mode_disabled_reason ('extra_usage_disabled'…),
+   * or 'cooldown' after a rate limit; told at the start and at each turn's end, not read back after a restart
+   */
+  fastModeBlocked?: string;
   permissionMode: PermissionMode;
   /** the name the session's Claude was last told it has; differs from `name` after a rename (or for older sessions) */
   introducedAs?: string;
@@ -440,10 +447,11 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type Effort = (typeof EFFORTS)[number];
 
 /** What the session's model panel changes ('' : the default); what is left out stays as it is. */
-export interface TuneChange { model?: string; effort?: Effort | ''; ultracode?: boolean; permissionMode?: PermissionMode }
+export interface TuneChange { model?: string; effort?: Effort | ''; ultracode?: boolean; fastMode?: boolean; permissionMode?: PermissionMode }
 
 /** A model Claude Code offers (from its initialize answer): `value` is what --model takes ('default' : its default). */
-export interface ModelChoice { value: string; label: string; description?: string; efforts: Effort[] }
+/** A model Claude Code offers: `fast` when it takes fast mode. */
+export interface ModelChoice { value: string; label: string; description?: string; efforts: Effort[]; fast?: boolean }
 
 export type PermissionDecision = 'allow' | 'deny' | 'always';
 
@@ -456,6 +464,7 @@ export interface SessionOptions {
   model?: string;
   effort?: Effort;
   ultracode?: boolean;
+  fastMode?: boolean;
   permissionMode?: PermissionMode;
   name?: string;
   /** first message to send, e.g. "/kit:new" */
@@ -707,7 +716,7 @@ export type ClientMessage =
   /** shows a file of the session's folder in the Finder (the Explorer on Windows) */
   | { t: 'revealFile'; sessionId: string; path: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
-  /** changes the model, the effort, ultracode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
+  /** changes the model, the effort, ultracode, fast mode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
   | ({ t: 'tune'; sessionId: string } & TuneChange)
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
   /** opens a terminal window on the user's computer, in the folder of the session given (the server finds it), else the default folder */

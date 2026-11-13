@@ -36,13 +36,27 @@ export const composer = {
     resting: 'au repos, sera réveillée',
   },
   tune: {
-    title: 'Modèle, effort, permissions et ultracode',
+    title: 'Modèle, effort, permissions, ultracode et mode rapide',
     model: 'Modèle',
     effort: 'Effort',
     permissions: 'Permissions',
     defaultEffort: 'auto',
     efforts: { low: 'bas', medium: 'moyen', high: 'élevé', xhigh: 'très élevé', max: 'max' },
     ultracode: 'ultracode',
+    fast: 'mode rapide',
+    /** why Claude Code does not serve fast mode while it is on (its fast_mode_disabled_reason, or a cooldown) */
+    fastBlocked: {
+      cooldown: 'En pause après une limite d’usage, revient bientôt.',
+      extra_usage_disabled: 'Demande des crédits d’usage, désactivés pour ce compte.',
+      free: 'Demande un abonnement payant.',
+      preference: 'Désactivé par ton organisation.',
+      model_not_allowed: 'Pas permis pour ce modèle.',
+      not_first_party: 'Pas disponible avec ce fournisseur.',
+      disabled_by_env: 'Pas disponible avec cette configuration de Claude Code.',
+      network_error: 'Claude Code n’a pas pu le vérifier (réseau).',
+      pending: 'Claude Code le vérifie.',
+      unknown: 'Pas disponible pour l’instant.',
+    },
   },
   launcher: {
     label: 'Nouvelle session',

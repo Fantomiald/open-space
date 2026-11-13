@@ -451,6 +451,7 @@ export class Session {
       onSpend: (dollars) => this.onSpend(dollars),
       onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
+      onFastMode: (blocked) => this.onFastMode(blocked),
       onRequest: (request) => this.onRequest(request),
       onElicitation: (request) => this.onElicitation(request),
       onCancel: (requestId) => this.settle(requestId, { k: 'ask_done', requestId, allow: false, cancelled: true }),
@@ -485,7 +486,7 @@ export class Session {
       cwd,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -1004,7 +1005,7 @@ export class Session {
   }
 
   /**
-   * Another model, effort ('' : the default), ultracode or permission mode. A running process takes it at once, as the
+   * Another model, effort ('' : the default), ultracode, fast mode or permission mode. A running process takes it at once, as the
    * Agent SDK does it (checked with 2.1.303 through get_settings); the next launches pass it as --model, --effort,
    * --settings and --permission-mode.
    */
@@ -1013,6 +1014,7 @@ export class Session {
     const model = change.model !== undefined && change.model !== this.info.model ? change.model : null;
     const effort = change.effort !== undefined && change.effort !== (this.info.effort ?? '') ? change.effort : null;
     const ultracode = change.ultracode !== undefined && change.ultracode !== !!this.info.ultracode ? change.ultracode : null;
+    const fastMode = change.fastMode !== undefined && change.fastMode !== !!this.info.fastMode ? change.fastMode : null;
     const permissionMode = change.permissionMode !== undefined && change.permissionMode !== this.info.permissionMode ? change.permissionMode : null;
     if (model !== null) {
       this.info.model = model;
@@ -1021,21 +1023,36 @@ export class Session {
     }
     if (effort !== null) this.info.effort = effort || undefined;
     if (ultracode !== null) this.info.ultracode = ultracode || undefined;
+    // why Claude Code does not serve it is known again at the next init or turn's end
+    if (fastMode !== null) Object.assign(this.info, { fastMode: fastMode || undefined, fastModeBlocked: undefined });
     if (permissionMode !== null) this.info.permissionMode = permissionMode;
     this.publish();
     if (model !== null) await process?.control({ subtype: 'set_model', model: model || 'default' });
     if (effort !== null) await process?.control({ subtype: 'apply_flag_settings', settings: { effortLevel: effort || null } });
     // Claude Code takes "manual" as its "default" mode
     if (permissionMode !== null) await process?.control({ subtype: 'set_permission_mode', mode: permissionMode });
-    if (ultracode === null) return;
+    if (fastMode !== null) await this.applyOrUndo(process, { fastMode }, () => { this.info.fastMode = !fastMode || undefined; });
+    // refused when dynamic workflows are off in Claude Code's /config
+    if (ultracode !== null) await this.applyOrUndo(process, { ultracode }, () => { this.info.ultracode = !ultracode || undefined; });
+  }
+
+  /** Flag settings for the running process: refused, the session stays as it was (`undo`). */
+  private async applyOrUndo(process: ProcessHandle | null, settings: Record<string, unknown>, undo: () => void) {
     try {
-      await process?.control({ subtype: 'apply_flag_settings', settings: { ultracode } });
+      await process?.control({ subtype: 'apply_flag_settings', settings });
     } catch (error) {
-      // refused when dynamic workflows are off in Claude Code's /config: the session stays as it was
-      this.info.ultracode = !ultracode || undefined;
+      undo();
       this.publish();
       throw error;
     }
+  }
+
+  /** Why Claude Code does not serve fast mode (undefined: it does), shown only while the session asks for it. */
+  private onFastMode(blocked: string | undefined) {
+    const shown = this.info.fastMode ? blocked : undefined;
+    if (shown === this.info.fastModeBlocked) return;
+    this.info.fastModeBlocked = shown;
+    this.publish();
   }
 
   /** Claude Code settings changed in Open Space (null : back to Claude Code's own): a running process takes them at once. */

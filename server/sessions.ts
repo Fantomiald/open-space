@@ -628,6 +628,7 @@ export class SessionManager {
     const restored = options.resumeId ? await rename(this.switchedOffLog(options.resumeId), path.join(this.logsDir, `${options.resumeId}.jsonl`)).then(() => true, () => false) : false;
     if (options.effort) info.effort = options.effort;
     if (options.ultracode) info.ultracode = true;
+    if (options.fastMode) info.fastMode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
     if (started.trigger) info.trigger = started.trigger;
     if (started.role) info.role = started.role;
@@ -1030,7 +1031,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1235,6 +1236,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     id, cwd, state: state as SessionInfo['state'], name: asString(raw.name, id.slice(0, 8)), model: asString(raw.model), activeModel: asString(raw.activeModel),
     effort: (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort : undefined,
     ultracode: raw.ultracode === true || undefined,
+    fastMode: raw.fastMode === true || undefined,
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,

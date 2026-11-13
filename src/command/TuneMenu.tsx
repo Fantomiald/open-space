@@ -4,16 +4,17 @@ import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
-import { BranchIcon, TuneIcon, UltracodeIcon } from './Icons.tsx';
+import { BranchIcon, FastIcon, TuneIcon, UltracodeIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
 
 /** What the menu shows: a session's own settings, or those a new session will start with. */
-export interface Tuning { model: string; effort?: Effort; ultracode?: boolean; permissionMode: PermissionMode }
+export interface Tuning { model: string; effort?: Effort; ultracode?: boolean; fastMode?: boolean; fastModeBlocked?: string; permissionMode: PermissionMode }
 
 /**
- * The model, effort, permissions and ultracode in one button (the bar has no room for four more), opening a panel to change them at
- * once: a running session's (see Session.tune), or the next one's in the launcher. The models are Claude Code's own
- * list, with the efforts each takes; until it was asked for, Open Space's short list and every effort.
+ * The model, effort, permissions, ultracode and fast mode in one button (the bar has no room for five more), opening a panel to
+ * change them at once: a running session's (see Session.tune), or the next one's in the launcher. The models are Claude
+ * Code's own list, with the efforts each takes and whether it takes fast mode; until it was asked for, Open Space's short
+ * list, every effort and fast mode offered.
  * In a small window, the button is an icon that says them in its tooltip.
  */
 /** The launcher's choice of a branch of its own for the new session (a folder in a git repository only). */
@@ -31,17 +32,19 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
   const panelId = useId();
   const words = t.composer.tune;
   const chosen = tuning.model || 'default';
-  const choices: { value: string; label: string; description?: string; efforts: readonly Effort[] }[] = catalog.length
+  const choices: { value: string; label: string; description?: string; efforts: readonly Effort[]; fast?: boolean }[] = catalog.length
     ? catalog
     : models().map(([value, label]) => ({ value: value || 'default', label, efforts: EFFORTS }));
   // a model given by its full name, or not offered any more, stays shown as it is
   const options = choices.some((choice) => choice.value === chosen) ? choices : [...choices, { value: chosen, label: chosen, efforts: EFFORTS }];
   const model = options.find((choice) => choice.value === chosen)!;
+  // kept in sight while on, so that it can be turned off on a model that does not take it
+  const fastOffered = !!tuning.fastMode || !catalog.length || !!model.fast;
   // the slider goes from the default effort ('') to the highest the model takes
   const steps: (Effort | '')[] = ['', ...model.efforts];
   const effort = tuning.effort && model.efforts.includes(tuning.effort) ? tuning.effort : '';
   const effortName = (value: Effort | '') => (value ? words.efforts[value] : words.defaultEffort);
-  const summary = [shortModelName(model), model.efforts.length > 0 && effortName(effort), modeLabel(tuning.permissionMode, 'short'), tuning.ultracode && words.ultracode].filter(Boolean).join(' · ');
+  const summary = [shortModelName(model), model.efforts.length > 0 && effortName(effort), modeLabel(tuning.permissionMode, 'short'), tuning.ultracode && words.ultracode, tuning.fastMode && words.fast].filter(Boolean).join(' · ');
   // how far the slider is filled, and how hot it glows (data-effort)
   const fill = { '--fill': `${(steps.indexOf(effort) / Math.max(1, steps.length - 1)) * 100}%` } as CSSProperties;
   return (
@@ -56,6 +59,7 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
       ) : (
         <button type="button" className="cp-button cp-tune__chip" aria-expanded={open} aria-controls={panelId} aria-label={summary} title={summary} onClick={() => setOpen(!open)}>
           {tuning.ultracode && <span className="cp-tune__ultracode"><UltracodeIcon /></span>}
+          {tuning.fastMode && <span className="cp-tune__fast"><FastIcon /></span>}
           {shortModelName(model)}{model.efforts.length > 0 && <span className="cp-muted"> · <span className="cp-tune__level">{effortName(effort)}</span></span>}
         </button>
       )}
@@ -89,16 +93,29 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
             </div>
           )}
           {ultracodeOffered && (
-            <label className="cp-ultracode">
+            <label className="cp-switch cp-ultracode">
               <span><UltracodeIcon /><strong>{words.ultracode}</strong></span>
               <input type="checkbox" role="switch" checked={!!tuning.ultracode} aria-checked={!!tuning.ultracode} onChange={(e) => onChange({ ultracode: e.target.checked })} />
             </label>
           )}
+          {fastOffered && (
+            <label className="cp-switch cp-fast">
+              <span><FastIcon /><strong>{words.fast}</strong></span>
+              <input type="checkbox" role="switch" checked={!!tuning.fastMode} aria-checked={!!tuning.fastMode} aria-describedby={tuning.fastMode && tuning.fastModeBlocked ? `${panelId}-fast` : undefined} onChange={(e) => onChange({ fastMode: e.target.checked })} />
+            </label>
+          )}
+          {tuning.fastMode && tuning.fastModeBlocked && <p className="cp-tune__note" id={`${panelId}-fast`}>{fastNote(tuning.fastModeBlocked)}</p>}
         </div>
       )}
     </div>
   );
 }
+
+/** Why Claude Code does not serve fast mode (Session.onFastMode), as it says it; a reason it adds later reads as "not for now". */
+const fastNote = (blocked: string) => {
+  const notes: Record<string, string> = t.composer.tune.fastBlocked;
+  return notes[blocked] ?? t.composer.tune.fastBlocked.unknown;
+};
 
 /** "Opus 5.5", and Open Space's short name for Claude Code's default: its own ("Default (recommended)") is long for a chip. */
 const shortModelName = (choice: { value: string; label: string }) => (choice.value === 'default' ? t.session.models.default : choice.label.replace(/\s*\(.*\)$/, ''));

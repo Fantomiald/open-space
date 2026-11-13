@@ -102,6 +102,10 @@ function parseOptions(raw: unknown): SessionOptions | null {
     if (typeof options.ultracode !== 'boolean') return null;
     result.ultracode = options.ultracode;
   }
+  if (options.fastMode !== undefined) {
+    if (typeof options.fastMode !== 'boolean') return null;
+    result.fastMode = options.fastMode;
+  }
   if (options.permissionMode !== undefined) {
     if (!isPermissionMode(options.permissionMode)) return null;
     result.permissionMode = options.permissionMode;
@@ -311,12 +315,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       const model = raw.model === undefined || (typeof raw.model === 'string' && (raw.model === '' || MODEL_PATTERN.test(raw.model))) ? raw.model as string | undefined : null;
       const effort = raw.effort === undefined || raw.effort === '' || (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort | '' | undefined : null;
       const ultracode = raw.ultracode === undefined || typeof raw.ultracode === 'boolean' ? raw.ultracode : null;
+      const fastMode = raw.fastMode === undefined || typeof raw.fastMode === 'boolean' ? raw.fastMode : null;
       const permissionMode = raw.permissionMode === undefined || isPermissionMode(raw.permissionMode) ? raw.permissionMode : null;
-      if (model === null || effort === null || ultracode === null || permissionMode === null) return null;
-      if (model === undefined && effort === undefined && ultracode === undefined && permissionMode === undefined) return null;
+      if (model === null || effort === null || ultracode === null || fastMode === null || permissionMode === null) return null;
+      if (model === undefined && effort === undefined && ultracode === undefined && fastMode === undefined && permissionMode === undefined) return null;
       return {
         t: 'tune', sessionId, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}), ...(ultracode !== undefined ? { ultracode } : {}),
-        ...(permissionMode !== undefined ? { permissionMode } : {}),
+        ...(fastMode !== undefined ? { fastMode } : {}), ...(permissionMode !== undefined ? { permissionMode } : {}),
       };
     }
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;

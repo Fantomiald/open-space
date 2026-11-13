@@ -1931,26 +1931,32 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   background: linear-gradient(90deg, var(--rainbow)) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: cp-shimmer 2.4s linear infinite;
 }
-/* the ultracode switch */
-.cp-ultracode { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); cursor: pointer; }
-.cp-ultracode > span { display: inline-flex; align-items: center; gap: var(--space-2); }
-.cp-ultracode strong { font-weight: var(--weight-medium); }
-.cp-ultracode .cp-icon { color: var(--color-text-muted); transition: color var(--duration) var(--easing); }
+/* the switches of the panel: ultracode and fast mode */
+.cp-switch { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); cursor: pointer; }
+.cp-switch > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cp-switch strong { font-weight: var(--weight-medium); white-space: nowrap; }
+.cp-switch .cp-icon { color: var(--color-text-muted); transition: color var(--duration) var(--easing); }
 /* the lightning of ultracode, lit when it is on: in the panel, and before the model in the button */
 .cp-ultracode:has(input:checked) .cp-icon, .cp-tune__ultracode { color: var(--tone-permission); }
 .cp-tune__ultracode { display: inline-block; margin-right: var(--space-1); vertical-align: -0.2em; }
 .cp-tune__ultracode .cp-icon { width: 0.95rem; height: 0.95rem; }
-.cp-ultracode input {
+.cp-switch input {
   flex: none; position: relative; appearance: none; width: 2.125rem; height: 1.25rem; margin: 0; border-radius: 999px; background: var(--track); cursor: pointer;
   transition: background var(--duration) var(--easing), box-shadow var(--duration) var(--easing);
 }
-.cp-ultracode input::before {
+.cp-switch input::before {
   content: ''; position: absolute; top: 3px; left: 3px; width: calc(1.25rem - 6px); aspect-ratio: 1; border-radius: 50%; background: var(--selected);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.45); transition: translate var(--duration) var(--easing);
 }
 .cp-ultracode input:checked { background: linear-gradient(90deg, var(--rainbow)) 0 0 / 200% 100%; animation: cp-shimmer 2.4s linear infinite; box-shadow: 0 0 12px color-mix(in srgb, var(--tone-peer) 55%, transparent); }
-.cp-ultracode input:checked::before { translate: calc(2.125rem - 1.25rem) 0; }
-.cp-ultracode input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.cp-switch input:checked::before { translate: calc(2.125rem - 1.25rem) 0; }
+.cp-switch input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+/* fast mode: the arrows lit in the work tone, in the panel and before the model in the button; why it does not serve, under it */
+.cp-fast input:checked { background: var(--tone-work); }
+.cp-fast:has(input:checked) .cp-icon, .cp-tune__fast { color: var(--tone-work); }
+.cp-tune__fast { display: inline-block; margin-right: var(--space-1); vertical-align: -0.2em; }
+.cp-tune__fast .cp-icon { width: 0.95rem; height: 0.95rem; }
+.cp-tune__note { margin: calc(-1 * var(--space-2)) 0 0; font-size: var(--text-xs); color: var(--color-text-muted); }
 /* ultracode on: a rainbow edge turning around the panel and the chip */
 @property --ultracode-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 .cp-tune__chip { position: relative; }
