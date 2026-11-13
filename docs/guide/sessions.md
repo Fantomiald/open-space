@@ -21,10 +21,8 @@ Each session is one `claude -p` process, shown as a character at a desk. This pa
 The session menu offers three ways to stop.
 
 - **Interrupt** stops the current turn. The session stays open and keeps its process. The MCP tool `stop_session` and the Telegram `/stop` command do the same.
-- **Rest** sends the session to the break room. Claude Code stops, and the session no longer takes a slot. Its next message starts the process again on the same conversation. Turning Remote Control on also brings it back.
+- **Rest** sends the session to the break room. Claude Code stops, and the session no longer takes a slot. Its next message starts the process again on the same conversation. Turning Remote Control on also brings it back. The MCP tool `rest_session` does the same.
 - **Switch off** removes the session from Open Space. Its keys are dropped. If it has its own branch, you choose to merge, keep or discard it. You can pick it up again from **Resume**: it comes back with its name, and with its whole thread for 30 days. Claude Code's own transcript is not touched.
-
-You put a session to rest from the interface only. No MCP tool does it.
 
 If the session started background work (sub-agents, background tasks, scheduled wake-ups), Rest asks first: what they started stops with them.
 

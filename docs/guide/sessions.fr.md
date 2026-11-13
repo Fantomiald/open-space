@@ -21,10 +21,8 @@ Chaque session est un processus `claude -p`, affiché comme un personnage à son
 Le menu de la session propose trois façons d'arrêter.
 
 - **Interrompre** arrête le tour en cours. La session reste ouverte et garde son processus. L'outil MCP `stop_session` et la commande Telegram `/stop` font la même chose.
-- **Repos** envoie la session en salle de repos. Claude Code s'arrête et la session ne prend plus de place. Son prochain message relance le processus sur la même conversation. Activer Remote Control la rappelle aussi.
+- **Repos** envoie la session en salle de repos. Claude Code s'arrête et la session ne prend plus de place. Son prochain message relance le processus sur la même conversation. Activer Remote Control la rappelle aussi. L'outil MCP `rest_session` fait la même chose.
 - **Éteindre** retire la session d'Open Space. Ses clés sont oubliées. Si elle a sa propre branche, tu choisis de la fusionner, la garder ou la jeter. Tu peux la reprendre depuis **Reprendre** : elle revient avec son nom, et avec tout son fil pendant 30 jours. La transcription de Claude Code elle-même n'est pas touchée.
-
-La mise au repos se fait depuis l'interface uniquement. Aucun outil MCP ne la fait.
 
 Si la session a lancé du travail en fond (sous-agents, tâches en arrière-plan, réveils programmés), Repos demande d'abord : ce qu'elle a lancé s'arrête avec elle.
 

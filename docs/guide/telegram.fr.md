@@ -60,7 +60,7 @@ Sans nom, `/run`, `/new`, `/stop` et les autres listent ce que tu peux choisir.
 
 ## En langage normal
 
-Tout le reste va à un petit agent : un `claude -p` à lui, Haiku par défaut. Tu changes son modèle dans les réglages du bot (**Modèle de l'agent**). Ses seuls outils sont ceux du serveur MCP d'Open Space. Il peut lister les sessions, leur écrire, les arrêter, activer Remote Control, lancer des sessions et des déclencheurs, et t'envoyer des fichiers. Il ne répond jamais à une permission ni à une question : tu le fais avec les boutons. Il garde sa conversation d'un message à l'autre, jusqu'à `/reset`.
+Tout le reste va à un petit agent : un `claude -p` à lui, Haiku par défaut. Tu changes son modèle dans les réglages du bot (**Modèle de l'agent**). Ses seuls outils sont ceux du serveur MCP d'Open Space. Il peut lister les sessions, leur écrire, les arrêter, les mettre au repos, activer Remote Control, lancer des sessions et des déclencheurs, et t'envoyer des fichiers. Il ne répond jamais à une permission ni à une question : tu le fais avec les boutons. Il garde sa conversation d'un message à l'autre, jusqu'à `/reset`.
 
 ## Les problèmes
 

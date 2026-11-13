@@ -53,13 +53,14 @@ La clé est gardée dans `mcp-key` sous `OFFICE_DIR`.
 | `list_sessions` | Externe, bot | Liste les sessions : état, ce qu'elles attendent, ce qu'elles ont dit en dernier. |
 | `send_message` | Externe, bot | Envoie un message à une session, comme tapé dans Open Space. Il attend la fin d'un tour en cours. |
 | `stop_session` | Externe, bot | Interrompt ce que fait une session, comme Interrompre dans Open Space. La session reste ouverte et garde sa place. |
+| `rest_session` | Externe, bot | Met une session au repos, comme Repos dans Open Space : son processus et son navigateur s'arrêtent, ce qui libère sa place. Un tour en cours est coupé, sans demander. Son prochain message la réveille. |
 | `set_remote` | Externe, bot | Active ou coupe Remote Control pour une session. |
 | `answer_permission` | Externe | Répond à ce qu'une session attend : une permission avec `allow`, `deny` ou `always` (quand c'est proposé), ou une question avec ses réponses. Une demande de clés ne se répond que dans Open Space. |
 | `send_file` | Session, bot | Envoie un fichier dans ta conversation Telegram par son chemin absolu, avec une légende facultative. Le bot est facultatif quand tu n'en as qu'un. |
 | `rename_session` | Session | Renomme la session qui appelle. |
 | `finish_run` | Session | Pour le run d'un déclencheur seulement : dit que la tâche est faite. La session se ferme à la fin du tour, et sa conversation reste dans Reprendre. Ailleurs, il renvoie une erreur. |
 
-Aucun outil ne met une session au repos ni ne l'éteint : ça se fait depuis l'interface. Voir [Sessions](sessions.fr.md).
+Aucun outil n'éteint une session : ça se fait depuis l'interface. Voir [Sessions](sessions.fr.md).
 
 Une session ou un bot ne peut pas fixer les règles d'un déclencheur (`allowedTools`). Seul le programme externe le peut.
 

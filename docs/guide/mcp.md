@@ -53,13 +53,14 @@ The key is kept in `mcp-key` under `OFFICE_DIR`.
 | `list_sessions` | External, bot | Lists the sessions: state, what they wait for, what they said last. |
 | `send_message` | External, bot | Sends a message to a session, as if typed in Open Space. It waits for the end of a turn under way. |
 | `stop_session` | External, bot | Interrupts what a session is doing, like Interrupt in Open Space. The session stays open and keeps its place. |
+| `rest_session` | External, bot | Puts a session to rest, like Rest in Open Space: its process and browser stop, which frees its place. A turn under way is cut short, without asking. Its next message wakes it up. |
 | `set_remote` | External, bot | Turns Remote Control on or off for a session. |
 | `answer_permission` | External | Answers what a session waits for: a permission with `allow`, `deny` or `always` (when offered), or a question with its answers. A request for keys can only be answered in Open Space. |
 | `send_file` | Session, bot | Sends a file to your Telegram chat by its absolute path, with an optional caption. The bot is optional when you have only one. |
 | `rename_session` | Session | Renames the calling session. |
 | `finish_run` | Session | For a trigger's run only: says the task is done. The session closes at the end of the turn, and its conversation stays in Resume. Anywhere else it returns an error. |
 
-No tool puts a session to rest or switches it off: do that from the interface. See [Sessions](sessions.md).
+No tool switches a session off: do that from the interface. See [Sessions](sessions.md).
 
 A session or a bot cannot set a trigger's rules (`allowedTools`). Only the external program can.
 
