@@ -70,6 +70,23 @@ export function chromeSight(content: unknown): ChromeSight | null {
   return { url: line[2], title: line[1], ...(picture ? { picture } : {}) };
 }
 
+/**
+ * A turn stopped by the usage limit: when the limit resets, in milliseconds (null when no rate limit event told it),
+ * and which window ran out.
+ */
+export interface LimitHit { resetsAt: number | null; kind: 'five_hour' | 'weekly' | 'other' }
+
+/** What a turn stopped by the usage limit ends with ("You've hit your 5-hour limit · resets 7pm (Europe/Paris)", 2.1.319). */
+const LIMIT_TEXT = /hit your .*limit/i;
+/** What a limit hit says when no rejecting rate limit event came before it. */
+const NO_LIMIT: LimitHit = Object.freeze({ resetsAt: null, kind: 'other' });
+
+/** The window a rate limit event names (rate_limit_info.rateLimitType). */
+function limitKind(type: string): LimitHit['kind'] {
+  if (type === 'five_hour') return 'five_hour';
+  return type.startsWith('seven_day') ? 'weekly' : 'other';
+}
+
 /** The Agent call that first started a sub-agent, and the sub-agent's type. */
 export interface AgentLaunch { call: string; type: string; description?: string }
 
@@ -109,6 +126,8 @@ export interface NormalizerOptions {
   onChrome?: (sight: ChromeSight) => void;
   /** the next message Claude Code predicts the user will send, after a turn (claude --prompt-suggestions) */
   onSuggestion?: (suggestion: string) => void;
+  /** the turn stopped on the usage limit: told once per turn, from the answer's error or the result's text */
+  onLimitHit?: (hit: LimitHit) => void;
   /** first names already taken by sub-agents of this session (shared across resumes) */
   names: Set<string>;
   /** the name of the session a SendMessage call goes to: its `to` is a name, or a socket address when answering one */
@@ -150,6 +169,10 @@ export class Normalizer {
   private revived = new Map<string, string>();
   /** sub-agents currently working (called, not yet gone) */
   readonly present = new Set<string>();
+  /** the last rate limit event's reset time (ms) and window */
+  private lastLimit: LimitHit = NO_LIMIT;
+  /** the limit was already told for the turn under way */
+  private limitTold = false;
 
   private options: NormalizerOptions;
 
@@ -188,12 +211,19 @@ export class Normalizer {
         // the window of the model that answered (Claude Code tells it per model at a turn's end)
         const windows = Object.values(asJson(message.modelUsage)).map((usage) => asNumber(asJson(usage).contextWindow)).filter(Boolean);
         if (windows.length) this.options.onContext?.({ max: Math.max(...windows) });
+        if (message.is_error && LIMIT_TEXT.test(asString(message.result))) this.tellLimit();
+        this.limitTold = false;
         this.options.onResult({
           ok: !message.is_error && message.subtype === 'success', text: asString(message.result), ms: asNumber(message.duration_ms),
         });
         break;
       }
       case 'rate_limit_event': {
+        const info = asJson(message.rate_limit_info);
+        const resetsAt = asNumber(info.resetsAt);
+        this.lastLimit = info.status === 'rejected'
+          ? { resetsAt: resetsAt ? (resetsAt < 1e12 ? resetsAt * 1000 : resetsAt) : null, kind: limitKind(asString(info.rateLimitType)) }
+          : NO_LIMIT;
         const windows = Object.entries(asJson(asJson(message.rate_limit_info).unifiedWindows)).map(([name, raw]) => {
           const window = asJson(raw);
           return { name, utilization: asNumber(window.utilization), resetsAt: asNumber(window.resetsAt) || null };
@@ -359,8 +389,17 @@ export class Normalizer {
     this.options.emit({ k: 'leave', who: id, ok, tokens: asNumber(usage.total_tokens), tools: asNumber(usage.tool_uses), ms: asNumber(usage.duration_ms) });
   }
 
+  /** Tells the turn stopped on the usage limit, once per turn. */
+  private tellLimit() {
+    if (this.limitTold) return;
+    this.limitTold = true;
+    this.options.onLimitHit?.(this.lastLimit);
+    this.lastLimit = NO_LIMIT;
+  }
+
   private assistant(message: Json) {
     const who = asString(message.parent_tool_use_id) || 'chef';
+    if (who === 'chef' && message.error === 'rate_limit' && LIMIT_TEXT.test(textOf(asJson(message.message).content))) this.tellLimit();
     // what this answer was given to read is the context as it stands (cache included); a sub-agent has its own
     const usage = asJson(asJson(message.message).usage);
     this.spend(asJson(message.message), usage);

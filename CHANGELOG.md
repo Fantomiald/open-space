@@ -1,5 +1,9 @@
 # Versions
 
+## Non publiée
+
+- Limite d'usage : une session arrêtée par la limite de 5 h (ou de la semaine) se met en pause au lieu d'échouer, et reprend seule une minute après l'heure de remise à zéro, en disant à Claude de continuer où il en était (et de recréer ses réveils `/loop` ou cron, perdus pendant la pause). Le panneau État la garde dans « Au travail » avec « en pause jusqu'à 19:00 », sa bulle le dit, et un bandeau au-dessus du champ propose « Reprendre maintenant ». Ce qui est envoyé entre-temps attend dans la file et part à la reprise. La pause survit à un redémarrage d'Open Space. Le réglage Claude Code « Reprendre à la fin de la limite » (`autoContinueAtUsageLimit`) n'a rien changé à ces tours en `-p`, d'où cette reprise côté Open Space.
+
 ## 1.35.4
 
 - Bulles d'aide : survoler une icône (Réglages, Focus, Mods, Interrompre…) affiche son nom après un court instant, aux couleurs d'Open Space et sans sortir de la fenêtre. Elle s'affiche aussi au clavier (Tab) et se ferme avec Échap (PR #54 de Guillaume).

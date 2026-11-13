@@ -359,6 +359,8 @@ export const session: Dictionary['session'] = {
     compacting: { auto: 'auto-compacting', manual: 'compacting' },
     subagents: (count: number) => (count === 1 ? '1 sub-agent' : `${count} sub-agents`),
     scheduled: (count: number) => (count === 1 ? '1 planned wake-up' : `${count} planned wake-ups`),
+    pausedUntil: (when: string) => `paused until ${when}`,
+    pausedSentence: (when: string) => `Usage limit reached: paused until ${when}, then I pick up again.`,
     fold: 'Fold',
     unfold: 'Unfold',
   },

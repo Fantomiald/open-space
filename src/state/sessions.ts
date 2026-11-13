@@ -39,7 +39,7 @@ import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { projectOf } from './projects.ts';
 import { openOut } from '../net/out.ts';
 import { outKey, outSize, outTarget, parseOut, type OutTarget } from './out.ts';
-import { announceSpeech, answerSpeech, earlySpeech, replySpeech, speechOf } from './speech.ts';
+import { announceSpeech, answerSpeech, earlySpeech, pauseSpeech, replySpeech, speechOf } from './speech.ts';
 
 /** The open windows, kept in this browser so a reload finds them as they were. */
 const readLayout = () => readPreference<{ columns: string[][]; selectedId: string | null } | null>('layout', null);
@@ -590,6 +590,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'session': {
         const previous = s.sessions;
         set({ sessions: { ...previous, [message.session.id]: message.session } });
+        const paused = pauseSpeech(previous[message.session.id], message.session, new Date());
+        if (paused) announceSpeech(paused);
         if (s.awaitingNew && !previous[message.session.id]) {
           // a new session with several open joins them when there is room, else takes the place of the one in use
           // in focus mode it opens where the launcher's window was (the same place in the grid) and that window closes

@@ -1,6 +1,7 @@
 // Words and tones for session states. One place, so the design can restyle the tones without touching logic.
 import type { BackgroundTask, PermissionMode, SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { clockTime, resetLabel } from '../lib/format.ts';
 import { type AttentionKind, isWorking } from './queue.ts';
 
 /** Drives the colour of badges and cards (see --tone-* in design/tokens.css). */
@@ -34,6 +35,16 @@ export function backgroundLabel(tasks: readonly BackgroundTask[]): string {
   if (kinds.size === 1 && kinds.has('shell')) return words.shells(tasks.length);
   if (kinds.size === 1 && kinds.has('monitor')) return words.monitors(tasks.length);
   return words.tasks(tasks.length);
+}
+
+/**
+ * Until when the usage limit pauses a session: the time alone today ("en pause jusqu’à 19:00"), with its day otherwise.
+ * `note` for a status line, `sentence` for a bubble or a banner.
+ */
+export function pauseLabel(until: number, now: Date, form: 'note' | 'sentence' = 'note'): string {
+  const date = new Date(until);
+  const when = date.toDateString() === now.toDateString() ? clockTime(date) : resetLabel(until, now);
+  return form === 'note' ? t.session.status.pausedUntil(when) : t.session.status.pausedSentence(when);
 }
 
 /** The models offered for a session: the alias Claude Code takes, and its name ('' : Claude Code's default). */

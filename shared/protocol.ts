@@ -346,6 +346,10 @@ export interface SessionInfo {
   background?: BackgroundTask[];
   /** wake-ups it planned on its own (a /loop, cron jobs), still to come; absent when none */
   scheduled?: number;
+  /** epoch ms until which it is paused by the usage limit: what is sent waits in the queue, then it resumes on its own */
+  pausedUntil?: number;
+  /** the wake-ups it had planned (`scheduled`) when the limit paused it, told to Claude when it resumes */
+  pausedCrons?: number;
   /** the last slash command sent to the session, without the slash (e.g. "kit:design"); '' if none */
   command: string;
   /** last text said by the assistant, shortened */
@@ -643,6 +647,8 @@ export type ClientMessage =
   | { t: 'unqueue'; sessionId: string; queueId: string }
   /** sends the queued messages at once, interrupting the running turn */
   | { t: 'sendNow'; sessionId: string }
+  /** lifts a pause of the usage limit at once: the session resumes, then sends its queue */
+  | { t: 'resumeNow'; sessionId: string }
   /** a side question (/btw): answered from the session's conversation without interrupting it nor entering it */
   | { t: 'aside'; sessionId: string; question: string; /** a reply to the side question shown: it is asked with the exchange so far */ follow?: boolean }
   /** the side question's answer is put away (and the question withdrawn if still asked) */

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { LoggedEvent, OfficeEvent, Question, SessionInfo, SessionState, SlashCommand } from '../../shared/protocol.ts';
 import { availability, stillFree } from './availability.ts';
-import { backgroundLabel, backgroundWork, contextLevel, stateLabel, toneOf } from './labels.ts';
+import { backgroundLabel, backgroundWork, contextLevel, pauseLabel, stateLabel, toneOf } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, ownCommand, withOwnCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
 import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
@@ -104,6 +104,17 @@ describe('attention queue', () => {
     assert.equal(toneOf(rendering, null), 'work');
     assert.equal(stateLabel(rendering, null), stateLabel(session('w', 'work'), null));
     assert.equal(attentionKind(rendering, {}), 'finished', 'what it said before going on still waits to be read');
+  });
+
+  it('counts a session the usage limit paused as working, not as a turn to read, and says until when', () => {
+    const now = new Date(2026, 10, 13, 15, 20);
+    const paused = session('p', 'wait', { turns: 3, lastSeq: 9, pausedUntil: new Date(2026, 10, 13, 19, 0).getTime() });
+    assert.equal(attentionKind(paused, {}), null);
+    assert.deepEqual(otherSessions([paused]).working.map((s) => s.id), ['p']);
+    assert.equal(sessionStatus(paused, {}), 'working');
+    assert.equal(toneOf(paused, null), 'work');
+    assert.equal(pauseLabel(paused.pausedUntil!, now), 'en pause jusqu’à 19:00');
+    assert.equal(pauseLabel(new Date(2026, 10, 14, 8, 5).getTime(), now), 'en pause jusqu’à demain à 08:05');
   });
 
   it('names what runs in the background as Claude Code does: shells, monitors, or tasks when they are mixed', () => {

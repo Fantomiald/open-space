@@ -371,6 +371,8 @@ export const session = {
     compacting: { auto: 'compactage auto', manual: 'compactage' },
     subagents: (count: number) => (count === 1 ? '1 sous-agent' : `${count} sous-agents`),
     scheduled: (count: number) => (count === 1 ? '1 réveil prévu' : `${count} réveils prévus`),
+    pausedUntil: (when: string) => `en pause jusqu’à ${when}`,
+    pausedSentence: (when: string) => `Limite d’usage atteinte : en pause jusqu’à ${when}, puis je reprends.`,
     fold: 'Replier',
     unfold: 'Déplier',
   },

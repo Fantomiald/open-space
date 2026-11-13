@@ -4,9 +4,11 @@ import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
-import { contextLevel, isRunning } from '../state/labels.ts';
+import { contextLevel, isRunning, pauseLabel } from '../state/labels.ts';
+import { isPaused } from '../state/queue.ts';
 import { closeCompact, compactClosed } from '../state/hints.ts';
 import { useSessions } from '../state/sessions.ts';
+import { useNow } from '../lib/useNow.ts';
 import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { BackgroundTasks } from './BackgroundTasks.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
@@ -41,6 +43,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const busy = session.state === 'starting' || session.state === 'work' || session.state === 'perm';
   const interruptible = isRunning(session);
   const queued = session.queued ?? [];
+  const paused = isPaused(session);
   const own = attachments.items.length ? null : ownCommand(text);
   // during a turn a message waits for its end in the queue, unless it is one of Open Space's own commands (Session.send)
   const waits = busy && !own;
@@ -111,13 +114,15 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
       {queued.length > 0 && (
         <section className="cp-queue" aria-label={words.queueLabel}>
           <div className="cp-queue__head">
-            <span>{words.queued(queued.length)}{busy ? words.leaveAtTurnEnd : ''}</span>
-            <button
-              type="button" className="cp-button" data-variant="primary" onClick={() => send({ t: 'sendNow', sessionId: session.id })}
-              title={busy ? words.sendNowTitle : undefined}
-            >
-              {busy ? words.sendNow : words.send}
-            </button>
+            <span>{words.queued(queued.length)}{paused ? words.leaveAtResume(queued.length) : busy ? words.leaveAtTurnEnd : ''}</span>
+            {!paused && (
+              <button
+                type="button" className="cp-button" data-variant="primary" onClick={() => send({ t: 'sendNow', sessionId: session.id })}
+                title={busy ? words.sendNowTitle : undefined}
+              >
+                {busy ? words.sendNow : words.send}
+              </button>
+            )}
           </div>
           <ol className="cp-queue__list">
             {queued.map((message) => (
@@ -136,6 +141,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
           </ol>
         </section>
       )}
+      {paused && <PauseBanner session={session} until={session.pausedUntil!} />}
       <CompactHint session={session} />
       <AttachmentStrip attachments={attachments} />
       {field}
@@ -152,6 +158,22 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
         ) : !stacked && <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>}
       </div>
     </form>
+  );
+}
+
+/** The usage limit paused the session: until when, what happens then, and a way not to wait. */
+function PauseBanner({ session, until }: { session: SessionInfo; until: number }) {
+  const send = useSessions((s) => s.send);
+  const words = t.composer.composer;
+  const now = useNow(60_000);
+  return (
+    <div className="cp-compact-hint" data-level="paused" role="status">
+      <PauseIcon />
+      <span>{pauseLabel(until, new Date(now), 'sentence')}</span>
+      <button type="button" className="cp-button" data-size="small" title={words.resumeNowTitle} onClick={() => send({ t: 'resumeNow', sessionId: session.id })}>
+        {words.resumeNow}
+      </button>
+    </div>
   );
 }
 

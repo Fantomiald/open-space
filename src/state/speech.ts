@@ -1,9 +1,10 @@
 // What is said in any session as it happens (live, never replayed history): the session agent's texts, and the user's
 // messages and answers. The meeting room listens to it for its speech bubbles; nothing is stored. What sub-agents
 // write stays in their tab: several of them at once would fill the room with bubbles.
-import type { OfficeEvent, PermissionDecision } from '../../shared/protocol.ts';
+import type { OfficeEvent, PermissionDecision, SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { earlyBubbleText } from '../room/bubbles.ts';
+import { pauseLabel } from './labels.ts';
 import { writingStops } from './partials.ts';
 
 /** The speaker of the user's own messages and answers. */
@@ -35,6 +36,12 @@ export function earlySpeech(sessionId: string, who: string, draft: string): Spee
   if (!sentence) return null;
   spokenEarly.add(sessionId);
   return { sessionId, speaker: who, text: sentence };
+}
+
+/** The session's bubble when the usage limit pauses it, or moves its pause later; none when the pause is lifted, nor for a session first seen paused. */
+export function pauseSpeech(previous: SessionInfo | undefined, next: SessionInfo, now: Date): Speech | null {
+  if (!previous || next.pausedUntil === undefined || next.pausedUntil === previous.pausedUntil) return null;
+  return { sessionId: next.id, speaker: 'chef', text: pauseLabel(next.pausedUntil, now, 'sentence') };
 }
 
 export const answerSpeech = (sessionId: string, decision: PermissionDecision): Speech => ({ sessionId, speaker: USER_SPEAKER, text: t.common.decisions[decision] });

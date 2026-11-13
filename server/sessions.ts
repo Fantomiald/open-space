@@ -42,6 +42,10 @@ import {
 
 const STATES: ReadonlySet<string> = new Set(['starting', 'work', 'perm', 'wait', 'done', 'closed', 'error']);
 const SAVE_DELAY_MS = 500;
+/** A session paused by the usage limit resumes this long after the reset, for claude.ai to have reset it too. */
+const LIMIT_RESUME_DELAY_MS = 60_000;
+/** The longest delay setTimeout keeps (2^31 - 1 ms): a later reset is looked at again after it. */
+const MAX_TIMER_MS = 2_147_483_647;
 /** A session in Remote Control keeps its process: those on by default leave this many live slots for the others to work in. */
 const REMOTE_FREE_SLOTS = 2;
 const MAX_COMMAND_DESCRIPTION = 200;
@@ -120,6 +124,8 @@ export class SessionManager {
   /** an idle compaction failed (the session limit, most often): none is tried again until a turn ends well */
   private idleCompactPaused = false;
   private saveTimer: NodeJS.Timeout | null = null;
+  /** wakes the sessions the usage limit paused, a minute after the nearest reset */
+  private limitTimer: NodeJS.Timeout | null = null;
   /** set by shutdown(): no new process may start after it */
   private stopping = false;
   private deps: SessionManagerDeps;
@@ -169,6 +175,37 @@ export class SessionManager {
     for (const session of this.sessions.values()) {
       if (session.snapshot().remoteSession) session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control back on for ${session.snapshot().name}`, error));
     }
+    this.resumeDue();
+  }
+
+  /** The sessions the usage limit paused whose reset is a minute past resume; the timer is set for the next one. */
+  private resumeDue() {
+    this.limitTimer = null;
+    const now = this.now();
+    for (const session of this.sessions.values()) {
+      const until = session.pausedUntil;
+      if (until !== undefined && until + LIMIT_RESUME_DELAY_MS <= now) session.resumeAfterLimit();
+    }
+    this.armLimitTimer();
+  }
+
+  private armLimitTimer() {
+    if (this.limitTimer) clearTimeout(this.limitTimer);
+    this.limitTimer = null;
+    const pauses = [...this.sessions.values()].flatMap((session) => session.pausedUntil ?? []);
+    if (!pauses.length || this.stopping) return;
+    this.limitTimer = setTimeout(() => this.resumeDue(), Math.min(MAX_TIMER_MS, Math.max(0, Math.min(...pauses) + LIMIT_RESUME_DELAY_MS - this.now())));
+    this.limitTimer.unref();
+  }
+
+  /** The user would not wait for the usage limit to reset: the session resumes now. */
+  resumeNow(id: string) { this.session(id).resumeAfterLimit(); }
+
+  /** When the five-hour window of the last usage known resets, in epoch ms, if it is still ahead. */
+  private knownReset(): number | null {
+    const resetsAt = this.quota?.resetsAt ?? null;
+    const resetsAtMs = resetsAt === null ? null : resetsAt < 1e12 ? resetsAt * 1000 : resetsAt;
+    return resetsAtMs !== null && resetsAtMs > this.now() ? resetsAtMs : null;
   }
 
   /**
@@ -341,6 +378,8 @@ export class SessionManager {
       onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
       onQuota: (quota) => this.setQuota(quota),
+      knownReset: () => this.knownReset(),
+      onPauseChanged: () => this.armLimitTimer(),
       onCleared: () => this.awaitingTag.add(info.id),
       allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.roots()),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
@@ -1208,6 +1247,8 @@ export class SessionManager {
     for (const id of [...this.asides.keys()]) this.closeAside(id);
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    if (this.limitTimer) clearTimeout(this.limitTimer);
+    this.limitTimer = null;
     await Promise.all([...this.sessions.values()].map((session) => session.shutdown()));
     await this.saveNow();
     await Promise.all([...this.logs.values()].map((log) => log.close()));
@@ -1247,6 +1288,8 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
     queued: parseQueue(raw.queued),
+    pausedUntil: typeof raw.pausedUntil === 'number' && raw.pausedUntil > 0 ? raw.pausedUntil : undefined,
+    pausedCrons: typeof raw.pausedCrons === 'number' && Number.isInteger(raw.pausedCrons) && raw.pausedCrons > 0 ? raw.pausedCrons : undefined,
     worktree: parseWorktree(raw.worktree),
     toldPlace: asString(raw.toldPlace) || undefined,
     toldSharedBrowser: raw.toldSharedBrowser === true || undefined,

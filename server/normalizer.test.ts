@@ -4,11 +4,11 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import type { BackgroundTask, OfficeEvent, Quota, SlashCommand } from '../shared/protocol.ts';
 import { asJson } from './json.ts';
-import { Normalizer, describeRequest, ruleText, type AgentLaunch, type ChromeSight, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, ruleText, type AgentLaunch, type ChromeSight, type InitInfo, type LimitHit, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 
 function createNormalizer(peerName?: (address: string) => string, agentLaunch?: (agentId: string) => AgentLaunch | null) {
   const files: { who: string; caption: string; files: readonly { path: string; size: number; image: boolean }[]; display: string }[] = [];
-  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[], chrome: [] as ChromeSight[], suggestions: [] as string[] };
+  const seen = { files, events: [] as OfficeEvent[], results: [] as TurnResult[], quotas: [] as Quota[], inits: [] as InitInfo[], commands: [] as SlashCommand[][], requests: [] as ToolRequest[], cancels: [] as string[], partials: [] as string[], order: [] as string[], background: [] as BackgroundTask[][], schedules: [] as ScheduleChange[], chrome: [] as ChromeSight[], suggestions: [] as string[], limits: [] as LimitHit[] };
   const normalizer = new Normalizer({
     emit: (event) => { seen.events.push(event); seen.order.push(event.k); },
     onInit: (info) => seen.inits.push(info), onCommands: (commands) => seen.commands.push(commands),
@@ -16,6 +16,7 @@ function createNormalizer(peerName?: (address: string) => string, agentLaunch?: 
     onRequest: (request) => { seen.requests.push(request); seen.order.push('request'); }, onCancel: (requestId) => seen.cancels.push(requestId), onPartial: (who, text) => seen.partials.push(`${who}:${text}`),
     onBackground: (tasks) => seen.background.push(tasks), onSchedule: (change) => seen.schedules.push(change), onChrome: (sight) => seen.chrome.push(sight),
     onSuggestion: (suggestion) => { seen.suggestions.push(suggestion); seen.order.push('suggestion'); },
+    onLimitHit: (hit) => seen.limits.push(hit),
     names: new Set(), peerName, agentLaunch, onFiles: (who, caption, sent, display) => files.push({ who, caption, files: sent, display }),
   });
   return { normalizer, ...seen };
@@ -45,6 +46,55 @@ describe('Normalizer on a real turn that edits and writes files (2.1.318)', () =
     ]);
     const editId = acts.find((event) => event.k === 'act' && event.tool === 'Edit');
     assert.equal(diffs[0].k === 'diff' && diffs[0].id, editId?.k === 'act' && editId.id);
+  });
+});
+
+describe('Normalizer on a turn stopped by the usage limit (built from a 2.1.319 transcript)', () => {
+  it('tells the limit once, with the reset time of the last rate limit event in milliseconds', () => {
+    const { limits, results } = replay('rate-limit-hit');
+    assert.deepEqual(limits, [{ resetsAt: 1794002400000, kind: 'five_hour' }]);
+    assert.equal(results[0]?.ok, false);
+  });
+
+  it('tells it with no reset time when no rate limit event came before', () => {
+    const { normalizer, limits } = createNormalizer();
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'text', text: "You've hit your 5-hour limit" }] }, error: 'rate_limit' });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your 5-hour limit" });
+    assert.deepEqual(limits, [{ resetsAt: null, kind: 'other' }]);
+  });
+
+  it('tells it from the result alone when the answer carries no error', () => {
+    const { normalizer, limits } = createNormalizer();
+    normalizer.handle({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: 1794211200, rateLimitType: 'seven_day_opus' } });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your weekly limit · resets Nov 15" });
+    assert.deepEqual(limits, [{ resetsAt: 1794211200000, kind: 'weekly' }]);
+  });
+
+  it('tells it again on a later turn, and not for another error', () => {
+    const { normalizer, limits } = createNormalizer();
+    normalizer.handle({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 500' });
+    for (let turn = 0; turn < 2; turn++) {
+      normalizer.handle({ type: 'assistant', message: { content: [{ type: 'text', text: 'limit' }] }, error: 'rate_limit' });
+      normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your 5-hour limit" });
+    }
+    assert.equal(limits.length, 2);
+  });
+
+  it('forgets the reset time once told, and takes none from an event that allows', () => {
+    const { normalizer, limits } = createNormalizer();
+    normalizer.handle({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: 1794002400, rateLimitType: 'five_hour' } });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your 5-hour limit" });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your 5-hour limit" });
+    normalizer.handle({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', resetsAt: 1794020400, rateLimitType: 'five_hour' } });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your 5-hour limit" });
+    assert.deepEqual(limits, [{ resetsAt: 1794002400000, kind: 'five_hour' }, { resetsAt: null, kind: 'other' }, { resetsAt: null, kind: 'other' }]);
+  });
+
+  it('does not tell a rate limit error that is not the usage limit', () => {
+    const { normalizer, limits } = createNormalizer();
+    normalizer.handle({ type: 'assistant', message: { content: [{ type: 'text', text: 'API Error: 429 rate_limit_error' }] }, error: 'rate_limit' });
+    normalizer.handle({ type: 'result', subtype: 'success', is_error: true, result: 'API Error: 429 rate_limit_error' });
+    assert.deepEqual(limits, []);
   });
 });
 

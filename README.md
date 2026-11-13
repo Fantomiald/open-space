@@ -24,6 +24,7 @@ Open Space runs the `claude` installed on your machine, so your skills, plugins,
 ![Cmd+. swaps the room for focus mode: the sessions on the left, conversations side by side; Tab slides them aside to see the room](docs/images/focus.gif)
 
 - **See who needs you.** The Status panel lists what waits for you and for how long, who is working, and who is ready for a new message.
+- **Get past the 5-hour limit without thinking about it.** A session stopped by the usage limit pauses and picks up again on its own when the limit resets, with what you sent it meanwhile. "Resume now" if you'd rather not wait.
 - **Open up to six conversations** side by side. Tab slides them aside to see the room, Tab brings them back.
 - **Focus mode** (Cmd+. on Mac, Ctrl+. on Windows) swaps the room for the list of your sessions, grouped by what they need. The list folds down to faces when you want more room.
 - **Search everything** with Cmd+K on Mac or Ctrl+K on Windows: sessions, messages, commands and settings.

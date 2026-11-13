@@ -218,6 +218,7 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
       return sessionId && queueId ? { t: 'unqueue', sessionId, queueId } : null;
     }
     case 'sendNow': return sessionId ? { t: 'sendNow', sessionId } : null;
+    case 'resumeNow': return sessionId ? { t: 'resumeNow', sessionId } : null;
     case 'aside': {
       const question = boundedString(raw.question, MAX_TEXT)?.trim();
       return sessionId && question ? { t: 'aside', sessionId, question, ...(raw.follow === true ? { follow: true } : {}) } : null;

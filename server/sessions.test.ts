@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it, mock } from 'node:test';
 import type { AccountsBrowser, ServerMessage, SessionInfo } from '../shared/protocol.ts';
 import type { CatalogProbe, ElicitationAnswer, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
@@ -1394,6 +1394,156 @@ describe('keys asked with os-secret', () => {
     assert.deepEqual(find(id).secrets, ['TOKEN']);
     await manager.forget(id);
     assert.deepEqual(store.names(id), []);
+    await manager.shutdown();
+  });
+});
+
+describe('the usage limit', () => {
+  const RESET = 1794002400_000;
+  const RESUME = /^La limite est repartie à zéro : reprends où tu en étais\./;
+  const sentTo = (processes: FakeProcess[]) => processes.flatMap((process) => process.sent);
+
+  it('pauses until the reset, keeps what is sent meanwhile, then its timer resumes with the queue after it', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      let clock = RESET - 2 * 3_600_000;
+      const { manager, processes, find, states } = setup({}, undefined, () => clock);
+      await manager.init();
+      const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+      processes[0].feed('rate-limit-hit');
+      assert.equal(find(id).pausedUntil, RESET);
+      assert.equal(states(id).at(-1), 'wait');
+      manager.send(id, 'and then this');
+      assert.deepEqual(sentTo(processes).length, 1, 'nothing reaches Claude during the pause');
+      assert.deepEqual(find(id).queued?.map((message) => message.text), ['and then this']);
+      clock = RESET + 59_000;
+      mock.timers.tick(2 * 3_600_000 + 59_000);
+      assert.equal(sentTo(processes).length, 1, 'not before a minute past the reset');
+      clock = RESET + 60_000;
+      mock.timers.tick(1_000);
+      const last = sentTo(processes).at(-1) ?? '';
+      assert.match(last, RESUME);
+      assert.match(last, /\n\nand then this$/);
+      assert.equal(find(id).pausedUntil, undefined);
+      assert.equal(find(id).queued, undefined);
+      await manager.shutdown();
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('resumes once only when the limit is hit again during the pause, and tells the wake-ups it had planned', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/loop check the deploy' });
+    processes[0].handlers.onMessage({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'w1', name: 'ScheduleWakeup', input: { delaySeconds: 1200, prompt: '/loop check the deploy', reason: 'r' } }] } });
+    processes[0].handlers.onMessage({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'w1', content: 'ok' }] } });
+    processes[0].feed('rate-limit-hit', 1);
+    processes[0].feed('rate-limit-hit', 1);
+    assert.equal(find(id).pausedUntil, RESET);
+    assert.equal(find(id).pausedCrons, 1);
+    manager.resumeNow(id);
+    manager.resumeNow(id);
+    const resumes = sentTo(processes).filter((text) => RESUME.test(text));
+    assert.equal(resumes.length, 1);
+    assert.match(resumes[0], /Tu avais 1 réveil prévu \(CronCreate, \/loop\) : recrée ceux qui servent encore\.$/);
+    await manager.shutdown();
+  });
+
+  it('resumes at once after a restart when the reset is past', async () => {
+    let clock = RESET - 3_600_000;
+    const first = setup({}, undefined, () => clock);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'go' });
+    first.processes[0].feed('rate-limit-hit');
+    first.manager.send(id, 'queued before the restart');
+    await first.manager.shutdown();
+    clock = RESET + 120_000;
+    const second = setup({}, first.dataDir, () => clock);
+    await second.manager.init();
+    const last = sentTo(second.processes).at(-1) ?? '';
+    assert.match(last, RESUME);
+    assert.match(last, /queued before the restart$/);
+    assert.equal(second.find(id).pausedUntil, undefined);
+    await second.manager.shutdown();
+  });
+
+  it('keeps the pause across a restart while the reset is ahead', async () => {
+    const clock = RESET - 3_600_000;
+    const first = setup({}, undefined, () => clock);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'go' });
+    first.processes[0].feed('rate-limit-hit');
+    await first.manager.shutdown();
+    const second = setup({}, first.dataDir, () => clock);
+    await second.manager.init();
+    assert.equal(second.find(id).pausedUntil, RESET);
+    assert.equal(second.processes.length, 0);
+    await second.manager.shutdown();
+  });
+
+  it('resumes at once when the user asks, and sends the queue with it', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    manager.send(id, 'now please');
+    manager.resumeNow(id);
+    assert.match(sentTo(processes).at(-1) ?? '', /^La limite est repartie à zéro[\s\S]*\n\nnow please$/);
+    assert.equal(find(id).pausedUntil, undefined);
+    await manager.shutdown();
+  });
+
+  it('waits five hours when the reset is unknown', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit', 2);
+    assert.equal(find(id).pausedUntil, clock + 5 * 3_600_000);
+    await manager.shutdown();
+  });
+
+  it('waits a quarter of an hour when the reset it is given has already passed', async () => {
+    const clock = RESET + 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    assert.equal(find(id).pausedUntil, clock + 15 * 60_000);
+    await manager.shutdown();
+  });
+
+  it('keeps a trigger’s run open through the pause, and tells no one it finished', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      const clock = RESET - 2 * 3_600_000;
+      const { manager, processes, find, attention } = setup({}, undefined, () => clock);
+      await manager.init();
+      const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' } });
+      manager.send(id, 'go');
+      processes[0].feed('rate-limit-hit');
+      mock.timers.tick(60 * 60_000 + 1_000);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.notEqual(find(id).state, 'closed');
+      assert.deepEqual(attention.filter(([kind, session]) => kind === 'finished' && session === id), []);
+      await manager.shutdown();
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it('takes the five-hour reset of the last usage known when the limit does not say it', async () => {
+    const clock = 1792149600_000 - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'ping' });
+    processes[0].feed('simple-turn');
+    manager.send(id, 'again');
+    processes[0].feed('rate-limit-hit', 2);
+    assert.equal(find(id).pausedUntil, 1792149600_000);
     await manager.shutdown();
   });
 });

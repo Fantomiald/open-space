@@ -9,12 +9,12 @@ import { formatAge } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { roomSessions } from '../room/cast.ts';
-import { backgroundLabel, todoLabel } from '../state/labels.ts';
-import { attentionQueue, otherSessions } from '../state/queue.ts';
+import { backgroundLabel, pauseLabel, todoLabel } from '../state/labels.ts';
+import { attentionQueue, isPaused, otherSessions } from '../state/queue.ts';
 import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { AutomatonIcon, ChevronDownIcon, ChevronUpIcon, CompactIcon, PlusIcon } from './Icons.tsx';
+import { AutomatonIcon, ChevronDownIcon, ChevronUpIcon, CompactIcon, PauseIcon, PlusIcon } from './Icons.tsx';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { Marquee } from './Marquee.tsx';
@@ -113,7 +113,9 @@ export function StatusPanel() {
     </li>
   );
   const workingRow = (session: SessionInfo) => {
+    const paused = isPaused(session);
     const notes = [
+      paused && pauseLabel(session.pausedUntil!, new Date(now)),
       session.compacting && words.compacting[session.compacting],
       session.state === 'starting' && words.starting,
       session.subagents.length > 0 && words.subagents(session.subagents.length),
@@ -121,8 +123,10 @@ export function StatusPanel() {
     ].filter((note) => typeof note === 'string');
     return (
     <li key={session.id}>
-      <button type="button" className="cp-status__item" data-kind={session.compacting ? 'compacting' : 'working'} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
-        {session.compacting ? <span className="cp-status__compact" aria-hidden="true"><CompactIcon /></span> : <span className="cp-status__dot" aria-hidden="true" />}
+      <button type="button" className="cp-status__item" data-kind={paused ? 'paused' : session.compacting ? 'compacting' : 'working'} aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
+        {paused ? <span className="cp-status__paused" aria-hidden="true"><PauseIcon /></span>
+          : session.compacting ? <span className="cp-status__compact" aria-hidden="true"><CompactIcon /></span>
+          : <span className="cp-status__dot" aria-hidden="true" />}
         <span className="cp-status__label">
           <RowName session={session} label={session.name} />
           {notes.length > 0 && <Marquee className="cp-status__notes">{notes.join(' · ')}</Marquee>}
