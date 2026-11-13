@@ -99,6 +99,8 @@ export interface OpenSpaceApi {
   answer: (sessionId: string, requestId: string, decision: PermissionDecision) => void;
   reply: (sessionId: string, requestId: string, answers: Record<string, string>) => void;
   interrupt: (sessionId: string) => void;
+  /** puts the session to rest (like Rest in Open Space): its process and browser go, it no longer counts among the live ones */
+  rest: (sessionId: string) => Promise<void>;
   remote: (sessionId: string, enabled: boolean) => void;
   rename: (sessionId: string, name: string) => void;
   /** closes the session once its turn ends */
@@ -175,7 +177,8 @@ export const TOOLS: Tool[] = [
     inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, requestId: { type: 'string' }, decision: { type: 'string', enum: ['allow', 'deny', 'always'] }, answers: { type: 'object' } }, required: ['sessionId', 'requestId'] },
     annotations: write,
   },
-  { name: 'stop_session', for: FOLLOWERS, description: 'Interrupts what a session is doing (like Stop in Open Space); it stays open.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] }, annotations: write },
+  { name: 'stop_session', for: FOLLOWERS, description: 'Interrupts what a session is doing (like Stop in Open Space); it stays open and keeps its process, so its place among the live sessions too (rest_session frees it).', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] }, annotations: write },
+  { name: 'rest_session', for: FOLLOWERS, description: 'Puts a session to rest (like Rest in Open Space): its process and browser stop, which frees its place among the live sessions; a turn under way is cut short. Its conversation stays, and its next message wakes it up.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] }, annotations: write },
   { name: 'set_remote', for: FOLLOWERS, description: 'Turns Remote Control on or off for a session, to follow and answer it from the Claude app of the phone.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['sessionId', 'enabled'] }, annotations: write },
   // what a session does to itself only, nothing of the user's: read-only to Claude Code, so that a run in plan mode may too
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
@@ -299,7 +302,8 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       api.answer(sessionId, wait.requestId, decision);
       return text(decision);
     }
-    case 'stop_session': api.interrupt(session().id); return text('stopped');
+    case 'stop_session': api.interrupt(session().id); return text('stopped: the session keeps its place among the live ones (rest_session frees it)');
+    case 'rest_session': await api.rest(session().id); return text('resting');
     case 'set_remote': api.remote(session().id, args.enabled === true); return text(args.enabled === true ? 'on' : 'off');
     case 'rename_session': case 'finish_run': {
       if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
