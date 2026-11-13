@@ -164,6 +164,7 @@ Le premier lancement demande ton prénom et ton perso, les dossiers où les sess
 
 ## Bon à savoir
 
+- Le [guide d'utilisation](docs/guide/README.fr.md) détaille les sessions, les automates, Telegram, les secrets, le serveur MCP, les mods et les variables d'environnement.
 - L’app de bureau prend en charge macOS et Windows. Le navigateur piloté par les agents demande un navigateur Chromium (Chrome, Edge, Arc).
 - Open Space s'appuie sur `claude -p` en mode stream-json, dont certaines options ne sont pas documentées. Une version plus récente de Claude Code peut casser une fonction : [ouvre une issue](https://github.com/Fantomiald/open-space/issues) si ça t'arrive.
 - Les commentaires du code et la doc interne ([ARCHITECTURE.md](docs/ARCHITECTURE.md), [CLAUDE.md](CLAUDE.md)) sont en partie en français.
