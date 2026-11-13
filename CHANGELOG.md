@@ -1,5 +1,9 @@
 # Versions
 
+## 1.35.5
+
+- Fast mode : un interrupteur dans le menu du modèle (lanceur et sessions), pour les modèles qui l'acceptent (Opus, Fable). Une icône s'affiche alors devant le modèle. Si Claude Code ne le sert pas (pas de crédits d'usage, limite atteinte), la raison s'affiche sous l'interrupteur (PR #56 de JB).
+
 ## 1.35.4
 
 - Bulles d'aide : survoler une icône (Réglages, Focus, Mods, Interrompre…) affiche son nom après un court instant, aux couleurs d'Open Space et sans sortir de la fenêtre. Elle s'affiche aussi au clavier (Tab) et se ferme avec Échap (PR #54 de Guillaume).
