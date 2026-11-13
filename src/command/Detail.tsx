@@ -1,6 +1,7 @@
 import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { MAX_TAG, MAX_TAGS, parseTags, withoutTag } from '../../shared/tags.ts';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { shortcut } from '../lib/platform.ts';
 import { drivesBrowser } from '../state/browser.ts';
@@ -54,7 +55,9 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
   const pick = (action: () => void) => () => { action(); close(); };
   return (
     <div className="cp-detail__more" ref={box}>
-      <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} title={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
+      <Tooltip text={words.more}>
+        <button type="button" className="cp-icon-button" data-variant="outlined" aria-expanded={open} aria-haspopup="menu" aria-label={words.more} onClick={() => setOpen(!open)}><MoreIcon /></button>
+      </Tooltip>
       {open && (
         <div ref={menu} className="cp-detail__menu" popover="manual" role="menu" aria-label={words.more}>
           <button type="button" role="menuitem" title={t.session.detail.renameHint} onClick={pick(onRename)}><PencilIcon />{t.session.detail.rename}</button>
@@ -207,7 +210,11 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
               zoom={several ? { zoomed, toggle: toggleZoom } : undefined} popOut={detached ? undefined : () => popOut({ kind: 'session', sessionId: session.id })}
             />
             {detached ? <OutControls target={{ kind: 'session', sessionId: session.id }} variant="outlined" />
-              : <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} title={t.session.detail.hideTitle} onClick={hide}><CloseIcon /></button>}
+              : (
+                <Tooltip text={t.session.detail.hideTitle}>
+                  <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={t.session.detail.hide} onClick={hide}><CloseIcon /></button>
+                </Tooltip>
+              )}
           </div>
         </div>
         <div className="cp-detail__line">

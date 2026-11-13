@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { hasNews, unreadMods } from '../../shared/dashboards.ts';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { plural, t } from '../i18n/index.ts';
 import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions, type RoomKind } from '../room/cast.ts';
@@ -54,17 +55,23 @@ export function Header() {
         <h1 className="cp-sr-only">Open Space</h1>
         <nav className="cp-segmented" data-icons aria-label={words.rooms}>
           {VIEWS.map(([id, ViewIcon, room]) => (
-            <button key={id} type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} title={words[room]} onClick={() => setView(id)}>
-              <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
-            </button>
+            <Tooltip key={id} text={words[room]}>
+              <button type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} onClick={() => setView(id)}>
+                <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
+              </button>
+            </Tooltip>
           ))}
-          <button type="button" aria-pressed={view === 'dashboards'} aria-label={dashboardsNews ? words.dashboardsNews : words.dashboards} title={dashboardsNews ? words.dashboardsNews : words.dashboardsTitle} data-news={dashboardsNews || undefined} onClick={() => setView('dashboards')}>
-            <DashboardIcon />
-          </button>
+          <Tooltip text={dashboardsNews ? words.dashboardsNews : words.dashboardsTitle}>
+            <button type="button" aria-pressed={view === 'dashboards'} aria-label={dashboardsNews ? words.dashboardsNews : words.dashboards} data-news={dashboardsNews || undefined} onClick={() => setView('dashboards')}>
+              <DashboardIcon />
+            </button>
+          </Tooltip>
           <span className="cp-header__divider" aria-hidden="true" />
-          <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} title={words.focusTitle(FOCUS_KEYS)} onClick={() => setView('focus')}>
-            <FocusIcon />
-          </button>
+          <Tooltip text={words.focusTitle(FOCUS_KEYS)}>
+            <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} onClick={() => setView('focus')}>
+              <FocusIcon />
+            </button>
+          </Tooltip>
         </nav>
       </div>
       <ProjectFilter />
@@ -74,16 +81,19 @@ export function Header() {
       <div className="cp-header__tools">
         {quota && <QuotaMeter quota={quota} />}
         <ModsButton />
-        <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} aria-label={words.search} title={words.searchTitle}>
-          <SearchIcon /><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
-        </button>
-        <button
-          type="button" className="cp-icon-button cp-header__settings" data-alert={appReady || outdated > 0} onClick={() => openSettings(true)}
-          aria-label={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settings}
-          title={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settingsTitle(SETTINGS_KEYS)}
-        >
-          <SettingsIcon />
-        </button>
+        <Tooltip text={words.searchTitle}>
+          <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} aria-label={words.search}>
+            <SearchIcon /><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
+          </button>
+        </Tooltip>
+        <Tooltip text={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settingsTitle(SETTINGS_KEYS)}>
+          <button
+            type="button" className="cp-icon-button cp-header__settings" data-alert={appReady || outdated > 0} onClick={() => openSettings(true)}
+            aria-label={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settings}
+          >
+            <SettingsIcon />
+          </button>
+        </Tooltip>
       </div>
     </header>
   );

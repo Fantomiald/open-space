@@ -1,5 +1,6 @@
 import { use, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
 import { readDraft, writeDraft } from '../state/drafts.ts';
@@ -97,7 +98,9 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   );
   const tools = (
     <div className="cp-composer__tools">
-      <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} title={words.commands} onClick={() => openPalette(true, '/')}><CommandIcon /></button>
+      <Tooltip text={words.commands}>
+        <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={words.commands} onClick={() => openPalette(true, '/')}><CommandIcon /></button>
+      </Tooltip>
       <TuneMenu tuning={session} cwd={session.cwd} onChange={(change) => send({ t: 'tune', sessionId: session.id, ...change })} compact={stacked} />
       <AttachButton attachments={attachments} />
       {session.background && <BackgroundTasks sessionId={session.id} tasks={session.background} compact={stacked} />}
@@ -122,8 +125,12 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
                 <span className="cp-queue__text">{message.text}</span>
                 {message.images ? <span className="cp-queue__images" title={words.images(message.images)}><ImageIcon />{message.images}</span> : null}
                 {message.files ? <span className="cp-queue__images" title={words.files(message.files)}><FileIcon />{message.files}</span> : null}
-                <button type="button" className="cp-icon-button" aria-label={words.editLabel} title={words.edit} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
-                <button type="button" className="cp-icon-button" aria-label={words.removeLabel} title={words.remove} onClick={() => unqueue(message.id)}><CloseIcon /></button>
+                <Tooltip text={words.edit}>
+                  <button type="button" className="cp-icon-button" aria-label={words.editLabel} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
+                </Tooltip>
+                <Tooltip text={words.remove}>
+                  <button type="button" className="cp-icon-button" aria-label={words.removeLabel} onClick={() => unqueue(message.id)}><CloseIcon /></button>
+                </Tooltip>
               </li>
             ))}
           </ol>
@@ -136,10 +143,12 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
         {tools}
         {/* while it works and nothing is written, the button stops it (Escape too); a message written joins the turn */}
         {interruptible && !ready ? (
-          <button
-            type="button" className={stacked ? 'cp-icon-button' : 'cp-button'} data-variant="outlined" aria-label={t.session.detail.interrupt} title={t.session.detail.interruptTitle}
-            disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}
-          ><PauseIcon />{!stacked && t.session.detail.interrupt}</button>
+          <Tooltip text={t.session.detail.interruptTitle}>
+            <button
+              type="button" className={stacked ? 'cp-icon-button' : 'cp-button'} data-variant="outlined" aria-label={t.session.detail.interrupt}
+              disabled={session.state === 'starting'} onClick={() => send({ t: 'interrupt', sessionId: session.id })}
+            ><PauseIcon />{!stacked && t.session.detail.interrupt}</button>
+          </Tooltip>
         ) : !stacked && <button type="submit" className="cp-button" data-variant="primary" disabled={!ready}>{sendLabel}</button>}
       </div>
     </form>
@@ -165,9 +174,11 @@ function CompactHint({ session }: { session: SessionInfo }) {
       <button type="button" className="cp-button" data-size="small" title={words.compactTitle} onClick={() => sendText(session.id, words.compactCommand)}>
         {words.compact}
       </button>
-      <button type="button" className="cp-icon-button" aria-label={words.hide} title={words.hide} onClick={() => { closeCompact(key); refresh((count) => count + 1); }}>
-        <CloseIcon />
-      </button>
+      <Tooltip text={words.hide}>
+        <button type="button" className="cp-icon-button" aria-label={words.hide} onClick={() => { closeCompact(key); refresh((count) => count + 1); }}>
+          <CloseIcon />
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -178,12 +189,13 @@ export function RemoteButton({ session }: { session: SessionInfo }) {
   const words = t.session.remote;
   const state = session.remote?.state ?? 'off';
   return (
-    <button
-      type="button" className="cp-icon-button cp-remote-button" data-variant="outlined" data-state={state} aria-label="Remote Control" aria-pressed={!!session.remote}
-      title={session.remote ? words.on(words.states[session.remote.state]) : words.off}
-      onClick={() => send({ t: 'remoteControl', sessionId: session.id, enabled: !session.remote })}
-    >
-      <PhoneIcon /><span className="cp-remote-button__dot" aria-hidden="true" />
-    </button>
+    <Tooltip text={session.remote ? words.on(words.states[session.remote.state]) : words.off}>
+      <button
+        type="button" className="cp-icon-button cp-remote-button" data-variant="outlined" data-state={state} aria-label="Remote Control" aria-pressed={!!session.remote}
+        onClick={() => send({ t: 'remoteControl', sessionId: session.id, enabled: !session.remote })}
+      >
+        <PhoneIcon /><span className="cp-remote-button__dot" aria-hidden="true" />
+      </button>
+    </Tooltip>
   );
 }

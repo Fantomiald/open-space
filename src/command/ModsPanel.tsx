@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { MAX_MOD_DESCRIPTION, MAX_MOD_NAME, MAX_MOD_REQUEST, MOD_ICONS as ICON_NAMES, MOD_REFRESH, type ModIcon, type ModInfo } from '../../shared/mods.ts';
 import { isSecretName, type SecretEntry } from '../../shared/secrets.ts';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { modsNews } from '../room/metrics.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -18,9 +19,11 @@ export function ModsButton() {
   const words = t.mods;
   return (
     <div className="cp-mods">
-      <button type="button" className="cp-button" data-variant="quiet" aria-haspopup="dialog" aria-expanded={open} data-news={news} aria-label={words.title} title={news ? words.news : words.buttonTitle} onClick={() => openModsPanel(true)}>
-        <ModsIcon />
-      </button>
+      <Tooltip text={news ? words.news : words.buttonTitle}>
+        <button type="button" className="cp-button" data-variant="quiet" aria-haspopup="dialog" aria-expanded={open} data-news={news} aria-label={words.title} onClick={() => openModsPanel(true)}>
+          <ModsIcon />
+        </button>
+      </Tooltip>
     </div>
   );
 }

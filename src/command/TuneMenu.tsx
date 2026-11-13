@@ -1,5 +1,6 @@
 import { type CSSProperties, useCallback, useId, useRef, useState } from 'react';
 import { EFFORTS, PERMISSION_MODES, type Effort, type PermissionMode, type TuneChange } from '../../shared/protocol.ts';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { modeLabel, models } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -46,10 +47,12 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
   return (
     <div className="cp-tune" ref={box} data-effort={effort || 'auto'} data-ultracode={tuning.ultracode || undefined}>
       {compact ? (
-        <button
-          type="button" className="cp-icon-button cp-tune__chip" data-variant="outlined" aria-expanded={open} aria-controls={panelId}
-          aria-label={`${words.title} : ${summary}`} title={summary} onClick={() => setOpen(!open)}
-        ><TuneIcon /></button>
+        <Tooltip text={summary}>
+          <button
+            type="button" className="cp-icon-button cp-tune__chip" data-variant="outlined" aria-expanded={open} aria-controls={panelId}
+            aria-label={`${words.title} : ${summary}`} onClick={() => setOpen(!open)}
+          ><TuneIcon /></button>
+        </Tooltip>
       ) : (
         <button type="button" className="cp-button cp-tune__chip" aria-expanded={open} aria-controls={panelId} aria-label={summary} title={summary} onClick={() => setOpen(!open)}>
           {tuning.ultracode && <span className="cp-tune__ultracode"><UltracodeIcon /></span>}

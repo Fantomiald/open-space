@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import type { Attachments } from './useAttachments.ts';
 import { previewOf } from '../state/files.ts';
@@ -52,9 +53,11 @@ export function AttachButton({ attachments, className }: { attachments: Attachme
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <button type="button" className={className ?? 'cp-icon-button'} aria-label={t.composer.attachments.attach} title={t.composer.attachments.attachTitle} onClick={() => input.current?.click()}>
-        <PaperclipIcon />
-      </button>
+      <Tooltip text={t.composer.attachments.attachTitle}>
+        <button type="button" className={className ?? 'cp-icon-button'} aria-label={t.composer.attachments.attach} onClick={() => input.current?.click()}>
+          <PaperclipIcon />
+        </button>
+      </Tooltip>
       <input
         ref={input} type="file" multiple hidden
         onChange={(event) => { attachments.add([...(event.target.files ?? [])]); event.target.value = ''; }}
