@@ -1,5 +1,10 @@
 # Versions
 
+## 1.35.6
+
+- Navigateur intégré, comme Claude in Chrome : quand un agent travaille dans un navigateur, un liseré à sa couleur entoure la page et son curseur glisse vers chaque clic, avec ce qu'il fait à côté (Clique, Tape, Attend, Ouvre la page…) et un cercle au clic. La couleur vient de son prénom, comme les tags, assez foncée pour du texte blanc. Les clics des sessions et des testeurs passent par Open Space pour être vus. Le réglage « Curseur de l'agent » (Navigateur) cache curseur et liseré.
+- MCP : `delete_trigger` supprime un automate.
+
 ## 1.35.5
 
 - Fast mode : un interrupteur dans le menu du modèle (lanceur et sessions), pour les modèles qui l'acceptent (Opus, Fable). Une icône s'affiche alors devant le modèle. Si Claude Code ne le sert pas (pas de crédits d'usage, limite atteinte), la raison s'affiche sous l'interrupteur (PR #56 de JB).
