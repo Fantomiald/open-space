@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { browserId, CHROME_LANE, lanesOf, SHARED_LANE, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type MouseButton } from '../../shared/browser.ts';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { browserId, CHROME_LANE, FORMATS, lanesOf, SHARED_LANE, shownFormat, type BrowserAction, type BrowserFormat, type BrowserInput, type BrowserState, type MouseButton } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { buildFeed } from '../state/feed.ts';
+import { isRunning } from '../state/labels.ts';
+import { darkEnoughForWhite, tagColor } from '../design/tag-colors.ts';
 import { t } from '../i18n/index.ts';
 import { IS_WINDOWS } from '../lib/platform.ts';
-import { accountsBrowserOfLane, accountsLanes, browserLanes, launchedByLooking, usedAccountsLane, modifiersOf, pictureFraction, shownLane, testersAtWork } from '../state/browser.ts';
+import { accountsBrowserOfLane, accountsLanes, browserActionOf, browserLanes, browserTool, launchedByLooking, usedAccountsLane, modifiersOf, pictureFraction, shownLane, testersAtWork } from '../state/browser.ts';
 import { formatClock } from '../lib/format.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipIcon, PowerIcon, RefreshIcon } from './Icons.tsx';
@@ -11,6 +14,26 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DeskIcon, PhoneIcon, PipI
 const BUTTONS = ['left', 'middle', 'right'] as const;
 /** pointer moves sent at most this often: enough for hovers, without flooding the socket */
 const MOVE_EVERY_MS = 40;
+
+/** Who works in a browser and with which Playwright tool: its view outlines the page and shows its cursor. */
+export interface Driver { name: string; tool: string }
+
+const NO_EVENTS: never[] = [];
+
+/** Who works in the browser of `lane` right now: the session's agent in its own or the shared one, a tester in its own. */
+export function useDriver(session: SessionInfo, lane: number): Driver | null {
+  const events = useSessions((s) => s.logs[session.id] ?? NO_EVENTS);
+  const running = isRunning(session);
+  const { name, subagents } = session;
+  return useMemo(() => {
+    if (!running || lane === CHROME_LANE) return null;
+    const own = lane === 0 || lane === SHARED_LANE;
+    const tester = own ? null : subagents.find((agent) => agent.type === `browser-tester-${lane}`);
+    if (!own && !tester) return null;
+    const tool = browserTool(buildFeed(events).items, tester?.id ?? null);
+    return tool ? { name: tester?.name ?? name, tool } : null;
+  }, [events, running, lane, name, subagents]);
+}
 
 /** each tester's first name by browserId, kept once it has finished (its browser stays to look at) */
 const testerNames = new Map<string, string>();
@@ -64,7 +87,7 @@ export function FormatSwitch({ session, lane, format }: { session: SessionInfo; 
  * The session's browsers in place of its thread: its own, and one per tester it launched (a sub-agent with a browser of
  * its own), picked above the page. Its own is shown unless the user picks another.
  */
-export function BrowserView({ session, driving }: { session: SessionInfo; driving: boolean }) {
+export function BrowserView({ session }: { session: SessionInfo }) {
   const lanes = useLanes(session);
   const chosen = useSessions((s) => s.browserLanes[session.id] ?? 0);
   const showLane = useSessions((s) => s.showBrowserLane);
@@ -82,7 +105,7 @@ export function BrowserView({ session, driving }: { session: SessionInfo; drivin
     </>
   );
   if (lane === CHROME_LANE) return <ChromePane session={session}>{picker}</ChromePane>;
-  return <BrowserPane key={lane} session={session} lane={lane} driving={driving && lane === 0}>{picker}</BrowserPane>;
+  return <BrowserPane key={lane} session={session} lane={lane}>{picker}</BrowserPane>;
 }
 
 /**
@@ -131,7 +154,7 @@ function ChromePane({ session, children }: { session: SessionInfo; children: Rea
 }
 
 /** One browser of the session with its address bar, its tabs and the page. */
-function BrowserPane({ session, lane, driving, children }: { session: SessionInfo; lane: number; driving: boolean; children: ReactNode }) {
+function BrowserPane({ session, lane, children }: { session: SessionInfo; lane: number; children: ReactNode }) {
   const send = useSessions((s) => s.send);
   const browser = useSessions((s) => s.browsers[browserId(session.id, lane)]);
   const available = useSessions((s) => s.browserAvailable);
@@ -174,7 +197,7 @@ function BrowserPane({ session, lane, driving, children }: { session: SessionInf
           ))}
         </div>
       )}
-      <BrowserScreen session={session} lane={lane} driving={driving} />
+      <BrowserScreen session={session} lane={lane} />
     </section>
   );
 }
@@ -183,7 +206,9 @@ function BrowserPane({ session, lane, driving, children }: { session: SessionInf
  * The page of one browser of the session as its pictures come (server/browser.ts), and the user's clicks, scrolls and
  * keys passed on to it. The same browser its Playwright tools drive, so both see what the other does.
  */
-export function BrowserScreen({ session, lane, driving }: { session: SessionInfo; lane: number; driving: boolean }) {
+export function BrowserScreen({ session, lane }: { session: SessionInfo; lane: number }) {
+  const driver = useDriver(session, lane);
+  const cursorShown = useSessions((s) => s.preferences.agentCursor);
   const send = useSessions((s) => s.send);
   const browser = useSessions((s) => s.browsers[browserId(session.id, lane)]);
   const available = useSessions((s) => s.browserAvailable);
@@ -220,7 +245,7 @@ export function BrowserScreen({ session, lane, driving }: { session: SessionInfo
   return (
     // focusable, so the keys typed while it is in focus go to the page
     <div
-      className="cp-browser__screen" role="application" tabIndex={0} aria-label={words.view} data-driving={driving}
+      className="cp-browser__screen" role="application" tabIndex={0} aria-label={words.view} data-driving={!!driver}
       onKeyDown={(event) => key(event, 'keyDown')} onKeyUp={(event) => key(event, 'keyUp')}
       onPaste={(event) => { const text = event.clipboardData.getData('text'); if (text) { event.preventDefault(); input({ kind: 'text', text }); } }}
     >
@@ -251,9 +276,33 @@ export function BrowserScreen({ session, lane, driving }: { session: SessionInfo
               onContextMenu={(event) => event.preventDefault()}
             />
             {!browser && <p className="cp-browser__note">{words.starting}</p>}
-            {driving && <span className="cp-browser__driving">{words.driving(session.name)}</span>}
+            {driver && cursorShown && <DriverOverlay driver={driver} browser={browser} />}
           </>
         )}
+    </div>
+  );
+}
+
+/**
+ * The agent at work in the page, as over the user's Chrome with Claude in Chrome: an outline in its colour, and its
+ * cursor gliding to each point its mouse goes to, with what it does next to it.
+ */
+function DriverOverlay({ driver, browser }: { driver: Driver; browser: BrowserState | undefined }) {
+  const words = t.session.browser;
+  const size = browser?.size ?? FORMATS[browser?.format ?? 'desktop'], pointer = browser?.pointer;
+  const style = { '--driver': darkEnoughForWhite(tagColor(driver.name)), '--ratio': size.width / size.height } as CSSProperties;
+  return (
+    <div className="cp-browser__driver" style={style} aria-hidden>
+      {/* the picture's own box (it is contained in the screen): the outline goes round the page, the cursor lands on it */}
+      <div className="cp-browser__stage">
+        {pointer && (
+          <div className="cp-browser__cursor" style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }}>
+            {pointer.clicks > 0 && <span key={pointer.clicks} className="cp-browser__ripple" />}
+            <svg viewBox="0 0 16 18" width="18" height="20" aria-hidden="true"><path d="M1.5 1.5 L14 8.2 L8.3 9.6 L5.6 15.6 Z" /></svg>
+            <span className="cp-browser__action">{words.actions[browserActionOf(driver.tool)] ?? words.acting}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -33,7 +33,12 @@ export interface BrowserState {
   format: BrowserFormat;
   /** the page's size in its last picture: the format's, or the one its agent set (Playwright's browser_resize) */
   size: { width: number; height: number } | null;
+  /** where its agent's mouse last went, as fractions of the page: Playwright's moves and clicks, never the user's */
+  pointer: BrowserPointer | null;
 }
+
+/** `clicks` counts the agent's presses since the browser started, so that a view sees each new one. */
+export interface BrowserPointer { x: number; y: number; clicks: number }
 
 /** below this width, a page reads as laid out for a phone */
 const PHONE_WIDTH = 768;

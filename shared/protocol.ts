@@ -538,6 +538,8 @@ export interface Preferences {
   copyOnSelect: boolean;
   /** a tester's browser floats over the office by itself when the tester goes to a page */
   autoPip: boolean;
+  /** an agent at work in a browser shows its cursor and an outline around the page */
+  agentCursor: boolean;
   /** the effort a new session starts with ('' : the model's default) */
   effort: Effort | '';
   /** Claude Code settings for Open Space's sessions only (shared/claude-settings.ts); what is left out is Claude Code's own */

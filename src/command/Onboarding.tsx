@@ -35,7 +35,7 @@ export function Onboarding() {
   const [birthday, setBirthday] = useState('');
   const [roots, setRoots] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Omit<Preferences, 'roots'>>({
-    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, isolate: 'busy', autoPip: true, autoTag: false, autoTagRule: '',
+    notifications: true, defaultFolder: '', model: 'opus', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, isolate: 'busy', autoPip: true, agentCursor: true, autoTag: false, autoTagRule: '',
     // empty: the server's default (~/Journal), and no numbers file; changed later in the settings
     journalFolder: '',
     favoriteNotes: [],

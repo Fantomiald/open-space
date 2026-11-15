@@ -385,7 +385,9 @@ describe('the shared browser’s endpoints', () => {
       policy: loopbackPolicy([sharedPort], SECRET), port: sharedPort, distDir: path.join(base, 'dist'), soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
       onConnection: () => {}, log: () => {},
       browser: {
-        watch: async () => {}, version: async () => ({}), key: ownKey, known: (sessionId) => sessionId === 's1',
+        watch: async () => {}, version: async () => ({ Browser: 'Chrome' }), key: ownKey, known: (sessionId) => sessionId === 's1',
+        socket: async () => 'ws://127.0.0.1:2/devtools/browser/own',
+        connect: (client, upstream, sessionId, lane) => { connected.push({ owner: `${sessionId}.${lane}`, upstream }); client.close(); },
         shared: {
           key,
           version: async () => ({ Browser: 'Chrome', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/browser/x' }),
@@ -435,6 +437,20 @@ describe('the shared browser’s endpoints', () => {
     assert.equal(await open(`${key('s1')}/lane/99`), 'rejected');
     assert.equal(await open(key('s1'), 'http://evil.example'), 'rejected');
     assert.deepEqual(connected, [{ owner: 's1.2', upstream: 'ws://127.0.0.1:1/devtools/browser/x' }]);
+  });
+
+  it('relays a session’s Playwright to its own browser too, so that its mouse shows in the view', async () => {
+    connected.length = 0;
+    const answer = await (await fetch(`http://127.0.0.1:${sharedPort}/browser/s1/cdp/${ownKey('s1')}/lane/1/json/version`)).json() as Record<string, unknown>;
+    assert.equal(answer.webSocketDebuggerUrl, `ws://127.0.0.1:${sharedPort}/browser/s1/cdp/${ownKey('s1')}/lane/1/devtools`);
+    const open = (at: string) => new Promise<'open' | 'rejected'>((resolve) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${sharedPort}/browser/s1/cdp/${at}/devtools`);
+      socket.on('open', () => resolve('open'));
+      socket.on('error', () => resolve('rejected'));
+    });
+    assert.equal(await open(`${ownKey('s1')}/lane/1`), 'open');
+    assert.equal(await open(key('s1')), 'rejected');
+    assert.deepEqual(connected, [{ owner: 's1.1', upstream: 'ws://127.0.0.1:2/devtools/browser/own' }]);
   });
 });
 

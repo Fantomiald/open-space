@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { accountsBrowserOfLane, accountsLanes, usedAccountsLane, browserLanes, drivesBrowser, floatsOutOfSight, isBrowserTool, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from './browser.ts';
+import { accountsBrowserOfLane, accountsLanes, usedAccountsLane, browserActionOf, browserLanes, browserTool, drivesBrowser, floatsOutOfSight, isBrowserTool, launchedByLooking, modifiersOf, pictureFraction, shownLane, testersAtWork } from './browser.ts';
 import { CHROME_LANE, SHARED_LANE } from '../../shared/browser.ts';
 
 describe('the picture of a session’s browser', () => {
@@ -42,6 +42,21 @@ describe('whether a session drives its browser', () => {
   it('not once the turn is over, nor for a sub-agent’s tools', () => {
     assert.equal(drivesBrowser([tool(1, 'mcp__playwright__browser_click'), turn(2)]), false);
     assert.equal(drivesBrowser([tool(1, 'Bash'), tool(2, 'mcp__playwright__browser_click', 'agent-1')]), false);
+  });
+
+  it('tells which tool, the session’s or a tester’s, and what it does', () => {
+    const items = [tool(1, 'mcp__playwright__browser_navigate'), tool(2, 'mcp__playwright__browser_type', 'agent-1'), tool(3, 'Bash', 'agent-2')];
+    assert.equal(browserTool(items), 'mcp__playwright__browser_navigate');
+    assert.equal(browserTool(items, 'agent-1'), 'mcp__playwright__browser_type');
+    assert.equal(browserTool(items, 'agent-2'), null);
+    assert.equal(browserActionOf('mcp__shared-browser__browser_take_screenshot'), 'take_screenshot');
+  });
+
+  it('tells the action at work when several were sent at once: the earliest without a result', () => {
+    const pending = (id: number, name: string) => ({ ...tool(id, name), ok: null });
+    const sent = [tool(1, 'mcp__playwright__browser_click'), pending(2, 'mcp__playwright__browser_wait_for'), pending(3, 'mcp__playwright__browser_click'), pending(4, 'mcp__playwright__browser_type')];
+    assert.equal(browserTool(sent), 'mcp__playwright__browser_wait_for');
+    assert.equal(browserTool([tool(1, 'mcp__playwright__browser_click'), tool(2, 'mcp__playwright__browser_type')]), 'mcp__playwright__browser_type');
   });
 });
 

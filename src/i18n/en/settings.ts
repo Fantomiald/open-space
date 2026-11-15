@@ -143,6 +143,7 @@ export const settings: Dictionary['settings'] = {
       },
       accountsBrowser: { title: 'Browser for your accounts', hint: 'Where sessions go to your signed-in accounts. “My Chrome” goes through the Claude in Chrome extension: your real Chrome, signed in everywhere, mail included. Trusted folders only, from each session’s next launch.', options: { shared: 'Shared browser', chrome: 'My Chrome' } },
       autoPip: { title: 'Automatic mini window', hint: 'A tester’s browser pops up in a mini window, and comes back when you leave the Browser view. A session checking its own pages just lights up its globe.' },
+      agentCursor: { title: 'Agent’s cursor', hint: 'When an agent works in a browser, its cursor and an outline in its colour show where it acts.' },
       roots: { title: 'Allowed folders', hint: 'Check the ones where you keep your projects.' },
       defaultFolder: { title: 'Default folder', hint: 'Shift+N starts a session in it.' },
       theme: { title: 'Office theme', hint: 'The office and the break room get a new setting, furniture included.', options: { office: 'Office', space: 'Space shuttle', tokyo: 'Neon Tokyo', dungeon: 'Dungeon', beach: 'Beach', pirate: 'Pirate ship', forest: 'Treehouse', cellar: 'Hacker cellar' } },

@@ -351,6 +351,12 @@ const mcpApi: OpenSpaceApi = {
     return triggers.save(id, parsed.input);
   },
   runTrigger: (id) => triggers.fire(id, 'agent'),
+  deleteTrigger: async (id) => {
+    if (!triggers.get(id)) return false;
+    await triggers.remove(id);
+    triggerKeys.drop(id);
+    return true;
+  },
   startSession: async ({ cwd, prompt, name, model, permissionMode, role, remote }) => {
     const mode = permissionMode === undefined ? settings.preferences.permissionMode : isPermissionMode(permissionMode) ? permissionMode : null;
     if (!mode) throw new Error(st.triggers.errors.mode);
@@ -446,6 +452,7 @@ function browserOf(sessionId: string, shared: boolean) {
 const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
+    socket: (sessionId, lane) => browsers.socket(sessionId, lane), connect: (client, upstream, sessionId, lane) => browsers.connect(client, upstream, browserId(sessionId, lane)),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
   mods: { kitDir: MOD_KIT, port: config.modsPort, key: (id) => modKey(secret, id), file: (id, relative) => mods.file(id, relative) },
   secrets: {

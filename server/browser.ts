@@ -16,11 +16,11 @@ import { mkdir, readdir, readFile, readlink, rm } from 'node:fs/promises';
 import type http from 'node:http';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import type { BrowserAction, BrowserFormat, BrowserInput, BrowserState, BrowserTab } from '../shared/browser.ts';
+import type { BrowserAction, BrowserFormat, BrowserInput, BrowserPointer, BrowserState, BrowserTab } from '../shared/browser.ts';
 import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import type { AccountsBrowser } from '../shared/protocol.ts';
 import { asArray, asJson, isJson } from './json.ts';
-import { cookiesToClear, hostOf, isKept, readSites, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
+import { type CdpMessage, cookiesToClear, hostOf, isKept, PASS_THROUGH, readSites, relayCdp, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
 import { recoverWindowsBrowser } from './browser-recovery.ts';
 import { signalTree } from './process-tree.ts';
 
@@ -335,6 +335,7 @@ interface Live {
   following: Promise<void>;
   frame: { data: Buffer; width: number; height: number } | null;
   format: BrowserFormat;
+  pointer: BrowserPointer | null;
   viewers: Set<http.ServerResponse>;
   idleSince: number;
 }
@@ -386,7 +387,7 @@ export class Browsers {
 
   state(id: string): BrowserState | null {
     const live = this.live.get(id);
-    return live ? { tabs: [...live.tabs.values()], active: live.active, format: live.format, size: live.frame && { width: live.frame.width, height: live.frame.height } } : null;
+    return live ? { tabs: [...live.tabs.values()], active: live.active, format: live.format, size: live.frame && { width: live.frame.width, height: live.frame.height }, pointer: live.pointer } : null;
   }
 
   states(): Record<string, BrowserState> {
@@ -531,6 +532,30 @@ export class Browsers {
     return asJson(await answer.json());
   }
 
+  /** The WebSocket of a session's own browser or a tester's, which its Playwright reaches through `connect` (to see its mouse). */
+  async socket(sessionId: string, lane: number): Promise<string> {
+    if (lane < 0 || lane > TESTERS) throw new Error('no such browser');
+    return (await this.ensure(browserId(sessionId, lane))).chrome.socket;
+  }
+
+  /** A session's Playwright connected to its own browser (or a tester's), its mouse shown in the views. */
+  connect(client: WebSocket, upstreamUrl: string, id: string) {
+    relayCdp(client, upstreamUrl, PASS_THROUGH, (message) => this.pointed(id, message));
+  }
+
+  /** The agent's mouse moved or pressed in the shown page: the views draw its cursor there. */
+  private pointed(id: string, message: CdpMessage) {
+    if (message.method !== 'Input.dispatchMouseEvent') return;
+    const live = this.live.get(id);
+    const params = asJson(message.params);
+    const { width, height } = live?.frame ?? VIEWPORT;
+    const x = Number(params.x) / width, y = Number(params.y) / height;
+    if (!live || !Number.isFinite(x) || !Number.isFinite(y) || params.type === 'mouseReleased') return;
+    const clicks = (live.pointer?.clicks ?? 0) + (params.type === 'mousePressed' ? 1 : 0);
+    live.pointer = { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1), clicks };
+    this.deps.onState(id, this.state(id));
+  }
+
   /** The shared Chrome's /json/version, launching it if needed (its WebSocket is replaced by Open Space's, see http.ts). */
   async sharedVersion(): Promise<Record<string, unknown>> {
     const shared = await this.ensureShared();
@@ -548,7 +573,8 @@ export class Browsers {
     const shared = this.shared;
     if (!shared) { client.close(); return; }
     // counted once relayed only: a client gone while the shared Chrome started would keep it from idling out
-    if (!relaySharedCdp(client, upstreamUrl, owner, this.sharedTabs)) return;
+    const view = browserId(sessionOfBrowser(owner), SHARED_LANE);
+    if (!relaySharedCdp(client, upstreamUrl, owner, this.sharedTabs, (message) => this.pointed(view, message))) return;
     shared.relays++;
     client.once('close', () => { shared.relays--; shared.idleSince = this.now(); });
   }
@@ -625,7 +651,7 @@ export class Browsers {
 
   /** A view of `chrome`, showing nothing yet. */
   private view(chrome: Chrome, id: string): Live {
-    return { chrome, tabs: new Map(), active: null, attached: null, casting: false, following: Promise.resolve(), frame: null, format: this.formats.get(id) ?? 'desktop', viewers: new Set(), idleSince: this.now() };
+    return { chrome, tabs: new Map(), active: null, attached: null, casting: false, following: Promise.resolve(), frame: null, format: this.formats.get(id) ?? 'desktop', pointer: null, viewers: new Set(), idleSince: this.now() };
   }
 
   private async launch(id: string): Promise<Live> {

@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { browserId, lanesOf, sessionOfBrowser, shownFormat } from '../../shared/browser.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
-import { drivesBrowser } from '../state/browser.ts';
-import { buildFeed } from '../state/feed.ts';
-import { isRunning } from '../state/labels.ts';
 import { fitPip, placePip, resizePip, showsPage } from '../state/pip.ts';
 import type { Box } from '../state/room-frame.ts';
 import { showsBrowser, useSessions } from '../state/sessions.ts';
@@ -17,7 +14,6 @@ import { ChevronDownIcon, ChevronUpIcon, CloseIcon, MaximizeIcon, PopOutIcon } f
 import { OutControls } from './OutControls.tsx';
 import { INTERACTIVE } from './useWindowDrag.ts';
 
-const NO_EVENTS: never[] = [];
 /** how far a press on its title bar goes before it carries the window rather than clicking a name */
 const CARRY_AFTER = 4;
 /** where the user left it, and folded or not */
@@ -78,10 +74,6 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
     return () => window.removeEventListener('resize', keep);
   }, []);
 
-  // its agent at work in this browser, as in its window
-  const events = useSessions((s) => (lane === 0 ? (s.logs[session.id] ?? NO_EVENTS) : NO_EVENTS));
-  const running = isRunning(session);
-  const driving = useMemo(() => running && lane === 0 && drivesBrowser(buildFeed(events).items), [events, running, lane]);
 
   // the names are buttons but carry it too: it only moves once the pointer has gone a little way, else they are clicked
   const grab = (edge: Edge | null, event: ReactPointerEvent<HTMLElement>) => {
@@ -130,7 +122,7 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
         <button type="button" className="cp-icon-button" data-size="small" aria-label={words.dock} title={words.dockTitle(session.name)} onClick={dockPip}><MaximizeIcon /></button>
         <button type="button" className="cp-icon-button" data-size="small" aria-label={words.pipClose} title={words.pipClose} onClick={dismissPip}><CloseIcon /></button>
       </header>
-      {!placement.folded && <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} driving={driving} />}
+      {!placement.folded && <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} />}
       {!placement.folded && <FreeHandles onPull={grab} />}
     </section>
   );
@@ -140,9 +132,6 @@ function Pip({ session, lane }: { session: SessionInfo; lane: number }) {
 export function OutBrowser({ session, lane }: { session: SessionInfo; lane: number }) {
   const browser = useSessions((s) => s.browsers[browserId(session.id, lane)]);
   const format = browser ? shownFormat(browser) : 'desktop';
-  const events = useSessions((s) => (lane === 0 ? (s.logs[session.id] ?? NO_EVENTS) : NO_EVENTS));
-  const running = isRunning(session);
-  const driving = useMemo(() => running && lane === 0 && drivesBrowser(buildFeed(events).items), [events, running, lane]);
   return (
     <section className="cp-pip" data-detached="true" aria-label={t.session.browser.pipLabel(session.name)}>
       <header className="cp-pip__head">
@@ -150,7 +139,7 @@ export function OutBrowser({ session, lane }: { session: SessionInfo; lane: numb
         <FormatSwitch session={session} lane={lane} format={browser && format} />
         <OutControls target={{ kind: 'browser', sessionId: session.id, lane }} variant="small" />
       </header>
-      <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} driving={driving} />
+      <BrowserScreen key={browserId(session.id, lane)} session={session} lane={lane} />
     </section>
   );
 }

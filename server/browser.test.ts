@@ -136,7 +136,7 @@ describe('the address bar', () => {
 });
 
 describe('the format shown', () => {
-  const state = (size: { width: number; height: number } | null) => ({ tabs: [], active: null, format: 'desktop' as const, size });
+  const state = (size: { width: number; height: number } | null) => ({ tabs: [], active: null, format: 'desktop' as const, size, pointer: null });
 
   it('is the one picked until a page is pictured', () => {
     assert.equal(shownFormat(state(null)), 'desktop');

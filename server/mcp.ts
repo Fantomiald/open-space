@@ -4,7 +4,7 @@
 // the secret, lets it in without a cookie) and at /mcp/external/<key> for another program, once the user turned that
 // access on in the Automates panel (a random key kept in OFFICE_DIR/mcp-key, replaced when regenerated).
 //
-// What it can do: list, create, change and start triggers, start a session, add someone to the crew, read and change a
+// What it can do: list, create, change, start and delete triggers, start a session, add someone to the crew, read and change a
 // short list of harmless settings. Never: keys, secrets, the allowed folders, security, the folders' trust. A session's
 // calls go through Claude Code's permissions like any tool (its permission mode); the external program is the user's.
 // The external program alone also answers the sessions (a bot that relays the permissions to a phone): a session never
@@ -35,7 +35,7 @@ export const MCP_SERVER = MCP_SERVER_NAME;
 export const MCP_SETTINGS = [
   'language', 'theme', 'pet', 'festivals', 'officeLife', 'notifications', 'autoTag', 'autoTagRule', 'remoteByDefault', 'model', 'effort',
   'idleCompact', 'timeFormat', 'timestamps', 'turnDuration', 'detailedActions', 'reduceMotion', 'glassOpacity', 'windowStyle', 'tagColors',
-  'copyOnSelect', 'autoPip',
+  'copyOnSelect', 'autoPip', 'agentCursor',
 ] as const satisfies readonly (keyof Preferences)[];
 
 /** A session's key to the MCP server, from Open Space's secret. */
@@ -82,6 +82,8 @@ export interface OpenSpaceApi {
   lastRuns: () => TriggerRun[];
   saveTrigger: (id: string | undefined, raw: Json) => Promise<{ trigger: Trigger } | { error: TriggerError }>;
   runTrigger: (id: string) => Promise<TriggerRun>;
+  /** removes the trigger and its keys; false when there is no such trigger */
+  deleteTrigger: (id: string) => Promise<boolean>;
   /** starts a session like the page (crew name, trust rules); `remote`: Remote Control on */
   startSession: (options: { cwd: string; prompt: string; name?: string; model?: string; permissionMode?: string; role?: string; remote: boolean }) => Promise<SessionInfo>;
   addMember: (name: string, jobs: Job[]) => Promise<void>;
@@ -152,6 +154,7 @@ export const TOOLS: Tool[] = [
   { name: 'list_triggers', description: 'Lists Open Space triggers (scheduled or webhook-started sessions) and their latest runs.', inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'create_trigger', description: 'Creates a trigger that starts an Open Space session on a schedule (cron) or from a webhook: for a task that comes back, never for a one-off one (to send the user a file now, send_file).', inputSchema: { type: 'object', properties: triggerFields, required: ['name', 'prompt', 'kind'] }, annotations: write },
   { name: 'update_trigger', description: 'Changes an existing trigger; only the fields given change.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, ...triggerFields }, required: ['id'] }, annotations: write },
+  { name: 'delete_trigger', description: 'Deletes a trigger for good (its past runs stay in their sessions).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
   { name: 'run_trigger', description: 'Starts a trigger\'s run now (a new session). A webhook trigger already running 3 queues it; a cron trigger whose previous run still works skips it.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: write },
   {
     name: 'create_session', description: 'Starts a new Open Space session in a project folder with a first message.',
@@ -338,6 +341,7 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       const saved = await api.saveTrigger(id, name === 'create_trigger' ? { ...fields, cwd: folder() } : fields);
       return 'error' in saved ? failure(st.triggers.errors[saved.error]) : text(shown(api, saved.trigger, []));
     }
+    case 'delete_trigger': return (await api.deleteTrigger(asString(args.id))) ? text('deleted') : failure(st.triggers.errors.unknown);
     case 'run_trigger': {
       const run = await api.runTrigger(asString(args.id));
       return run.outcome === 'started' || run.outcome === 'queued' ? text(run) : failure(run.error ?? run.outcome);

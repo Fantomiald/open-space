@@ -37,6 +37,12 @@ function fakeApi() {
       triggers.splice(0, triggers.length, ...triggers.filter((each) => each.id !== trigger.id), trigger);
       return { trigger };
     },
+    deleteTrigger: async (id) => {
+      const at = triggers.findIndex((each) => each.id === id);
+      if (at < 0) return false;
+      triggers.splice(at, 1);
+      return true;
+    },
     runTrigger: async (id) => ({ id: 'run00001', triggerId: id, at: 1, source: 'agent', outcome: 'started', sessionId: 's2' }),
     startSession: async (options) => { sessions.push(options); return { id: 's9', name: 'Ada', cwd: options.cwd, permissionMode: 'auto' } as SessionInfo; },
     addMember: async (name, jobs) => { crew.push({ name, jobs }); },
@@ -183,6 +189,9 @@ describe('the open-space MCP server', () => {
     assert.match((await tool(api, 'list_triggers')).text, /"messengers": \[\s*"iMD"\s*\]/);
     assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, messengers: ['@IMD_juyin_bot'] })).isError, false);
     assert.match((await tool(api, 'update_trigger', { id: triggers[0].id, messengers: ['Perso'] })).text, /iMD/, 'an unknown bot names the known ones');
+    assert.equal((await tool(api, 'delete_trigger', { id: triggers[0].id })).isError, false);
+    assert.equal(triggers.length, 0);
+    assert.equal((await tool(api, 'delete_trigger', { id: 'abcdef1234' })).isError, true);
   });
 
   it('starts sessions, adds to the crew, lists roles', async () => {
