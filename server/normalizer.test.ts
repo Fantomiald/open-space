@@ -208,6 +208,13 @@ describe('AskUserQuestion', () => {
     assert.equal(ask.detail, 'Which colour?\nWhich sizes?');
   });
 
+  it('asks for switch_browser in words, never with an "always" the ask rule would outweigh', () => {
+    const ask = describeRequest({ requestId: 'b1', who: 'chef', tool: 'mcp__open-space__switch_browser', input: { browser: 'chrome', reason: '/tz-arcade' }, suggestions: [{ type: 'addRules', rules: [{ toolName: 'mcp__open-space__switch_browser' }] }] }, '/work');
+    assert.equal(ask.canAlways, false);
+    assert.equal(ask.detail, '→ Chrome · /tz-arcade');
+    assert.equal(describeRequest({ requestId: 'b2', who: 'chef', tool: 'mcp__open-space__switch_browser', input: {}, suggestions: [] }, '/work').detail, '→ Chrome', 'called without arguments: the default');
+  });
+
   it('falls back to a yes/no when the input does not have the expected shape', () => {
     const ask = describeRequest({ ...request, input: { questions: 'nope' } }, '/work');
     assert.equal(ask.questions, undefined);

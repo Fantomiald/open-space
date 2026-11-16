@@ -117,6 +117,7 @@ export const composer = {
   },
   permission: {
     label: (tool: string) => `Autorisation demandée pour ${tool}`,
+    switchBrowser: 'Changer de navigateur',
     morePending: (count: number) => `et ${plural(count, 'autre', 'autres')} en attente`,
     yes: 'Oui',
     no: 'Non',

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { automatonPersonId, roleLabel, type AutomatonRun } from '../../shared/automata.ts';
-import { PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
 import { ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, MAX_RUN_COST, MAX_RUN_MINUTES, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { formatAgo, formatClock, formatDuration, homeRelative } from '../lib/format.ts';
@@ -16,7 +16,7 @@ import { Copyable } from './Copyable.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import {
-  AutomatonIcon, BrandIcon, ChevronDownIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
+  AutomatonIcon, BrandIcon, ChevronDownIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, GlobeIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
   PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TimerIcon, TuneIcon, WebhookIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
@@ -299,6 +299,12 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
             <Row id="trigger-mode" icon={<TuneIcon />} title={fields.mode} hint={fields.modeHint}>
               <select value={draft.permissionMode} aria-label={fields.mode} onChange={(e) => change({ permissionMode: e.target.value as PermissionMode })}>
                 {PERMISSION_MODES.map((mode) => <option key={mode} value={mode}>{modeLabel(mode, 'short')}</option>)}
+              </select>
+            </Row>
+            <Row id="trigger-browser" icon={<GlobeIcon />} title={fields.browser} hint={fields.browserHint}>
+              <select value={draft.browser} aria-label={fields.browser} onChange={(e) => change({ browser: e.target.value as TriggerInput['browser'] })}>
+                <option value="">{fields.browserDefault(fields.browsers[defaults.accountsBrowser])}</option>
+                {ACCOUNTS_BROWSERS.map((browser) => <option key={browser} value={browser}>{fields.browsers[browser]}</option>)}
               </select>
             </Row>
             <Row id="trigger-max-cost" icon={<CostIcon />} title={fields.maxCost} hint={fields.maxCostHint}>

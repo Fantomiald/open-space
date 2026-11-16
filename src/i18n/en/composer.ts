@@ -115,6 +115,7 @@ export const composer: Dictionary['composer'] = {
   },
   permission: {
     label: (tool: string) => `Permission requested for ${tool}`,
+    switchBrowser: 'Switch browser',
     morePending: (count: number) => `and ${count} more waiting`,
     yes: 'Yes',
     no: 'No',

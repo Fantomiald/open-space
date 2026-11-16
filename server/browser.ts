@@ -178,6 +178,16 @@ export function accountsBrowserOf(chosen: AccountsBrowser, untrusted: boolean): 
   return untrusted ? null : chosen;
 }
 
+/**
+ * Opens the user's own Chrome in the background when it is not running: Claude in Chrome only reaches an open Chrome
+ * (an automaton's run at 8 am). macOS only; elsewhere the user keeps it open.
+ */
+export function openUserChrome(platform: NodeJS.Platform = process.platform, run: (command: string, args: string[], done: (error: Error | null) => void) => void = execFile) {
+  if (platform !== 'darwin') return;
+  // pgrep fails when no process has that name
+  run('pgrep', ['-x', 'Google Chrome'], (error) => { if (error) run('open', ['-g', '-a', 'Google Chrome'], () => {}); });
+}
+
 /** The name of the server `claude --chrome` adds, on the user's own Chrome: its tools' prefix. */
 export const CHROME_SERVER = 'claude-in-chrome';
 

@@ -371,6 +371,7 @@ export const session: Dictionary['session'] = {
   },
   todo: {
     allow: (tool, name) => `Allow ${tool ?? 'an action'} for ${name}`,
+    switchBrowser: (name) => `Confirm ${name}'s browser`,
     answer: (name) => `Answer ${name}`,
     read: (name) => `Read ${name}`,
     error: (name) => `See ${name}’s error`,

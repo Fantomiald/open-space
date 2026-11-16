@@ -65,6 +65,17 @@ describe('the triggers', () => {
     assert.deepEqual(parseTriggerInput({ ...input(), allowedTools: ['Edit', '../x'] }), { error: 'rules' });
   });
 
+  it('takes the browser of its runs, the setting\'s when left out or unknown', () => {
+    const base = { name: 'Arcade', cwd: '/work', prompt: '/tz-arcade', kind: 'cron' };
+    const of = (raw: Record<string, unknown>, from?: TriggerInput) => { const parsed = parseTriggerInput({ ...base, ...raw }, from); return 'input' in parsed ? parsed.input.browser : parsed.error; };
+    assert.equal(of({}), '');
+    assert.equal(of({ browser: 'chrome' }), 'chrome');
+    assert.equal(of({ browser: 'firefox' }), '');
+    const chrome = { ...DEFAULT_TRIGGER, ...base, browser: 'chrome' as const } as TriggerInput;
+    assert.equal(of({}, chrome), 'chrome', 'kept when not given');
+    assert.equal(of({ browser: '' }, chrome), '', 'back to the setting');
+  });
+
   it('takes a cost cap and a time cap, both optional, within bounds', () => {
     const plain = parseTriggerInput(input());
     assert.ok('input' in plain && plain.input.maxCost === 0 && plain.input.maxMinutes === 0, 'no cap by default');

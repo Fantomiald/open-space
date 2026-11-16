@@ -3,7 +3,7 @@
 // stands in the server room as a robot. Shared by the server, the page and the open-space MCP server.
 import { isCron } from './cron.ts';
 import { parseMessengerIds, type Messenger } from './messengers.ts';
-import { isPermissionMode, type PermissionMode } from './protocol.ts';
+import { ACCOUNTS_BROWSERS, isPermissionMode, type AccountsBrowser, type PermissionMode } from './protocol.ts';
 
 export const TRIGGER_KINDS = ['cron', 'webhook'] as const;
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
@@ -27,6 +27,11 @@ export interface TriggerInput {
   permissionMode: PermissionMode;
   /** Remote Control turned on for each run (validate from the phone) */
   remote: boolean;
+  /**
+   * the browser of the user's accounts its runs use ('': the setting's, Preferences.accountsBrowser). Set from the page
+   * or the external program, never by a session: a run on the user's Chrome would skip the yes switch_browser asks for.
+   */
+  browser: AccountsBrowser | '';
   /**
    * what its runs do without asking, on top of their mode: Claude Code permission rules ("Edit", "Bash(git push *)"),
    * given with --allowedTools. Set from the page or the external program, never by a session (it would widen its own rights).
@@ -134,7 +139,7 @@ export function parseAllowRules(raw: unknown): string[] | null {
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
 
 export const DEFAULT_TRIGGER: TriggerInput = {
-  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, allowedTools: [], messengers: [], notifyDone: true, maxCost: 0, maxMinutes: 0,
+  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, browser: '', allowedTools: [], messengers: [], notifyDone: true, maxCost: 0, maxMinutes: 0,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -170,6 +175,7 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
     model: text('model', base.model, 80),
     permissionMode,
     remote: flag('remote', base.remote),
+    browser: ACCOUNTS_BROWSERS.find((known) => known === raw.browser) ?? (raw.browser === '' ? '' : base.browser ?? ''),
     allowedTools,
     messengers,
     notifyDone: flag('notifyDone', base.notifyDone),
@@ -216,3 +222,6 @@ export function lastRuns(runs: readonly TriggerRun[]): Map<string, TriggerRun> {
 
 /** The name of Open Space's own MCP server in a configuration: its tools are mcp__open-space__<tool> (server/mcp.ts). */
 export const MCP_SERVER_NAME = 'open-space';
+/** The open-space tool a session switches its browser with: Claude Code always asks the user before it runs (claude-process.ts). */
+export const SWITCH_BROWSER = 'switch_browser';
+export const SWITCH_BROWSER_TOOL = `mcp__${MCP_SERVER_NAME}__${SWITCH_BROWSER}`;

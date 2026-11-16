@@ -386,6 +386,36 @@ describe('the user’s own Chrome', () => {
     await manager.shutdown();
   });
 
+  it('switch_browser relaunches the session once its turn is over, which goes on by itself, Remote Control included', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/tz-arcade' });
+    await manager.remoteControl(id, true);
+    assert.equal(manager.switchBrowserOnRequest(id, 'chrome'), 'switching');
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1, 'stopped at the end of its turn, though Remote Control keeps processes');
+    assert.equal(processes[1].launch.chrome, true);
+    assert.equal(processes[1].launch.resume, true);
+    assert.match(processes[1].sent.at(-1)!, /claude-in-chrome[\s\S]*relancée sur Mon Chrome/);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(processes[1].remoteCalls, [true], 'Remote Control on again');
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    assert.equal(manager.switchBrowserOnRequest(id, 'chrome'), 'same');
+    await manager.shutdown();
+  });
+
+  it('a trigger\'s run starts on the browser its trigger chose', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/tz-arcade' }, { trigger: { id: 't1', name: 'Arcade' }, accountsBrowser: 'chrome' });
+    assert.equal(processes[0].launch.chrome, true);
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    await manager.shutdown();
+  });
+
   it('the setting switches the sessions without a choice of their own, one at work once its turn is over', async () => {
     const setting = { browser: 'shared' as AccountsBrowser };
     const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));

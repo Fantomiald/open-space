@@ -42,6 +42,9 @@ describe('buildClaudeArgs', () => {
     // the open-space server alone does not tell the session it has a browser
     const alone = buildClaudeArgs({ ...base, openSpaceMcp: openSpace });
     assert.equal(alone[alone.indexOf('--append-system-prompt') + 1], identityPrompt('Iris'));
+    // switch_browser always waits for the user's yes, even in auto mode or allowed by the trigger
+    assert.deepEqual(JSON.parse(alone[alone.indexOf('--settings') + 1]).permissions, { ask: ['mcp__open-space__switch_browser'] });
+    assert.ok(!buildClaudeArgs(base).includes('--settings'), 'no open-space server, no rule');
   });
 
   it('tells a session with the shared browser what it is for, and only then', () => {

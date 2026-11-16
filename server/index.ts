@@ -54,7 +54,7 @@ import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
 import { installFilter } from './playwright-filter.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
-import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
+import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, openUserChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -170,6 +170,7 @@ const sessions = new SessionManager({
   tagRule: () => settings.preferences.autoTagRule,
   remoteByDefault: () => settings.preferences.remoteByDefault,
   accountsBrowser: () => settings.preferences.accountsBrowser,
+  openUserChrome: () => openUserChrome(),
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,
@@ -263,7 +264,7 @@ const triggers = new Triggers({
     try {
       const { session } = await startSession(
         { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
-        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes } },
+        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes }, ...(trigger.browser ? { accountsBrowser: trigger.browser } : {}) },
       );
       const keys = triggerKeys.entries(trigger.id);
       if (keys.length) sessions.giveSecrets(session.id, undefined, keys);
@@ -398,6 +399,7 @@ const mcpApi: OpenSpaceApi = {
   remote: (sessionId, enabled) => { void sessions.remoteControl(sessionId, enabled); },
   rename: (sessionId, name) => sessions.rename(sessionId, name),
   finish: (sessionId) => sessions.finishAfterTurn(sessionId),
+  switchBrowser: (sessionId, browser) => sessions.switchBrowserOnRequest(sessionId, browser),
   sendFile: async (botId, file, caption) => {
     const allowed = [...config.roots, attachmentsFolder(config.dataDir), uploadsFolder(config.dataDir)];
     const found = path.isAbsolute(file) ? allowed.map((root) => resolveInside(root, file)).find(Boolean) : null;

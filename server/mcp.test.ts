@@ -62,6 +62,7 @@ function fakeApi() {
     remote: (id, enabled) => { done.push(`remote ${id} ${enabled}`); },
     rename: (id, name) => { done.push(`rename ${id} ${name}`); },
     finish: (id) => { done.push(`finish ${id}`); },
+    switchBrowser: (id, browser) => { done.push(`browser ${id} ${browser}`); return browser === 'shared' ? 'same' : 'switching'; },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
     bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
     mods: () => mods,
@@ -101,7 +102,7 @@ describe('the open-space MCP server', () => {
   it('lets the external program alone follow the sessions and answer them, never a request for keys', async () => {
     const { api, done } = fakeApi();
     const external = (await call(api, 'tools/list', {}, EXTERNAL)).result!.tools as { name: string }[];
-    assert.equal(external.length, TOOLS.length - 3, 'all but send_file, for a chat, and what a session does to itself');
+    assert.equal(external.length, TOOLS.length - 4, 'all but send_file, for a chat, and what a session does to itself');
     assert.ok(external.every((each) => !('for' in each)));
     assert.ok(!toolsFor(S1).some((each) => ['list_sessions', 'send_message', 'answer_permission', 'stop_session'].includes(each.name)));
     assert.equal((await tool(api, 'answer_permission', { sessionId: 's5', requestId: 'r1', decision: 'allow' })).isError, true, 'a session cannot approve');
@@ -144,6 +145,20 @@ describe('the open-space MCP server', () => {
     await tool(api, 'send_file', { path: '/work/app/a.png', bot: '@imd_juyin_bot' }, S1);
     assert.match((await tool(api, 'send_file', { path: '/work/app/a.png', bot: 'Perso' }, S1)).text, /iMD/, 'an unknown bot names the known ones');
     assert.deepEqual(done, ['remote s5 true', 'file bot00001 /work/app/shot.png', 'file bot00001 /work/app/report.pdf', 'file bot00001 /work/app/a.png'], 'a session sends to the only bot, or the one named');
+  });
+
+  it('lets a session switch its own browser, never a trigger\'s', async () => {
+    const { api, done } = fakeApi();
+    assert.ok(toolsFor(S1).some((each) => each.name === 'switch_browser'));
+    assert.ok(!toolsFor(EXTERNAL).some((each) => each.name === 'switch_browser'));
+    assert.ok(!toolsFor(BOT).some((each) => each.name === 'switch_browser'));
+    assert.match((await tool(api, 'switch_browser', { browser: 'chrome', reason: 'tz-arcade' }, S1)).text, /tour/);
+    assert.equal((await tool(api, 'switch_browser', { browser: 'shared', reason: 'x' }, S1)).isError, false);
+    assert.equal((await tool(api, 'switch_browser', { browser: 'firefox', reason: 'x' }, S1)).isError, true);
+    await tool(api, 'switch_browser', {}, S1);
+    assert.deepEqual(done, ['browser s1 chrome', 'browser s1 shared', 'browser s1 chrome'], 'without arguments: the user\'s Chrome');
+    assert.equal((await tool(api, 'create_trigger', { name: 'Arcade', prompt: '/tz-arcade', kind: 'cron', browser: 'chrome' }, S1)).isError, true, 'a session never puts a run on the user\'s Chrome');
+    assert.equal((await tool(api, 'create_trigger', { name: 'Arcade', prompt: '/tz-arcade', kind: 'cron', cwd: '/work/app', browser: 'chrome' }, EXTERNAL)).isError, false);
   });
 
   it('lets a session rename itself, and a trigger\'s run say it is done', async () => {

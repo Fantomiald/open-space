@@ -15,12 +15,12 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Job } from '../shared/jobs.ts';
-import type { PermissionDecision, PermissionPrompt, Preferences, SessionInfo } from '../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, type AccountsBrowser, type PermissionDecision, type PermissionPrompt, type Preferences, type SessionInfo } from '../shared/protocol.ts';
 import type { AgentRole } from '../shared/automata.ts';
 import { MAX_MOD_REQUEST, type ModInfo } from '../shared/mods.ts';
 import { arrangeTiles, tileSizeOf, type AskedTile } from '../shared/dashboard-grid.ts';
 import { DASHBOARD_COLUMNS, DASHBOARD_ROW, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, type Dashboard } from '../shared/dashboards.ts';
-import { MCP_SERVER_NAME, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
+import { MCP_SERVER_NAME, SWITCH_BROWSER, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 
@@ -107,6 +107,8 @@ export interface OpenSpaceApi {
   rename: (sessionId: string, name: string) => void;
   /** closes the session once its turn ends */
   finish: (sessionId: string) => void;
+  /** switch_browser, the user's yes given: the session goes on with that browser once its turn ends ('same': it has it) */
+  switchBrowser: (sessionId: string, browser: AccountsBrowser) => 'switching' | 'same';
   /** the user's bots, to name in a trigger's `messengers` */
   bots: () => { id: string; name: string; username: string | null }[];
   mods: () => ModInfo[];
@@ -140,6 +142,7 @@ const triggerFields: Json = {
   model: { type: 'string', description: 'Model alias or name (optional)' },
   permissionMode: { type: 'string', enum: ['auto', 'acceptEdits', 'manual', 'plan'] },
   remote: { type: 'boolean', description: 'Remote Control on for each run (default true)' },
+  browser: { type: 'string', enum: ['', ...ACCOUNTS_BROWSERS], description: 'The browser of the user\'s accounts its runs use: "chrome" (their own Chrome), "shared", or "" for the setting\'s. Only the external program sets it, never a session.' },
   allowedTools: { type: 'array', items: { type: 'string' }, description: 'Claude Code permission rules its runs use without asking, e.g. "Bash(git push *)". Only the external program sets them, never a session.' },
   messengers: { type: 'array', items: { type: 'string' }, description: 'Bots told what its runs wait for and the files they send, by name or @username (the user\'s bots, Connections page in Open Space); [] for none' },
   notifyDone: { type: 'boolean', description: 'Its bots are also told when a run finishes (default true)' },
@@ -185,6 +188,12 @@ export const TOOLS: Tool[] = [
   { name: 'set_remote', for: FOLLOWERS, description: 'Turns Remote Control on or off for a session, to follow and answer it from the Claude app of the phone.', inputSchema: { type: 'object', properties: { sessionId: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['sessionId', 'enabled'] }, annotations: write },
   // what a session does to itself only, nothing of the user's: read-only to Claude Code, so that a run in plan mode may too
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
+  {
+    name: SWITCH_BROWSER, for: ['session'],
+    description: 'Switches the browser of the user\'s accounts your session uses: "chrome" (the user\'s own Chrome, through Claude in Chrome, the default) or "shared" (Open Space\'s shared browser). Only when the user asked for it in this conversation or in your task, never on your own. The user confirms it in Open Space, Telegram or the Claude app; once it is done, end your turn: Open Space relaunches your session with that browser and tells you to go on.',
+    inputSchema: { type: 'object', properties: { browser: { type: 'string', enum: [...ACCOUNTS_BROWSERS] }, reason: { type: 'string', description: 'What the user asked for, in a few words (shown to them with the confirmation)' } }, },
+    annotations: write,
+  },
   { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
   {
     name: 'send_file', for: ['session', 'messenger'],
@@ -320,6 +329,13 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       api.finish(caller.session);
       return text(st.triggers.mcp.finishing);
     }
+    case SWITCH_BROWSER: {
+      if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
+      // a call made before its schema was loaded comes without arguments (seen with 2.1.325): the user's Chrome, what it is for
+      const browser = args.browser === undefined ? 'chrome' : ACCOUNTS_BROWSERS.find((known) => known === args.browser);
+      if (!browser) return failure(st.triggers.mcp.unknownBrowser);
+      return text(api.switchBrowser(caller.session, browser) === 'same' ? st.triggers.mcp.sameBrowser : st.triggers.mcp.switchingBrowser);
+    }
     case 'send_file': {
       const bot = 'messenger' in caller ? { id: caller.messenger } : chosenBot(api, args.bot);
       if ('error' in bot) return failure(bot.error);
@@ -333,6 +349,8 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       const fields: Record<string, unknown> = { ...given };
       // an agent would widen its own rights through a trigger it starts
       if (!('external' in caller) && fields.allowedTools !== undefined) return failure(st.triggers.mcp.rulesFromPage);
+      // nor reach the user's Chrome without the yes switch_browser asks for
+      if (!('external' in caller) && fields.browser !== undefined) return failure(st.triggers.mcp.browserFromPage);
       if (fields.messengers !== undefined) {
         const bots = botIds(api, fields.messengers);
         if ('unknown' in bots) return failure(st.triggers.mcp.unknownBot(bots.unknown, api.bots().map((bot) => bot.name)));

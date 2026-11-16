@@ -4,6 +4,7 @@
 import path from 'node:path';
 import { actDetail, isSubagentHandback, permissionDetail, SUBAGENT_NAMES, cut } from '../shared/activity.ts';
 import type { BackgroundTask, ImageType, ImageUpload, OfficeEvent, PlanItem, Question, Quota, SlashCommand } from '../shared/protocol.ts';
+import { SWITCH_BROWSER_TOOL } from '../shared/triggers.ts';
 import { toolOutput } from './actions.ts';
 import { IMAGE_EXTENSIONS } from './attachments.ts';
 import { DIFF_TOOLS, fileDiff } from './diffs.ts';
@@ -621,5 +622,7 @@ export function describeRequest(request: ToolRequest, folder: string): AskEvent 
     return { k: 'ask', who, requestId, tool, detail: questions.map((question) => question.question).join('\n'), canAlways: false, questions };
   }
   const always = suggestions.flatMap((suggestion) => asArray(suggestion.rules).map(asJson)).map(ruleText);
+  // "always" would add an allow rule, which the ask rule on switch_browser outweighs: it would ask again anyway
+  if (tool === SWITCH_BROWSER_TOOL) return { k: 'ask', who, requestId, tool, detail: permissionDetail(tool, input, folder), canAlways: false };
   return { k: 'ask', who, requestId, tool, detail: permissionDetail(tool, input, folder), canAlways: suggestions.length > 0, ...(always.length ? { always } : {}) };
 }

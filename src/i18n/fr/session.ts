@@ -384,6 +384,7 @@ export const session = {
   },
   todo: {
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,
+    switchBrowser: (name: string) => `Valider le navigateur de ${name}`,
     answer: (name: string) => `Répondre à ${name}`,
     read: (name: string) => `Lire ${name}`,
     error: (name: string) => `Voir l’erreur de ${name}`,

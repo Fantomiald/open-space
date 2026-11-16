@@ -1,5 +1,6 @@
 // What the session thread shows of a tool call or a permission request (a path, a command, a query),
 // plus the first names given to sub-agents and small text helpers.
+import { SWITCH_BROWSER_TOOL } from './triggers.ts';
 
 /** First names for sub-agents (never the same twice in a session). */
 export const SUBAGENT_NAMES = ['Bob', 'Lulu', 'Gaston', 'Nina', 'Momo', 'Kiki', 'Fifi', 'Riri', 'Loulou', 'Zazie', 'Titi', 'Coco'];
@@ -58,6 +59,7 @@ export function permissionDetail(tool: string, input: Record<string, unknown> | 
   if (tool === 'Bash') return readableCommand(i.command, folder);
   if (tool === 'Write' || tool === 'Edit' || tool === 'MultiEdit' || tool === 'NotebookEdit') return String(i.file_path ?? i.notebook_path ?? '');
   if (tool === 'WebFetch') return String(i.url ?? '');
+  if (tool === SWITCH_BROWSER_TOOL) return `→ ${i.browser === 'shared' ? 'Shared Browser' : 'Chrome'}${typeof i.reason === 'string' && i.reason.trim() ? ` · ${cut(i.reason.trim(), DETAIL_MAX)}` : ''}`;
   const detail = relToFolder(JSON.stringify(i, null, 2), folder);
   return detail.length > DETAIL_MAX ? `${detail.slice(0, DETAIL_MAX - 1)}…` : detail;
 }

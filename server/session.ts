@@ -90,7 +90,8 @@ export interface SessionDeps {
 export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
 
 /** Why we asked the process to stop (null = nobody did: it ended or crashed on its own). */
-type StopRequest = { reason: 'closed' | 'idle'; note: string } | null;
+/** `after`: what follows once the process is gone (a relaunch). */
+type StopRequest = { reason: 'closed' | 'idle'; note: string; after?: () => void } | null;
 
 /** A request waiting for the user: what to send back, and what to show. */
 /** `given`: an `os-secret ask` (no tool call of Claude Code's), told the names given, or null when refused or cancelled */
@@ -1084,6 +1085,25 @@ export class Session {
     return true;
   }
 
+  /**
+   * Restarts its process right away with `text` as its next message (the conversation goes on with --resume), and
+   * Remote Control again if it was on. false: it is at work, or busy in the background.
+   */
+  relaunch(text: string, note: string): boolean {
+    if (!this.process?.alive || this.context.state !== 'wait' || this.info.subagents.length > 0 || this.info.background) return false;
+    const remote = !!this.remote;
+    this.clearIdleTimer();
+    this.stopRequest = {
+      reason: 'idle', note,
+      after: () => {
+        this.send(text);
+        if (remote) this.setRemote(true).catch((error: unknown) => this.record({ k: 'error', message: error instanceof Error ? error.message : String(error) }));
+      },
+    };
+    void this.process.stop(2000);
+    return true;
+  }
+
   /** The browser of the user's accounts it uses, whatever the setting; undefined: the setting's (see SessionManager.switchBrowsers). */
   setAccountsBrowser(browser: AccountsBrowser | undefined) {
     this.info.accountsBrowser = browser;
@@ -1163,6 +1183,7 @@ export class Session {
     if (requested) {
       this.apply({ type: 'exit', reason: requested.reason }, requested.note);
       if (requested.reason === 'closed') this.deps.onTurnEnd?.(this.snapshot(), 'exited');
+      requested.after?.();
       return;
     }
     if (code === 0 && signal === null) this.apply({ type: 'exit', reason: 'clean' }, st.sessions.stopped.ended);
