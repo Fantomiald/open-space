@@ -93,13 +93,13 @@ export function TuneMenu({ tuning, cwd, onChange, compact = false, isolation }: 
             </div>
           )}
           {ultracodeOffered && (
-            <label className="cp-switch cp-ultracode">
+            <label className="cp-tune__switch cp-ultracode">
               <span><UltracodeIcon /><strong>{words.ultracode}</strong></span>
               <input type="checkbox" role="switch" checked={!!tuning.ultracode} aria-checked={!!tuning.ultracode} onChange={(e) => onChange({ ultracode: e.target.checked })} />
             </label>
           )}
           {fastOffered && (
-            <label className="cp-switch cp-fast">
+            <label className="cp-tune__switch cp-fast">
               <span><FastIcon /><strong>{words.fast}</strong></span>
               <input type="checkbox" role="switch" checked={!!tuning.fastMode} aria-checked={!!tuning.fastMode} aria-describedby={tuning.fastMode && tuning.fastModeBlocked ? `${panelId}-fast` : undefined} onChange={(e) => onChange({ fastMode: e.target.checked })} />
             </label>

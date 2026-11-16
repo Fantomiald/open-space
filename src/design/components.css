@@ -1942,25 +1942,25 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   animation: cp-shimmer 2.4s linear infinite;
 }
 /* the switches of the panel: ultracode and fast mode */
-.cp-switch { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); cursor: pointer; }
-.cp-switch > span { display: inline-flex; align-items: center; gap: var(--space-2); }
-.cp-switch strong { font-weight: var(--weight-medium); white-space: nowrap; }
-.cp-switch .cp-icon { color: var(--color-text-muted); transition: color var(--duration) var(--easing); }
+.cp-tune__switch { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--text-sm); cursor: pointer; }
+.cp-tune__switch > span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.cp-tune__switch strong { font-weight: var(--weight-medium); white-space: nowrap; }
+.cp-tune__switch .cp-icon { color: var(--color-text-muted); transition: color var(--duration) var(--easing); }
 /* the lightning of ultracode, lit when it is on: in the panel, and before the model in the button */
 .cp-ultracode:has(input:checked) .cp-icon, .cp-tune__ultracode { color: var(--tone-permission); }
 .cp-tune__ultracode { display: inline-block; margin-right: var(--space-1); vertical-align: -0.2em; }
 .cp-tune__ultracode .cp-icon { width: 0.95rem; height: 0.95rem; }
-.cp-switch input {
+.cp-tune__switch input {
   flex: none; position: relative; appearance: none; width: 2.125rem; height: 1.25rem; margin: 0; border-radius: 999px; background: var(--track); cursor: pointer;
   transition: background var(--duration) var(--easing), box-shadow var(--duration) var(--easing);
 }
-.cp-switch input::before {
+.cp-tune__switch input::before {
   content: ''; position: absolute; top: 3px; left: 3px; width: calc(1.25rem - 6px); aspect-ratio: 1; border-radius: 50%; background: var(--selected);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.45); transition: translate var(--duration) var(--easing);
 }
 .cp-ultracode input:checked { background: linear-gradient(90deg, var(--rainbow)) 0 0 / 200% 100%; animation: cp-shimmer 2.4s linear infinite; box-shadow: 0 0 12px color-mix(in srgb, var(--tone-peer) 55%, transparent); }
-.cp-switch input:checked::before { translate: calc(2.125rem - 1.25rem) 0; }
-.cp-switch input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.cp-tune__switch input:checked::before { translate: calc(2.125rem - 1.25rem) 0; }
+.cp-tune__switch input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 /* fast mode: the arrows lit in the work tone, in the panel and before the model in the button; why it does not serve, under it */
 .cp-fast input:checked { background: var(--tone-work); }
 .cp-fast:has(input:checked) .cp-icon, .cp-tune__fast { color: var(--tone-work); }
