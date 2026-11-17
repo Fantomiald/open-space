@@ -3,6 +3,7 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
 import { copyCodeOnClick } from './copyCode.ts';
+import { copyWithLinks } from './copyLinks.ts';
 import { Prose } from './Prose.tsx';
 import { CloseIcon } from './Icons.tsx';
 
@@ -18,7 +19,7 @@ export function AsidePanel({ session }: { session: SessionInfo }) {
   if (!aside) return null;
   const earlier = aside.earlier ?? [];
   return (
-    <section className="cp-aside" data-state={aside.state} aria-label={t.session.aside.label} aria-live="polite" onClick={(e) => copyCodeOnClick(e.target)}>
+    <section className="cp-aside" data-state={aside.state} aria-label={t.session.aside.label} aria-live="polite" onClick={(e) => copyCodeOnClick(e.target)} onCopy={copyWithLinks}>
       <header className="cp-aside__head">
         <span className="cp-aside__label">{t.session.aside.title}</span>
         <p className="cp-aside__question">{earlier[0]?.question ?? aside.question}</p>

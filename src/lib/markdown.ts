@@ -1,10 +1,10 @@
 // Markdown displayed safely (every message): raw HTML is escaped, only http(s)/mailto links (opened in a new tab),
-// remote images are replaced by their alt text. Code blocks get a copy button (copyCodeOnClick copies them).
+// remote images are replaced by their alt text. Code blocks get a copy button (copyCodeOnClick copies them); a copied
+// selection keeps its links' addresses (copyWithLinks).
 import { Marked } from 'marked';
 import { findMentions } from '../../shared/mentions.ts';
 import { t } from '../i18n/index.ts';
-
-const SAFE_URL = /^(https?:\/\/|mailto:)/i;
+import { SAFE_URL } from './links.ts';
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 

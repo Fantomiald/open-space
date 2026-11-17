@@ -6,6 +6,7 @@ import { IS_MAC, shortcut } from '../lib/platform.ts';
 import { formatAgo, homeRelative } from '../lib/format.ts';
 import { useNow } from '../lib/useNow.ts';
 import { useSessions } from '../state/sessions.ts';
+import { copyWithLinks } from './copyLinks.ts';
 import { CheckIcon, CloseIcon, CopyIcon, InfoIcon, NotesIcon, PencilIcon, PlusIcon, RemoveIcon, SearchIcon, StarIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { Prose } from './Prose.tsx';
@@ -401,7 +402,7 @@ function Board() {
               onChange={(e) => setDraft({ name: shown.name, text: e.target.value })} onBlur={flush}
             />
           ) : (
-            <div className="cp-board__content" ref={page}>
+            <div className="cp-board__content" ref={page} onCopy={copyWithLinks}>
               {shown.text.trim() ? <Prose text={shown.text} className="cp-board__prose" /> : (
                 <div className="cp-empty-state">
                   <p>{words.blank}</p>
