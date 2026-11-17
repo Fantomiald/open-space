@@ -27,6 +27,7 @@ import { parseClientMessage } from './messages.ts';
 import { loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
+import { pathFinder } from './file-mentions.ts';
 import { windowsKnownFolders } from './system-folders.ts';
 import { SessionManager, TrustNeeded } from './sessions.ts';
 import { UsageLedger } from './usage.ts';
@@ -524,6 +525,18 @@ function onConnection(socket: WebSocket) {
 }
 
 /** The real folder a session's explorer works in: its own, as long as it stays among the allowed ones. */
+/** The files and folders "@" offers in the message field, its folder's list kept for the keystrokes that follow. */
+const findPaths = pathFinder();
+
+/**
+ * Where "@" looks for paths: a session's folder (filesRoot), or a folder of the launcher inside the allowed ones; null
+ * when it is neither (a session gone, a folder outside): the field then offers no path, without a word.
+ */
+function mentionRoot(message: { sessionId: string } | { cwd: string }): string | null {
+  if ('cwd' in message) return resolveAllowedDirectory(message.cwd, config.roots);
+  try { return filesRoot(message.sessionId); } catch { return null; }
+}
+
 function filesRoot(sessionId: string): string {
   const cwd = sessions.folderOf(sessionId);
   if (!cwd) throw new Error(st.sessions.notFound);
@@ -650,6 +663,11 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'changes': send({ t: 'changes', sessionId: message.sessionId, changes: await sessions.changes(message.sessionId) }); break;
     case 'listFolder': send({ t: 'folder', sessionId: message.sessionId, folder: message.folder, entries: await listFolder(filesRoot(message.sessionId), message.folder) }); break;
     case 'revealFile': revealFile(filesRoot(message.sessionId), message.path); break;
+    case 'findPaths': {
+      const root = mentionRoot(message);
+      send({ t: 'paths', id: message.id, query: message.query, paths: root ? await findPaths(root, message.query) : [] });
+      break;
+    }
     case 'readFile': send({ t: 'file', sessionId: message.sessionId, file: await readSessionFile(filesRoot(message.sessionId), message.path), outcome: 'read' }); break;
     case 'writeFile': {
       const { saved, file } = await writeSessionFile(filesRoot(message.sessionId), message.path, message.text, message.version);

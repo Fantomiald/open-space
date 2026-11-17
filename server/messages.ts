@@ -34,6 +34,8 @@ const INSPECT_VIEWS: ReadonlySet<InspectView> = new Set(['mcp', 'context', 'usag
 const MCP_ACTIONS: ReadonlySet<McpAction> = new Set(['reconnect', 'enable', 'disable', 'authenticate']);
 const identifier = (value: unknown): string | null => (typeof value === 'string' && /^[\w-]{1,100}$/.test(value) ? value : null);
 const MAX_NOTE_QUERY = 200;
+/** What follows an "@" in the message field: a path from the session's folder, as long as the explorer takes one. */
+const MAX_PATH_QUERY = 1024;
 const noteName = (value: unknown): string | null => (typeof value === 'string' && NOTE_NAME.test(value) ? value : null);
 
 /** A path from a session's folder, as the explorer sends it ("/" between names, '' for the folder itself): no ".." nor absolute path. */
@@ -299,6 +301,15 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'revealFile': {
       const at = relativePath(raw.path);
       return sessionId && at ? { t: raw.t, sessionId, path: at } : null;
+    }
+    case 'findPaths': {
+      const query = boundedString(raw.query, MAX_PATH_QUERY);
+      const id = asNumber(raw.id, -1);
+      if (query === null || !Number.isInteger(id) || id < 0) return null;
+      // a session's folder (its own, on the server) or a folder of the launcher, never both
+      if (raw.sessionId !== undefined) return sessionId && raw.cwd === undefined ? { t: 'findPaths', id, query, sessionId } : null;
+      const cwd = boundedString(raw.cwd, 4096);
+      return cwd ? { t: 'findPaths', id, query, cwd } : null;
     }
     case 'writeFile': {
       const at = relativePath(raw.path);

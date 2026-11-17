@@ -15,10 +15,24 @@ describe('mentions', () => {
   });
 
   it('reads the "@" being typed under the caret', () => {
-    assert.deepEqual(mentionAt('va voir @Li', 11), { start: 8, typed: 'Li' });
-    assert.deepEqual(mentionAt('@', 1), { start: 0, typed: '' });
+    assert.deepEqual(mentionAt('va voir @Li', 11), { start: 8, end: 11, typed: 'Li' });
+    assert.deepEqual(mentionAt('@', 1), { start: 0, end: 1, typed: '' });
     assert.equal(mentionAt('pl@exa', 6), null);
     assert.equal(mentionAt('@Li puis', 8), null);
+  });
+
+  it('reads a quoted path being typed, spaces included, up to its closing quote after the caret', () => {
+    assert.deepEqual(mentionAt('lis @"my no', 11), { start: 4, end: 11, typed: '"my no' });
+    assert.deepEqual(mentionAt('lis @"my docs/" vite', 14), { start: 4, end: 15, typed: '"my docs/' });
+    assert.deepEqual(mentionAt('lis @"my f puis "ceci"', 10), { start: 4, end: 10, typed: '"my f' });
+    assert.equal(mentionAt('lis @"my notes.txt" ', 20), null);
+  });
+
+  it('does not take a path for a session of the same name', () => {
+    const named = ['src', 'PL', 'README'];
+    assert.deepEqual(findMentions('lis @src/command/Composer.tsx et @README.md', named), []);
+    assert.deepEqual(findMentions('voir @src\\lib', named), []);
+    assert.deepEqual(findMentions('demande à @src, puis à @PL.', named).map((mention) => mention.name), ['src', 'PL']);
   });
 
   it('names a session by any of its tags too', () => {

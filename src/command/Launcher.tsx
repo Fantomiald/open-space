@@ -230,7 +230,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         <AttachmentStrip attachments={attachments} />
         <CommandField
           ref={field} id="launcher-field" label={words.fieldLabel} value={text} onChange={setText} onSubmit={() => { if (text.trim() || attachments.items.length) start(); }}
-          onPaste={attachments.onPaste} people={mentionable}
+          onPaste={attachments.onPaste} people={mentionable} paths={{ cwd }}
           placeholder={resuming ? (resumeId ? words.placeholderResume : words.placeholderPickFirst) : words.placeholder}
         />
         <div className="cp-launcher__options">

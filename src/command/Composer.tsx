@@ -92,7 +92,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const field = (
     <CommandField
       id={`composer-field-${session.id}`} label={words.fieldLabel(session.name)} value={text} onChange={setText} onSubmit={submit} placeholder={placeholder}
-      onPaste={attachments.onPaste} shell cwd={session.cwd} own people={people}
+      onPaste={attachments.onPaste} shell cwd={session.cwd} own people={people} paths={{ sessionId: session.id }}
       suggestion={suggesting && !busy && !stopped && !note && !attachments.items.length ? session.suggestion : undefined}
     />
   );

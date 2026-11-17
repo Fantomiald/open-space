@@ -7,6 +7,7 @@ import type { TriggerInput, TriggersState, TriggerTag } from './triggers.ts';
 import type { SecretEntry } from './secrets.ts';
 import type { MessengerInput } from './messengers.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
+import type { PathEntry } from './file-mentions.ts';
 import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
@@ -717,6 +718,12 @@ export type ClientMessage =
   | { t: 'fileAction'; sessionId: string; action: FileAction }
   /** shows a file of the session's folder in the Finder (the Explorer on Windows) */
   | { t: 'revealFile'; sessionId: string; path: string }
+  /**
+   * the files and folders "@" offers in the message field for what follows it (shared/file-mentions.ts): in a session's
+   * folder, or in a folder of the launcher before its session exists (answered with `paths` carrying the same `id`)
+   */
+  | { t: 'findPaths'; id: number; query: string; sessionId: string }
+  | { t: 'findPaths'; id: number; query: string; cwd: string }
   /** turns Remote Control on or off for a session (its process starts if needed, and stays while it is on) */
   /** changes the model, the effort, ultracode, fast mode or the permission mode of a session, at once if its process runs, else from its next launch ('' : the default) */
   | ({ t: 'tune'; sessionId: string } & TuneChange)
@@ -864,6 +871,8 @@ export type ServerMessage =
   | { t: 'music'; nowPlaying: NowPlaying }
   | { t: 'musicLibrary'; query: string; playlists: string[]; tracks: MusicTrack[] }
   | { t: 'searchResults'; id: number; query: string; hits: SearchHit[] }
+  /** the answer to 'findPaths': the best paths for `query`, at most MAX_PATH_MATCHES */
+  | { t: 'paths'; id: number; query: string; paths: PathEntry[] }
   | { t: 'costs'; report: CostReport }
   /** the user's mods, whenever one is made, changed or removed */
   | { t: 'mods'; mods: ModInfo[] }
