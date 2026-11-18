@@ -13,7 +13,6 @@ import { sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
 import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../state/list-groups.ts';
-import { pendingEntries } from '../state/pending.ts';
 import { usePendingLater } from '../state/pending-later.ts';
 import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
@@ -58,14 +57,6 @@ export function SessionList() {
     () => listGroups(Object.values(sessions).filter((session) => inProject(session, project)), seen, grouping, keptNow, later),
     [sessions, seen, project, grouping, keptNow, later],
   );
-  // what each session to finish leaves, its first line under its tags (the rest in its strip, PendingStrip.tsx)
-  const toFinish = useMemo(() => {
-    const entries = pendingEntries(groups.find((group) => group.state === 'finish')?.sessions ?? []);
-    return new Map(entries.map(({ session, items, git }) => {
-      const lines = [...items.map((item) => item.text), ...(git ? [git] : [])];
-      return [session.id, { first: lines[0], more: lines.length - 1 }];
-    }));
-  }, [groups]);
   // the digits of Alt+1…9 follow the header's projects (by name), not the list's order, which moves with who waits
   const projects = useMemo(() => projectsOf(Object.values(sessions), seen), [sessions, seen]);
   const open = (id: string) => {
@@ -116,7 +107,6 @@ export function SessionList() {
                 const status = sessionStatus(session, seen);
                 const kind = attentionKind(session, seen);
                 const working = isWorking(session);
-                const todo = toFinish.get(session.id);
                 const elapsed = now - (working ? session.busySince ?? session.stateSince : session.stateSince);
                 return (
                   <li key={session.id}>
@@ -139,12 +129,6 @@ export function SessionList() {
                           {session.tags?.length ? <span className="cp-list__tags"><TagChips tags={session.tags} className="cp-list__tag" /></span>
                             : <span className="cp-list__last">{session.lastMessage || stateLabel(session, kind)}</span>}
                         </span>
-                        {todo && (
-                          <span className="cp-list__line" title={todo.first}>
-                            <span className="cp-list__last">{todo.first}</span>
-                            {todo.more > 0 && <span className="cp-list__more">+{todo.more}</span>}
-                          </span>
-                        )}
                       </span>
                     </button>
                   </li>
