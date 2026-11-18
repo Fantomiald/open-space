@@ -60,6 +60,7 @@ The key is kept in `mcp-key` under `OFFICE_DIR`.
 | `rename_session` | Session | Renames the calling session. |
 | `set_pending` | Session | Sets what the calling session leaves pending, one short line per item (8 at most), replacing the previous list: a PR to open, a key to provide. An empty list clears it. The lines show in the Status panel, under « Left pending ». |
 | `finish_run` | Session | For a trigger's run only: says the task is done. The session closes at the end of the turn, and its conversation stays in Resume. Anywhere else it returns an error. |
+| `switch_browser` | Session | Switches the session to "My Chrome" (your real Chrome, the default) or to the shared browser, only when you asked for it. Claude Code always asks for your yes, whatever the mode: in Open Space, on Telegram, or in the Claude app with Remote Control. Once approved, the session is relaunched with that browser at the end of its turn and goes on by itself. |
 
 No tool switches a session off: do that from the interface. See [Sessions](sessions.md).
 

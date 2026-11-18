@@ -395,6 +395,36 @@ describe('the user’s own Chrome', () => {
     await manager.shutdown();
   });
 
+  it('switch_browser relaunches the session once its turn is over, which goes on by itself, Remote Control included', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/tz-arcade' });
+    await manager.remoteControl(id, true);
+    assert.equal(manager.switchBrowserOnRequest(id, 'chrome'), 'switching');
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1, 'stopped at the end of its turn, though Remote Control keeps processes');
+    assert.equal(processes[1].launch.chrome, true);
+    assert.equal(processes[1].launch.resume, true);
+    assert.match(processes[1].sent.at(-1)!, /claude-in-chrome[\s\S]*relancée sur Mon Chrome/);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(processes[1].remoteCalls, [true], 'Remote Control on again');
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    assert.equal(manager.switchBrowserOnRequest(id, 'chrome'), 'same');
+    await manager.shutdown();
+  });
+
+  it('a trigger\'s run starts on the browser its trigger chose', async () => {
+    const setting = { browser: 'shared' as AccountsBrowser };
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/tz-arcade' }, { trigger: { id: 't1', name: 'Arcade' }, accountsBrowser: 'chrome' });
+    assert.equal(processes[0].launch.chrome, true);
+    assert.equal(find(id).accountsBrowser, 'chrome');
+    await manager.shutdown();
+  });
+
   it('the setting switches the sessions without a choice of their own, one at work once its turn is over', async () => {
     const setting = { browser: 'shared' as AccountsBrowser };
     const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));
@@ -1689,6 +1719,33 @@ describe('process life cycle', () => {
     assert.equal(processes[0].launch.effort, 'xhigh');
     assert.equal(processes[0].launch.ultracode, true);
     assert.equal(find(id).ultracode, true);
+    await manager.shutdown();
+  });
+
+  it('starts in fast mode, turns it off and on at once, says why Claude Code does not serve it, and stays as it was when refused', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), model: 'opus', fastMode: true, text: 'hello' });
+    assert.equal(processes[0].launch.fastMode, true);
+    assert.equal(find(id).fastMode, true);
+    const turn = (state: string, reason?: string) => processes.at(-1)!.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5, fast_mode_state: state, ...(reason ? { fast_mode_disabled_reason: reason } : {}) });
+    processes[0].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id, fast_mode_state: 'off', fast_mode_disabled_reason: 'extra_usage_disabled' });
+    assert.equal(find(id).fastModeBlocked, 'extra_usage_disabled');
+    turn('on');
+    assert.equal(find(id).fastModeBlocked, undefined);
+    turn('cooldown');
+    assert.equal(find(id).fastModeBlocked, 'cooldown');
+    await manager.tune(id, { fastMode: false });
+    assert.deepEqual(processes[0].controls.at(-1), { subtype: 'apply_flag_settings', settings: { fastMode: false } });
+    assert.equal(find(id).fastMode, undefined);
+    assert.equal(find(id).fastModeBlocked, undefined, 'off: nothing to explain');
+    turn('off', 'sdk_opt_in_required');
+    assert.equal(find(id).fastModeBlocked, undefined);
+    await manager.tune(id, { fastMode: true });
+    assert.deepEqual(processes[0].controls.at(-1), { subtype: 'apply_flag_settings', settings: { fastMode: true } });
+    processes[0].refused.add('apply_flag_settings');
+    await assert.rejects(manager.tune(id, { fastMode: false }));
+    assert.equal(find(id).fastMode, true);
     await manager.shutdown();
   });
 

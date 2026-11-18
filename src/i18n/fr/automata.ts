@@ -54,6 +54,7 @@ export const automata = {
       kindHint: 'À une heure donnée, ou quand un autre programme appelle son adresse.',
       modelHint: 'Le modèle de la session.',
       modeHint: 'Ce que la session peut faire sans te demander.',
+      browser: 'Navigateur pour tes comptes', browserHint: 'Là où ses runs vont sur tes comptes connectés. « Mon Chrome » passe par l’extension Claude in Chrome : Chrome doit être ouvert à l’heure du run.', browserDefault: (label: string) => `Comme les réglages (${label})`, browsers: { shared: 'Navigateur partagé', chrome: 'Mon Chrome' },
       maxCost: 'Plafond de coût ($)', maxCostHint: 'Le run s’arrête une fois cette somme dépensée, estimée au prix public. Vide : pas de plafond.',
       maxMinutes: 'Plafond de temps (min)', maxMinutesHint: 'Le run s’arrête au bout de ces minutes. Vide : pas de plafond.',
       noCap: 'Aucun',

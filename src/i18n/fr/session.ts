@@ -249,7 +249,15 @@ export const session = {
     closed: 'Navigateur fermé.',
     reopen: 'Rouvrir',
     missing: 'Aucun Chrome sur cet ordinateur : installe Google Chrome (ou Chromium, Edge, Brave) pour avoir le navigateur intégré.',
-    driving: (name: string) => `${name} pilote`,
+    /** what the agent does in the page, by Playwright tool (browserActionOf), next to its cursor */
+    actions: {
+      click: 'Clique', type: 'Tape', fill_form: 'Remplit le formulaire', press_key: 'Appuie sur une touche', hover: 'Survole',
+      select_option: 'Choisit', drag: 'Fait glisser', drop: 'Dépose', file_upload: 'Envoie un fichier', navigate: 'Ouvre la page',
+      navigate_back: 'Revient en arrière', snapshot: 'Lit la page', find: 'Cherche dans la page', take_screenshot: 'Prend une capture',
+      wait_for: 'Attend', evaluate: 'Lance du code', run_code_unsafe: 'Lance du code', tabs: 'Change d’onglet', resize: 'Redimensionne',
+      handle_dialog: 'Répond à la fenêtre', console_messages: 'Lit la console', network_requests: 'Lit le réseau', network_request: 'Lit le réseau',
+    } as Record<string, string>,
+    acting: 'Travaille',
     lanes: 'Navigateurs',
     tester: (lane: number) => `Testeur ${lane}`,
     shared: 'Partagé',
@@ -386,6 +394,7 @@ export const session = {
   },
   todo: {
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,
+    switchBrowser: (name: string) => `Valider le navigateur de ${name}`,
     answer: (name: string) => `Répondre à ${name}`,
     read: (name: string) => `Lire ${name}`,
     error: (name: string) => `Voir l’erreur de ${name}`,

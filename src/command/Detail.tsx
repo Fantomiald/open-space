@@ -283,7 +283,7 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
         </details>
       )}
       <SessionTabs sessionId={session.id} view={panelView} driving={driving} agents={agents} agent={agent} setAgent={setAgent} />
-      {panelView === 'browser' ? <BrowserView session={session} driving={driving} />
+      {panelView === 'browser' ? <BrowserView session={session} />
         : panelView === 'files' ? <FilesView session={session} />
         : panelView === 'changes' ? <ChangesView cwd={session.cwd} changes={changes} onBack={back} onRefresh={() => send({ t: 'changes', sessionId: session.id })} />
         : panelView === 'mcp' ? <McpView sessionId={session.id} cwd={session.cwd} onBack={back} />

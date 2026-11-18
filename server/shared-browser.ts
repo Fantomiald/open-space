@@ -171,7 +171,7 @@ function touchesKept(method: string, params: Record<string, unknown>): boolean {
  * resumed first when they wait for the debugger (they would stay paused for everyone otherwise). The Target and Browser
  * domains reach the whole browser from any session, a tab's own included, so their rules hold on every session.
  */
-export class SharedCdpFilter {
+export class SharedCdpFilter implements CdpFilter {
   private readonly owner: string;
   private readonly tabs: SharedTabs;
   /** the sessions of this owner's targets (its tabs, their frames and workers), the only ones it may send to */
@@ -285,15 +285,31 @@ export class SharedCdpFilter {
   }
 }
 
+/** What a relay does with each message: the shared browser's filter, or nothing at all for a browser of one owner. */
+export interface CdpFilter {
+  fromClient(message: CdpMessage): { upstream?: CdpMessage; client?: CdpMessage; close?: true };
+  fromUpstream(message: CdpMessage): { client?: CdpMessage; upstream: CdpMessage[] };
+}
+
+/** A browser of one owner (a session's own, a tester's): every message goes through as it is. */
+export const PASS_THROUGH: CdpFilter = {
+  fromClient: (message) => ({ upstream: message }),
+  fromUpstream: (message) => ({ client: message, upstream: [] }),
+};
+
 /**
  * One owner's Playwright connected to the shared Chrome through Open Space (`client`, its WebSocket on Open Space's server),
  * every message going through the owner's filter. Either side closing closes the other: a Playwright whose browser went
  * away connects again at its next call. False, and nothing relayed, for a client already gone.
  */
-export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: string, tabs: SharedTabs): boolean {
-  // gone while the shared Chrome started (see Browsers.relay): its close already happened, nothing would end the relay
+export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: string, tabs: SharedTabs, onCommand?: (message: CdpMessage) => void): boolean {
+  return relayCdp(client, upstreamUrl, new SharedCdpFilter(owner, tabs), onCommand);
+}
+
+/** A Playwright connected to a Chrome through Open Space, which sees each of its commands (`onCommand`) on the way. */
+export function relayCdp(client: WebSocket, upstreamUrl: string, filter: CdpFilter, onCommand?: (message: CdpMessage) => void): boolean {
+  // gone while the Chrome started (see Browsers.relay): its close already happened, nothing would end the relay
   if (client.readyState !== WebSocket.OPEN) return false;
-  const filter = new SharedCdpFilter(owner, tabs);
   const upstream = new WebSocket(upstreamUrl, { perMessageDeflate: false, maxPayload: 64_000_000 });
   const waiting: string[] = [];
   let ended = false;
@@ -317,7 +333,7 @@ export function relaySharedCdp(client: WebSocket, upstreamUrl: string, owner: st
     const message = parse(data);
     if (!message) return;
     const result = filter.fromClient(message);
-    if (result.upstream) toChrome(result.upstream);
+    if (result.upstream) { onCommand?.(result.upstream); toChrome(result.upstream); }
     if (result.client) toPlaywright(result.client);
     if (result.close) end();
   });

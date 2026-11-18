@@ -61,14 +61,25 @@ export const isBrowserTool = (tool: string) => /^mcp__[^_].*__browser_/.test(too
  * The turn under way is at work in the browser: its agent's last tool is one of Playwright's. Not only while a call
  * runs: they last a moment, and the agent thinks between them.
  */
-export function drivesBrowser(items: readonly FeedItem[]): boolean {
+export const drivesBrowser = (items: readonly FeedItem[]): boolean => browserTool(items) !== null;
+
+/** The Playwright tool the agent (`agent`: a sub-agent's id, null for the session's own) is at in the turn under way, as drivesBrowser. */
+export function browserTool(items: readonly FeedItem[], agent: string | null = null): string | null {
+  // an agent often sends several browser actions at once, which run one after the other: the one at work is the
+  // earliest of them without a result, not the last one sent
+  let current: string | null = null;
   for (let at = items.length - 1; at >= 0; at--) {
     const item = items[at];
-    if (item.kind === 'turn') return false;
-    if (item.kind === 'tool' && item.agent === null) return isBrowserTool(item.tool);
+    if (item.kind === 'turn') break;
+    if (item.kind !== 'tool' || item.agent !== agent) continue;
+    if (!isBrowserTool(item.tool)) break;
+    if (item.ok === null || current === null) current = item.tool;
   }
-  return false;
+  return current;
 }
+
+/** What a Playwright tool does, as its name says after `browser_` (click, type, navigate…). */
+export const browserActionOf = (tool: string) => /__browser_(\w+)$/.exec(tool)?.[1] ?? '';
 
 /** The first names of the session's testers at work, by lane: the sub-agent of type browser-tester-<lane>. */
 export function testersAtWork(subagents: readonly SubagentInfo[]): Record<number, string> {

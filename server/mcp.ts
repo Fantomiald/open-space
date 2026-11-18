@@ -4,7 +4,7 @@
 // the secret, lets it in without a cookie) and at /mcp/external/<key> for another program, once the user turned that
 // access on in the Automates panel (a random key kept in OFFICE_DIR/mcp-key, replaced when regenerated).
 //
-// What it can do: list, create, change and start triggers, start a session, add someone to the crew, read and change a
+// What it can do: list, create, change, start and delete triggers, start a session, add someone to the crew, read and change a
 // short list of harmless settings. Never: keys, secrets, the allowed folders, security, the folders' trust. A session's
 // calls go through Claude Code's permissions like any tool (its permission mode); the external program is the user's.
 // The external program alone also answers the sessions (a bot that relays the permissions to a phone): a session never
@@ -15,13 +15,14 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Job } from '../shared/jobs.ts';
-import type { PermissionDecision, PermissionPrompt, Preferences, SessionInfo } from '../shared/protocol.ts';
+import { ACCOUNTS_BROWSERS, type AccountsBrowser, type PermissionDecision, type PermissionPrompt, type Preferences, type SessionInfo } from '../shared/protocol.ts';
 import type { AgentRole } from '../shared/automata.ts';
 import { MAX_MOD_REQUEST, type ModInfo } from '../shared/mods.ts';
 import { arrangeTiles, tileSizeOf, type AskedTile } from '../shared/dashboard-grid.ts';
 import { DASHBOARD_COLUMNS, DASHBOARD_ROW, MAX_DASHBOARD_NAME, MAX_DASHBOARDS, type Dashboard } from '../shared/dashboards.ts';
-import { MCP_SERVER_NAME, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
+import { MCP_SERVER_NAME, SWITCH_BROWSER, type Trigger, type TriggerError, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
+import { MAX_PENDING } from '../shared/pending.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 
 /** The protocol versions known; another asked for gets the newest. */
@@ -35,7 +36,7 @@ export const MCP_SERVER = MCP_SERVER_NAME;
 export const MCP_SETTINGS = [
   'language', 'theme', 'pet', 'festivals', 'officeLife', 'notifications', 'autoTag', 'autoTagRule', 'remoteByDefault', 'model', 'effort',
   'idleCompact', 'timeFormat', 'timestamps', 'turnDuration', 'detailedActions', 'reduceMotion', 'glassOpacity', 'windowStyle', 'tagColors',
-  'copyOnSelect', 'autoPip',
+  'copyOnSelect', 'autoPip', 'agentCursor',
 ] as const satisfies readonly (keyof Preferences)[];
 
 /** A session's key to the MCP server, from Open Space's secret. */
@@ -82,6 +83,8 @@ export interface OpenSpaceApi {
   lastRuns: () => TriggerRun[];
   saveTrigger: (id: string | undefined, raw: Json) => Promise<{ trigger: Trigger } | { error: TriggerError }>;
   runTrigger: (id: string) => Promise<TriggerRun>;
+  /** removes the trigger and its keys; false when there is no such trigger */
+  deleteTrigger: (id: string) => Promise<boolean>;
   /** starts a session like the page (crew name, trust rules); `remote`: Remote Control on */
   startSession: (options: { cwd: string; prompt: string; name?: string; model?: string; permissionMode?: string; role?: string; remote: boolean }) => Promise<SessionInfo>;
   addMember: (name: string, jobs: Job[]) => Promise<void>;
@@ -103,10 +106,12 @@ export interface OpenSpaceApi {
   rest: (sessionId: string) => Promise<void>;
   remote: (sessionId: string, enabled: boolean) => void;
   rename: (sessionId: string, name: string) => void;
-  /** replaces what the session leaves pending with these lines, untrusted (shared/pending.ts tidies them) */
-  setPending: (sessionId: string, items: unknown[]) => void;
+  /** replaces what the session leaves pending with these lines, untrusted (shared/pending.ts tidies them); returns those the user removed before, left out */
+  setPending: (sessionId: string, items: unknown[]) => string[];
   /** closes the session once its turn ends */
   finish: (sessionId: string) => void;
+  /** switch_browser, the user's yes given: the session goes on with that browser once its turn ends ('same': it has it) */
+  switchBrowser: (sessionId: string, browser: AccountsBrowser) => 'switching' | 'same';
   /** the user's bots, to name in a trigger's `messengers` */
   bots: () => { id: string; name: string; username: string | null }[];
   mods: () => ModInfo[];
@@ -140,6 +145,7 @@ const triggerFields: Json = {
   model: { type: 'string', description: 'Model alias or name (optional)' },
   permissionMode: { type: 'string', enum: ['auto', 'acceptEdits', 'manual', 'plan'] },
   remote: { type: 'boolean', description: 'Remote Control on for each run (default true)' },
+  browser: { type: 'string', enum: ['', ...ACCOUNTS_BROWSERS], description: 'The browser of the user\'s accounts its runs use: "chrome" (their own Chrome), "shared", or "" for the setting\'s. Only the external program sets it, never a session.' },
   allowedTools: { type: 'array', items: { type: 'string' }, description: 'Claude Code permission rules its runs use without asking, e.g. "Bash(git push *)". Only the external program sets them, never a session.' },
   messengers: { type: 'array', items: { type: 'string' }, description: 'Bots told what its runs wait for and the files they send, by name or @username (the user\'s bots, Connections page in Open Space); [] for none' },
   notifyDone: { type: 'boolean', description: 'Its bots are also told when a run finishes (default true)' },
@@ -154,6 +160,7 @@ export const TOOLS: Tool[] = [
   { name: 'list_triggers', description: 'Lists Open Space triggers (scheduled or webhook-started sessions) and their latest runs.', inputSchema: { type: 'object', properties: {} }, annotations: read },
   { name: 'create_trigger', description: 'Creates a trigger that starts an Open Space session on a schedule (cron) or from a webhook: for a task that comes back, never for a one-off one (to send the user a file now, send_file).', inputSchema: { type: 'object', properties: triggerFields, required: ['name', 'prompt', 'kind'] }, annotations: write },
   { name: 'update_trigger', description: 'Changes an existing trigger; only the fields given change.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, ...triggerFields }, required: ['id'] }, annotations: write },
+  { name: 'delete_trigger', description: 'Deletes a trigger for good (its past runs stay in their sessions).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: { ...write, destructiveHint: true } },
   { name: 'run_trigger', description: 'Starts a trigger\'s run now (a new session). A webhook trigger already running 3 queues it; a cron trigger whose previous run still works skips it.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, annotations: write },
   {
     name: 'create_session', description: 'Starts a new Open Space session in a project folder with a first message.',
@@ -186,9 +193,15 @@ export const TOOLS: Tool[] = [
   { name: 'rename_session', for: ['session'], description: 'Renames your own session in Open Space: a short name for what you work on, e.g. a ticket\'s key.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }, annotations: read },
   {
     name: 'set_pending', for: ['session'],
-    description: 'Sets what is left pending in your session, replacing the previous list: things you or the user still have to do (committed but not pushed, a PR to open, waiting for a key or a manual step). Call it at the end of a turn when something remains; call it with an empty list once all is settled. One short line per item.',
+    description: 'Sets what only the user can still settle for your task, replacing the previous list: a key or an access to give, a step to do by hand, a decision to make. Not the state of git (Open Space reads it itself), not what you could do next, not suggestions: when in doubt, leave it out. Call it with an empty list once all is settled. One short line per item.',
     inputSchema: { type: 'object', properties: { items: { type: 'array', items: { type: 'string' }, description: 'One short line per item, at most 8' } }, required: ['items'] },
     annotations: read,
+  },
+  {
+    name: SWITCH_BROWSER, for: ['session'],
+    description: 'Switches the browser of the user\'s accounts your session uses: "chrome" (the user\'s own Chrome, through Claude in Chrome, the default) or "shared" (Open Space\'s shared browser). Only when the user asked for it in this conversation or in your task, never on your own. The user confirms it in Open Space, Telegram or the Claude app; once it is done, end your turn: Open Space relaunches your session with that browser and tells you to go on.',
+    inputSchema: { type: 'object', properties: { browser: { type: 'string', enum: [...ACCOUNTS_BROWSERS] }, reason: { type: 'string', description: 'What the user asked for, in a few words (shown to them with the confirmation)' } }, },
+    annotations: write,
   },
   { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
   {
@@ -316,8 +329,11 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
     case 'rename_session': case 'finish_run': case 'set_pending': {
       if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
       if (name === 'set_pending') {
-        api.setPending(caller.session, Array.isArray(args.items) ? args.items : []);
-        return text('saved');
+        // a call made before Claude Code has the tool's schema comes without arguments: never read that as clearing the list
+        if (!Array.isArray(args.items)) return failure(st.triggers.mcp.noItems);
+        const removed = api.setPending(caller.session, args.items);
+        const saved = args.items.length > MAX_PENDING ? `saved the first ${MAX_PENDING} lines` : 'saved';
+        return text(removed.length ? `${saved}; left out, the user removed them and does not want them again: ${removed.join(' | ')}` : saved);
       }
       if (name === 'rename_session') {
         const named = asString(args.name).trim();
@@ -328,6 +344,13 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       if (!api.sessions().find((each) => each.id === caller.session)?.trigger) return failure(st.triggers.mcp.notARun);
       api.finish(caller.session);
       return text(st.triggers.mcp.finishing);
+    }
+    case SWITCH_BROWSER: {
+      if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));
+      // a call made before its schema was loaded comes without arguments (seen with 2.1.325): the user's Chrome, what it is for
+      const browser = args.browser === undefined ? 'chrome' : ACCOUNTS_BROWSERS.find((known) => known === args.browser);
+      if (!browser) return failure(st.triggers.mcp.unknownBrowser);
+      return text(api.switchBrowser(caller.session, browser) === 'same' ? st.triggers.mcp.sameBrowser : st.triggers.mcp.switchingBrowser);
     }
     case 'send_file': {
       const bot = 'messenger' in caller ? { id: caller.messenger } : chosenBot(api, args.bot);
@@ -342,6 +365,8 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       const fields: Record<string, unknown> = { ...given };
       // an agent would widen its own rights through a trigger it starts
       if (!('external' in caller) && fields.allowedTools !== undefined) return failure(st.triggers.mcp.rulesFromPage);
+      // nor reach the user's Chrome without the yes switch_browser asks for
+      if (!('external' in caller) && fields.browser !== undefined) return failure(st.triggers.mcp.browserFromPage);
       if (fields.messengers !== undefined) {
         const bots = botIds(api, fields.messengers);
         if ('unknown' in bots) return failure(st.triggers.mcp.unknownBot(bots.unknown, api.bots().map((bot) => bot.name)));
@@ -350,6 +375,7 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       const saved = await api.saveTrigger(id, name === 'create_trigger' ? { ...fields, cwd: folder() } : fields);
       return 'error' in saved ? failure(st.triggers.errors[saved.error]) : text(shown(api, saved.trigger, []));
     }
+    case 'delete_trigger': return (await api.deleteTrigger(asString(args.id))) ? text('deleted') : failure(st.triggers.errors.unknown);
     case 'run_trigger': {
       const run = await api.runTrigger(asString(args.id));
       return run.outcome === 'started' || run.outcome === 'queued' ? text(run) : failure(run.error ?? run.outcome);

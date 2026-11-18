@@ -9,7 +9,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
-import { MCP_SERVER_NAME } from '../shared/triggers.ts';
+import { MCP_SERVER_NAME, SWITCH_BROWSER_TOOL } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
@@ -116,6 +116,8 @@ export interface LaunchOptions {
   model: string;
   effort?: Effort;
   ultracode?: boolean;
+  /** fast mode, as a flag setting: in claude -p it is also its opt-in (else fast_mode_disabled_reason "sdk_opt_in_required", 2.1.323) */
+  fastMode?: boolean;
   permissionMode: PermissionMode;
   /** the session's name, given to Claude when the conversation starts, with the user's name and their note (Preferences) */
   name: string;
@@ -179,7 +181,7 @@ export interface LaunchOptions {
 /** What a trigger's run does to its own session without asking: name itself, say it is done, say what is left pending (server/mcp.ts). */
 const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -190,7 +192,11 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.model) args.push('--model', options.model);
   if (options.effort) args.push('--effort', options.effort);
   // ultracode is a settings key of its own, so that it holds at any effort (`--effort ultracode` would replace the level)
-  const settings = { ...options.settings, ...(options.ultracode ? { ultracode: true } : {}) };
+  // switch_browser always waits for the user's yes, whatever the mode or the rules that allow it: an ask rule wins over
+  // both (checked with 2.1.325, in auto mode and with the tool in --allowedTools), and the yes can come from Telegram or
+  // Remote Control, since it is a permission of Claude Code's
+  const askRules = options.openSpaceMcp ? { permissions: { ask: [SWITCH_BROWSER_TOOL] } } : {};
+  const settings = { ...options.settings, ...askRules, ...(options.ultracode ? { ultracode: true } : {}), ...(options.fastMode ? { fastMode: true } : {}) };
   if (Object.keys(settings).length) args.push('--settings', JSON.stringify(settings));
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // a server of the same name in the user's settings gives way to this one (checked with 2.1.306)
@@ -303,6 +309,7 @@ export function parseCatalog(response: Json): Catalog {
     label: asString(m.displayName) || asString(m.value),
     ...(asString(m.description) ? { description: asString(m.description) } : {}),
     efforts: m.supportsEffort === false ? [] : asArray(m.supportedEffortLevels).filter(isEffort),
+    ...(m.supportsFastMode === true ? { fast: true } : {}),
   }));
   return { commands, models };
 }

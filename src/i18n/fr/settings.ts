@@ -146,6 +146,7 @@ export const settings = {
       },
       accountsBrowser: { title: 'Navigateur pour tes comptes', hint: 'Là où les sessions vont sur tes comptes connectés. « Mon Chrome » passe par l’extension Claude in Chrome : ton vrai Chrome, connecté partout, messagerie comprise. Dossiers approuvés seulement, au prochain lancement de chaque session.', options: { shared: 'Navigateur partagé', chrome: 'Mon Chrome' } },
       autoPip: { title: 'Mini-fenêtre automatique', hint: 'Le navigateur d’un testeur s’ouvre tout seul en mini-fenêtre, et revient quand tu quittes la vue Navigateur. Une session qui vérifie ses propres pages fait juste clignoter son globe.' },
+      agentCursor: { title: 'Curseur de l’agent', hint: 'Quand un agent travaille dans un navigateur, son curseur et un liseré à sa couleur montrent où il agit.' },
       roots: { title: 'Dossiers autorisés', hint: 'Coche ceux où tu ranges tes projets.' },
       defaultFolder: { title: 'Dossier par défaut', hint: 'Maj+N lance une session dedans.' },
       theme: { title: 'Thème du bureau', hint: 'Le bureau et la salle de repos changent de décor, meubles compris.', options: { office: 'Bureau', space: 'Navette spatiale', tokyo: 'Tokyo néon', dungeon: 'Donjon', beach: 'Plage', pirate: 'Bateau pirate', forest: 'Cabane en forêt', cellar: 'Cave de hackers' } },

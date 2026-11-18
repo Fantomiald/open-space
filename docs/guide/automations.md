@@ -19,6 +19,7 @@ A trigger starts a session on its own, at a set time (cron) or when another prog
 | Rules | Tools it may use without asking, on top of its mode. One rule per line in Claude Code's format, 40 at most. | none |
 | Keys | Values handed to every run through `os-secret` (see below). | none |
 | Remote Control | Follow the run and approve from the Claude app on your phone. | on |
+| Browser for your accounts | As in the settings, the shared browser, or "My Chrome" (your real Chrome through Claude in Chrome). Open Space opens Chrome in the background when it is closed (macOS). Set in Open Space only, never from a session. | as in the settings |
 | Tell | The Telegram bots that get what its runs wait for and the files they send. | none |
 | Tell when done | Also sends the last answer of each run to those bots. | on |
 | Cost cap ($) | The run stops once it has spent this much, estimated at list prices. 1,000 at most. | no cap |

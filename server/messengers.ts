@@ -13,7 +13,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { MAX_MESSENGERS, MESSENGER_ID, type Messenger, type MessengerInput, type MessengerProblem } from '../shared/messengers.ts';
 import type { LoggedEvent, PermissionDecision, PermissionPrompt, SessionInfo } from '../shared/protocol.ts';
-import type { Trigger, TriggerRun } from '../shared/triggers.ts';
+import { SWITCH_BROWSER_TOOL, type Trigger, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import * as telegram from './telegram.ts';
 import type { Button, TelegramCallback, TelegramMessage, TelegramUpdate } from './telegram.ts';
@@ -106,7 +106,7 @@ export function waitMessage(session: SessionInfo, wait: PermissionPrompt, choice
   }
   const buttons: Button[] = [{ text: words.allow, callback_data: `p:${choice}:allow` }, { text: words.deny, callback_data: `p:${choice}:deny` }];
   if (wait.canAlways) buttons.push({ text: words.always, callback_data: `p:${choice}:always` });
-  return { text: telegram.fit(words.permission(who, wait.tool ?? '', wait.detail ?? '')), buttons: [buttons] };
+  return { text: telegram.fit(words.permission(who, wait.tool === SWITCH_BROWSER_TOOL ? words.switchBrowser : wait.tool ?? '', wait.detail ?? '')), buttons: [buttons] };
 }
 
 export class Messengers {

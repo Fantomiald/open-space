@@ -22,7 +22,7 @@ import { TuneMenu } from './TuneMenu.tsx';
 
 /**
  * Where a session starts when none is open: a message field at the bottom, with its folder (the default one when left empty),
- * model, effort, permissions and ultracode; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
+ * model, effort, permissions, ultracode and fast mode; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
  * which opens in its place. N puts the focus here; Shift+N starts a session at once (see App.tsx). `onClose`: shown as
  * a window beside the open sessions (focus mode), it can be closed; `replacing`: the session the new one will take the
  * place of, when no room is left.
@@ -50,6 +50,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   const [model, setModel] = useState(preferences.model);
   const [effort, setEffort] = useState<Effort | undefined>(preferences.effort || undefined);
   const [ultracode, setUltracode] = useState(false);
+  const [fastMode, setFastMode] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(preferences.permissionMode);
   // the settings arrive with the server's hello, maybe after the launcher showed
   useEffect(() => { setModel(preferences.model); setEffort(preferences.effort || undefined); setPermissionMode(preferences.permissionMode); }, [preferences.model, preferences.effort, preferences.permissionMode]);
@@ -112,6 +113,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     if (change.model !== undefined) setModel(change.model);
     if (change.effort !== undefined) setEffort(change.effort || undefined);
     if (change.ultracode !== undefined) setUltracode(change.ultracode);
+    if (change.fastMode !== undefined) setFastMode(change.fastMode);
     if (change.permissionMode !== undefined) setPermissionMode(change.permissionMode);
   };
 
@@ -123,7 +125,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
     const files = attachments.files;
     const isolate = isolated ? { isolate: startBase && startBase !== repo?.branch ? { base: startBase } : {} } : {};
     // the text and the pictures stay when they could not leave (too long, not connected)
-    if (!createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}), ...isolate })) return;
+    if (!createSession({ cwd, model, ...(effort ? { effort } : {}), ...(ultracode ? { ultracode } : {}), ...(fastMode ? { fastMode } : {}), permissionMode, ...(person ? { name: person } : {}), ...(message ? { text: message } : {}), ...(images.length ? { images } : {}), ...(files.length ? { files } : {}), ...(resuming && resumeId ? { resumeId } : {}), ...isolate })) return;
     setText('');
     attachments.clear();
     setResumeId(null);
@@ -233,7 +235,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}
-          <TuneMenu tuning={{ model, effort, ultracode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} compact />
+          <TuneMenu tuning={{ model, effort, ultracode, fastMode, permissionMode }} cwd={cwd} onChange={tune} isolation={canIsolate ? { isolated, onChange: chooseIsolated } : undefined} compact />
           <FolderPicker directories={directories} value={folder} onChange={setFolder} placeholder={homeRelative(startFolder)} />
           <AttachButton attachments={attachments} className="cp-icon-button cp-launcher__attach" />
           <button type="submit" className="cp-launcher__send" disabled={!ready}><span className="cp-launcher__send-label">{resuming ? words.resume : words.start}</span><SendIcon /></button>

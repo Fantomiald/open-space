@@ -19,6 +19,7 @@ Un déclencheur lance une session tout seul, à heure fixe (cron) ou quand un au
 | Règles | Les outils qu'elle utilise sans demander, en plus de son mode. Une règle par ligne au format de Claude Code, 40 au plus. | aucune |
 | Clés | Des valeurs données à chaque run par `os-secret` (voir plus bas). | aucune |
 | Remote Control | Suivre le run et valider depuis l'app Claude du téléphone. | activé |
+| Navigateur pour tes comptes | Comme les réglages, le navigateur partagé, ou « Mon Chrome » (ton vrai Chrome via Claude in Chrome). Open Space ouvre Chrome en arrière-plan s'il est fermé (macOS). Se règle dans Open Space seulement, jamais depuis une session. | comme les réglages |
 | Prévenir sur | Les bots Telegram qui reçoivent ce que ses runs attendent et les fichiers qu'ils envoient. | aucun |
 | Prévenir à la fin | Envoie aussi la dernière réponse de chaque run à ces bots. | activé |
 | Plafond de coût ($) | Le run s'arrête une fois cette somme dépensée, estimée au prix public. 1 000 au plus. | pas de plafond |

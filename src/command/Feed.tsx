@@ -3,6 +3,7 @@ import { TEXT_EXTENSIONS, type SentFile, type UploadedFile } from '../../shared/
 import { previewOf } from '../state/files.ts';
 import { DEFAULT_LOOK } from '../design/people-palette.ts';
 import { t } from '../i18n/index.ts';
+import { permissionTitle } from '../state/labels.ts';
 import { formatClock, formatDuration, formatSize } from '../lib/format.ts';
 import { reducedMotion } from '../lib/motion.ts';
 import { copyCodeOnClick } from './copyCode.ts';
@@ -250,7 +251,7 @@ function Item({ item, sessionId, speaker, openAgent, onView }: { item: ThreadEnt
     case 'permission':
       return (
         <li className="cp-feed__item" data-kind="permission" data-status={item.status}>
-          <code>{item.author ? `${item.author} · ` : ''}{item.question ? t.session.feed.question : item.tool}</code>
+          <code>{item.author ? `${item.author} · ` : ''}{item.question ? t.session.feed.question : permissionTitle(item.tool)}</code>
           <span className="cp-feed__detail">{item.detail}</span>
           <span className="cp-feed__flag">{(item.question ? t.session.feed.questionStatus : t.session.feed.permissionStatus)[item.status]}</span>
         </li>

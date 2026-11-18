@@ -57,6 +57,7 @@ export const automata: Dictionary['automata'] = {
       maxMinutes: 'Time cap (min)', maxMinutesHint: 'The run stops after this many minutes. Empty: no cap.',
       noCap: 'None',
       modeHint: 'What the session may do without asking you.',
+      browser: 'Browser for your accounts', browserHint: 'Where its runs go to your signed-in accounts. “My Chrome” goes through the Claude in Chrome extension: Chrome must be open when the run starts.', browserDefault: (label: string) => `As in the settings (${label})`, browsers: { shared: 'Shared browser', chrome: 'My Chrome' },
     },
     groups: { what: 'What it does', when: 'When', how: 'How it works', rules: 'Permissions', options: 'Options' },
     newIntro: 'It will start a session on its own, at a set time or from a webhook.',

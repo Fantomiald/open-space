@@ -54,7 +54,7 @@ import { saveAvatar } from './crew.ts';
 import { appPort } from './app-port.ts';
 import { installFilter } from './playwright-filter.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
-import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
+import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, openUserChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
 import { browserId, laneOf, sessionOfBrowser } from '../shared/browser.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -170,6 +170,7 @@ const sessions = new SessionManager({
   tagRule: () => settings.preferences.autoTagRule,
   remoteByDefault: () => settings.preferences.remoteByDefault,
   accountsBrowser: () => settings.preferences.accountsBrowser,
+  openUserChrome: () => openUserChrome(),
   runShell: createShellRunner(buildClaudeEnvironment(process.env, config.passthrough)),
   identity: () => ({ user: crew.selfName ?? '', note: settings.preferences.agentNote }),
   claudeSettings: () => settings.preferences.claude,
@@ -263,7 +264,7 @@ const triggers = new Triggers({
     try {
       const { session } = await startSession(
         { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
-        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes } },
+        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes }, ...(trigger.browser ? { accountsBrowser: trigger.browser } : {}) },
       );
       const keys = triggerKeys.entries(trigger.id);
       if (keys.length) sessions.giveSecrets(session.id, undefined, keys);
@@ -351,6 +352,12 @@ const mcpApi: OpenSpaceApi = {
     return triggers.save(id, parsed.input);
   },
   runTrigger: (id) => triggers.fire(id, 'agent'),
+  deleteTrigger: async (id) => {
+    if (!triggers.get(id)) return false;
+    await triggers.remove(id);
+    triggerKeys.drop(id);
+    return true;
+  },
   startSession: async ({ cwd, prompt, name, model, permissionMode, role, remote }) => {
     const mode = permissionMode === undefined ? settings.preferences.permissionMode : isPermissionMode(permissionMode) ? permissionMode : null;
     if (!mode) throw new Error(st.triggers.errors.mode);
@@ -393,6 +400,7 @@ const mcpApi: OpenSpaceApi = {
   rename: (sessionId, name) => sessions.rename(sessionId, name),
   setPending: (sessionId, items) => sessions.setPending(sessionId, items),
   finish: (sessionId) => sessions.finishAfterTurn(sessionId),
+  switchBrowser: (sessionId, browser) => sessions.switchBrowserOnRequest(sessionId, browser),
   sendFile: async (botId, file, caption) => {
     const allowed = [...config.roots, attachmentsFolder(config.dataDir), uploadsFolder(config.dataDir)];
     const found = path.isAbsolute(file) ? allowed.map((root) => resolveInside(root, file)).find(Boolean) : null;
@@ -447,6 +455,7 @@ function browserOf(sessionId: string, shared: boolean) {
 const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
+    socket: (sessionId, lane) => browsers.socket(sessionId, lane), connect: (client, upstream, sessionId, lane) => browsers.connect(client, upstream, browserId(sessionId, lane)),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
   mods: { kitDir: MOD_KIT, port: config.modsPort, key: (id) => modKey(secret, id), file: (id, relative) => mods.file(id, relative) },
   secrets: {
@@ -565,7 +574,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
     case 'close': await sessions.close(message.sessionId); break;
-    case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, permissionMode: message.permissionMode }); break;
+    case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, fastMode: message.fastMode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tags': sessions.setTags(message.sessionId, message.tags); break;
     case 'dismissPending': sessions.dismissPending(message.sessionId, message.id); break;
