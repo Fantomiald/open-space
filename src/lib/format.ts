@@ -51,11 +51,14 @@ export { plural } from '../i18n/index.ts';
 /** "7 days" for Claude Code's "seven_day" usage window; an unknown window keeps its own name, made readable. */
 export const quotaWindowName = (name: string) => t.common.quota.windows[name] ?? name.replace(/_/g, ' ');
 
+/** A local time of day, as "19:05". */
+export const clockTime = (date: Date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
 /** When a usage window frees up ("today at 19:40", "tomorrow at 08:00", "Monday at 14:00"), from Unix seconds or ms. */
 export function resetLabel(resetsAt: number, now: Date): string {
   const { reset } = t.common;
   const date = new Date(resetsAt < 1e12 ? resetsAt * 1000 : resetsAt);
-  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const time = clockTime(date);
   const days = Math.round((new Date(date).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86_400_000);
   const day = days <= 0 ? reset.today
     : days === 1 ? reset.tomorrow

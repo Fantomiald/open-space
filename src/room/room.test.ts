@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { SessionInfo, SessionState } from '../../shared/protocol.ts';
-import { earlySpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
+import { earlySpeech, pauseSpeech, speechOf, USER_SPEAKER } from '../state/speech.ts';
 import { VISIBLE_ROWS, bubbleText, earlyBubbleText, pruneBubbles, pushBubble, type Bubble } from './bubbles.ts';
 import type { SeenSequences } from '../state/queue.ts';
 import { decorOf, planRoom, roleTitle, roomSessions } from './cast.ts';
@@ -468,6 +468,18 @@ describe('speech bubbles', () => {
     assert.equal(speechOf('e', { k: 'say', who: 'chef', text: 'Je regarde. Le code est propre.' }), null);
     assert.equal(speechOf('e', { k: 'say', who: 'chef', text: 'Fini.' })?.text, 'Fini.', 'the next message has its own bubble');
     assert.equal(earlySpeech('e', 'toolu_1', 'Je liste. Puis'), null, 'never for a sub-agent');
+  });
+
+  it('says once in a bubble that the usage limit paused a session, and again only if the pause moves', () => {
+    const now = new Date(2026, 10, 13, 15, 0);
+    const until = new Date(2026, 10, 13, 19, 0).getTime();
+    const before = { id: 'p', state: 'work' } as SessionInfo;
+    const paused = { id: 'p', state: 'wait', pausedUntil: until } as SessionInfo;
+    assert.deepEqual(pauseSpeech(before, paused, now), { sessionId: 'p', speaker: 'chef', text: 'Limite d’usage atteinte : en pause jusqu’à 19:00, puis je reprends.' });
+    assert.equal(pauseSpeech(paused, { ...paused }, now), null);
+    assert.equal(pauseSpeech(paused, { ...paused, pausedUntil: undefined }, now), null, 'resuming says nothing');
+    assert.equal(pauseSpeech(paused, { ...paused, pausedUntil: until + 3_600_000 }, now)?.text, 'Limite d’usage atteinte : en pause jusqu’à 20:00, puis je reprends.');
+    assert.equal(pauseSpeech(undefined, paused, now), null, 'a session already paused when the page loads');
   });
 
   it('pushes older bubbles up, fades those pushed past the top, then drops them', () => {

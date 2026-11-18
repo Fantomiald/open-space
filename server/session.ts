@@ -15,7 +15,7 @@ import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
 import { parseContextUsage, parseMcpServers, parseUsageReport, quotaFromUsage } from './inspect.ts';
 import type { ShellRunner } from './shell.ts';
-import { Normalizer, describeRequest, elicitationContent, type ChromeSight, type ElicitationField, type ElicitationRequest, type InitInfo, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
+import { Normalizer, describeRequest, elicitationContent, type ChromeSight, type ElicitationField, type ElicitationRequest, type InitInfo, type LimitHit, type ScheduleChange, type ToolRequest, type TurnResult } from './normalizer.ts';
 import { applySchedule, noSchedules, pendingSchedules, scheduledUntil, type Schedules } from './schedules.ts';
 import type { SessionLog } from './session-log.ts';
 import { initialContext, reduce, type MachineContext, type MachineInput } from './session-state.ts';
@@ -86,6 +86,10 @@ export interface SessionDeps {
   onAutoCompactFailed?: () => void;
   /** /clear started a new conversation: its tags are gone, its first plain message may name new ones */
   onCleared?: () => void;
+  /** when the five-hour window of the last usage known resets (epoch ms), if ahead: the pause of a limit that does not say it */
+  knownReset?: () => number | null;
+  /** a pause of the usage limit began, moved or was lifted: the timer that resumes the sessions is set again */
+  onPauseChanged?: () => void;
 }
 
 export type TurnEnd = 'done' | 'failed' | 'interrupted' | 'exited';
@@ -111,6 +115,10 @@ const GRACE_MS = 3000;
 const PARTIAL_EVERY_MS = 80;
 /** get_usage calls claude.ai: asked at most this often per session (see askUsage) */
 const USAGE_EVERY_MS = 5 * 60_000;
+/** How long a session stopped by a limit whose reset is unknown is paused at most. */
+const UNKNOWN_RESET_PAUSE_MS = 5 * 60 * 60_000;
+/** The pause when the reset given is already past while the limit still holds. */
+const PAST_RESET_PAUSE_MS = 15 * 60_000;
 
 export class Session {
   private info: StoredInfo;
@@ -135,6 +143,12 @@ export class Session {
   private caps = { cost: 0, minutes: 0 };
   private spent = 0;
   private capped = false;
+  /** the time cap's timer, while it runs: stopped during a pause of the usage limit */
+  private capTimer: NodeJS.Timeout | null = null;
+  /** when the time cap stops the run (epoch ms), while its timer runs */
+  private capDeadline = 0;
+  /** what is left of the time cap (ms), counted again when its timer starts */
+  private capLeft = 0;
   private queuedImages = new Map<string, readonly ImageUpload[]>();
   /** the other files of the queued messages, by queue id, as their upload ids (same) */
   private queuedFiles = new Map<string, readonly string[]>();
@@ -248,8 +262,69 @@ export class Session {
     if (images.length) this.queuedImages.set(id, images);
     if (files.length) this.queuedFiles.set(id, files);
     this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}) }];
-    if (this.busy || this.preparing) { this.publish(); return; }
+    if (this.busy || this.preparing || this.paused) { this.publish(); return; }
     this.sendQueued();
+  }
+
+  /** True while the usage limit pauses it: what is sent waits in the queue until resumeAfterLimit. */
+  get paused() { return this.info.pausedUntil !== undefined; }
+
+  /** When it resumes on its own (epoch ms), while the usage limit pauses it. */
+  get pausedUntil() { return this.info.pausedUntil; }
+
+  /**
+   * The usage limit stopped its turn: paused until `until`. A limit hit again during the pause (a cron of its own)
+   * moves the pause later, never earlier, and keeps the wake-ups counted the first time.
+   */
+  pause(until: number) {
+    if (!this.paused) {
+      this.info.pausedCrons = pendingSchedules(this.schedules, this.now()) || undefined;
+      this.stopCapClock();
+    }
+    this.info.pausedUntil = Math.max(this.info.pausedUntil ?? 0, until);
+    this.publish();
+    this.deps.onPauseChanged?.();
+  }
+
+  /** The pause is over, resumed or not: a trigger's run takes up its time cap where it was. */
+  private liftPause() {
+    if (!this.paused) return;
+    this.info.pausedUntil = undefined;
+    this.info.pausedCrons = undefined;
+    this.startCapClock();
+    this.deps.onPauseChanged?.();
+  }
+
+  /**
+   * The limit has reset (or the user would not wait): Claude is told to go on, with the queue after it. A session
+   * closed meanwhile is only unpaused.
+   */
+  resumeAfterLimit() {
+    if (!this.paused) return;
+    const crons = this.info.pausedCrons;
+    // a process alive all along still has its wake-ups: only those of a process gone need making again
+    const lost = this.process?.alive ? 0 : crons ?? 0;
+    this.liftPause();
+    if (this.context.state === 'closed') { this.publish(); return; }
+    const resume = { id: randomUUID(), text: st.limit.resume(lost) };
+    // a /clear sent meanwhile starts a new conversation: there is nothing to go on with
+    if (!this.info.queued?.[0]?.text.startsWith('/clear')) this.info.queued = [resume, ...(this.info.queued ?? [])];
+    if (this.busy || this.preparing) { this.publish(); return; }
+    try {
+      this.sendQueued();
+    } catch (error) {
+      // no process could start (too many alive): paused again, it tries once more a minute later
+      this.info.queued = this.info.queued?.filter((message) => message.id !== resume.id);
+      if (!this.info.queued?.length) this.info.queued = undefined;
+      this.record({ k: 'note', text: error instanceof Error ? error.message : String(error) });
+      this.pause(this.now());
+      this.info.pausedCrons = crons;
+    }
+  }
+
+  private onLimitHit(hit: LimitHit) {
+    const until = hit.resetsAt ?? this.deps.knownReset?.() ?? this.now() + UNKNOWN_RESET_PAUSE_MS;
+    this.pause(until > this.now() ? until : this.now() + PAST_RESET_PAUSE_MS);
   }
 
   /**
@@ -297,6 +372,7 @@ export class Session {
    * the thread shows `shown`, a short line in the user's name. Only between turns.
    */
   instruct(prompt: string, shown: string) {
+    if (this.paused) throw new Error(st.limit.paused(this.info.name));
     if (this.busy || this.preparing || this.stopRequest || this.info.queued?.length) throw new Error(st.worktree.waitTurn(this.info.name));
     this.deliver(prompt, [], [], shown);
     this.publish();
@@ -344,6 +420,7 @@ export class Session {
   sendNow() {
     // its folder is being made or moved: the queue leaves once it is done
     if (this.preparing) return;
+    if (this.paused) { this.resumeAfterLimit(); return; }
     if (!this.busy) { this.sendQueued(); return; }
     this.interrupt();
     // an interrupt with no turn to stop (the session looked busy, Claude Code was waiting) never ends one: the queue
@@ -355,7 +432,7 @@ export class Session {
   /** Sends the oldest queued messages as one: the plain ones together, a slash command alone (it must come first). */
   private sendQueued() {
     const queued = this.info.queued ?? [];
-    if (!queued.length) return;
+    if (!queued.length || this.paused) return;
     const isCommand = (message: { text: string }) => message.text.startsWith('/');
     const firstCommand = queued.findIndex(isCommand);
     const count = firstCommand === 0 ? 1 : firstCommand === -1 ? queued.length : firstCommand;
@@ -463,6 +540,7 @@ export class Session {
       onSuggestion: (suggestion) => this.onSuggestion(suggestion),
       onBackground: (tasks) => this.onBackground(tasks),
       onSchedule: (change) => this.onSchedule(change),
+      onLimitHit: (hit) => this.onLimitHit(hit),
       onContext: ({ used, max }) => { this.info.context = { used: used ?? this.info.context?.used ?? 0, max: max ?? this.info.context?.max ?? 0 }; },
       onFiles: (who, caption, files, display) => this.onEvent({
         k: 'files', who, ...(caption.trim() ? { caption: caption.slice(0, 2000) } : {}),
@@ -897,7 +975,7 @@ export class Session {
     if (before && !before.compacted) this.deps.onAutoCompactFailed?.();
     this.apply({ type: 'turn_result' });
     if (this.context.state !== 'wait' || !before) return;
-    if (this.info.queued?.length) { this.sendQueued(); return; }
+    if (this.info.queued?.length && !this.paused) { this.sendQueued(); return; }
     if (before.resting && this.process?.alive) {
       this.info.resting = true;
       this.stopRequest = { reason: 'closed', note: st.sessions.stopped.compacted };
@@ -918,9 +996,23 @@ export class Session {
   /** A trigger's run caps: past either, it is stopped and closed (its conversation stays in Resume). */
   limit(caps: { cost: number; minutes: number }) {
     this.caps = caps;
-    if (!caps.minutes) return;
-    const timer = setTimeout(() => this.stopCapped(st.sessions.capped.time(caps.minutes)), caps.minutes * 60_000);
-    timer.unref();
+    this.capLeft = caps.minutes * 60_000;
+    if (!this.paused) this.startCapClock();
+  }
+
+  /** A pause of the usage limit is not time worked: the time cap stops with it and goes on after. */
+  private startCapClock() {
+    if (!this.caps.minutes || this.capTimer) return;
+    this.capDeadline = this.now() + this.capLeft;
+    this.capTimer = setTimeout(() => this.stopCapped(st.sessions.capped.time(this.caps.minutes)), this.capLeft);
+    this.capTimer.unref();
+  }
+
+  private stopCapClock() {
+    if (!this.capTimer) return;
+    clearTimeout(this.capTimer);
+    this.capTimer = null;
+    this.capLeft = Math.max(0, this.capDeadline - this.now());
   }
 
   private onSpend(dollars: number) {
@@ -940,12 +1032,20 @@ export class Session {
     this.info.compacting = undefined;
     this.apply({ type: 'turn_result' });
     if (this.context.state !== 'wait') return;
+    // a turn that went through during the pause (a wake-up of its own): the limit has reset already
+    if (how === 'done' && this.paused) {
+      this.deps.onTurnEnd?.(this.snapshot(), how);
+      this.resumeAfterLimit();
+      return;
+    }
     // queued messages leave at once: the session works again, nothing to tell the user
-    if (this.info.queued?.length) { this.sendQueued(); return; }
+    if (this.info.queued?.length && !this.paused) { this.sendQueued(); return; }
     this.armIdleTimer();
-    // a turn the user stopped themselves needs no telling either
-    if (tell) this.deps.onAttention?.('finished', this.snapshot());
+    // a turn the user stopped themselves needs no telling either, nor one the usage limit paused
+    if (tell && !this.paused) this.deps.onAttention?.('finished', this.snapshot());
+    // told even when paused: a merge asked of this turn has failed, a browser switch waits no longer
     this.deps.onTurnEnd?.(this.snapshot(), how);
+    if (this.paused) return;
     // a trigger's run leaves the room: soon once it said it is done (a moment for the messengers, looking every 2 s,
     // to tell it finished), else after an hour left alone; a turn since keeps it
     const closeIn = this.finishing ? FINISH_DELAY_MS : this.info.trigger ? RUN_LEFT_MS : null;
@@ -1152,6 +1252,8 @@ export class Session {
 
   /** Stops the process now (and Remote Control for good). A session without a process is simply marked closed. */
   async close(note = st.sessions.stopped.byUser) {
+    // closed by the user (or its caps): it waits for the reset no more, what it queued goes with the next message
+    this.liftPause();
     await Promise.all([this.setRemote(false), this.stopShells()]);
     this.clearIdleTimer();
     if (this.process?.alive) {

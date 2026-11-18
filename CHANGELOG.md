@@ -2,7 +2,8 @@
 
 ## Non publiée
 
-- En suspens : le panneau État a une section de plus, ce que les sessions laissent derrière elles. Ce que l'agent dit rester à faire (outil MCP `set_pending` : une PR à ouvrir, une clé à fournir), avec depuis quand, puis ce que git dit de son dossier : fichiers pas commités, commits pas poussés, branche jamais poussée. Une ligne se reprend d'un clic (le message « Reprends : … » part à la session) ou s'écarte ; ce que dit git disparaît une fois commité et poussé.
+- À finir : le panneau État et le mode focus rangent à part les sessions lues qui laissent quelque chose à faire : ce que l'agent dit rester à faire et que toi seul peux régler (outil MCP `set_pending` : une clé à fournir, une version à publier), puis ce que git dit de leur dossier (« Commiter 2 fichiers », « Pousser 3 commits »). « Prêtes » devient « Terminées » et ne garde que les sessions où il ne reste rien. Dans la session, un bandeau « À finir » au-dessus du champ rappelle ces lignes : « Plus tard » la range dans Terminées jusqu'à ce que ça change, la croix retire une ligne pour de bon (l'agent ne peut plus la remettre). Au travail passe en tête du panneau, et les tags d'une ligne ne sont plus coupés.
+- Limite d'usage : une session arrêtée par la limite de 5 h (ou de la semaine) se met en pause au lieu d'échouer, et reprend seule une minute après l'heure de remise à zéro, en disant à Claude de continuer où il en était (et de recréer ses réveils `/loop` ou cron, perdus pendant la pause). Le panneau État la garde dans « Au travail » avec « en pause jusqu'à 19:00 », sa bulle le dit, et un bandeau au-dessus du champ propose « Reprendre maintenant ». Ce qui est envoyé entre-temps attend dans la file et part à la reprise. La pause survit à un redémarrage d'Open Space. Le réglage Claude Code « Reprendre à la fin de la limite » (`autoContinueAtUsageLimit`) n'a rien changé à ces tours en `-p`, d'où cette reprise côté Open Space.
 
 ## 1.35.7
 

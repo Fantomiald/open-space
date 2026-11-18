@@ -17,7 +17,7 @@ const unseen = (session: SessionInfo, seen: SeenSequences) => (session.quietFrom
 export function attentionKind(session: SessionInfo, seen: SeenSequences = {}): AttentionKind | null {
   if (session.state === 'perm') return session.permissions[0]?.questions || session.permissions[0]?.secrets ? 'question' : 'permission';
   if (session.state === 'error') return unseen(session, seen) ? 'error' : null;
-  if (session.state === 'wait' && session.turns > 0 && unseen(session, seen)) return 'finished';
+  if (session.state === 'wait' && session.turns > 0 && !isPaused(session) && unseen(session, seen)) return 'finished';
   return null;
 }
 
@@ -30,9 +30,12 @@ export function attentionQueue(sessions: readonly SessionInfo[], seen: SeenSeque
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.session.stateSince - b.session.stateSince);
 }
 
-/** At work: its turn running, or between turns while sub-agents or commands it sent off in the background still work. */
+/** The usage limit stopped it: it resumes on its own at `pausedUntil`, nothing for the user to read meanwhile. */
+export const isPaused = (session: SessionInfo) => session.state === 'wait' && session.pausedUntil !== undefined;
+
+/** At work: its turn running, or between turns while sub-agents or commands it sent off in the background still work, or the limit pauses it. */
 export const isWorking = (session: SessionInfo) => session.state === 'work' || session.state === 'starting'
-  || (session.state === 'wait' && (session.subagents.length > 0 || !!session.background));
+  || (session.state === 'wait' && (session.subagents.length > 0 || !!session.background || isPaused(session)));
 
 export interface SessionGroups { working: SessionInfo[]; idle: SessionInfo[]; stopped: SessionInfo[] }
 
