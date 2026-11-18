@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { t } from '../i18n/index.ts';
 import { useSessions } from '../state/sessions.ts';
+import { selectedWithLinks } from './copyLinks.ts';
 
 const SHOWN_MS = 900;
 /** As in Claude Code: only in a thread or in the message field; elsewhere in the app, selecting is not meant as copying. */
@@ -12,7 +13,7 @@ function selectedText(target: EventTarget | null): string {
   const selection = window.getSelection();
   const inThread = (node: Node | null) => (node instanceof Element ? node : node?.parentElement)?.closest('.cp-feed');
   if (!selection || !inThread(selection.anchorNode) || !inThread(selection.focusNode)) return '';
-  return selection.toString();
+  return selectedWithLinks(selection);
 }
 
 /**

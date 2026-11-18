@@ -1,12 +1,16 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
+import { folderOfPath, pathMention, type PathEntry } from '../../shared/file-mentions.ts';
 import { findMentions, mentionAt, mentionNames } from '../../shared/mentions.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
 import { folderName } from '../lib/format.ts';
 import { commandAt, commandSuggestions, typedName, withOwnCommands } from '../state/commands.ts';
+import type { PathScope } from '../state/path-mentions.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
+import { FileIcon, FolderIcon } from './Icons.tsx';
 import { SessionFace } from './SessionFace.tsx';
+import { usePathMentions } from './usePathMentions.ts';
 
 const MAX_SUGGESTIONS = 8;
 
@@ -20,8 +24,11 @@ export function useMentionable(exceptId?: string): Mentionable[] {
     .map((other) => ({ name: other.name, session: other, detail: [folderName(other.cwd), other.resting ? t.composer.composer.resting : ''].filter(Boolean).join(' · ') })), [sessions, exceptId]);
 }
 
-/** A line of the suggestions: a command or a session (`aside`: its tags, after its name). `insert` replaces what is typed; typed as `whole`, Enter sends. */
-interface Suggestion { label: string; aside?: string; hint?: string; description?: string; insert: string; whole: string; face?: SessionInfo }
+/**
+ * A line of the suggestions: a command, a session (`aside`: its tags, after its name) or a path (`icon`). `insert`
+ * replaces what is typed, the caret going `caret` characters into it (by default after it); typed as `whole`, Enter sends.
+ */
+interface Suggestion { key: string; label: string; aside?: string; hint?: string; description?: string; insert: string; caret?: number; whole: string; face?: SessionInfo; icon?: 'file' | 'folder' }
 
 /**
  * The sessions whose name or one of its tags starts with what follows the "@", then those whose name or tag holds it,
@@ -33,11 +40,19 @@ function mentionSuggestions(people: readonly Mentionable[], typed: string): Sugg
     const { name, session: { tags = [] } } = person;
     const written = test(foldQuery(name)) ? name : tags.find((tag) => test(foldQuery(tag))) ?? null;
     if (!written) return null;
-    return { label: `@${name}`, aside: tags.join(', ') || undefined, description: person.detail, insert: `@${written} `, whole: `@${written}`, face: person.session };
+    return { key: `session:${person.session.id}`, label: `@${name}`, aside: tags.join(', ') || undefined, description: person.detail, insert: `@${written} `, whole: `@${written}`, face: person.session };
   };
   const starting = people.map((person) => line(person, (folded) => folded.startsWith(word)));
   const holding = people.map((person, index) => (starting[index] ? null : line(person, (folded) => folded.includes(word))));
   return [...starting, ...holding].filter((suggestion): suggestion is Suggestion => !!suggestion);
+}
+
+/** The files and folders found, one line each: its name, and the folder it is in (`root`, the folder's own name, at its top). */
+function pathSuggestions(paths: readonly PathEntry[], root: string): Suggestion[] {
+  return paths.map((entry) => {
+    const name = entry.path.slice(entry.path.lastIndexOf('/') + 1);
+    return { key: `path:${entry.path}`, label: entry.folder ? `${name}/` : name, description: folderOfPath(entry.path) || root, icon: entry.folder ? 'folder' : 'file', ...pathMention(entry) };
+  });
 }
 
 interface Props {
@@ -59,18 +74,21 @@ interface Props {
   own?: boolean;
   /** the sessions "@" names: suggested as it is typed, and marked in the text */
   people?: readonly Mentionable[];
+  /** the folder whose files and folders "@" offers too, after the sessions (Claude Code reads what they name) */
+  paths?: PathScope;
   /** the next message Claude Code predicts: shown in grey while the field is empty, written by Tab */
   suggestion?: string;
 }
 
 /**
  * A message field that suggests the slash commands as soon as a word starts with "/", at the start or in the middle
- * of the message (Tab or Enter completes it where it is), and the sessions after an "@", marked once named. With
+ * of the message (Tab or Enter completes it where it is), and after an "@" the sessions, marked once named, then the
+ * files and folders of `paths` (a folder completed goes on with what is in it, see shared/file-mentions.ts). With
  * `shell`, like Claude Code's bash mode: a "!" typed first becomes a prompt in front of the field instead of text (the
  * value keeps it: "!ls"), and Backspace at the very start takes it away, back to a message. Like Claude Code's prompt
  * suggestions, an empty field shows `suggestion` in grey, and Tab writes it, ready to send or to change.
  */
-export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste, shell = false, cwd, own = false, people, suggestion }, ref) {
+export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function CommandField({ id, label, value, onChange, onSubmit, placeholder, rows = 3, onPaste, shell = false, cwd, own = false, people, paths, suggestion }, ref) {
   const shellMode = shell && value.startsWith('!');
   // the space after the "!" is the prompt's, not the command's
   const shown = shellMode ? value.slice(1).replace(/^ +/, '') : value;
@@ -87,17 +105,26 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
   const [caret, setCaret] = useState(value.length);
   const folderCommands = useSessions((s) => commandsIn(s, cwd));
   const commands = useMemo(() => (own ? withOwnCommands(folderCommands, true) : folderCommands), [folderCommands, own]);
-  const mentioning = shellMode || !people?.length ? null : mentionAt(value, Math.min(caret, value.length));
-  const typing = mentioning ? { start: mentioning.start, typed: `@${mentioning.typed}` } : shellMode ? null : commandAt(value, Math.min(caret, value.length));
+  const mentioning = shellMode || (!people?.length && !paths) ? null : mentionAt(value, Math.min(caret, value.length));
+  const typing: { start: number; typed: string; end?: number } | null = mentioning ? { start: mentioning.start, end: mentioning.end, typed: `@${mentioning.typed}` }
+    : shellMode ? null : commandAt(value, Math.min(caret, value.length));
   const typed = typing?.typed;
+  const offering = !dismissed && focused && typed !== undefined;
+  // what follows the "@", a quoted path without its quote
+  const found = usePathMentions(paths, offering && typed.startsWith('@') ? typed.slice(1).replace(/^"/, '') : null);
+  const root = folderName(cwd ?? (paths && 'cwd' in paths ? paths.cwd : ''));
   const suggestions = useMemo((): Suggestion[] => {
-    if (dismissed || !focused || typed === undefined) return [];
-    if (typed.startsWith('@')) return mentionSuggestions(people ?? [], typed.slice(1)).slice(0, MAX_SUGGESTIONS);
+    if (!offering) return [];
+    if (typed.startsWith('@')) {
+      // a quote opens a path: a session's name is never quoted
+      const named = typed.startsWith('@"') ? [] : mentionSuggestions(people ?? [], typed.slice(1));
+      return [...named, ...pathSuggestions(found, root)].slice(0, MAX_SUGGESTIONS);
+    }
     return commandSuggestions(commands, typed).slice(0, MAX_SUGGESTIONS).map((command) => {
       const whole = `/${typedName(command)}`;
-      return { label: whole, hint: command.argumentHint, description: command.description, insert: `${whole} `, whole };
+      return { key: whole, label: whole, hint: command.argumentHint, description: command.description, insert: `${whole} `, whole };
     });
-  }, [commands, people, typed, dismissed, focused]);
+  }, [commands, people, typed, offering, found, root]);
   const current = suggestions[Math.min(active, suggestions.length - 1)];
   const marks = useMemo(() => (shellMode || !people?.length ? [] : findMentions(value, mentionNames(people.map((person) => person.session)))), [value, people, shellMode]);
   const overlay = useRef<HTMLDivElement>(null);
@@ -114,13 +141,17 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
     setActive(0);
     setDismissed(false);
   };
-  /** What is typed under the caret becomes the command or the session chosen, followed by a space, and the caret goes after it. */
+  /**
+   * What is typed under the caret becomes the command, the session or the path chosen, followed by a space but for a
+   * folder (its content is offered next), and the caret goes after it (inside the quotes of a quoted folder).
+   */
   const complete = (suggestion: Suggestion) => {
     if (!typing) return;
     const inserted = suggestion.insert;
-    const end = typing.start + typing.typed.length;
-    const at = typing.start + inserted.length;
-    edit(value.slice(0, typing.start) + inserted + value.slice(end).replace(/^ /, ''), at);
+    const end = typing.end ?? typing.start + typing.typed.length;
+    const at = typing.start + (suggestion.caret ?? inserted.length);
+    const rest = value.slice(end);
+    edit(value.slice(0, typing.start) + inserted + (inserted.endsWith(' ') ? rest.replace(/^ /, '') : rest), at);
     requestAnimationFrame(() => area.current?.setSelectionRange(at, at));
   };
   const track = (e: React.SyntheticEvent<HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart + (shellMode ? 1 : 0));
@@ -151,10 +182,12 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
         <ul id={listId} ref={list} role="listbox" className="cp-composer__commands" aria-label={t.common.commandField.commands}>
           {suggestions.map((suggestion, index) => (
             <li
-              key={suggestion.label} id={`${listId}-${index}`} role="option" aria-selected={suggestion === current} data-active={suggestion === current} data-face={!!suggestion.face}
+              key={suggestion.key} id={`${listId}-${index}`} role="option" aria-selected={suggestion === current} data-active={suggestion === current} data-face={!!suggestion.face} data-path={!!suggestion.icon}
               onMouseDown={(e) => e.preventDefault()} onClick={() => complete(suggestion)}
             >
               {suggestion.face && <SessionFace session={suggestion.face} resting={suggestion.face.resting} />}
+              {suggestion.icon === 'folder' && <FolderIcon />}
+              {suggestion.icon === 'file' && <FileIcon />}
               <strong>{suggestion.label.startsWith('@') ? <><span className="cp-at">@</span>{suggestion.label.slice(1)}</> : suggestion.label}{suggestion.aside && <span className="cp-composer__aside"> - {suggestion.aside}</span>}</strong>
               {suggestion.hint && <span className="cp-muted"> {suggestion.hint}</span>}
               {suggestion.description && <span className="cp-palette__description">{suggestion.description}</span>}

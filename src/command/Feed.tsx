@@ -7,6 +7,7 @@ import { permissionTitle } from '../state/labels.ts';
 import { formatClock, formatDuration, formatSize } from '../lib/format.ts';
 import { reducedMotion } from '../lib/motion.ts';
 import { copyCodeOnClick } from './copyCode.ts';
+import { copyWithLinks } from './copyLinks.ts';
 import { useNow } from '../lib/useNow.ts';
 import { chibiHead, lookOfStranger } from '../room/chibi.ts';
 import { robotHead, robotLook } from '../room/robot.ts';
@@ -436,7 +437,7 @@ export function Feed({ feed, sessionId, loading, speaker, working, drafts, agent
   return (
     <div className="cp-thread">
       {searching && <FeedSearch key={searchSeed} thread={scroller} version={entries} />}
-      <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onScroll={(e) => onScroll(e.currentTarget)} onWheel={onGesture} onTouchMove={onGesture} onKeyDown={onGesture} onPointerDown={onGesture} tabIndex={0} role="region" aria-label={t.session.feed.region}>
+      <div className="cp-feed" ref={scroller} onClick={(e) => copyCodeOnClick(e.target)} onCopy={copyWithLinks} onScroll={(e) => onScroll(e.currentTarget)} onWheel={onGesture} onTouchMove={onGesture} onKeyDown={onGesture} onPointerDown={onGesture} tabIndex={0} role="region" aria-label={t.session.feed.region}>
         {loading ? <p className="cp-muted">{t.session.feed.loading}</p> : entries.length === 0 && !shownAgent ? <p className="cp-muted">{t.session.feed.empty}</p> : (
           <ul ref={list}>
             {shownAgent && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { copyCodeOnClick } from './copyCode.ts';
+import { copyWithLinks } from './copyLinks.ts';
 import { CloseIcon, DownloadIcon } from './Icons.tsx';
 import { Prose } from './Prose.tsx';
 
@@ -151,6 +152,6 @@ function TextFile({ src, markdown }: { src: string; markdown: boolean }) {
   const words = t.session.feed.viewer;
   if (read.status !== 'read') return <div className="cp-viewer__text"><p className="cp-muted">{read.status === 'loading' ? words.loading : words.unreadable}</p></div>;
   return markdown
-    ? <div className="cp-viewer__text" onClick={(e) => copyCodeOnClick(e.target)}><Prose className="cp-viewer__prose" text={read.text} /></div>
+    ? <div className="cp-viewer__text" onClick={(e) => copyCodeOnClick(e.target)} onCopy={copyWithLinks}><Prose className="cp-viewer__prose" text={read.text} /></div>
     : <pre className="cp-viewer__text" data-plain="true">{read.text}</pre>;
 }

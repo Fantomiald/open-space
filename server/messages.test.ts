@@ -135,6 +135,19 @@ describe('parseClientMessage', () => {
     assert.deepEqual(parseClientMessage({ t: 'costs', fresh: true }), { t: 'costs', fresh: true });
     assert.deepEqual(parseClientMessage({ t: 'costs', fresh: 'yes' }), { t: 'costs' });
   });
+
+  it('takes a search of the paths "@" offers, in a session’s folder or a folder, and drops the malformed ones', () => {
+    assert.deepEqual(parseClientMessage({ t: 'findPaths', id: 4, query: 'src/comp', sessionId: 's1' }), { t: 'findPaths', id: 4, query: 'src/comp', sessionId: 's1' });
+    assert.deepEqual(parseClientMessage({ t: 'findPaths', id: 0, query: '', cwd: '~/work/demo' }), { t: 'findPaths', id: 0, query: '', cwd: '~/work/demo' });
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, query: 'x' }), null, 'a session or a folder');
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, query: 'x', sessionId: 's1', cwd: '/a' }), null, 'not both');
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, query: 'x', sessionId: '../s1' }), null);
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, query: 'x', cwd: '' }), null);
+    assert.equal(parseClientMessage({ t: 'findPaths', id: -1, query: 'x', sessionId: 's1' }), null);
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 2.5, query: 'x', sessionId: 's1' }), null);
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, sessionId: 's1' }), null);
+    assert.equal(parseClientMessage({ t: 'findPaths', id: 1, query: 'x'.repeat(1025), sessionId: 's1' }), null);
+  });
   it('takes the worktree messages with a sane branch name, and drops the others', () => {
     const id = 'abc-1';
     assert.deepEqual(parseClientMessage({ t: 'create', options: { cwd: '/p', isolate: {} } }), { t: 'create', options: { cwd: '/p', isolate: {} } });

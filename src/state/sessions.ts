@@ -5,6 +5,7 @@ import { NO_TRIGGERS, type TriggerError, type TriggerInput, type TriggersState }
 import { appendRunEvents, type RunLog } from './automata.ts';
 import type { ModInfo, ModSettings } from '../../shared/mods.ts';
 import { heardModEnv, heardModStore } from './mods.ts';
+import { heardPaths } from './path-mentions.ts';
 import type { SecretEntry } from '../../shared/secrets.ts';
 import type { MessengerInput } from '../../shared/messengers.ts';
 import { create } from 'zustand';
@@ -714,6 +715,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'musicLibrary': set({ musicLibrary: { query: message.query, playlists: message.playlists, tracks: message.tracks } }); break;
       // an answer to an older query, overtaken by the one typed since, is dropped
       case 'searchResults': if (message.id === searchId) set({ searchResults: { id: message.id, query: message.query, hits: message.hits } }); break;
+      case 'paths': heardPaths(message.id, message.query, message.paths); break;
       case 'costs': set({ costs: message.report }); break;
       case 'mods': set({ mods: message.mods }); break;
       case 'modCreated': get().openMod(message.id); break;
