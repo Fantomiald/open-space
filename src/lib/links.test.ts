@@ -53,3 +53,7 @@ it('skips a link whose text is not in the copy, and goes on with the next one', 
   const links = [{ text: 'gone', href: 'https://example.org/gone' }, { text: 'docs', href: 'https://example.org/docs' }];
   assert.equal(withLinks('Read the docs', links), 'Read the [docs](https://example.org/docs)');
 });
+
+it('escapes the brackets of a link text, so the copy reads back as one link', () => {
+  assert.equal(withLinks('see a]b', [{ text: 'a]b', href: 'https://x.org/' }]), 'see [a\\]b](https://x.org/)');
+});

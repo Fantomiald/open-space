@@ -49,7 +49,14 @@ export function copyWithLinks(event: ClipboardEvent) {
   const copied = selectedWithLinks(selection, plain);
   if (copied === plain) return;
   const html = document.createElement('div');
-  for (const range of rangesOf(selection)) html.append(range.cloneContents());
+  for (const range of rangesOf(selection)) {
+    // A selection inside one link clones only its text: the link is put back around it, or a rich paste loses it
+    const around = range.commonAncestorContainer;
+    const anchor = (around instanceof Element ? around : around.parentElement)?.closest(PROSE_LINKS);
+    const wrapper = anchor ? anchor.cloneNode(false) : html;
+    wrapper.appendChild(range.cloneContents());
+    if (wrapper !== html) html.append(wrapper);
+  }
   event.clipboardData.setData('text/plain', copied);
   event.clipboardData.setData('text/html', html.innerHTML);
   event.preventDefault();

@@ -11,10 +11,11 @@ import { resolveInside } from './paths.ts';
 
 /** Never offered, even when .gitignore forgets them: version control, dependencies, caches. */
 const SKIPPED = new Set(['.git', '.hg', '.svn', 'node_modules', 'bower_components', '__pycache__', '.venv', '.DS_Store']);
-const MAX_PATHS = 50_000;
+/** The walk only: git's list is never cut, since it gives untracked files first and tracked ones alphabetically. */
+const MAX_WALKED = 50_000;
 const WALK_MS = 1_000;
 const GIT_TIMEOUT_MS = 5_000;
-/** How long a folder's list serves the next keystrokes before it is read again. */
+/** How long after the last keystroke a folder's list is kept before it is read again. */
 const LIST_TTL_MS = 5_000;
 
 /** The files git knows in `root` and under it (`dir/` for an untracked repository inside), or null outside git. */
@@ -24,7 +25,12 @@ function gitFiles(root: string): Promise<string[] | null> {
     execFile('git', ['-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
       cwd: root, timeout: GIT_TIMEOUT_MS, maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' },
-    }, (error, stdout) => resolve(error ? null : String(stdout).split('\0').filter(Boolean)));
+    }, (error, stdout) => {
+      const files = String(stdout).split('\0');
+      // Cut off by the timeout or the buffer, git's list is still better than a walk that ignores .gitignore
+      if (error) files.pop();
+      resolve(error && !files.length ? null : files.filter(Boolean));
+    });
   });
 }
 
@@ -38,7 +44,6 @@ function fromFiles(files: readonly string[]): PathEntry[] {
     for (let count = 1; count < names.length; count++) folders.add(names.slice(0, count).join('/'));
     if (file.endsWith('/')) folders.add(names.join('/'));
     else entries.push({ path: file, folder: false });
-    if (entries.length >= MAX_PATHS) break;
   }
   return [...[...folders].map((folder) => ({ path: folder, folder: true })), ...entries];
 }
@@ -48,7 +53,7 @@ async function walk(root: string): Promise<PathEntry[]> {
   const until = Date.now() + WALK_MS;
   const entries: PathEntry[] = [];
   const folders = [''];
-  while (folders.length && entries.length < MAX_PATHS && Date.now() < until) {
+  while (folders.length && entries.length < MAX_WALKED && Date.now() < until) {
     const folder = folders.shift() as string;
     const found = await readdir(path.join(root, folder), { withFileTypes: true }).catch(() => []);
     for (const entry of found) {
@@ -77,7 +82,8 @@ export function pathFinder(ttlMs = LIST_TTL_MS): (root: string, query: string) =
     const now = Date.now();
     for (const [folder, list] of lists) if (now - list.at >= ttlMs) lists.delete(folder);
     let list = lists.get(root);
-    if (!list) {
+    if (list) list.at = now;
+    else {
       list = { at: now, entries: listPaths(root) };
       lists.set(root, list);
     }

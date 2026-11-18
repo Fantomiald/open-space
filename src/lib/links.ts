@@ -43,7 +43,7 @@ export function withLinks(plain: string, links: readonly CopiedLink[]): string {
     const at = found >= 0 ? found : plain.indexOf(text, from);
     if (at < 0) continue;
     const kept = SAFE_URL.test(link.href) && !showsItsAddress(link.label ?? text, link.href);
-    copied += plain.slice(from, at) + (kept ? `[${text}](${link.href})` : text);
+    copied += plain.slice(from, at) + (kept ? `[${text.replace(/[[\]]/g, '\\$&')}](${link.href})` : text);
     from = at + text.length;
   }
   return copied + plain.slice(from);

@@ -524,7 +524,6 @@ function onConnection(socket: WebSocket) {
   });
 }
 
-/** The real folder a session's explorer works in: its own, as long as it stays among the allowed ones. */
 /** The files and folders "@" offers in the message field, its folder's list kept for the keystrokes that follow. */
 const findPaths = pathFinder();
 
@@ -537,6 +536,7 @@ function mentionRoot(message: { sessionId: string } | { cwd: string }): string |
   try { return filesRoot(message.sessionId); } catch { return null; }
 }
 
+/** The real folder a session's explorer works in: its own, as long as it stays among the allowed ones. */
 function filesRoot(sessionId: string): string {
   const cwd = sessions.folderOf(sessionId);
   if (!cwd) throw new Error(st.sessions.notFound);
