@@ -69,15 +69,15 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.35': {
-        title: 'What needs your eye',
+      '1.36': {
+        title: 'What is left to do',
         items: {
-          news: { title: 'The orange dot leads you', text: 'A mod has news: the dot lights up on the Dashboards button, on the tab that holds it, then beside its title until you hover it.' },
-          bar: { title: 'More room for dashboards', text: 'Their tabs move up into the top bar: the grid takes the whole page.' },
-          automata: { title: 'Automatons sorted', text: 'Scheduled on one side, by webhook on the other, the active ones on top, and each group folds.' },
-          keys: { title: 'Your keys in the browser', text: 'os-secret signs a session’s browser in to a protected site or types a password, without the agent ever seeing the key.' },
+          finish: { title: 'To finish', text: 'A read session that leaves you something (a key to provide, files not committed) goes to To finish, with what is left. Done keeps only those with nothing left.' },
+          pause: { title: 'The 5-hour limit breaks nothing', text: 'A session stopped by the limit pauses and picks up on its own when the limit resets, with what you sent it meanwhile.' },
+          files: { title: 'Your files with @', text: 'After the sessions, "@" offers the session’s files and folders, written the way Claude Code reads them.' },
+          links: { title: 'Links survive a copy', text: 'Copying a message keeps its links’ addresses, as Markdown in a terminal, as real links in Slack or Notion.' },
         },
-        thanks: 'Thanks to Jean-Baptiste for keys in the browser (PR #39).',
+        thanks: 'Thanks to Guillaume for To finish and the pause (PR #57 and #58), and to Jean-Baptiste for @ and links (PR #59 and #60).',
       },
     },
     actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour', dashboards: 'Open dashboards' },

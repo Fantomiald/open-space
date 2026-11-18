@@ -1,9 +1,12 @@
 # Versions
 
-## Non publiée
+## 1.36.0
 
 - À finir : le panneau État et le mode focus rangent à part les sessions lues qui laissent quelque chose à faire : ce que l'agent dit rester à faire et que toi seul peux régler (outil MCP `set_pending` : une clé à fournir, une version à publier), puis ce que git dit de leur dossier (« Commiter 2 fichiers », « Pousser 3 commits »). « Prêtes » devient « Terminées » et ne garde que les sessions où il ne reste rien. Dans la session, un bandeau « À finir » au-dessus du champ rappelle ces lignes : « Plus tard » la range dans Terminées jusqu'à ce que ça change, la croix retire une ligne pour de bon (l'agent ne peut plus la remettre). Au travail passe en tête du panneau, et les tags d'une ligne ne sont plus coupés.
 - Limite d'usage : une session arrêtée par la limite de 5 h (ou de la semaine) se met en pause au lieu d'échouer, et reprend seule une minute après l'heure de remise à zéro, en disant à Claude de continuer où il en était (et de recréer ses réveils `/loop` ou cron, perdus pendant la pause). Le panneau État la garde dans « Au travail » avec « en pause jusqu'à 19:00 », sa bulle le dit, et un bandeau au-dessus du champ propose « Reprendre maintenant ». Ce qui est envoyé entre-temps attend dans la file et part à la reprise. La pause survit à un redémarrage d'Open Space. Le réglage Claude Code « Reprendre à la fin de la limite » (`autoContinueAtUsageLimit`) n'a rien changé à ces tours en `-p`, d'où cette reprise côté Open Space.
+- Champ de message : « @ » propose aussi, après les autres sessions, les fichiers et dossiers du dossier de la session (ou de celui choisi dans le lanceur), écrits comme Claude Code les lit (`@src/app.ts`, `@"docs/mes notes.txt"`). Un chemin tapé à la main n'est plus pris pour une session : `@src/app.ts` ne réveille plus une session nommée `src`.
+- Copier : une sélection qui contient des liens d'un message les garde en Markdown, `[texte](adresse)`, au lieu des seuls mots visibles ; un collage riche (Slack, Notion) garde les liens.
+- Menu du modèle : ses interrupteurs ne prennent plus le style de ceux des réglages.
 
 ## 1.35.7
 

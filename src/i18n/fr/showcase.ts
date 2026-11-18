@@ -71,15 +71,15 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.35': {
-        title: 'Ce qui demande ton œil',
+      '1.36': {
+        title: 'Ce qui reste à faire',
         items: {
-          news: { title: 'Le point orange te guide', text: 'Un mod a du nouveau : le point s’allume sur le bouton Dashboards, sur l’onglet qui le contient, puis à côté de son titre jusqu’à ce que tu le survoles.' },
-          bar: { title: 'Plus de place pour les dashboards', text: 'Leurs onglets montent dans la barre du haut : la grille prend toute la page.' },
-          automata: { title: 'Automates rangés', text: 'Programmés d’un côté, par webhook de l’autre, les actifs en haut, et chaque groupe se replie.' },
-          keys: { title: 'Tes clés dans le navigateur', text: 'os-secret connecte le navigateur d’une session à un site protégé ou tape un mot de passe, sans que l’agent voie jamais la clé.' },
+          finish: { title: 'À finir', text: 'Une session lue qui te laisse quelque chose (une clé à fournir, des fichiers pas commités) passe dans À finir, avec ce qui reste. Terminées ne garde que celles où il n’y a plus rien.' },
+          pause: { title: 'La limite de 5 h ne casse plus rien', text: 'Une session arrêtée par la limite se met en pause et reprend seule à la remise à zéro, avec ce que tu lui as envoyé entre-temps.' },
+          files: { title: 'Tes fichiers avec @', text: 'Après les sessions, « @ » propose les fichiers et dossiers de la session, écrits comme Claude Code les lit.' },
+          links: { title: 'Les liens survivent au copier', text: 'Copier un message garde l’adresse de ses liens, en Markdown dans un terminal, en vrai lien dans Slack ou Notion.' },
         },
-        thanks: 'Merci à Jean-Baptiste pour les clés dans le navigateur (PR #39).',
+        thanks: 'Merci à Guillaume pour À finir et la pause (PR #57 et #58), et à Jean-Baptiste pour @ et les liens (PR #59 et #60).',
       },
     },
     actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite', dashboards: 'Ouvrir les dashboards' },
