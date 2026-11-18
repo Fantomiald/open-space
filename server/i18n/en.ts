@@ -69,6 +69,7 @@ export const en: ServerDictionary = {
   limit: {
     resume: (crons: number) => 'The usage limit has reset: go on where you left off.'
       + (crons > 0 ? ` You had ${crons} wake-up${crons > 1 ? 's' : ''} planned (CronCreate, /loop): create again those still useful.` : ''),
+    paused: (name: string) => `${name} is paused until the usage limit resets: try again then, or resume it now.`,
   },
   process: {
     stopped: 'Claude Code stopped.',

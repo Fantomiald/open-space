@@ -84,6 +84,8 @@ export const fr = {
     /** sent to Claude, `crons`: the wake-ups it had planned when it was paused */
     resume: (crons: number) => 'La limite est repartie à zéro : reprends où tu en étais.'
       + (crons > 0 ? ` Tu avais ${crons} réveil${crons > 1 ? 's' : ''} prévu${crons > 1 ? 's' : ''} (CronCreate, /loop) : recrée ceux qui servent encore.` : ''),
+    /** what Open Space would ask of a paused session (merge, pull request) */
+    paused: (name: string) => `${name} est en pause jusqu’à la remise à zéro de la limite : réessaie après, ou reprends-la maintenant.`,
   },
   process: {
     stopped: 'Claude Code s’est arrêté.',

@@ -1473,6 +1473,8 @@ describe('the usage limit', () => {
     processes[0].feed('rate-limit-hit', 1);
     assert.equal(find(id).pausedUntil, RESET);
     assert.equal(find(id).pausedCrons, 1);
+    // the process went away during the pause, and its wake-ups with it
+    processes[0].exit(0, null, '');
     manager.resumeNow(id);
     manager.resumeNow(id);
     const resumes = sentTo(processes).filter((text) => RESUME.test(text));
@@ -1524,6 +1526,104 @@ describe('the usage limit', () => {
     assert.match(sentTo(processes).at(-1) ?? '', /^La limite est repartie à zéro[\s\S]*\n\nnow please$/);
     assert.equal(find(id).pausedUntil, undefined);
     await manager.shutdown();
+  });
+
+  it('asks for no wake-up again when its process lived through the pause', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: '/loop check the deploy' });
+    processes[0].handlers.onMessage({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'w1', name: 'ScheduleWakeup', input: { delaySeconds: 1200, prompt: '/loop check the deploy', reason: 'r' } }] } });
+    processes[0].handlers.onMessage({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'w1', content: 'ok' }] } });
+    processes[0].feed('rate-limit-hit', 1);
+    manager.resumeNow(id);
+    assert.equal(sentTo(processes).at(-1), 'La limite est repartie à zéro : reprends où tu en étais.');
+    await manager.shutdown();
+  });
+
+  it('is lifted by a turn that went through meanwhile, which resumes the work the limit cut', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    processes[0].feed('simple-turn');
+    assert.equal(find(id).pausedUntil, undefined);
+    assert.match(sentTo(processes).at(-1) ?? '', RESUME);
+    await manager.shutdown();
+  });
+
+  it('is lifted when the session is closed, and what it queued leaves with the next message', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    manager.send(id, 'queued');
+    await manager.close(id);
+    assert.equal(find(id).pausedUntil, undefined);
+    manager.send(id, 'back');
+    assert.equal(sentTo(processes).at(-1), 'queued\n\nback');
+    await manager.shutdown();
+  });
+
+  it('sends no resume before a /clear queued during the pause', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({}, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    manager.send(id, '/clear');
+    manager.resumeNow(id);
+    assert.equal(sentTo(processes).at(-1), '/clear');
+    assert.equal(sentTo(processes).filter((text) => RESUME.test(text)).length, 0);
+    assert.equal(find(id).queued, undefined);
+    await manager.shutdown();
+  });
+
+  it('pauses again for a minute when no process can start at the reset', async () => {
+    const clock = RESET - 3_600_000;
+    const { manager, processes, find } = setup({ maxLive: 1 }, undefined, () => clock);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    processes[0].exit(0, null, '');
+    await manager.create({ cwd: projectA(), text: 'busy elsewhere' });
+    manager.resumeNow(id);
+    assert.equal(processes.length, 2);
+    assert.equal(find(id).pausedUntil, clock);
+    assert.equal(find(id).queued, undefined);
+    await manager.shutdown();
+  });
+
+  it('stops a trigger’s time cap during the pause', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+      let clock = RESET - 2 * 3_600_000;
+      const { manager, processes, find } = setup({}, undefined, () => clock);
+      await manager.init();
+      const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' }, caps: { cost: 0, minutes: 30 } });
+      manager.send(id, 'go');
+      clock += 10 * 60_000;
+      mock.timers.tick(10 * 60_000);
+      processes[0].feed('rate-limit-hit');
+      clock += 60 * 60_000;
+      mock.timers.tick(60 * 60_000);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.notEqual(find(id).state, 'closed', 'the pause is not time worked');
+      manager.resumeNow(id);
+      clock += 19 * 60_000;
+      mock.timers.tick(19 * 60_000);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.notEqual(find(id).state, 'closed');
+      clock += 2 * 60_000;
+      mock.timers.tick(2 * 60_000);
+      for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(find(id).state, 'closed');
+      await manager.shutdown();
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   it('waits five hours when the reset is unknown', async () => {
