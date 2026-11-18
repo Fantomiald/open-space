@@ -331,6 +331,8 @@ export interface SessionInfo {
   untrusted?: boolean;
   /** what its agent says it leaves pending (set_pending tool, shared/pending.ts), oldest first; absent: nothing */
   pending?: PendingItem[];
+  /** the pending lines the user removed: never taken back from set_pending (at most MAX_DISMISSED, the latest) */
+  dismissedPending?: string[];
   /** what git says its folder holds that is not committed or not pushed (server/pending-git.ts); absent: nothing, or not a repository */
   git?: GitPending;
   /** put to rest by the user: its process is released and it waits in the break room until it gets a message */

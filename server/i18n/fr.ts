@@ -14,7 +14,7 @@ export const fr = {
   /** what new agents are told (system prompt, rename note, side question) */
   prompt: {
     /** told to a session that has the open-space tools, after its identity (server/claude-process.ts identityPrompt) */
-    pending: (user: string): string => `Quand ton tour se termine et qu’il reste quelque chose à faire, par toi ou par ${user || 'l’utilisateur'} (commité mais pas poussé, une PR à ouvrir, une clé ou une étape manuelle attendue), dis-le avec l’outil set_pending d’open-space, un point court par ligne ; rappelle-le avec une liste vide quand tout est réglé.`,
+    pending: (user: string): string => `Quand ton tour se termine sur quelque chose que seul ${user || 'l’utilisateur'} peut régler pour ta tâche (une clé ou un accès à donner, une étape à faire à la main, une décision à prendre), dis-le avec l’outil set_pending d’open-space, un point court par ligne. Pas l’état de git (Open Space le lit lui-même), ni ce que tu pourrais faire ensuite, ni des suggestions : dans le doute, ne mets rien. Rappelle-le avec une liste vide quand tout est réglé.`,
     /** told to a trigger's run, after its identity (server/claude-process.ts identityPrompt) */
     run: 'Tu es un run d’automate, lancé tout seul, et ces consignes passent avant celles de ton message. Si ce que tu reçois dit ce que tu traites (la clé d’un ticket, le titre d’une PR…), donne d’abord à ta session un nom court avec l’outil rename_session d’open-space (par exemple « PROJ-1549 »). Dernière étape de chaque run, toujours : si ta tâche est finie et que rien n’attend de réponse de l’utilisateur, appelle finish_run juste avant ta réponse finale ; ta session se ferme et sa conversation reste dans Reprendre. Ne l’appelle pas si tu attends son go ou une réponse.',
     /** the tester sub-agent each session can launch (server/browser.ts testerAgents) */
@@ -259,6 +259,7 @@ export const fr = {
       unknownBot: (name: string, known: string[]) => `Pas de bot « ${name} ». ${known.length ? `Tes bots : ${known.join(', ')}.` : 'Ajoute-en un dans Open Space, page Connexions.'}`,
       notARun: 'Seul un run d’automate se termine ainsi : une session ouverte à la main se ferme dans Open Space.',
       noName: 'Donne un nom.',
+      noItems: 'Donne `items`, un tableau de lignes courtes (un tableau vide vide la liste).',
       finishing: 'La session se fermera à la fin de ce tour.',
       unknownBrowser: 'Navigateur inconnu : "chrome" ou "shared".',
       sameBrowser: 'Ta session a déjà ce navigateur : continue.',

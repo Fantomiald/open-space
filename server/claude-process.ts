@@ -180,6 +180,8 @@ export interface LaunchOptions {
  */
 /** What a trigger's run does to its own session without asking: name itself, say it is done, say what is left pending (server/mcp.ts). */
 const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
+/** Every session with Open Space's server is asked to say what it leaves pending at the end of a turn: never a permission prompt for that. */
+const SET_PENDING = `mcp__${MCP_SERVER_NAME}__set_pending`;
 
 export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
   const args = [
@@ -205,7 +207,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (mcpConfigs.length) args.push('--mcp-config', ...mcpConfigs);
   if (options.agent) args.push('--agent', options.agent);
   // a run names itself and says it is done without asking (st.prompt.run)
-  const allowed = [...(options.allowedTools ?? []), ...(options.run ? RUN_TOOLS : [])];
+  const allowed = [...(options.allowedTools ?? []), ...(options.run ? RUN_TOOLS : options.openSpaceMcp ? [SET_PENDING] : [])];
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   if (options.hidden?.length) args.push('--disallowedTools', hiddenRules(options.hidden).join(','));
   if (options.agents) args.push('--agents', options.agents);

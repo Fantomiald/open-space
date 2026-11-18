@@ -29,7 +29,7 @@ import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
 import { storedTags } from '../shared/tags.ts';
-import { cleanPending } from '../shared/pending.ts';
+import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
 import { readGitPending } from './pending-git.ts';
 import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
@@ -1142,7 +1142,7 @@ export class SessionManager {
   }
 
   setTags(id: string, tags: readonly string[]) { this.session(id).setTags(tags); }
-  setPending(id: string, items: readonly unknown[]) { this.session(id).setPending(items); }
+  setPending(id: string, items: readonly unknown[]): string[] { return this.session(id).setPending(items); }
   dismissPending(id: string, itemId: string) { this.session(id).dismissPending(itemId); }
   rest(id: string) { return this.session(id).rest(); }
   remoteControl(id: string, enabled: boolean) { return this.session(id).setRemote(enabled); }
@@ -1289,6 +1289,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,
     tags: storedTags(raw).length ? storedTags(raw) : undefined,
     pending: parsePending(raw.pending),
+    dismissedPending: parseDismissed(raw.dismissedPending),
     resting: raw.resting === true || undefined,
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
@@ -1314,6 +1315,12 @@ function parsePending(raw: unknown): PendingItem[] | undefined {
   const previous = items.map((item) => ({ id: asString(item.id), text: asString(item.text), since: asNumber(item.since) }));
   const kept = cleanPending(previous.map((item) => item.text), 0, previous);
   return kept.length ? kept : undefined;
+}
+
+/** The pending lines the user removed from a saved session; undefined when none. */
+function parseDismissed(raw: unknown): string[] | undefined {
+  const lines = asArray(raw).map((line) => asString(line)).filter(Boolean).slice(-MAX_DISMISSED);
+  return lines.length ? lines : undefined;
 }
 
 /** What a saved session keeps of the trigger that started it. */

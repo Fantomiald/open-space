@@ -5,6 +5,8 @@ import type { PendingItem } from './protocol.ts';
 /** How many lines a session may leave pending, and how long each may be. */
 export const MAX_PENDING = 8;
 export const MAX_PENDING_TEXT = 200;
+/** How many removed lines a session remembers, so that its agent does not set them again. */
+export const MAX_DISMISSED = 20;
 
 const lineOf = (raw: unknown): string => {
   if (typeof raw === 'string') return raw;

@@ -1,9 +1,9 @@
-// Where every session is at, pinned to the bottom left corner of the screen in both views: what waits for the user
-// (to answer, allow, read or check, the most urgent first, with how long it has waited), then who is at work and for
-// how long, then who is ready for a message (read, not stopped), and last, apart, the runs a trigger started, finished
-// to read or at work (one asking the user something stays in the first group, marked as one), and what the sessions
-// leave pending (src/state/pending.ts). A click opens the session; the title folds the panel
-// down to its counts, a group's title folds that group away (both remembered in this browser).
+// Where every session is at, pinned to the bottom left corner of the screen in both views: who is at work and for how
+// long, then what waits for the user (to answer, allow, read or check, the most urgent first, with how long it has
+// waited), then the read sessions that left something to do (src/state/pending.ts), then the finished ones (read,
+// nothing left or put off for later), and last, apart, the runs a trigger started, finished to read or at work
+// (one asking the user something stays with the others, marked as one). A click opens the session; the title folds
+// the panel down to its counts, a group's title folds that group away (both remembered in this browser).
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useMemo, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatAge } from '../lib/format.ts';
@@ -15,9 +15,9 @@ import { attentionQueue, otherSessions } from '../state/queue.ts';
 import { inProject } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import { pendingRows, type PendingRow } from '../state/pending.ts';
-import { Tooltip } from '../design/Tooltip.tsx';
-import { AutomatonIcon, ChevronDownIcon, ChevronUpIcon, CloseIcon, CompactIcon, PlayIcon, PlusIcon } from './Icons.tsx';
+import { pendingEntries, type PendingEntry } from '../state/pending.ts';
+import { isPutOff, usePendingLater } from '../state/pending-later.ts';
+import { AutomatonIcon, BranchIcon, ChevronDownIcon, ChevronUpIcon, CompactIcon, PlusIcon } from './Icons.tsx';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { Marquee } from './Marquee.tsx';
@@ -27,7 +27,7 @@ const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
 const writeFolded = (folded: boolean) => { try { localStorage.setItem(FOLDED_KEY, String(folded)); } catch { /* not kept: it folds for this visit only */ } };
 
-type Group = 'waiting' | 'working' | 'ready' | 'pending' | 'automata';
+type Group = 'waiting' | 'working' | 'finish' | 'ready' | 'automata';
 
 function StatusGroup({ group, count, folded, onFold, children }: { group: Group; count: number; folded: boolean; onFold: () => void; children: ReactNode }) {
   const words = t.session.status;
@@ -55,35 +55,35 @@ function RowName({ session, label, marked = false }: { session: SessionInfo; lab
   );
 }
 
-/** A line of what a session leaves pending: a click opens the session; Pick up opens it and asks it to see to that line, Set aside (a line the agent said) drops it. */
-function PendingLine({ row, now, current }: { row: PendingRow; now: number; current: boolean }) {
+/**
+ * A read session that left something to do: its name, then one short line per thing the agent said, and what git says
+ * of its folder; the age is the oldest line's. A click opens the session, where these lines can be seen to (PendingStrip).
+ */
+function PendingCard({ entry, now, current }: { entry: PendingEntry; now: number; current: boolean }) {
   const show = useSessions((s) => s.show);
-  const send = useSessions((s) => s.send);
-  const words = t.session.pending;
-  const { session } = row;
-  const resume = () => { show(session.id); send({ t: 'send', sessionId: session.id, text: words.resumeText(row.text) }); };
+  const { session, items, git } = entry;
   return (
-    <li className="cp-status__pending">
-      <button type="button" className="cp-status__item" data-kind={row.declared ? 'pending' : 'git'} aria-current={current} onClick={() => show(session.id)}>
+    <li className="cp-status__pending" data-current={current}>
+      <button type="button" className="cp-status__item" data-kind="pending" aria-current={current} onClick={() => show(session.id)}>
         <span className="cp-status__dot" aria-hidden="true" />
-        <span className="cp-status__label">
-          <span className="cp-status__head">
-            <RowName session={session} label={session.name} />
-            {row.since !== null && <span className="cp-status__time">{formatAge(now - row.since)}</span>}
-          </span>
-          <Marquee className="cp-status__notes">{row.text}</Marquee>
-        </span>
+        <span className="cp-status__label"><RowName session={session} label={session.name} /></span>
+        <span className="cp-status__time">{formatAge(now - (items[0]?.since ?? session.stateSince))}</span>
       </button>
-      <Tooltip text={words.resume}>
-        <button type="button" className="cp-icon-button cp-status__action" aria-label={words.resume} onClick={resume}><PlayIcon /></button>
-      </Tooltip>
-      {row.itemId && (
-        <Tooltip text={words.dismiss}>
-          <button type="button" className="cp-icon-button cp-status__action" aria-label={words.dismiss} onClick={() => send({ t: 'dismissPending', sessionId: session.id, id: row.itemId ?? '' })}><CloseIcon /></button>
-        </Tooltip>
-      )}
+      <ul className="cp-status__tasks">
+        {[...items.map((item) => item.text), ...(git ? [git] : [])].map((line) => (
+          <li key={line} className="cp-status__task"><span className="cp-status__task-text" title={line}>{line}</span></li>
+        ))}
+      </ul>
     </li>
   );
+}
+
+/** What a ready session still holds, in a few muted words: what git says of its folder, and the lines put off for later. */
+function ReadyNote({ pending }: { pending: PendingEntry }) {
+  const words = t.session.pending;
+  const note = [pending.git, pending.items.length > 0 && words.putOff(pending.items.length)].filter((part) => typeof part === 'string').join(' · ');
+  if (!note) return null;
+  return <span className="cp-status__git" title={note}>{pending.git && <BranchIcon />}<span className="cp-status__git-text">{note}</span></span>;
 }
 
 export function StatusPanel() {
@@ -113,6 +113,7 @@ export function StatusPanel() {
   };
   const [folded, setFolded] = useState(readFolded);
   const [foldedGroups, setFoldedGroups] = useState(() => readPreference<Group[]>('statusFolded', []));
+  const later = usePendingLater((s) => s.later);
   const foldGroup = (group: Group) => {
     const next = foldedGroups.includes(group) ? foldedGroups.filter((other) => other !== group) : [...foldedGroups, group];
     writePreference('statusFolded', next);
@@ -132,11 +133,19 @@ export function StatusPanel() {
   }, [shown, seen]);
   const automata = toRead.length + atWork.length;
   // the office's idle ones (not the resting ones, in the break room), the most recently ready first
-  const ready = useMemo(() => [...roomSessions(shown, seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [shown, seen]);
-  const pending = useMemo(() => pendingRows(shown), [shown]);
+  const idle = useMemo(() => [...roomSessions(shown, seen, 'office')[2]].sort((a, b) => b.stateSince - a.stateSince), [shown, seen]);
+  // a read session that left something to do (its own lines, or files git says are not committed or pushed) waits for
+  // the user, under the rest, until put off for later
+  const [toFinish, ready] = useMemo(() => {
+    const entries = pendingEntries(idle);
+    const finish = entries.filter((entry) => !isPutOff(later, entry.session));
+    const finishing = new Set(finish.map((entry) => entry.session.id));
+    const byId = new Map(entries.map((entry) => [entry.session.id, entry]));
+    return [finish, idle.filter((session) => !finishing.has(session.id)).map((session) => ({ session, pending: byId.get(session.id) }))];
+  }, [idle, later]);
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);
-  if (!waiting.length && !working.length && !ready.length && !pending.length && !automata) return null;
+  if (!waiting.length && !toFinish.length && !working.length && !ready.length && !automata) return null;
   const words = t.session.status;
   const waitingRow = ({ session, kind }: (typeof waiting)[number], marked: boolean) => (
     <li key={session.id}>
@@ -173,41 +182,44 @@ export function StatusPanel() {
       {!folded && <span className="cp-status__resize" aria-hidden="true" title={words.resize} onPointerDown={resize} onDoubleClick={() => { writePreference('statusSize', null); setSize(null); }} />}
       <button type="button" className="cp-status__head" aria-expanded={!folded} title={folded ? words.unfold : words.fold} onClick={fold}>
         <span className="cp-status__title">{words.title}</span>
-        {waiting.length > 0 && <span className="cp-status__count" data-kind="waiting" title={words.waiting}>{waiting.length}</span>}
         {working.length > 0 && <span className="cp-status__count" data-kind="working" title={words.working}>{working.length}</span>}
+        {waiting.length > 0 && <span className="cp-status__count" data-kind="waiting" title={words.waiting}>{waiting.length}</span>}
+        {toFinish.length > 0 && <span className="cp-status__count" data-kind="finish" title={words.finish}>{toFinish.length}</span>}
         {ready.length > 0 && <span className="cp-status__count" data-kind="ready" title={words.ready}>{ready.length}</span>}
-        {pending.length > 0 && <span className="cp-status__count" data-kind="pending" title={words.pending}>{pending.length}</span>}
         {automata > 0 && <span className="cp-status__count" data-kind="automata" title={words.automata}><AutomatonIcon />{automata}</span>}
         {folded ? <ChevronUpIcon /> : <ChevronDownIcon />}
       </button>
       {!folded && (
         <div className="cp-status__body">
-          {waiting.length > 0 && (
-            <StatusGroup {...groupProps('waiting', waiting.length)}>
-                {waiting.map((entry) => waitingRow(entry, true))}
-            </StatusGroup>
-          )}
           {working.length > 0 && (
             <StatusGroup {...groupProps('working', working.length)}>
                 {working.map(workingRow)}
             </StatusGroup>
           )}
+          {waiting.length > 0 && (
+            <StatusGroup {...groupProps('waiting', waiting.length)}>
+                {waiting.map((entry) => waitingRow(entry, true))}
+            </StatusGroup>
+          )}
+          {toFinish.length > 0 && (
+            <StatusGroup {...groupProps('finish', toFinish.length)}>
+                {toFinish.map((entry) => <PendingCard key={entry.session.id} entry={entry} now={now} current={openIds.includes(entry.session.id)} />)}
+            </StatusGroup>
+          )}
           {ready.length > 0 && (
             <StatusGroup {...groupProps('ready', ready.length)}>
-                {ready.map((session) => (
+                {ready.map(({ session, pending }) => (
                   <li key={session.id}>
                     <button type="button" className="cp-status__item" data-kind="ready" aria-current={openIds.includes(session.id)} onClick={() => show(session.id)}>
                       <span className="cp-status__dot" aria-hidden="true" />
-                      <span className="cp-status__label"><RowName session={session} label={session.name} /></span>
+                      <span className="cp-status__label">
+                        <RowName session={session} label={session.name} />
+                        {pending && <ReadyNote pending={pending} />}
+                      </span>
                       <span className="cp-status__time">{formatAge(now - session.stateSince)}</span>
                     </button>
                   </li>
                 ))}
-            </StatusGroup>
-          )}
-          {pending.length > 0 && (
-            <StatusGroup {...groupProps('pending', pending.length)}>
-                {pending.map((row) => <PendingLine key={row.key} row={row} now={now} current={openIds.includes(row.session.id)} />)}
             </StatusGroup>
           )}
           {automata > 0 && (

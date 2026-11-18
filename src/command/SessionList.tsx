@@ -1,5 +1,5 @@
-// Focus mode's list of every session, in place of the room: what waits for the user, who works, who is ready for a
-// message, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
+// Focus mode's list of every session, in place of the room: who works, what waits for the user, who left something
+// to finish, who is done, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
 // look, as in the room), its state as a sign on the face, how long it has been so, and its tags (else its last words). A click opens it beside the open ones (or goes to it when open); a
 // group folds away, and the whole list down to the faces (remembered in this browser). A project's + (on hover, or
 // Alt+its digit, App.tsx) opens a new session in its folder.
@@ -13,6 +13,7 @@ import { sessionStatus } from '../room/cast.ts';
 import { stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
 import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../state/list-groups.ts';
+import { usePendingLater } from '../state/pending-later.ts';
 import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
@@ -51,9 +52,10 @@ export function SessionList() {
   // the one opened from the waiting group stays there while it is the one in front
   const [kept, setKept] = useState<Kept | null>(null);
   const keptNow = kept?.id === selectedId ? kept : null;
+  const later = usePendingLater((s) => s.later);
   const groups = useMemo(
-    () => listGroups(Object.values(sessions).filter((session) => inProject(session, project)), seen, grouping, keptNow),
-    [sessions, seen, project, grouping, keptNow],
+    () => listGroups(Object.values(sessions).filter((session) => inProject(session, project)), seen, grouping, keptNow, later),
+    [sessions, seen, project, grouping, keptNow, later],
   );
   // the digits of Alt+1…9 follow the header's projects (by name), not the list's order, which moves with who waits
   const projects = useMemo(() => projectsOf(Object.values(sessions), seen), [sessions, seen]);

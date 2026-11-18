@@ -1,42 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SessionInfo } from '../../shared/protocol.ts';
-import { pendingRows } from './pending.ts';
+import { pendingEntries } from './pending.ts';
 
 const session = (id: string, extra: Partial<SessionInfo> = {}) => ({ id, name: id, cwd: `/work/${id}`, state: 'wait', turns: 1, permissions: [], subagents: [], createdAt: 0, ...extra }) as unknown as SessionInfo;
 
-test('lists what each session leaves pending, the oldest first, what git says after what it said', () => {
-  const rows = pendingRows([
+const view = (sessions: SessionInfo[]) => pendingEntries(sessions).map((entry) => [entry.session.id, entry.items.map((item) => item.text), entry.git]);
+
+test('lists each session with something pending, the one waiting longest first, what it said oldest first', () => {
+  assert.deepEqual(view([
     session('margot', { pending: [{ id: 'a', text: 'PR à ouvrir', since: 300 }], git: { dirty: 3, unpushed: 2, noUpstream: false, branch: 'main' } }),
-    session('theo', { pending: [{ id: 'b', text: 'Clé Stripe à fournir', since: 100 }, { id: 'c', text: 'Migration à lancer', since: 200 }] }),
+    session('theo', { pending: [{ id: 'c', text: 'Migration à lancer', since: 200 }, { id: 'b', text: 'Clé Stripe à fournir', since: 100 }] }),
     session('lea', { git: { dirty: 0, unpushed: 1, noUpstream: true, branch: 'feature' } }),
+  ]), [
+    ['theo', ['Clé Stripe à fournir', 'Migration à lancer'], null],
+    ['margot', ['PR à ouvrir'], 'Commiter 3 fichiers · Pousser 2 commits'],
+    ['lea', [], 'Pousser la branche'],
   ]);
-  assert.deepEqual(rows.map((row) => [row.session.id, row.text, row.since, row.declared]), [
-    ['theo', 'Clé Stripe à fournir', 100, true],
-    ['theo', 'Migration à lancer', 200, true],
-    ['margot', 'PR à ouvrir', 300, true],
-    ['margot', '3 fichiers pas commités', null, false],
-    ['margot', '2 commits pas poussés', null, false],
-    ['lea', 'branche jamais poussée', null, false],
-  ]);
-  assert.equal(new Set(rows.map((row) => row.key)).size, rows.length);
 });
 
-test('says what git says of a folder once, under the first session open in it', () => {
+test('says what git says of a folder once, with the first session open in it', () => {
   const git = { dirty: 3, unpushed: 0, noUpstream: false, branch: 'main' };
-  const rows = pendingRows([
+  assert.deepEqual(view([
     session('margot', { cwd: '/work/shop', git, pending: [{ id: 'a', text: 'PR à ouvrir', since: 100 }] }),
     session('theo', { cwd: '/work/shop', git }),
     session('lea', { cwd: '/work/shop', git }),
-  ]);
-  assert.deepEqual(rows.map((row) => [row.session.id, row.text]), [['margot', 'PR à ouvrir'], ['margot', '3 fichiers pas commités']]);
+  ]), [['margot', ['PR à ouvrir'], 'Commiter 3 fichiers']]);
 });
 
 test('leaves out closed sessions and those with nothing pending, and says one file in the singular', () => {
-  const rows = pendingRows([
+  assert.deepEqual(view([
     session('gone', { state: 'closed', pending: [{ id: 'a', text: 'Pas poussé', since: 1 }] }),
     session('clean'),
+    session('tidy', { git: { dirty: 0, unpushed: 0, noUpstream: false, branch: 'main' } }),
     session('one', { git: { dirty: 1, unpushed: 0, noUpstream: false, branch: 'main' } }),
-  ]);
-  assert.deepEqual(rows.map((row) => row.text), ['1 fichier pas commité']);
+  ]), [['one', [], 'Commiter 1 fichier']]);
 });

@@ -6,7 +6,7 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import { cleanPending } from '../shared/pending.ts';
+import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
 import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, GitPending, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
@@ -525,6 +525,7 @@ export class Session {
       this.info.toldSecrets = undefined;
       this.info.tags = undefined;
       this.info.pending = undefined;
+      this.info.dismissedPending = undefined;
       this.deps.onCleared?.();
       this.record({ k: 'cleared' });
       this.cleared = true;
@@ -1112,17 +1113,26 @@ export class Session {
     this.publish();
   }
 
-  /** Replaces what the session leaves pending with these lines (shared/pending.ts); a line said again keeps its age. */
-  setPending(items: readonly unknown[]) {
-    const kept = cleanPending(items, this.now(), this.info.pending);
+  /**
+   * Replaces what the session leaves pending with these lines (shared/pending.ts); a line said again keeps its age.
+   * Returns the lines left out because the user removed them before.
+   */
+  setPending(items: readonly unknown[]): string[] {
+    const dismissed = new Set(this.info.dismissedPending);
+    const lines = cleanPending(items, this.now(), this.info.pending);
+    const kept = lines.filter((item) => !dismissed.has(item.text));
     this.info.pending = kept.length ? kept : undefined;
     this.publish();
+    return lines.filter((item) => dismissed.has(item.text)).map((item) => item.text);
   }
 
-  /** The user sets a pending line aside. */
+  /** The user removes a pending line: it goes, and does not come back when the agent sets it again. */
   dismissPending(id: string) {
-    const kept = this.info.pending?.filter((item) => item.id !== id) ?? [];
+    const line = this.info.pending?.find((item) => item.id === id);
+    if (!line) return;
+    const kept = this.info.pending?.filter((item) => item !== line) ?? [];
     this.info.pending = kept.length ? kept : undefined;
+    this.info.dismissedPending = [...(this.info.dismissedPending ?? []).filter((text) => text !== line.text), line.text].slice(-MAX_DISMISSED);
     this.publish();
   }
 

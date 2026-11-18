@@ -11,6 +11,7 @@ import { AttachButton, AttachmentStrip } from './Attachments.tsx';
 import { BackgroundTasks } from './BackgroundTasks.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
 import { AlertIcon, CloseIcon, CommandIcon, FileIcon, ImageIcon, PauseIcon, PencilIcon, PhoneIcon } from './Icons.tsx';
+import { PendingStrip } from './PendingStrip.tsx';
 import { runOwnCommand } from './ownCommands.ts';
 import { TuneMenu } from './TuneMenu.tsx';
 import type { Attachments } from './useAttachments.ts';
@@ -136,6 +137,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
           </ol>
         </section>
       )}
+      <PendingStrip session={session} />
       <CompactHint session={session} />
       <AttachmentStrip attachments={attachments} />
       {field}

@@ -33,6 +33,10 @@ export async function readGitPending(cwd: string): Promise<GitPending | null> {
   const branch = (await git(cwd, 'symbolic-ref', '--short', '-q', 'HEAD'))?.trim() ?? '';
   const detached = branch === '';
   const upstream = detached ? null : await git(cwd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}');
+  // nothing to say of commits in a repository with no remote, nor on a branch whose remote one is gone (a merged PR's)
+  const remotes = detached || upstream !== null ? '' : ((await git(cwd, 'remote')) ?? '').trim();
+  const gone = remotes !== '' && (await git(cwd, 'config', '--get', `branch.${branch}.merge`)) !== null;
+  if (!detached && upstream === null && (remotes === '' || gone)) return dirty ? { dirty, unpushed: 0, noUpstream: false, branch } : null;
   const noUpstream = !detached && upstream === null;
   const unpushed = detached ? 0 : noUpstream ? await commitsOnlyHere(cwd, branch) : count(await git(cwd, 'rev-list', '--count', '@{u}..HEAD'));
   if (dirty === 0 && unpushed === 0) return null;

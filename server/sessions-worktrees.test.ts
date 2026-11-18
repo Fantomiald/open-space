@@ -411,6 +411,8 @@ describe('the cases asked for', () => {
     const { find, id, repo, dataDir } = context;
     commit(find(id).worktree!.root, 'pay.ts', 'pay\n');
     await turnDone(context, id);
+    // git reads the branch after the turn, in its own time: what is saved at shutdown must hold that commit
+    await until(() => find(id).worktree?.status?.ahead === 1, 'the branch read after the turn');
     const branch = find(id).worktree!.branch;
     await context.manager.shutdown();
     const again = setup(dataDir);
@@ -567,10 +569,10 @@ describe('an isolated session never loses work, nor touches what it should not',
     await context.manager.init();
     const { id } = await context.manager.create({ cwd: repo, name: 'Lina', text: 'Ajoute Apple Pay', isolate: {} });
     await context.manager.forget(id);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    // git makes the folder, then takes it back, in its own time
+    const worktrees = () => git(repo, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length;
+    await until(() => worktrees() === 1 && git(repo, 'branch', '--list', 'os/*') === '', 'the folder and its branch taken back');
     assert.equal(context.processes.length, 0);
-    assert.equal(git(repo, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
-    assert.equal(git(repo, 'branch', '--list', 'os/*'), '');
     await context.manager.shutdown();
   });
 

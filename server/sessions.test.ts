@@ -742,6 +742,21 @@ describe('what a session leaves pending', () => {
     await second.manager.shutdown();
   });
 
+  it('never takes back a line the user removed, even after a restart', async () => {
+    const dataDir = path.join(base, `data-pending-${++counter}`);
+    const first = setup({}, dataDir);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'hi' });
+    first.manager.setPending(id, ['Clé Stripe à fournir', 'PR à ouvrir']);
+    first.manager.dismissPending(id, first.find(id).pending![1].id);
+    await first.manager.shutdown();
+    const second = setup({}, dataDir);
+    await second.manager.init();
+    assert.deepEqual(second.manager.setPending(id, ['Clé Stripe à fournir', 'PR à ouvrir']), ['PR à ouvrir']);
+    assert.deepEqual(second.find(id).pending?.map((item) => item.text), ['Clé Stripe à fournir']);
+    await second.manager.shutdown();
+  });
+
   it('forgets the list on /clear, with the conversation', async () => {
     const { manager, processes, find } = setup({});
     await manager.init();

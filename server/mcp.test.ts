@@ -61,7 +61,7 @@ function fakeApi() {
     rest: async (id) => { done.push(`rest ${id}`); },
     remote: (id, enabled) => { done.push(`remote ${id} ${enabled}`); },
     rename: (id, name) => { done.push(`rename ${id} ${name}`); },
-    setPending: (id, items) => { done.push(`pending ${id} ${JSON.stringify(items)}`); },
+    setPending: (id, items) => { done.push(`pending ${id} ${JSON.stringify(items)}`); return []; },
     finish: (id) => { done.push(`finish ${id}`); },
     switchBrowser: (id, browser) => { done.push(`browser ${id} ${browser}`); return browser === 'shared' ? 'same' : 'switching'; },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
@@ -103,7 +103,7 @@ describe('the open-space MCP server', () => {
   it('lets the external program alone follow the sessions and answer them, never a request for keys', async () => {
     const { api, done } = fakeApi();
     const external = (await call(api, 'tools/list', {}, EXTERNAL)).result!.tools as { name: string }[];
-    assert.equal(external.length, TOOLS.length - 4, 'all but send_file, for a chat, and what a session does to itself');
+    assert.equal(external.length, TOOLS.length - 5, 'all but send_file, for a chat, and what a session does to itself');
     assert.ok(external.every((each) => !('for' in each)));
     assert.ok(!toolsFor(S1).some((each) => ['list_sessions', 'send_message', 'answer_permission', 'stop_session'].includes(each.name)));
     assert.equal((await tool(api, 'answer_permission', { sessionId: 's5', requestId: 'r1', decision: 'allow' })).isError, true, 'a session cannot approve');
@@ -181,6 +181,8 @@ describe('the open-space MCP server', () => {
     await tool(api, 'set_pending', { items: [] }, S1);
     assert.equal((await tool(api, 'set_pending', { items: ['x'] }, EXTERNAL)).isError, true);
     assert.deepEqual(done, ['pending s1 ["Pas poussé"," "]', 'pending s1 []']);
+    const told = await tool({ ...api, setPending: () => ['PR à ouvrir'] }, 'set_pending', { items: ['PR à ouvrir'] }, S1);
+    assert.match(JSON.stringify(told), /the user removed them/);
   });
 
   it('speaks MCP: initialize, tools/list, notifications without an answer, unknown methods', async () => {

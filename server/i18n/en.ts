@@ -13,7 +13,7 @@ const worktreeNote = ({ branch, base, root, mainRoot }: Place) =>
 
 export const en: ServerDictionary = {
   prompt: {
-    pending: (user: string) => `When your turn ends and something is left to do, by you or by ${user || 'the user'} (committed but not pushed, a PR to open, a key or a manual step awaited), say it with the set_pending tool of open-space, one short line per item; call it again with an empty list once all is settled.`,
+    pending: (user: string) => `When your turn ends on something only ${user || 'the user'} can settle for your task (a key or an access to give, a step to do by hand, a decision to make), say it with the set_pending tool of open-space, one short line per item. Not the state of git (Open Space reads it itself), not what you could do next, not suggestions: when in doubt, leave it out. Call it again with an empty list once all is settled.`,
     run: 'You are an automaton\'s run, started on your own, and these instructions come before those of your message. If what you receive says what you work on (a ticket\'s key, a PR\'s title…), first give your session a short name with the rename_session tool of open-space (for instance "PROJ-1549"). Last step of every run, always: if your task is done and nothing waits for an answer from the user, call finish_run just before your final answer; your session closes and its conversation stays in Resume. Do not call it if you wait for their go or an answer.',
     tester: {
       description: 'Tests a flow in a browser of its own, shown live in Open Space. Launch it with the flow, the address and what should happen. For several flows at once, a browser-tester of a different number per flow.',
@@ -238,6 +238,7 @@ export const en: ServerDictionary = {
       unknownBot: (name: string, known: string[]) => `No bot "${name}". ${known.length ? `Your bots: ${known.join(', ')}.` : 'Add one in Open Space, Connections page.'}`,
       notARun: 'Only an automaton\'s run ends this way: a session opened by hand is closed in Open Space.',
       noName: 'Give a name.',
+      noItems: 'Give `items`, an array of short lines (an empty array clears the list).',
       finishing: 'The session will close at the end of this turn.',
       unknownBrowser: 'Unknown browser: "chrome" or "shared".',
       sameBrowser: 'Your session already has this browser: go on.',

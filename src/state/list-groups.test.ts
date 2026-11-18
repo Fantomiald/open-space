@@ -26,6 +26,15 @@ describe('the list in groups', () => {
     assert.deepEqual(byProject.map((group) => group.folder), ['/code/app', '/code/site']);
   });
 
+  it('by state: who works first, and a read session that left something to do goes to finish until put off', () => {
+    const working = session('w', '/code/app', { state: 'work' });
+    const leftover = session('f', '/code/app', { stateSince: 3, pending: [{ id: 'p', text: 'Mettre la clé', since: 1 }] } as Partial<SessionInfo>);
+    const all = [unseen, read, working, leftover];
+    assert.deepEqual(keys(listGroups(all, { ...seen, f: 1 }, 'state')), [['working', ['w']], ['waiting', ['a']], ['finish', ['f']], ['ready', ['b']]]);
+    const later = { f: JSON.stringify([['p'], null]) };
+    assert.deepEqual(keys(listGroups(all, { ...seen, f: 1 }, 'state', null, later)), [['working', ['w']], ['waiting', ['a']], ['ready', ['b', 'f']]]);
+  });
+
   it('keeps the session just opened where it was, until another is opened', () => {
     const first = session('e', '/code/app');
     const opened = { ...unseen, stateSince: 9 };

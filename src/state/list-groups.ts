@@ -1,7 +1,10 @@
-// Focus mode's list, in groups (SessionList.tsx): by state (what waits for the user, who works, who is ready, who
-// rests), or by project with the states in that order inside each. The triggers' runs stay apart, last.
+// Focus mode's list, in groups (SessionList.tsx): by state, as in the Status panel (who works, what waits for the user,
+// who left something to finish, who is done, who rests), or by project with the states in that order inside each.
+// The triggers' runs stay apart, last.
 import { folderName } from '../lib/format.ts';
 import { roomSessions } from '../room/cast.ts';
+import { pendingEntries } from './pending.ts';
+import { isPutOff } from './pending-later.ts';
 import { projectOf } from './projects.ts';
 import { attentionKind, type SeenSequences } from './queue.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
@@ -9,7 +12,7 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 export const LIST_GROUPINGS = ['state', 'project'] as const;
 export type ListGrouping = (typeof LIST_GROUPINGS)[number];
 
-export type StateGroup = 'waiting' | 'working' | 'ready' | 'resting' | 'automata';
+export type StateGroup = 'working' | 'waiting' | 'finish' | 'ready' | 'resting' | 'automata';
 
 /** A group of the list: a state, or a project (`label`, its `folder`); `waiting`: how many wait for the user. */
 export interface ListGroup { key: string; state?: StateGroup; label?: string; folder?: string; sessions: SessionInfo[]; waiting: number }
@@ -19,20 +22,26 @@ export interface Kept { id: string; index: number }
 
 const latestFirst = (list: readonly SessionInfo[]) => [...list].sort((a, b) => b.stateSince - a.stateSince);
 
-export function listGroups(all: readonly SessionInfo[], seen: SeenSequences, grouping: ListGrouping, kept: Kept | null = null): ListGroup[] {
-  const [queue, working, ready] = roomSessions(all, seen, 'office');
+/** `later`: the leftovers the user put off (pending-later.ts), whose sessions go with the done ones. */
+export function listGroups(
+  all: readonly SessionInfo[], seen: SeenSequences, grouping: ListGrouping, kept: Kept | null = null, later: Readonly<Record<string, string>> = {},
+): ListGroup[] {
+  const [queue, working, idle] = roomSessions(all, seen, 'office');
   const [resting] = roomSessions(all, seen, 'lounge');
   const automata = roomSessions(all, seen, 'automata').flat();
+  const finishing = new Set(pendingEntries(idle).filter((entry) => !isPutOff(later, entry.session)).map((entry) => entry.session.id));
   let waiting = queue;
-  let readyLatest = latestFirst(ready);
+  let finish = latestFirst(idle.filter((session) => finishing.has(session.id)));
+  let ready = latestFirst(idle.filter((session) => !finishing.has(session.id)));
   // opened, it stops waiting: it would jump to another group under the pointer
-  const moved = kept && !queue.some((session) => session.id === kept.id) ? readyLatest.find((session) => session.id === kept.id) : undefined;
+  const moved = kept && !queue.some((session) => session.id === kept.id) ? idle.find((session) => session.id === kept.id) : undefined;
   if (moved && kept) {
-    readyLatest = readyLatest.filter((session) => session !== moved);
+    finish = finish.filter((session) => session !== moved);
+    ready = ready.filter((session) => session !== moved);
     waiting = [...queue.slice(0, kept.index), moved, ...queue.slice(kept.index)];
   }
   const count = (list: readonly SessionInfo[]) => list.filter((session) => attentionKind(session, seen) !== null).length;
-  const states: [StateGroup, SessionInfo[]][] = [['waiting', waiting], ['working', working], ['ready', readyLatest], ['resting', latestFirst(resting)]];
+  const states: [StateGroup, SessionInfo[]][] = [['working', working], ['waiting', waiting], ['finish', finish], ['ready', ready], ['resting', latestFirst(resting)]];
   const tail: ListGroup[] = automata.length ? [{ key: 'automata', state: 'automata', sessions: automata, waiting: count(automata) }] : [];
   if (grouping === 'state') {
     return [...states.filter(([, list]) => list.length > 0).map(([state, list]) => ({ key: state, state, sessions: list, waiting: count(list) })), ...tail];

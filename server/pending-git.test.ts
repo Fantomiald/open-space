@@ -57,4 +57,21 @@ describe('what git says a session leaves pending', () => {
     commit(root, 'feature.txt');
     assert.deepEqual(await readGitPending(root), { dirty: 0, unpushed: 1, noUpstream: true, branch: 'feature' });
   });
+
+  it('says nothing of commits in a repository with no remote, nor on a branch whose remote one was deleted', async () => {
+    const local = path.join(scratch, 'local');
+    mkdirSync(local);
+    sh(local, 'init', '-q', '-b', 'main');
+    commit(local, 'notes.md');
+    assert.equal(await readGitPending(local), null);
+    writeFileSync(path.join(local, 'notes.md'), 'changed\n');
+    assert.deepEqual(await readGitPending(local), { dirty: 1, unpushed: 0, noUpstream: false, branch: 'main' });
+    const root = clone();
+    sh(root, 'checkout', '-q', '-b', 'merged');
+    commit(root, 'merged.txt');
+    sh(root, 'push', '-q', '-u', 'origin', 'merged');
+    sh(root, 'push', '-q', 'origin', '--delete', 'merged');
+    sh(root, 'fetch', '-q', '--prune');
+    assert.equal(await readGitPending(root), null);
+  });
 });
