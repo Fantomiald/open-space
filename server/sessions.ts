@@ -95,6 +95,8 @@ export interface SessionManagerDeps {
    * and --chrome when the user's own Chrome is the browser of their accounts (Preferences.accountsBrowser)
    */
   browserMcp?: (sessionId: string, untrusted: boolean, accounts: AccountsBrowser) => BrowserLaunch;
+  /** opens the user's Chrome when a session starts with it and it is closed (browser.ts openUserChrome) */
+  openUserChrome?: () => void;
   /** Preferences.accountsBrowser: the browser of the user's accounts of the sessions without a choice of their own */
   accountsBrowser?: () => AccountsBrowser;
   /** the --mcp-config of the open-space MCP server for a session (server/mcp.ts); nothing for one whose folder was not trusted */
@@ -140,6 +142,8 @@ export class SessionManager {
   private launchedBrowsers = new Map<string, BrowserLaunch>();
   /** sessions whose process waits for the end of a turn to be released for other browsers (switchBrowsers) */
   private switchingBrowsers = new Set<string>();
+  /** the sessions switch_browser switches: they go on by themselves once relaunched (see switchBrowserOnRequest) */
+  private browserRequests = new Map<string, AccountsBrowser>();
 
   constructor(deps: SessionManagerDeps) {
     this.deps = deps;
@@ -268,8 +272,10 @@ export class SessionManager {
    */
   private switchBrowsers(id: string) {
     const session = this.sessions.get(id);
-    if (!session?.alive || !this.browsersChanged(id)) { this.switchingBrowsers.delete(id); return; }
-    if (session.release(st.sessions.stopped.browser)) this.switchingBrowsers.delete(id);
+    if (!session?.alive || !this.browsersChanged(id)) { this.switchingBrowsers.delete(id); this.browserRequests.delete(id); return; }
+    const asked = this.browserRequests.get(id);
+    const switched = asked ? session.relaunch(st.prompt.browserSwitched(asked), st.sessions.stopped.relaunched) : session.release(st.sessions.stopped.browser);
+    if (switched) { this.switchingBrowsers.delete(id); this.browserRequests.delete(id); }
     else this.switchingBrowsers.add(id);
   }
 
@@ -278,6 +284,20 @@ export class SessionManager {
     const session = this.session(id);
     session.setAccountsBrowser(browser === (this.deps.accountsBrowser?.() ?? 'shared') ? undefined : browser);
     this.switchBrowsers(id);
+  }
+
+  /**
+   * switch_browser, once the user said yes to it: the session goes on with that browser right after its turn, without
+   * waiting for a message (an automaton's run has nobody to send one), Remote Control included. 'same' when it already
+   * has it.
+   */
+  switchBrowserOnRequest(id: string, browser: AccountsBrowser): 'switching' | 'same' {
+    // called during the session's turn: setAccountsBrowser leaves the switch for its end
+    this.setAccountsBrowser(id, browser);
+    if (!this.browsersChanged(id)) return 'same';
+    this.browserRequests.set(id, browser);
+    this.switchingBrowsers.add(id);
+    return 'switching';
   }
 
   /** Preferences.accountsBrowser changed: the sessions without a choice of their own switch. */
@@ -365,6 +385,7 @@ export class SessionManager {
         const env = this.deps.secrets?.env(info.id);
         const browsers = this.browserLaunch(info.id);
         this.launchedBrowsers.set(info.id, browsers);
+        if (browsers.chrome) this.deps.openUserChrome?.();
         const openSpaceMcp = this.deps.openSpaceMcp?.(info.id, !!this.sessions.get(info.id)?.snapshot().untrusted);
         return this.deps.spawnProcess({ ...launch, addDirs: [uploadsFolder(this.deps.config.dataDir), modsFolder(this.deps.config.dataDir)], ...browsers, ...(openSpaceMcp ? { openSpaceMcp } : {}), ...(env ? { env } : {}) }, handlers);
       },
@@ -640,7 +661,7 @@ export class SessionManager {
    * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
    * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
    */
-  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean; caps?: { cost: number; minutes: number } } = {}): Promise<SessionInfo> {
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.roots());
@@ -667,10 +688,12 @@ export class SessionManager {
     const restored = options.resumeId ? await rename(this.switchedOffLog(options.resumeId), path.join(this.logsDir, `${options.resumeId}.jsonl`)).then(() => true, () => false) : false;
     if (options.effort) info.effort = options.effort;
     if (options.ultracode) info.ultracode = true;
+    if (options.fastMode) info.fastMode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
     if (started.trigger) info.trigger = started.trigger;
     if (started.role) info.role = started.role;
     if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
+    if (started.accountsBrowser && started.accountsBrowser !== (this.deps.accountsBrowser?.() ?? 'shared')) info.accountsBrowser = started.accountsBrowser;
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
     if (started.caps) session.limit(started.caps);
@@ -1069,7 +1092,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1176,6 +1199,7 @@ export class SessionManager {
     this.sessions.delete(id);
     this.launchedBrowsers.delete(id);
     this.switchingBrowsers.delete(id);
+    this.browserRequests.delete(id);
     const log = this.logs.get(id);
     this.logs.delete(id);
     await log?.close();
@@ -1276,6 +1300,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     id, cwd, state: state as SessionInfo['state'], name: asString(raw.name, id.slice(0, 8)), model: asString(raw.model), activeModel: asString(raw.activeModel),
     effort: (EFFORTS as readonly unknown[]).includes(raw.effort) ? raw.effort as Effort : undefined,
     ultracode: raw.ultracode === true || undefined,
+    fastMode: raw.fastMode === true || undefined,
     // sessions saved before the mode was selectable were all launched in manual mode
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { addressOf, MODIFIERS, SHARED_LANE, shownFormat } from '../shared/browser.ts';
-import { accountsBrowserOf, authAnswer, browserKey, browserMcpConfig, Browsers, chromeArgs, FOCUSED_FIELD, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
+import { accountsBrowserOf, authAnswer, openUserChrome, browserKey, browserMcpConfig, Browsers, chromeArgs, FOCUSED_FIELD, keyEvent, PICTURE_HEAD, picturePart, shortAddress, testerAgent, typingTab, TESTERS, testerAgents, testerLane } from './browser.ts';
 import { browserId, lanesOf, sessionOfBrowser } from '../shared/browser.ts';
 import { buildClaudeArgs } from './claude-process.ts';
 import { parseClientMessage } from './messages.ts';
@@ -110,6 +110,17 @@ describe('the browser of the user’s accounts', () => {
     assert.equal(accountsBrowserOf('chrome', true), null, 'a folder not trusted never reaches the user’s Chrome');
     assert.equal(accountsBrowserOf('shared', true), null, 'nor the shared browser');
   });
+
+  it('opens the user\'s Chrome in the background on macOS, only when it is closed', () => {
+    const calls = (running: boolean, platform: NodeJS.Platform) => {
+      const seen: string[] = [];
+      openUserChrome(platform, (command, args, done) => { seen.push([command, ...args].join(' ')); done(command === 'pgrep' && !running ? new Error('none') : null); });
+      return seen;
+    };
+    assert.deepEqual(calls(false, 'darwin'), ['pgrep -x Google Chrome', 'open -g -a Google Chrome']);
+    assert.deepEqual(calls(true, 'darwin'), ['pgrep -x Google Chrome']);
+    assert.deepEqual(calls(false, 'win32'), []);
+  });
 });
 
 describe('a sub-agent that is done', () => {
@@ -136,7 +147,7 @@ describe('the address bar', () => {
 });
 
 describe('the format shown', () => {
-  const state = (size: { width: number; height: number } | null) => ({ tabs: [], active: null, format: 'desktop' as const, size });
+  const state = (size: { width: number; height: number } | null) => ({ tabs: [], active: null, format: 'desktop' as const, size, pointer: null });
 
   it('is the one picked until a page is pictured', () => {
     assert.equal(shownFormat(state(null)), 'desktop');

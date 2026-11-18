@@ -1,5 +1,6 @@
 // Words and tones for session states. One place, so the design can restyle the tones without touching logic.
 import type { BackgroundTask, PermissionMode, SessionInfo } from '../../shared/protocol.ts';
+import { SWITCH_BROWSER_TOOL } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { clockTime, resetLabel } from '../lib/format.ts';
 import { type AttentionKind, isWorking } from './queue.ts';
@@ -85,10 +86,13 @@ export function contextLevel(context: SessionInfo['context']): 'calm' | 'rising'
 /** True when the session can still receive a message that makes it work (all of them can: a stopped one is resumed). */
 export const isRunning = (session: SessionInfo) => session.state === 'starting' || session.state === 'work' || session.state === 'perm';
 
+/** A permission's title: the tool's name, in words for Open Space's own (switch_browser). */
+export const permissionTitle = (tool: string) => (tool === SWITCH_BROWSER_TOOL ? t.composer.permission.switchBrowser : tool);
+
 /** What the user has to do for a session, as a to-do line ("Répondre à Lina", "Autoriser Bash pour Iris"). */
 export function todoLabel(session: SessionInfo, kind: AttentionKind): string {
   switch (kind) {
-    case 'permission': return t.session.todo.allow(session.permissions[0]?.tool, session.name);
+    case 'permission': return session.permissions[0]?.tool === SWITCH_BROWSER_TOOL ? t.session.todo.switchBrowser(session.name) : t.session.todo.allow(session.permissions[0]?.tool, session.name);
     case 'question': return t.session.todo.answer(session.name);
     case 'finished': return t.session.todo.read(session.name);
     case 'error': return t.session.todo.error(session.name);

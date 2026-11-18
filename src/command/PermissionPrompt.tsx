@@ -1,5 +1,6 @@
 import type { PermissionDecision, PermissionPrompt as Prompt } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
+import { permissionTitle } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useAnswerButtons } from './useAnswerButtons.ts';
 
@@ -11,9 +12,9 @@ export function PermissionPrompt({ sessionId, prompt, more }: { sessionId: strin
   const answer = (decision: PermissionDecision) => buttons.sent(answerPermission(sessionId, prompt.requestId, decision));
   const scope = prompt.canAlways && prompt.always?.length ? words.alwaysScope(prompt.always) : null;
   return (
-    <div className="cp-permission" role="group" aria-label={words.label(prompt.tool)}>
+    <div className="cp-permission" role="group" aria-label={words.label(permissionTitle(prompt.tool))}>
       <div className="cp-permission__what">
-        <strong>{prompt.tool}</strong>
+        <strong>{permissionTitle(prompt.tool)}</strong>
         {more ? <span className="cp-muted">{words.morePending(more)}</span> : null}
       </div>
       <pre className="cp-permission__detail">{prompt.detail}</pre>

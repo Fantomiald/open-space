@@ -4,6 +4,21 @@
 
 - Limite d'usage : une session arrêtée par la limite de 5 h (ou de la semaine) se met en pause au lieu d'échouer, et reprend seule une minute après l'heure de remise à zéro, en disant à Claude de continuer où il en était (et de recréer ses réveils `/loop` ou cron, perdus pendant la pause). Le panneau État la garde dans « Au travail » avec « en pause jusqu'à 19:00 », sa bulle le dit, et un bandeau au-dessus du champ propose « Reprendre maintenant ». Ce qui est envoyé entre-temps attend dans la file et part à la reprise. La pause survit à un redémarrage d'Open Space. Le réglage Claude Code « Reprendre à la fin de la limite » (`autoContinueAtUsageLimit`) n'a rien changé à ces tours en `-p`, d'où cette reprise côté Open Space.
 
+## 1.35.7
+
+- Navigateur d'une session : une session peut passer sur « Mon Chrome » avec l'outil MCP `switch_browser`, seulement quand tu le lui demandes. Claude Code te demande toujours ton accord, même en mode auto : la demande « Changer de navigateur » arrive dans Open Space, sur Telegram et dans l'app Claude avec Remote Control. Une fois validée, la session est relancée sur Chrome à la fin de son tour et reprend seule.
+- Automates : réglage « Navigateur pour tes comptes » (comme les réglages, navigateur partagé ou Mon Chrome), pour un `/tz-arcade` du matin dans ton Chrome par exemple. Il se règle dans Open Space seulement, jamais depuis une session.
+- Mon Chrome : Open Space ouvre Chrome en arrière-plan s'il est fermé quand une session démarre avec (macOS).
+
+## 1.35.6
+
+- Navigateur intégré, comme Claude in Chrome : quand un agent travaille dans un navigateur, un liseré à sa couleur entoure la page et son curseur glisse vers chaque clic, avec ce qu'il fait à côté (Clique, Tape, Attend, Ouvre la page…) et un cercle au clic. La couleur vient de son prénom, comme les tags, assez foncée pour du texte blanc. Les clics des sessions et des testeurs passent par Open Space pour être vus. Le réglage « Curseur de l'agent » (Navigateur) cache curseur et liseré.
+- MCP : `delete_trigger` supprime un automate.
+
+## 1.35.5
+
+- Fast mode : un interrupteur dans le menu du modèle (lanceur et sessions), pour les modèles qui l'acceptent (Opus, Fable). Une icône s'affiche alors devant le modèle. Si Claude Code ne le sert pas (pas de crédits d'usage, limite atteinte), la raison s'affiche sous l'interrupteur (PR #56 de JB).
+
 ## 1.35.4
 
 - Bulles d'aide : survoler une icône (Réglages, Focus, Mods, Interrompre…) affiche son nom après un court instant, aux couleurs d'Open Space et sans sortir de la fenêtre. Elle s'affiche aussi au clavier (Tab) et se ferme avec Échap (PR #54 de Guillaume).

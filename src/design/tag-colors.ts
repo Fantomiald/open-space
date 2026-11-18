@@ -32,3 +32,26 @@ export function applyTagColors(enabled: boolean) {
   root.dataset.tagColors = String(enabled);
   for (const [hue, color] of TAG_COLORS.entries()) root.style.setProperty(`--tag-${hue}`, color);
 }
+
+const channel = (value: number) => { const c = value / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const luminance = ([r, g, b]: number[]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+const contrastWithWhite = (rgb: number[]) => 1.05 / (luminance(rgb) + 0.05);
+
+/**
+ * `color` (#rrggbb) darkened just enough for white text on it to read (WCAG AA, 4.5:1): its hue and saturation kept,
+ * its lightness taken down one step at a time.
+ */
+export function darkEnoughForWhite(color: string): string {
+  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(color.slice(at, at + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), lightness = (max + min) / 2, delta = max - min;
+  const saturation = delta ? delta / (1 - Math.abs(2 * lightness - 1)) : 0;
+  const hue = !delta ? 0 : max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  const rgbAt = (l: number) => {
+    const chroma = (1 - Math.abs(2 * l - 1)) * saturation, x = chroma * (1 - Math.abs((hue % 2) - 1)), m = l - chroma / 2;
+    const [a, c, d] = [[chroma, x, 0], [x, chroma, 0], [0, chroma, x], [0, x, chroma], [x, 0, chroma], [chroma, 0, x]][Math.floor(hue) % 6];
+    return [a, c, d].map((value) => Math.round((value + m) * 255));
+  };
+  let l = lightness;
+  while (l > 0 && contrastWithWhite(rgbAt(l)) < 4.5) l -= 0.005;
+  return `#${rgbAt(Math.max(l, 0)).map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}

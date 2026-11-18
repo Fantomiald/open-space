@@ -42,6 +42,9 @@ describe('buildClaudeArgs', () => {
     // the open-space server alone does not tell the session it has a browser
     const alone = buildClaudeArgs({ ...base, openSpaceMcp: openSpace });
     assert.equal(alone[alone.indexOf('--append-system-prompt') + 1], identityPrompt('Iris'));
+    // switch_browser always waits for the user's yes, even in auto mode or allowed by the trigger
+    assert.deepEqual(JSON.parse(alone[alone.indexOf('--settings') + 1]).permissions, { ask: ['mcp__open-space__switch_browser'] });
+    assert.ok(!buildClaudeArgs(base).includes('--settings'), 'no open-space server, no rule');
   });
 
   it('tells a session with the shared browser what it is for, and only then', () => {
@@ -121,6 +124,7 @@ describe('parseCatalog', () => {
       models: [
         { value: 'default', displayName: 'Default (recommended)', description: 'Opus 5.5', supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'turbo'] },
         { value: 'haiku', displayName: 'Haiku 5.5', supportsEffort: false },
+        { value: 'opus', displayName: 'Opus', supportsEffort: false, supportsFastMode: true },
       ],
     });
     assert.deepEqual(catalog.commands, [
@@ -130,6 +134,7 @@ describe('parseCatalog', () => {
     assert.deepEqual(catalog.models, [
       { value: 'default', label: 'Default (recommended)', description: 'Opus 5.5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
       { value: 'haiku', label: 'Haiku 5.5', efforts: [] },
+      { value: 'opus', label: 'Opus', efforts: [], fast: true },
     ]);
   });
 
@@ -149,6 +154,11 @@ describe('parseCatalog', () => {
     const args = buildClaudeArgs({ ...base, ultracode: true, settings: { alwaysThinkingEnabled: false, outputStyle: 'Concis' } });
     assert.deepEqual(JSON.parse(args[args.indexOf('--settings') + 1]), { alwaysThinkingEnabled: false, outputStyle: 'Concis', ultracode: true });
     assert.ok(!buildClaudeArgs({ ...base, settings: {} }).includes('--settings'), 'nothing chosen: Claude Code’s own files');
+  });
+
+  it('passes fast mode as a setting: in claude -p, its own opt-in', () => {
+    const args = buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', fastMode: true, ultracode: true, permissionMode: 'auto', name: 'Ana' });
+    assert.deepEqual(JSON.parse(args[args.indexOf('--settings') + 1]), { ultracode: true, fastMode: true });
   });
 
   it('passes ultracode as a setting, next to the effort', () => {

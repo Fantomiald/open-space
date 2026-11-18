@@ -72,6 +72,9 @@ export interface WebServerOptions {
     version: (sessionId: string, lane: number) => Promise<Record<string, unknown>>;
     key: (sessionId: string) => string;
     known: (sessionId: string) => boolean;
+    /** the browser's own WebSocket, launched if needed */
+    socket: (sessionId: string, lane: number) => Promise<string>;
+    connect: (client: WebSocket, upstreamUrl: string, sessionId: string, lane: number) => void;
     /** the browser shared by every session (see shared-browser.ts), which each owner reaches through Open Space */
     shared?: {
       /** a key of its own, given to the sessions that get the shared browser only (never to a restricted one) */
@@ -88,6 +91,8 @@ export interface WebServerOptions {
 /** an os-secret request: a few names and a short text, or one key (shared/secrets.ts MAX_SECRET_LENGTH, url-encoded) */
 const MAX_SECRETS_FORM = 128 * 1024;
 const SHARED_SOCKET = /^\/browser\/([\w-]{1,100})\/shared\/([^/]+)(?:\/lane\/([1-9]\d?))?\/devtools$/;
+/** The WebSocket a session's Playwright reaches its own browser (or a tester's) by, through Open Space: it sees the agent's mouse. */
+const OWN_SOCKET = /^\/browser\/([\w-]{1,100})\/cdp\/([^/]+)(?:\/lane\/([1-9]\d?))?\/devtools$/;
 
 /**
  * A page a session published (its Artifact tool) or sent (SendUserFile) runs in a sandbox without allow-same-origin, even opened on its own: an
@@ -274,8 +279,10 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     if (kind !== 'cdp' || !lane || req.headers.origin !== undefined || !secretsMatch(browser.key(sessionId), key)) { res.writeHead(404).end(); return; }
-    const version = await browser.version(sessionId, Number(lane[1] ?? 0));
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(version));
+    const number = Number(lane[1] ?? 0);
+    const version = await browser.version(sessionId, number);
+    const socket = `ws://${req.headers.host}/browser/${sessionId}/cdp/${key}${number ? `/lane/${number}` : ''}/devtools`;
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ ...version, webSocketDebuggerUrl: socket }));
   }
 
   /**
@@ -501,6 +508,15 @@ export function createWebServer(options: WebServerOptions) {
     if (Number(lane ?? 0) > TESTERS || !options.browser?.known(sessionId) || !secretsMatch(shared.key(sessionId), key)) return null;
     return { shared, sessionId, lane: Number(lane ?? 0) };
   };
+  /** The session a connection to its own browser (or a tester's) is for, as sharedOwner. */
+  const ownBrowser = (req: http.IncomingMessage, url: URL | null) => {
+    const browser = options.browser;
+    const match = url && OWN_SOCKET.exec(url.pathname);
+    if (!browser || !match || req.headers.origin !== undefined || !hostAllowed(policy, req)) return null;
+    const [, sessionId = '', key = '', lane] = match;
+    if (Number(lane ?? 0) > TESTERS || !browser.known(sessionId) || !secretsMatch(browser.key(sessionId), key)) return null;
+    return { browser, sessionId, lane: Number(lane ?? 0) };
+  };
   server.on('upgrade', (req, socket, head) => {
     const url = parseRequestUrl(req.url);
     const owner = sharedOwner(req, url);
@@ -509,6 +525,15 @@ export function createWebServer(options: WebServerOptions) {
         owner.shared.socket(owner.sessionId, owner.lane)
           .then((upstream) => owner.shared.connect(client, upstream, browserId(owner.sessionId, owner.lane)))
           .catch((error: unknown) => { log('cannot reach the shared browser', error); client.close(); });
+      });
+      return;
+    }
+    const own = ownBrowser(req, url);
+    if (own) {
+      relays.handleUpgrade(req, socket, head, (client) => {
+        own.browser.socket(own.sessionId, own.lane)
+          .then((upstream) => own.browser.connect(client, upstream, own.sessionId, own.lane))
+          .catch((error: unknown) => { log('cannot reach the browser', error); client.close(); });
       });
       return;
     }
