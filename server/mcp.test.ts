@@ -74,7 +74,11 @@ function fakeApi() {
       done.push(`mod ${request}${bySession ? '' : ' by the caller'}`);
       return { mod, sessionId: bySession ? 's9' : null };
     },
-    editMod: async (id, request) => (mods.some((mod) => mod.id === id) ? (done.push(`change ${id} ${request}`), { sessionId: 's9' }) : null),
+    editMod: async (id, request) => {
+      if (!mods.some((mod) => mod.id === id)) return null;
+      done.push(`change ${id} ${request}`);
+      return { sessionId: 's9' };
+    },
     deleteMod: async (id) => {
       const at = mods.findIndex((mod) => mod.id === id);
       if (at < 0) return false;

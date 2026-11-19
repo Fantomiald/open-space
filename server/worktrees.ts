@@ -376,9 +376,16 @@ export async function commitWork(worktreeRoot: string, name: string): Promise<bo
   return true;
 }
 
+const FOLDER_BUSY = /permission denied|being used by another process|resource busy|directory not empty/i;
+
 /** Removes a worktree's folder (`force`: even with changes, which the caller decided to lose). */
 export async function removeWorktree(mainRoot: string, worktreeRoot: string, force: boolean) {
   const result = await run(mainRoot, ['worktree', 'remove', ...(force ? ['--force', '--force'] : []), worktreeRoot]);
+  // Windows refuses to delete a folder another process still stands in (a git status of the branch card ending), and
+  // git has already forgotten the worktree by then: finish the deletion, retried while the folder is busy
+  if (result.code !== 0 && FOLDER_BUSY.test(result.stderr) && existsSync(worktreeRoot)) {
+    await rm(worktreeRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
   if (result.code === 0) return;
   // already gone from the disk: git only needs to forget it
   if (!existsSync(worktreeRoot)) { await run(mainRoot, ['worktree', 'prune']); return; }
