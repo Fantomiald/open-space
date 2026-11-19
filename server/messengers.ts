@@ -4,8 +4,10 @@
 // Each linked bot is told, every couple of seconds, about the sessions it follows (a trigger's runs that name it, the
 // sessions it started, or every session when `allSessions`; not a session it started while Remote Control is on, since
 // the Claude app already shows it, unless /follow asks for it, and never one /unfollow dropped): what they wait for, with buttons to answer (a permission,
-// a question; keys are only given in Open Space), when they finish or stop on an error, and the files they send. An
-// answer given in Open Space removes the buttons. A reply to one of these messages goes to its session, files included;
+// a question), when they finish or stop on an error, and the files they send. An answer given in Open Space removes the
+// buttons. Keys are given by replying to their request with the values: the reply is deleted from the chat at once and
+// its text only goes to the session's key store, like the box in Open Space (never to its conversation, the agent nor
+// the log). Any other reply to one of these messages goes to its session, files included;
 // commands start, stop and list sessions and triggers; plain words go to a small agent driving Open Space through its
 // MCP server (server/messenger-agent.ts), which never answers a permission.
 import { randomBytes, randomInt } from 'node:crypto';
@@ -13,6 +15,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { MAX_MESSENGERS, MESSENGER_ID, type Messenger, type MessengerInput, type MessengerProblem } from '../shared/messengers.ts';
 import type { LoggedEvent, PermissionDecision, PermissionPrompt, SessionInfo } from '../shared/protocol.ts';
+import type { SecretEntry } from '../shared/secrets.ts';
 import { SWITCH_BROWSER_TOOL, type Trigger, type TriggerRun } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import * as telegram from './telegram.ts';
@@ -35,6 +38,8 @@ interface Stored {
   model: string;
   /** the agent's conversation, resumed from one message to the next */
   conversation: string | null;
+  /** the messages that asked for keys, kept on disk: a reply after a restart is deleted, never passed to the agent */
+  keyRequests?: number[];
 }
 
 export interface MessengersDeps {
@@ -58,6 +63,8 @@ export interface MessengersDeps {
   attachment: (stored: string) => string | null;
   /** answers plain words; `conversation`: to resume, null for a new one; gives back the conversation to resume next */
   agent: (bot: { id: string; model: string }, text: string, conversation: string | null) => Promise<{ text: string; conversation: string | null }>;
+  /** keeps the keys replied to a request for them (`requestId`, its wait), as the box in Open Space does: the names kept; throws when none is */
+  giveSecrets: (sessionId: string, requestId: string, entries: readonly SecretEntry[]) => string[];
   onChange: () => void;
   log: (message: string, error?: unknown) => void;
   api?: typeof telegram;
@@ -67,6 +74,10 @@ export interface MessengersDeps {
 interface Sent { chatId: number; messageId: number; text: string }
 /** What a button stands for. */
 interface Choice { botId: string; sessionId: string; requestId: string; questions?: PermissionPrompt['questions']; answers: Record<string, string>; picked: string[] }
+/** The keys a wait asks for (`os-secret ask`), in the order their values are replied. */
+interface KeyWait { sessionId: string; requestId: string; names: string[] }
+/** What a reply to a request for keys ends with: its wait settled with this outcome, or this said in the chat. */
+type KeysOutcome = { settle: string } | { say: string };
 type Question = NonNullable<PermissionPrompt['questions']>[number];
 
 const linkCode = () => String(randomInt(100_000, 1_000_000));
@@ -99,7 +110,8 @@ export function questionKeyboard(choice: number, question: Question, picked: rea
 export function waitMessage(session: SessionInfo, wait: PermissionPrompt, choice: number): { text: string; buttons: Button[][] } {
   const words = st.messengers;
   const who = session.trigger ? `${session.name} (${session.trigger.name})` : session.name;
-  if (wait.secrets) return { text: words.keys(who), buttons: [] };
+  // no buttons: the values come as a reply to this message (Messengers.takeKeys)
+  if (wait.secrets) return { text: telegram.fit(words.keys(who, wait.secrets, wait.detail ?? '')), buttons: [] };
   const question = wait.questions?.[0];
   if (question) {
     return { text: telegram.fit(`${words.question(who, question.question)}\n\n${words.orReply}`), buttons: questionKeyboard(choice, question) };
@@ -120,6 +132,10 @@ export class Messengers {
   private nextChoice = 1;
   /** which session a message is about, by `bot|message`, for replies */
   private readonly about = new Map<string, string>();
+  /** the keys a wait asks for, by its `bot|session|request` key like `sent`, until it is settled */
+  private readonly keyWaits = new Map<string, KeyWait>();
+  /** the messages that asked for keys, by `bot|message`, with their wait's key: kept once it is settled, so a late reply is deleted too */
+  private readonly keyMessages = new Map<string, string>();
   /** what was last seen of each session, by `bot|session` */
   private readonly seen = new Map<string, { seq: number; busy: boolean; state: SessionInfo['state'] }>();
   /** the sessions a bot started (by `/new` or its agent): it hears of them */
@@ -174,6 +190,7 @@ export class Messengers {
       chatId: tokenChanged ? null : before?.chatId ?? null, username: tokenChanged ? null : before?.username ?? null,
       linkCode: tokenChanged || !before ? linkCode() : before.linkCode, allSessions: input.allSessions, model: input.model,
       conversation: tokenChanged ? null : before?.conversation ?? null,
+      ...(!tokenChanged && before?.keyRequests ? { keyRequests: before.keyRequests } : {}),
     };
     this.bots = before ? this.bots.map((each) => (each.id === bot.id ? bot : each)) : [...this.bots, bot];
     this.write();
@@ -188,7 +205,9 @@ export class Messengers {
     this.polling.delete(id);
     this.problems.delete(id);
     this.bots = this.bots.filter((bot) => bot.id !== id);
-    for (const key of [...this.sent.keys()]) if (key.startsWith(`${id}|`)) this.sent.delete(key);
+    for (const kept of [this.sent, this.keyWaits, this.keyMessages]) {
+      for (const key of [...kept.keys()]) if (key.startsWith(`${id}|`)) kept.delete(key);
+    }
     this.write();
     this.deps.onChange();
   }
@@ -277,6 +296,10 @@ export class Messengers {
       return;
     }
     if (message.chat.id !== bot.chatId) return;
+    // a reply to a request for keys holds their values: taken before anything reads or keeps the message (one of the
+    // bot's commands stays a command; any other text, "/" first included, is values)
+    const keyRequest = message.reply_to_message && !(command && isBotCommand(command[0])) ? this.keyRequestAt(bot, message.reply_to_message.message_id) : undefined;
+    if (keyRequest !== undefined) return this.takeKeys(bot, message, keyRequest);
     const files = await this.received(bot, message);
     const replyTo = message.reply_to_message && this.about.get(`${bot.id}|${message.reply_to_message.message_id}`);
     const text = (message.text ?? message.caption ?? '').trim();
@@ -308,6 +331,48 @@ export class Messengers {
     // the sessions its agent started are followed like those of /new
     for (const session of this.deps.sessions()) if (!before.has(session.id)) this.started.add(`${bot.id}|${session.id}`);
     await this.say(bot, answer || st.messengers.agentSilent, messageId);
+  }
+
+  /**
+   * A reply to a request for keys (`waitKey`: its wait): its lines are their values, in the order asked. The message is
+   * deleted whatever happens, and its text goes nowhere but the session's key store: not to the session, the agent, the
+   * log, nor any message of the bot, which never answers the reply itself (Telegram would quote it) but the request.
+   */
+  private async takeKeys(bot: Stored, message: TelegramMessage, waitKey: string) {
+    const request = message.reply_to_message!.message_id;
+    // asked first, whatever happens next
+    const deleted = this.api.call(bot.token, 'deleteMessage', { chat_id: bot.chatId, message_id: message.message_id }).then(() => true, (error: unknown) => {
+      this.deps.log('messengers: cannot delete a reply holding keys', error);
+      return false;
+    });
+    try {
+      const outcome = this.giveKeys(waitKey, message);
+      // settled before anything is awaited: a tick meanwhile would say it was answered in Open Space
+      await ('settle' in outcome ? this.settle(bot, waitKey, outcome.settle) : this.say(bot, outcome.say, request));
+    } finally {
+      if (!(await deleted)) await this.say(bot, st.messengers.keyNotDeleted, request);
+    }
+  }
+
+  /** Gives the keys of a reply to their wait, if it still waits for them (synchronous: it cannot end between the check and the giving). */
+  private giveKeys(waitKey: string, message: TelegramMessage): KeysOutcome {
+    const words = st.messengers;
+    const wait = this.keyWaits.get(waitKey);
+    // given in Open Space or the turn over, even when the bot has not looked again yet
+    const waiting = !!wait && this.deps.sessions().some((session) => session.id === wait.sessionId && session.permissions.some((each) => each.requestId === wait.requestId));
+    if (!wait || !waiting) return { say: words.keyGone };
+    if (telegram.attachedFile(message) || !message.text) return { say: words.keyAsText };
+    const values = message.text.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (values.length !== wait.names.length) return { say: words.keyCount(wait.names.length) };
+    let kept: string[];
+    try {
+      kept = this.deps.giveSecrets(wait.sessionId, wait.requestId, wait.names.map((name, index) => ({ name, value: values[index]! })));
+    } catch {
+      // nothing kept (a value too long, too many keys): said without the error, nor the values
+      kept = [];
+    }
+    if (!kept.length) return { say: words.keyRefused };
+    return { settle: words.keysGiven(kept, wait.names.filter((name) => !kept.includes(name))) };
   }
 
   /** The question a message of the bot asks, while it waits. */
@@ -441,6 +506,7 @@ export class Messengers {
   private async settle(bot: Stored, key: string, outcome: string) {
     const sent = this.sent.get(key);
     this.sent.delete(key);
+    this.keyWaits.delete(key);
     if (!sent) return;
     await this.api.call(bot.token, 'editMessageText', { chat_id: sent.chatId, message_id: sent.messageId, text: telegram.fit(`${sent.text}\n\n${outcome}`) }).catch(() => undefined);
   }
@@ -484,14 +550,18 @@ export class Messengers {
     const choice = this.nextChoice++;
     const { text, buttons } = waitMessage(session, wait, choice);
     if (buttons.length) this.choices.set(choice, { botId: bot.id, sessionId: session.id, requestId: wait.requestId, ...(wait.questions ? { questions: wait.questions } : {}), answers: {}, picked: [] });
+    if (wait.secrets) this.keyWaits.set(key, { sessionId: session.id, requestId: wait.requestId, names: wait.secrets });
     // kept before sending: the next tick does not send it twice while this one waits for Telegram
     this.sent.set(key, { chatId: bot.chatId!, messageId: 0, text });
     try {
       const message = await this.api.call<TelegramMessage>(bot.token, 'sendMessage', { chat_id: bot.chatId, text, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}) });
       this.sent.set(key, { chatId: bot.chatId!, messageId: message.message_id, text });
-      this.remember(bot, message.message_id, session.id);
+      // a reply to a request for keys is never routed to the session (takeKeys)
+      if (wait.secrets) this.rememberKeys(bot, message.message_id, key);
+      else this.remember(bot, message.message_id, session.id);
     } catch (error) {
       this.sent.delete(key);
+      this.keyWaits.delete(key);
       throw error;
     }
   }
@@ -534,7 +604,21 @@ export class Messengers {
     this.about.set(`${bot.id}|${messageId}`, sessionId);
     if (this.about.size > KEPT_REPLIES) this.about.delete(this.about.keys().next().value!);
   }
+
+  private rememberKeys(bot: Stored, messageId: number, waitKey: string) {
+    this.keyMessages.set(`${bot.id}|${messageId}`, waitKey);
+    if (this.keyMessages.size > KEPT_REPLIES) this.keyMessages.delete(this.keyMessages.keys().next().value!);
+    bot.keyRequests = [...(bot.keyRequests ?? []), messageId].slice(-KEPT_REPLIES);
+    this.write();
+  }
+
+  /** The wait a request for keys was about; '' when only the disk remembers it (before a restart): no longer awaited. */
+  private keyRequestAt(bot: Stored, messageId: number): string | undefined {
+    return this.keyMessages.get(`${bot.id}|${messageId}`) ?? (bot.keyRequests?.includes(messageId) ? '' : undefined);
+  }
 }
 
 /** The bot's commands, in English like Telegram's own. */
 export const COMMANDS = ['sessions', 'run', 'new', 'stop', 'remote', 'follow', 'unfollow', 'reset', 'help'] as const;
+/** One of the bot's commands, or /start. */
+const isBotCommand = (name: string) => name === 'start' || (COMMANDS as readonly string[]).includes(name);

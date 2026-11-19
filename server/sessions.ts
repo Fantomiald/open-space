@@ -1152,11 +1152,13 @@ export class SessionManager {
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
   askSecrets(id: string, names: string[], why: string) { return this.session(id).askSecrets(names, why); }
 
-  /** Keys the user gave a session, in the box of an `os-secret ask` (`requestId`) or on their own. */
-  giveSecrets(id: string, requestId: string | undefined, entries: readonly SecretEntry[]) {
+  /** Keys the user gave a session, in the box of an `os-secret ask` (`requestId`) or on their own: the names kept. */
+  giveSecrets(id: string, requestId: string | undefined, entries: readonly SecretEntry[]): string[] {
     const session = this.session(id);
-    if (!this.deps.secrets?.store.set(id, entries).length) throw new Error(st.sessions.noSecret);
+    const kept = this.deps.secrets?.store.set(id, entries) ?? [];
+    if (!kept.length) throw new Error(st.sessions.noSecret);
     if (requestId) session.secretsGiven(requestId);
+    return kept;
   }
 
   forgetSecrets(id: string, names?: readonly string[]) {

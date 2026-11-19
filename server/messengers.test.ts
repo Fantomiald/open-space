@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { parseMessengerInput } from '../shared/messengers.ts';
-import type { LoggedEvent, SessionInfo } from '../shared/protocol.ts';
+import type { LoggedEvent, PermissionPrompt, SessionInfo } from '../shared/protocol.ts';
+import type { SecretEntry } from '../shared/secrets.ts';
 import type { Trigger } from '../shared/triggers.ts';
+import { st } from './i18n/index.ts';
 import { buildAgentArgs } from './messenger-agent.ts';
-import { matchByName, Messengers } from './messengers.ts';
+import { matchByName, Messengers, type MessengersDeps, waitMessage } from './messengers.ts';
 import * as telegram from './telegram.ts';
 
 let base: string;
@@ -20,10 +22,11 @@ const until = async (check: () => boolean) => {
   assert.ok(check(), 'never happened');
 };
 
-/** A Telegram that queues the updates given and records every call. */
+/** A Telegram that queues the updates given and records every call; the methods put in `failing` are refused. */
 function fakeTelegram() {
   const calls: { method: string; body: Record<string, unknown>; id?: number }[] = [];
   const updates: telegram.TelegramUpdate[] = [];
+  const failing = new Set<string>();
   let id = 1;
   let messageId = 100;
   const api: typeof telegram = {
@@ -35,6 +38,7 @@ function fakeTelegram() {
       }
       if (method === 'getMe') { calls.push({ method, body }); return { username: 'office_bot' }; }
       calls.push({ method, body, id: ++messageId });
+      if (failing.has(method)) throw new telegram.TelegramError(400, 'Bad Request: refused');
       return { message_id: messageId, chat: { id: 42 } };
     }) as typeof telegram.call,
     sendFile: async (_token, _chat, file) => { calls.push({ method: 'sendFile', body: { file } }); return { message_id: ++messageId, chat: { id: 42 } }; },
@@ -42,7 +46,7 @@ function fakeTelegram() {
   };
   const push = (update: Omit<telegram.TelegramUpdate, 'update_id'>) => updates.push({ update_id: id++, ...update });
   const message = (text: string, extra: Partial<telegram.TelegramMessage> = {}) => push({ message: { message_id: ++messageId, chat: { id: 42 }, text, ...extra } });
-  return { api, calls, push, message, sent: (method: string) => calls.filter((each) => each.method === method) };
+  return { api, calls, failing, push, message, sent: (method: string) => calls.filter((each) => each.method === method) };
 }
 
 describe('the chat bots', () => {
@@ -63,7 +67,7 @@ describe('the chat bots', () => {
       interrupt: (id) => done.push(`stop ${id}`), remote: (id) => done.push(`remote ${id}`),
       fire: async (id, payload) => { done.push(`fire ${id} ${payload}`); return { id: 'run1', triggerId: id, at: 0, source: 'manual', outcome: 'started', sessionId: 's2' }; },
       startSession: async () => session, folders: () => ['/work/pilou'], saveUpload: (name) => `0123456789abcdef/${name}`, attachment: () => null,
-      agent: async (_bot, text) => ({ text: `agent: ${text}`, conversation: 'c1' }), onChange: () => {}, log: () => {},
+      agent: async (_bot, text) => ({ text: `agent: ${text}`, conversation: 'c1' }), giveSecrets: () => [], onChange: () => {}, log: () => {},
     });
     try {
       assert.equal(messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: true, model: '' }), true);
@@ -122,7 +126,7 @@ describe('the chat bots', () => {
       sessions: () => [session], events: () => [], lastWords: () => 'Done here.', triggers: () => [],
       answer: () => {}, reply: () => {}, send: () => {}, interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
       startSession: async () => session, folders: () => ['/work/pilou'], saveUpload: (name) => name, attachment: () => null,
-      agent: async () => ({ text: '', conversation: null }), onChange: () => {}, log: () => {},
+      agent: async () => ({ text: '', conversation: null }), giveSecrets: () => [], onChange: () => {}, log: () => {},
     });
     const finish = async () => {
       const before = fake.sent('sendMessage').length;
@@ -185,5 +189,200 @@ describe('the chat bots', () => {
     assert.equal(args[args.indexOf('--model') + 1], 'haiku');
     assert.ok(args.includes('--strict-mcp-config'));
     assert.ok(args[args.indexOf('--disallowedTools') + 1]!.includes('Read(//data/secret)'));
+  });
+});
+
+describe('keys given by replying to the bot', () => {
+  const WHY = 'to deploy the preview';
+  const VALUE = 'made-up-value-7f3a';
+  const ask = (secrets: string[]): PermissionPrompt => ({ requestId: 'k1', who: 'chef', tool: 'os-secret', detail: WHY, canAlways: false, secrets });
+
+  /** A linked bot following a session that waits for the keys `names`, with all that leaves the bot recorded. `kept`: what the key store keeps. */
+  async function keyWait(file: string, names: string[], kept = (entries: readonly SecretEntry[]) => entries.map((entry) => entry.name)) {
+    const fake = fakeTelegram();
+    const given: { sessionId: string; requestId: string; entries: SecretEntry[] }[] = [];
+    const elsewhere: string[] = [];
+    const session = { id: 's1', name: 'JD', cwd: '/work/pilou', state: 'perm', stateSince: 0, permissions: [ask(names)] } as unknown as SessionInfo;
+    const deps: MessengersDeps = {
+      file: path.join(base, file), api: fake.api,
+      sessions: () => [session], events: () => [], lastWords: () => '', triggers: () => [],
+      answer: () => {}, reply: () => {}, interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
+      send: (_id, text) => elsewhere.push(`send ${text}`),
+      startSession: async () => session, folders: () => ['/work/pilou'], attachment: () => null,
+      saveUpload: (name) => { elsewhere.push(`upload ${name}`); return name; },
+      agent: async (_bot, text) => { elsewhere.push(`agent ${text}`); return { text: 'agent', conversation: null }; },
+      giveSecrets: (sessionId, requestId, entries) => {
+        given.push({ sessionId, requestId, entries: [...entries] });
+        const names = kept(entries);
+        // the box closes once a key is kept, as in Open Space
+        if (names.length) session.permissions = [];
+        return names;
+      },
+      onChange: () => {}, log: (message, error) => elsewhere.push(`log ${message} ${String(error)}`),
+    };
+    const messengers = new Messengers(deps);
+    messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: true, model: '' });
+    const link = async () => {
+      fake.message(`/start ${messengers.list()[0]!.linkCode}`);
+      await until(() => messengers.list()[0]!.linked);
+      await messengers.tick();
+      const found = fake.sent('sendMessage').find((each) => String(each.body.text).includes(WHY));
+      assert.ok(found?.id, 'the wait is sent');
+      return found;
+    };
+    // on a failure here, the bot would keep polling and the test file never end
+    const request = await link().catch((error: unknown) => { messengers.stop(); throw error; });
+    /** replies to the request (message 900 unless `extra` says), then waits for the bot to answer */
+    const reply = async (text: string, extra: Partial<telegram.TelegramMessage> = {}) => {
+      const answers = () => fake.sent('sendMessage').length + fake.sent('editMessageText').length;
+      const before = answers();
+      fake.message(text, { message_id: 900, reply_to_message: { message_id: request.id! }, ...extra });
+      await until(() => answers() > before);
+    };
+    /** whether `value` reached a call to Telegram (the bot's messages included) */
+    const leaked = (value: string) => fake.calls.some((each) => JSON.stringify(each.body).includes(value));
+    return { fake, given, elsewhere, session, messengers, deps, request, reply, leaked };
+  }
+
+  it('names the keys asked and what they are for, without buttons', () => {
+    const session = { name: 'JD' } as SessionInfo;
+    const one = waitMessage(session, ask(['GEMINI_API_KEY']), 1);
+    assert.ok(one.text.includes('GEMINI_API_KEY') && one.text.includes(WHY), one.text);
+    assert.deepEqual(one.buttons, []);
+    const two = waitMessage(session, ask(['GEMINI_API_KEY', 'STRIPE_KEY']), 2);
+    assert.ok(two.text.indexOf('GEMINI_API_KEY') < two.text.indexOf('STRIPE_KEY') && two.text.includes(WHY), two.text);
+    assert.notEqual(two.text.replace('GEMINI_API_KEY, STRIPE_KEY', ''), one.text.replace('GEMINI_API_KEY', ''), 'several keys: one value per line');
+  });
+
+  it('gives a value replied to the request to the session\'s keys, deletes it from the chat, and tells no one else', async () => {
+    const { fake, given, elsewhere, messengers, request, reply, leaked } = await keyWait('keys-one.json', ['GEMINI_API_KEY']);
+    try {
+      assert.equal(request.body.reply_markup, undefined);
+      await reply(`  ${VALUE}  `);
+      assert.deepEqual(given, [{ sessionId: 's1', requestId: 'k1', entries: [{ name: 'GEMINI_API_KEY', value: VALUE }] }]);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body), [{ chat_id: 42, message_id: 900 }]);
+      assert.deepEqual(elsewhere, [], 'neither the session, nor the agent, nor the log');
+      assert.equal(leaked(VALUE), false);
+      const settled = fake.sent('editMessageText');
+      assert.equal(settled.length, 1);
+      assert.equal(settled[0]!.body.message_id, request.id);
+      assert.ok(String(settled[0]!.body.text).endsWith(st.messengers.keysGiven(['GEMINI_API_KEY'], [])));
+      await messengers.tick();
+      assert.equal(fake.sent('editMessageText').length, 1, 'settled once');
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('takes several keys one per line, in the order asked', async () => {
+    const { given, elsewhere, messengers, reply, leaked } = await keyWait('keys-two.json', ['GEMINI_API_KEY', 'STRIPE_KEY']);
+    try {
+      await reply('made-up-gemini\n\n  made-up-stripe \n');
+      assert.deepEqual(given[0]?.entries, [{ name: 'GEMINI_API_KEY', value: 'made-up-gemini' }, { name: 'STRIPE_KEY', value: 'made-up-stripe' }]);
+      assert.deepEqual(elsewhere, []);
+      assert.equal(leaked('made-up-gemini') || leaked('made-up-stripe'), false);
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('keeps nothing when the lines are not as many as the keys, and still deletes the message', async () => {
+    const { fake, given, elsewhere, messengers, request, reply, leaked } = await keyWait('keys-count.json', ['GEMINI_API_KEY', 'STRIPE_KEY']);
+    try {
+      await reply(VALUE);
+      assert.deepEqual(given, []);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body.message_id), [900]);
+      const told = fake.sent('sendMessage').at(-1)!;
+      assert.equal(told.body.text, st.messengers.keyCount(2));
+      // an answer to the user's message would quote the value
+      assert.deepEqual(told.body.reply_parameters, { message_id: request.id, allow_sending_without_reply: true });
+      assert.deepEqual(elsewhere, []);
+      assert.equal(leaked(VALUE), false);
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('deletes a reply that comes once the key is no longer awaited, and passes it to no one', async () => {
+    const { fake, given, elsewhere, session, messengers, reply, leaked } = await keyWait('keys-gone.json', ['GEMINI_API_KEY']);
+    try {
+      // given in Open Space, before the bot looked again
+      session.permissions = [];
+      await reply(VALUE);
+      // and once the bot has settled its message
+      await messengers.tick();
+      await reply('made-up-later', { message_id: 901 });
+      assert.deepEqual(given, []);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body.message_id), [900, 901]);
+      assert.deepEqual(fake.sent('sendMessage').slice(-2).map((each) => each.body.text), [st.messengers.keyGone, st.messengers.keyGone]);
+      assert.deepEqual(elsewhere, [], 'not routed to the session');
+      assert.equal(leaked(VALUE) || leaked('made-up-later'), false);
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('deletes a reply to a request sent before Open Space restarted, and passes it to no one', async () => {
+    const { fake, given, elsewhere, session, messengers, deps, reply, leaked } = await keyWait('keys-restart.json', ['GEMINI_API_KEY']);
+    messengers.stop();
+    // the old poll ends its last getUpdates, or it would take the reply
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // the session that waited is gone with the restart
+    session.permissions = [];
+    const restarted = new Messengers(deps);
+    restarted.start();
+    try {
+      await reply(VALUE);
+      assert.deepEqual(given, []);
+      await until(() => fake.sent('deleteMessage').length > 0);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body.message_id), [900]);
+      assert.equal(fake.sent('sendMessage').at(-1)!.body.text, st.messengers.keyGone);
+      assert.deepEqual(elsewhere, [], 'not passed to the agent');
+      assert.equal(leaked(VALUE), false);
+    } finally {
+      restarted.stop();
+    }
+  });
+
+  it('asks the user to delete the reply when Telegram does not let the bot', async () => {
+    const { fake, given, messengers, reply, leaked } = await keyWait('keys-undeleted.json', ['GEMINI_API_KEY']);
+    try {
+      fake.failing.add('deleteMessage');
+      await reply(VALUE);
+      await until(() => fake.sent('sendMessage').some((each) => each.body.text === st.messengers.keyNotDeleted));
+      assert.equal(given.length, 1, 'the key is kept all the same');
+      assert.equal(leaked(VALUE), false);
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('keeps a command replied to the request a command', async () => {
+    const { fake, given, messengers, reply } = await keyWait('keys-command.json', ['GEMINI_API_KEY']);
+    try {
+      await reply('/sessions');
+      assert.deepEqual(given, []);
+      assert.equal(fake.sent('deleteMessage').length, 0);
+      assert.ok(String(fake.sent('sendMessage').at(-1)!.body.text).startsWith('JD · '));
+    } finally {
+      messengers.stop();
+    }
+  });
+
+  it('says a key was refused without repeating it, and that a file is no key', async () => {
+    const { fake, given, elsewhere, messengers, reply, leaked } = await keyWait('keys-refused.json', ['GEMINI_API_KEY'], () => []);
+    try {
+      await reply(VALUE);
+      assert.equal(given.length, 1);
+      assert.equal(fake.sent('sendMessage').at(-1)!.body.text, st.messengers.keyRefused);
+      await reply('', { message_id: 901, photo: [{ file_id: 'f1' }] });
+      assert.equal(fake.sent('sendMessage').at(-1)!.body.text, st.messengers.keyAsText);
+      assert.equal(given.length, 1);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body.message_id), [900, 901]);
+      assert.deepEqual(elsewhere, [], 'the file is not kept either');
+      assert.equal(leaked(VALUE), false);
+    } finally {
+      messengers.stop();
+    }
   });
 });
