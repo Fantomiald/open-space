@@ -59,6 +59,7 @@ export const common: Dictionary['common'] = {
   notices: {
     connecting: 'Connecting to the server…',
     stopped: 'Server stopped: run “npm start” in the office folder. This page reconnects by itself.',
+    unpairedPhone: 'This phone isn’t authorized yet: on your Mac, copy the link in Settings > Phone and open it here.',
     unpaired: 'This browser isn’t authorized yet: open the browser authorization link shown in the terminal (npm start opens it by itself when no tab is connected).',
     claudeMissing: 'Claude Code can’t be found on this computer: sessions can’t be started.',
     notConnected: 'Not connected to the server: try again in a moment.',

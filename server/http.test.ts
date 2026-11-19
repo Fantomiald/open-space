@@ -102,7 +102,7 @@ before(async () => {
   hooksPort = await freePort();
   modsPort = await freePort();
   const created = createWebServer({
-    policy: loopbackPolicy([port], SECRET), port, distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
+    policy: loopbackPolicy([port], SECRET), distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
     sessionFile: (sessionId, relative) => (sessionId === 's1' ? resolveInside(distDir, relative) : null),
     hooks: async (id, token, body) => {
@@ -382,7 +382,7 @@ describe('the shared browser’s endpoints', () => {
   before(async () => {
     sharedPort = await freePort();
     sharedServer = createWebServer({
-      policy: loopbackPolicy([sharedPort], SECRET), port: sharedPort, distDir: path.join(base, 'dist'), soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
+      policy: loopbackPolicy([sharedPort], SECRET), distDir: path.join(base, 'dist'), soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
       onConnection: () => {}, log: () => {},
       browser: {
         watch: async () => {}, version: async () => ({ Browser: 'Chrome' }), key: ownKey, known: (sessionId) => sessionId === 's1',

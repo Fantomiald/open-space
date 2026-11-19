@@ -55,7 +55,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   // what Open Space looks like: the windows, then the room and its people
   office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   // what starts sessions without the user at the keyboard, and the chat bots and programs that reach Open Space (body())
-  connections: [['automata', ['automata', 'hooksAddress', 'automataFolder']]],
+  connections: [['automata', ['automata', 'hooksAddress', 'automataFolder']], ['phone', ['phoneAccess']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
 };
 
@@ -134,6 +134,7 @@ function SettingsEditor() {
   const language = useSessions((s) => s.language);
   const terminals = useSessions((s) => s.terminals);
   const hooksPort = useSessions((s) => s.triggers.hooksPort);
+  const phone = useSessions((s) => s.triggers.phone);
   const store = useSessions.getState;
   const [query, setQuery] = useState('');
   const content = useRef<HTMLDivElement>(null);
@@ -468,6 +469,20 @@ function SettingsEditor() {
           )}
         </Row>
       );
+      case 'phoneAccess': {
+        // the saved setting, not the draft: the address only comes once the server applied it
+        const phoneNote = !preferences.phoneAccess ? null : phone?.link ? (
+          <div className="cp-hooks-guide">
+            <p className="cp-trigger__note">{rows.phoneAccess.ready}</p>
+            <Copyable text={phone.link} />
+          </div>
+        ) : <p className="cp-trigger__note">{rows.phoneAccess[phone?.problem ?? 'opening']}</p>;
+        return (
+          <Row key={id} id={id} flash={flash} icon={<PhoneIcon />} title={rows.phoneAccess.title} hint={rows.phoneAccess.hint} extra={phoneNote}>
+            <Switch checked={draft.phoneAccess ?? false} onChange={(phoneAccess) => change({ phoneAccess })} label={rows.phoneAccess.title} />
+          </Row>
+        );
+      }
       case 'journalFolder': return (
         <Row key={id} id={id} flash={flash} wide icon={<NotesIcon />} title={rows.journalFolder.title} hint={rows.journalFolder.hint}>
           <input aria-labelledby={`setting-${id}-title`} title={preferences.journalFolder} value={draft.journalFolder} onChange={(e) => change({ journalFolder: e.target.value })} spellCheck={false} />

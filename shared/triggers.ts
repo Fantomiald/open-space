@@ -91,9 +91,22 @@ export interface TriggersState {
   hooksPort: number | null;
   /** the MCP address another program of this computer uses, with its key; null while that access is off */
   externalMcp: string | null;
+  /** the phone's access through Tailscale (Preferences.phoneAccess) */
+  phone: PhoneAccess;
 }
 
-export const NO_TRIGGERS: TriggersState = { triggers: [], runs: [], messengers: [], keys: {}, hookBase: '', hooksPort: null, externalMcp: null };
+/** Why the phone's access, turned on, is not open: no Tailscale on this computer, Tailscale stopped or signed out, or `tailscale serve` refused (HTTPS certificates off in the tailnet). */
+export type PhoneProblem = 'noTailscale' | 'signedOut' | 'serveFailed';
+
+export interface PhoneAccess {
+  /** the https address the phone opens (https://<computer>.<tailnet>.ts.net); null while the access is off or not open */
+  address: string | null;
+  /** the link that authorises the phone's browser, on that address (it holds the secret, like the /pair link) */
+  link: string | null;
+  problem: PhoneProblem | null;
+}
+
+export const NO_TRIGGERS: TriggersState = { triggers: [], runs: [], messengers: [], keys: {}, hookBase: '', hooksPort: null, externalMcp: null, phone: { address: null, link: null, problem: null } };
 
 export const MAX_TRIGGERS = 50;
 export const MAX_TRIGGER_NAME = 60;

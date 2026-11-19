@@ -41,7 +41,7 @@ export function Onboarding() {
     favoriteNotes: [],
     automataFolder: '',
     hooksAddress: '',
-    copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, remoteByDefault: false, idleCompact: 0, accountsBrowser: 'shared',
+    copyOnSelect: false, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, remoteByDefault: false, phoneAccess: false, idleCompact: 0, accountsBrowser: 'shared',
   });
 
   useEffect(() => { send({ t: 'suggestRoots' }); }, [send]);

@@ -519,7 +519,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   petTrip: startTrip(Date.now()),
   // the server's setting, given with its hello
   // the server's settings, given with its hello
-  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, agentCursor: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, autoTagRule: '', remoteByDefault: false },
+  preferences: { notifications: true, roots: [], defaultFolder: '', model: '', permissionMode: 'auto', agentNote: '', festivals: true, officeLife: true, theme: 'office', pet: DEFAULT_PET, journalFolder: '', favoriteNotes: [], automataFolder: '', hooksAddress: '', copyOnSelect: false, autoPip: true, agentCursor: true, effort: '', claude: {}, timeFormat: 'auto', timestamps: false, turnDuration: true, detailedActions: false, promptSuggestions: true, reduceMotion: false, glassOpacity: GLASS_OPACITY.initial, windowStyle: 'classic', tagColors: false, idleCompact: 0, isolate: 'busy', accountsBrowser: 'shared', autoTag: false, autoTagRule: '', remoteByDefault: false, phoneAccess: false },
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,

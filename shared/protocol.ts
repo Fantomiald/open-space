@@ -536,6 +536,8 @@ export interface Preferences {
   autoTagRule: string;
   /** Remote Control turned on for each new session, as long as live slots are left (server/sessions.ts) */
   remoteByDefault: boolean;
+  /** the bridge also answers on this computer's Tailscale address, for the phone (server/index.ts applyPhoneAccess); never changed by a session */
+  phoneAccess: boolean;
   /** the pet, going from room to room: a cat, a dog, a droid, Rocky…, or none */
   pet: PetChoice;
   /** the place both rooms are dressed as (shared/room-themes.ts) */

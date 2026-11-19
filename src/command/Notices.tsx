@@ -9,7 +9,9 @@ export function ConnectionBanner() {
   if (connection === 'live') {
     return claude && !claude.found ? <p className="cp-banner" data-tone="error" role="status">{t.common.notices.claudeMissing}</p> : null;
   }
-  return <p className="cp-banner" data-tone={connection === 'connecting' ? 'neutral' : 'error'} role="status">{t.common.notices[connection]}</p>;
+  // opened through Tailscale (the phone): the authorisation link is in the computer's settings, not in a terminal
+  const notice = connection === 'unpaired' && location.protocol === 'https:' ? 'unpairedPhone' : connection;
+  return <p className="cp-banner" data-tone={connection === 'connecting' ? 'neutral' : 'error'} role="status">{t.common.notices[notice]}</p>;
 }
 
 export function Toasts() {

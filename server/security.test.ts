@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkUpgrade, createSecret, hostAllowed, loopbackPolicy, parseRequestUrl, readCookie, readOrCreateSecret, secretsMatch, sessionCookie } from './security.ts';
+import { allowPhone, checkUpgrade, createSecret, forgetPhone, hostAllowed, loopbackPolicy, parseRequestUrl, readCookie, readOrCreateSecret, secretsMatch, sessionCookie } from './security.ts';
 
 const fakeRequest = (headers: Record<string, string>) => ({ headers }) as unknown as IncomingMessage;
 const policy = loopbackPolicy([4848], 'secret-value');
@@ -86,5 +86,22 @@ describe('Host and Origin', () => {
     assert.equal(checkUpgrade(policy, fakeRequest({ ...goodHeaders, origin: 'null' })), 'bad-origin');
     assert.equal(checkUpgrade(policy, fakeRequest({ ...goodHeaders, cookie: 'poste_session=wrong' })), 'bad-cookie');
     assert.equal(checkUpgrade(policy, fakeRequest({ host: goodHeaders.host, origin: goodHeaders.origin })), 'bad-cookie');
+  });
+});
+
+describe('phone access', () => {
+  it('accepts the phone through its Tailscale name only while allowed, cookie still required', () => {
+    const phone = loopbackPolicy([4848], 'secret-value');
+    const name = 'mac.tail875b6e.ts.net';
+    const headers = { host: name, origin: `https://${name}`, cookie: 'poste_session=secret-value' };
+    assert.equal(checkUpgrade(phone, fakeRequest(headers)), 'bad-host');
+    allowPhone(phone, name);
+    assert.equal(checkUpgrade(phone, fakeRequest(headers)), 'ok');
+    assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, host: `${name}:443` })), 'ok');
+    assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, origin: `http://${name}` })), 'bad-origin');
+    assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, cookie: '' })), 'bad-cookie');
+    forgetPhone(phone, name);
+    assert.equal(checkUpgrade(phone, fakeRequest(headers)), 'bad-host');
+    assert.equal(hostAllowed(phone, fakeRequest({ host: '127.0.0.1:4848' })), true);
   });
 });

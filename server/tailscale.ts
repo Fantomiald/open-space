@@ -1,0 +1,38 @@
+// The phone's access (Preferences.phoneAccess): `tailscale serve` gives this computer an https address on the user's
+// tailnet (https://<computer>.<tailnet>.ts.net, a real certificate) and hands its requests to the bridge on 127.0.0.1,
+// keeping that name as the Host. Https makes the page a secure context on the phone (copy buttons, notifications), and
+// the bridge never listens beyond the loopback. Only the user's own Tailscale devices reach that address.
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+/** The CLI of the Mac app (App Store or standalone), else Homebrew's or the open-source package's. */
+const CANDIDATES = ['/Applications/Tailscale.app/Contents/MacOS/Tailscale', '/opt/homebrew/bin/tailscale', '/usr/local/bin/tailscale', '/usr/bin/tailscale'];
+const TIMEOUT_MS = 15_000;
+
+export const findTailscale = (): string | null => CANDIDATES.find((file) => existsSync(file)) ?? null;
+
+/** This computer's name on the tailnet, from `tailscale status --json`; null when Tailscale is stopped or signed out. */
+export function tailscaleName(status: unknown): string | null {
+  if (typeof status !== 'object' || status === null) return null;
+  const { BackendState, Self } = status as { BackendState?: unknown; Self?: { DNSName?: unknown } };
+  if (BackendState !== 'Running' || typeof Self?.DNSName !== 'string') return null;
+  const name = Self.DNSName.replace(/\.$/, '').toLowerCase();
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(name) ? name : null;
+}
+
+const run = (cli: string, args: string[]) => new Promise<string>((resolve, reject) => {
+  execFile(cli, args, { timeout: TIMEOUT_MS }, (error, stdout, stderr) => (error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout)));
+});
+
+export async function readTailscaleName(cli: string): Promise<string | null> {
+  try {
+    return tailscaleName(JSON.parse(await run(cli, ['status', '--json'])));
+  } catch {
+    return null;
+  }
+}
+
+/** Serves the bridge on https://<name> (port 443). It fails while HTTPS certificates are off in the tailnet's DNS settings. */
+export const serveBridge = (cli: string, port: number) => run(cli, ['serve', '--bg', '--https=443', `http://127.0.0.1:${port}`]);
+
+export const stopServing = (cli: string) => run(cli, ['serve', '--https=443', 'off']);

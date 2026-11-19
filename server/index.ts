@@ -14,6 +14,7 @@ import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
 import { isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
+import type { PhoneProblem } from '../shared/triggers.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
@@ -24,7 +25,8 @@ import { readClaudeDefaults } from './claude-settings.ts';
 import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
-import { loopbackPolicy, readOrCreateSecret } from './security.ts';
+import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
+import { findTailscale, readTailscaleName, serveBridge, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { pathFinder } from './file-mentions.ts';
@@ -288,10 +290,15 @@ messengers.start();
 const externalKey = new ExternalKey(path.join(config.dataDir, 'mcp-key'));
 /** the port that only answers webhooks, once it listens (config.hooksPort) */
 let hooksPort: number | null = null;
+/** this computer's Tailscale name the bridge is served under, for the phone (applyPhoneAccess); null while that access is off */
+let phoneName: string | null = null;
+const phone: { problem: PhoneProblem | null } = { problem: null };
+let phoneChange = Promise.resolve();
 const triggersMessage = (): ServerMessage => {
   const state: TriggersState = {
     triggers: triggers.list(), runs: triggers.recentRuns(), messengers: messengers.list(), keys: triggerKeys.all(), hookBase: `http://${HOST}:${config.port}/hooks`, hooksPort,
     externalMcp: externalKey.current ? `http://${HOST}:${config.port}/mcp/external/${externalKey.current}` : null,
+    phone: { address: phoneName && `https://${phoneName}`, link: phoneName && `https://${phoneName}/pair?secret=${secret}`, problem: phone.problem },
   };
   return { t: 'triggers', state };
 };
@@ -307,6 +314,7 @@ async function applyPreferences(changes: Partial<typeof settings.preferences>) {
   broadcast(preferencesMessage());
   await sessions.applySettings(changedSettings(before, settings.preferences.claude));
   if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
+  await applyPhoneAccess();
   await automata.poll();
 }
 
@@ -453,7 +461,7 @@ function browserOf(sessionId: string, shared: boolean) {
   if (shared && !sessions.hasSharedBrowser(sessionId)) throw new Error('this session has no shared browser');
 }
 
-const { server, hooksServer, modsServer } = createWebServer({ policy, port: config.port, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     socket: (sessionId, lane) => browsers.socket(sessionId, lane), connect: (client, upstream, sessionId, lane) => browsers.connect(client, upstream, browserId(sessionId, lane)),
@@ -811,7 +819,38 @@ hooksServer.on('error', (error) => log(`webhooks port ${config.hooksPort}`, erro
 // and one taken there only leaves the mods' windows empty
 modsServer.on('error', (error) => log(`mods port ${config.modsPort}`, error));
 
+/** Opens or closes the phone's https address to match the setting and Tailscale (which can stop, sign out or come back). */
+function applyPhoneAccess(): Promise<void> {
+  phoneChange = phoneChange.then(async () => {
+    const cli = settings.preferences.phoneAccess ? findTailscale() : null;
+    const wanted = cli ? await readTailscaleName(cli) : null;
+    const problem: PhoneProblem | null = !settings.preferences.phoneAccess ? null : !cli ? 'noTailscale' : !wanted ? 'signedOut' : null;
+    if (wanted === phoneName && problem === phone.problem) return;
+    if (phoneName && wanted !== phoneName) {
+      forgetPhone(policy, phoneName);
+      phoneName = null;
+      const stopper = findTailscale();
+      if (stopper) await stopServing(stopper).catch((error: unknown) => log('cannot stop tailscale serve', error));
+    }
+    phone.problem = problem;
+    if (cli && wanted && wanted !== phoneName) {
+      try {
+        await serveBridge(cli, config.port);
+        allowPhone(policy, wanted);
+        phoneName = wanted;
+      } catch (error) {
+        log('cannot start tailscale serve', error);
+        phone.problem = 'serveFailed';
+      }
+    }
+    broadcast(triggersMessage());
+  });
+  return phoneChange;
+}
+setInterval(() => { if (settings.preferences.phoneAccess || phoneName) applyPhoneAccess().catch((error: unknown) => log('phone access', error)); }, 30_000).unref();
+
 server.listen(config.port, HOST, () => {
+  applyPhoneAccess().catch((error: unknown) => log('phone access', error));
   hooksServer.listen(config.hooksPort, HOST, () => {
     hooksPort = config.hooksPort;
     broadcast(triggersMessage());

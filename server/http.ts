@@ -28,8 +28,6 @@ const TYPES: Record<string, string> = {
 
 export interface WebServerOptions {
   policy: AccessPolicy;
-  /** the port the bridge listens on (used in the CSP) */
-  port: number;
   distDir: string;
   /** sounds made at startup (see sounds.ts), served under /sounds/ in dev mode too */
   soundsDir: string;
@@ -148,11 +146,12 @@ function mcpCaller(mcp: McpOptions, parts: readonly string[]): Caller | null {
 }
 
 export function createWebServer(options: WebServerOptions) {
-  const { policy, port, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
-  const csp = [
+  const { policy, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
+  // the WebSocket under each name the page may be opened by (wss for the phone's https): Safari does not count it as 'self'
+  const appCsp = () => [
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${SPOTIFY_ARTWORK}`,
     "font-src 'self' data:", "media-src 'self' blob: data: https:", "worker-src 'self' blob:",
-    `connect-src 'self' ws://localhost:${port} ws://127.0.0.1:${port}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
+    `connect-src 'self' ${[...policy.allowedHosts].flatMap((host) => [`ws://${host}`, `wss://${host}`]).join(' ')}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
     ...(options.mods ? [`frame-src 'self' http://*.localhost:${options.mods.port}`] : []),
   ].join('; ');
 
@@ -472,7 +471,7 @@ export function createWebServer(options: WebServerOptions) {
     const ext = path.extname(file);
     await serveFile(file, res, {
       'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
-      ...(ext === '.html' ? { 'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer' } : {}),
+      ...(ext === '.html' ? { 'Content-Security-Policy': appCsp(), 'Referrer-Policy': 'no-referrer' } : {}),
     });
   }
 

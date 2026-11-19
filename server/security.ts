@@ -1,6 +1,7 @@
 // Access control for the local bridge: Host/Origin allow-lists, a request-target parser that never throws,
 // and the session cookie. The cookie value is a secret kept in OFFICE_DIR (0600) so it survives restarts:
-// a browser is authorised once through the /pair link, then http://127.0.0.1:<port> keeps working.
+// a browser is authorised once through the /pair link, then http://127.0.0.1:<port> keeps working. The phone, once the
+// user turns its access on, comes through `tailscale serve` (server/tailscale.ts) under https://<this computer>.ts.net.
 // Only readOrCreateSecret touches the disk; everything else is pure and unit-tested directly.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -8,10 +9,10 @@ import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
 
 export interface AccessPolicy {
-  /** exact `Host` header values accepted, e.g. "127.0.0.1:4848" */
-  allowedHosts: ReadonlySet<string>;
+  /** exact `Host` header values accepted, e.g. "127.0.0.1:4848"; the phone's Tailscale name joins them while its access is on */
+  allowedHosts: Set<string>;
   /** exact `Origin` header values accepted for WebSocket upgrades */
-  allowedOrigins: ReadonlySet<string>;
+  allowedOrigins: Set<string>;
   secret: string;
 }
 
@@ -44,6 +45,17 @@ export function loopbackPolicy(ports: number[], secret: string): AccessPolicy {
     allowedOrigins: new Set(ports.flatMap((port) => names.map((name) => `http://${name}:${port}`))),
     secret,
   };
+}
+
+/** Lets the phone's browser in under this computer's Tailscale name (https://<name>, through `tailscale serve`). */
+export function allowPhone(policy: AccessPolicy, name: string) {
+  for (const host of [name, `${name}:443`]) policy.allowedHosts.add(host);
+  policy.allowedOrigins.add(`https://${name}`);
+}
+
+export function forgetPhone(policy: AccessPolicy, name: string) {
+  for (const host of [name, `${name}:443`]) policy.allowedHosts.delete(host);
+  policy.allowedOrigins.delete(`https://${name}`);
 }
 
 /** Constant-time comparison (both sides hashed first so lengths never leak). */
