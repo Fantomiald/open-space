@@ -1,5 +1,10 @@
 # Versions
 
+## 1.36.3
+
+- Dashboards : en fenêtre étroite (moins de 960 px), ils restaient vides quand une session était sélectionnée.
+- Téléphone : les mods et les dashboards s'affichent, servis par `tailscale serve` sur `https://<ton-mac>.<tailnet>.ts.net:8443` (sur le téléphone, les mods partagent cette origine entre eux, toujours séparée d'Open Space).
+
 ## 1.36.2
 
 - Téléphone : l'app lancée depuis le Dock voit enfin Tailscale (son outil en ligne de commande ne répondait pas sans terminal, d'où « Tailscale est arrêté ou déconnecté »).
