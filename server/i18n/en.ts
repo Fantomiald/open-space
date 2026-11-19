@@ -254,7 +254,17 @@ export const en: ServerDictionary = {
     permission: (who: string, tool: string, detail: string) => `${who} asks: ${tool}${detail ? `\n${detail}` : ''}`,
     switchBrowser: 'to switch browser',
     question: (who: string, question: string) => `${who} asks:\n${question}`,
-    keys: (who: string) => `${who} waits for a key: give it in Open Space.`,
+    keys: (who: string, names: readonly string[], why: string) => (names.length > 1
+      ? `${who} waits for keys: ${names.join(', ')}${why ? `\n${why}` : ''}\n\nReply to this message with their values, one per line, in this order: your message is deleted at once, and the agent never sees them. Or give them in Open Space.`
+      : `${who} waits for a key: ${names.join(', ')}${why ? `\n${why}` : ''}\n\nReply to this message with its value: your message is deleted at once, and the agent never sees it. Or give it in Open Space.`),
+    keysGiven: (kept: readonly string[], refused: readonly string[]) => `${kept.length > 1 ? 'Keys given' : 'Key given'} from Telegram: ${kept.join(', ')}.${refused.length ? ` Not kept: ${refused.join(', ')}.` : ''}`,
+    keyCount: (expected: number) => (expected > 1
+      ? `I need ${expected} values, one per line, in the order asked: nothing was kept. Reply to the request again.`
+      : 'I need one value, on a single line: nothing was kept. Reply to the request again.'),
+    keyRefused: 'Not kept by Open Space (a value too long, or too many keys in this session). Try again, or give it in Open Space.',
+    keyGone: 'This key is no longer awaited: your message is deleted, nothing was kept.',
+    keyAsText: 'A key is sent as text, in reply to the request: your message is deleted.',
+    keyNotDeleted: 'I could not delete your message: delete it yourself.',
     allow: 'Allow',
     send: 'Send',
     orReply: 'Or reply to this message to write your own answer.',

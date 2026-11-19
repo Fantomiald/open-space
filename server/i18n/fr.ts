@@ -278,7 +278,17 @@ export const fr = {
     permission: (who: string, tool: string, detail: string) => `${who} demande : ${tool}${detail ? `\n${detail}` : ''}`,
     switchBrowser: 'changer de navigateur',
     question: (who: string, question: string) => `${who} demande :\n${question}`,
-    keys: (who: string) => `${who} attend une clé : donne-la dans Open Space.`,
+    keys: (who: string, names: readonly string[], why: string) => (names.length > 1
+      ? `${who} attend des clés : ${names.join(', ')}${why ? `\n${why}` : ''}\n\nRéponds à ce message avec leurs valeurs, une par ligne, dans cet ordre : ton message est effacé aussitôt, et l’agent ne les voit jamais. Ou donne-les dans Open Space.`
+      : `${who} attend une clé : ${names.join(', ')}${why ? `\n${why}` : ''}\n\nRéponds à ce message avec sa valeur : ton message est effacé aussitôt, et l’agent ne la voit jamais. Ou donne-la dans Open Space.`),
+    keysGiven: (kept: readonly string[], refused: readonly string[]) => `${kept.length > 1 ? 'Clés données' : 'Clé donnée'} depuis Telegram : ${kept.join(', ')}.${refused.length ? ` ${refused.length > 1 ? 'Pas gardées' : 'Pas gardée'} : ${refused.join(', ')}.` : ''}`,
+    keyCount: (expected: number) => (expected > 1
+      ? `Il me faut ${expected} valeurs, une par ligne, dans l’ordre demandé : rien n’est gardé. Réponds de nouveau à la demande.`
+      : 'Il me faut une seule valeur, sur une ligne : rien n’est gardé. Réponds de nouveau à la demande.'),
+    keyRefused: 'Pas gardée par Open Space (une valeur trop longue, ou trop de clés dans cette session). Réessaie, ou donne-la dans Open Space.',
+    keyGone: 'Cette clé n’est plus attendue : ton message est effacé, rien n’est gardé.',
+    keyAsText: 'Une clé s’envoie en texte, en réponse à la demande : ton message est effacé.',
+    keyNotDeleted: 'Je n’ai pas pu effacer ton message : efface-le toi-même.',
     allow: 'Autoriser',
     send: 'Envoyer',
     orReply: 'Ou réponds à ce message pour écrire ta propre réponse.',

@@ -251,6 +251,8 @@ const messengers = new Messengers({
       mcpUrl: (botId) => `http://${HOST}:${config.port}/mcp/messenger/${botId}/${messengerMcpKey(secret, botId)}`,
     })
     : async (_bot, _text, conversation) => ({ text: st.messengers.agentFailed, conversation }),
+  // the same path as the box in Open Space (the page's `secrets` message)
+  giveSecrets: (sessionId, requestId, entries) => sessions.giveSecrets(sessionId, requestId, entries),
   onChange: () => broadcast(triggersMessage()),
   log,
 });
