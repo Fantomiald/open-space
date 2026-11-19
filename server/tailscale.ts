@@ -20,8 +20,9 @@ export function tailscaleName(status: unknown): string | null {
   return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(name) ? name : null;
 }
 
+// the Mac app's binary only acts as the CLI when it sees a terminal (TERM): launched from the Dock, Open Space has none
 const run = (cli: string, args: string[]) => new Promise<string>((resolve, reject) => {
-  execFile(cli, args, { timeout: TIMEOUT_MS }, (error, stdout, stderr) => (error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout)));
+  execFile(cli, args, { timeout: TIMEOUT_MS, env: { ...process.env, TERM: process.env.TERM || 'dumb' } }, (error, stdout, stderr) => (error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout)));
 });
 
 export async function readTailscaleName(cli: string): Promise<string | null> {
