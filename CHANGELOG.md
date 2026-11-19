@@ -1,5 +1,9 @@
 # Versions
 
+## 1.36.4
+
+- Téléphone : sur un écran tactile de téléphone, Open Space s'ouvre sur la liste des sessions (le mode focus) au lieu de la salle ; une session ouverte prend tout l'écran et la croix ramène à la liste. Le header ne garde que Dashboards, Sessions, Mods, Recherche et Réglages, sans radio. L'interface va d'un bord à l'autre, sans espace ni arrondi autour des blocs, et l'état de la session est à côté de son nom. Une fenêtre de Mac rétrécie garde l'interface habituelle.
+
 ## 1.36.3
 
 - Dashboards : en fenêtre étroite (moins de 960 px), ils restaient vides quand une session était sélectionnée.
