@@ -1,5 +1,11 @@
 # Versions
 
+## 1.36.1
+
+- Téléphone : Open Space s'ouvre dans le Safari de ton téléphone, où que tu sois, par Tailscale (installé sur le Mac et sur le téléphone, même compte, HTTPS activé dans la page DNS de la console Tailscale). Le réglage Téléphone (Automates et connexions) lance `tailscale serve` en https sur `https://<ton-mac>.<tailnet>.ts.net` : le serveur reste sur 127.0.0.1, seuls tes appareils Tailscale y arrivent, et chacun doit d'abord être autorisé par le lien que le réglage donne à copier. Couper le réglage ferme l'adresse. Les mods ne s'affichent pas encore sur le téléphone.
+- Panneau État : une carte À finir repliée tient sur deux lignes, + N autres pour déplier ; le tag n'est plus coupé quand il a la place.
+- CI Windows réparée : la suppression d'un worktree encore occupé est réessayée.
+
 ## 1.36.0
 
 - À finir : le panneau État et le mode focus rangent à part les sessions lues qui laissent quelque chose à faire : ce que l'agent dit rester à faire et que toi seul peux régler (outil MCP `set_pending` : une clé à fournir, une version à publier), puis ce que git dit de leur dossier (« Commiter 2 fichiers », « Pousser 3 commits »). « Prêtes » devient « Terminées » et ne garde que les sessions où il ne reste rien. Dans la session, un bandeau « À finir » au-dessus du champ rappelle ces lignes : « Plus tard » la range dans Terminées jusqu'à ce que ça change, la croix retire une ligne pour de bon (l'agent ne peut plus la remettre). Au travail passe en tête du panneau, et les tags d'une ligne ne sont plus coupés.
