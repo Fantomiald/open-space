@@ -9,7 +9,7 @@ import type { SecretEntry } from '../shared/secrets.ts';
 import type { Trigger } from '../shared/triggers.ts';
 import { st } from './i18n/index.ts';
 import { buildAgentArgs } from './messenger-agent.ts';
-import { matchByName, Messengers, waitMessage } from './messengers.ts';
+import { matchByName, Messengers, type MessengersDeps, waitMessage } from './messengers.ts';
 import * as telegram from './telegram.ts';
 
 let base: string;
@@ -203,7 +203,7 @@ describe('keys given by replying to the bot', () => {
     const given: { sessionId: string; requestId: string; entries: SecretEntry[] }[] = [];
     const elsewhere: string[] = [];
     const session = { id: 's1', name: 'JD', cwd: '/work/pilou', state: 'perm', stateSince: 0, permissions: [ask(names)] } as unknown as SessionInfo;
-    const messengers = new Messengers({
+    const deps: MessengersDeps = {
       file: path.join(base, file), api: fake.api,
       sessions: () => [session], events: () => [], lastWords: () => '', triggers: () => [],
       answer: () => {}, reply: () => {}, interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
@@ -219,7 +219,8 @@ describe('keys given by replying to the bot', () => {
         return names;
       },
       onChange: () => {}, log: (message, error) => elsewhere.push(`log ${message} ${String(error)}`),
-    });
+    };
+    const messengers = new Messengers(deps);
     messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: true, model: '' });
     const link = async () => {
       fake.message(`/start ${messengers.list()[0]!.linkCode}`);
@@ -240,7 +241,7 @@ describe('keys given by replying to the bot', () => {
     };
     /** whether `value` reached a call to Telegram (the bot's messages included) */
     const leaked = (value: string) => fake.calls.some((each) => JSON.stringify(each.body).includes(value));
-    return { fake, given, elsewhere, session, messengers, request, reply, leaked };
+    return { fake, given, elsewhere, session, messengers, deps, request, reply, leaked };
   }
 
   it('names the keys asked and what they are for, without buttons', () => {
@@ -318,6 +319,28 @@ describe('keys given by replying to the bot', () => {
       assert.equal(leaked(VALUE) || leaked('made-up-later'), false);
     } finally {
       messengers.stop();
+    }
+  });
+
+  it('deletes a reply to a request sent before Open Space restarted, and passes it to no one', async () => {
+    const { fake, given, elsewhere, session, messengers, deps, reply, leaked } = await keyWait('keys-restart.json', ['GEMINI_API_KEY']);
+    messengers.stop();
+    // the old poll ends its last getUpdates, or it would take the reply
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // the session that waited is gone with the restart
+    session.permissions = [];
+    const restarted = new Messengers(deps);
+    restarted.start();
+    try {
+      await reply(VALUE);
+      assert.deepEqual(given, []);
+      await until(() => fake.sent('deleteMessage').length > 0);
+      assert.deepEqual(fake.sent('deleteMessage').map((each) => each.body.message_id), [900]);
+      assert.equal(fake.sent('sendMessage').at(-1)!.body.text, st.messengers.keyGone);
+      assert.deepEqual(elsewhere, [], 'not passed to the agent');
+      assert.equal(leaked(VALUE), false);
+    } finally {
+      restarted.stop();
     }
   });
 

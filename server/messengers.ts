@@ -38,6 +38,8 @@ interface Stored {
   model: string;
   /** the agent's conversation, resumed from one message to the next */
   conversation: string | null;
+  /** the messages that asked for keys, kept on disk: a reply after a restart is deleted, never passed to the agent */
+  keyRequests?: number[];
 }
 
 export interface MessengersDeps {
@@ -188,6 +190,7 @@ export class Messengers {
       chatId: tokenChanged ? null : before?.chatId ?? null, username: tokenChanged ? null : before?.username ?? null,
       linkCode: tokenChanged || !before ? linkCode() : before.linkCode, allSessions: input.allSessions, model: input.model,
       conversation: tokenChanged ? null : before?.conversation ?? null,
+      ...(!tokenChanged && before?.keyRequests ? { keyRequests: before.keyRequests } : {}),
     };
     this.bots = before ? this.bots.map((each) => (each.id === bot.id ? bot : each)) : [...this.bots, bot];
     this.write();
@@ -295,8 +298,8 @@ export class Messengers {
     if (message.chat.id !== bot.chatId) return;
     // a reply to a request for keys holds their values: taken before anything reads or keeps the message (one of the
     // bot's commands stays a command; any other text, "/" first included, is values)
-    const keyRequest = message.reply_to_message && !(command && isBotCommand(command[0])) ? this.keyMessages.get(`${bot.id}|${message.reply_to_message.message_id}`) : undefined;
-    if (keyRequest) return this.takeKeys(bot, message, keyRequest);
+    const keyRequest = message.reply_to_message && !(command && isBotCommand(command[0])) ? this.keyRequestAt(bot, message.reply_to_message.message_id) : undefined;
+    if (keyRequest !== undefined) return this.takeKeys(bot, message, keyRequest);
     const files = await this.received(bot, message);
     const replyTo = message.reply_to_message && this.about.get(`${bot.id}|${message.reply_to_message.message_id}`);
     const text = (message.text ?? message.caption ?? '').trim();
@@ -605,6 +608,13 @@ export class Messengers {
   private rememberKeys(bot: Stored, messageId: number, waitKey: string) {
     this.keyMessages.set(`${bot.id}|${messageId}`, waitKey);
     if (this.keyMessages.size > KEPT_REPLIES) this.keyMessages.delete(this.keyMessages.keys().next().value!);
+    bot.keyRequests = [...(bot.keyRequests ?? []), messageId].slice(-KEPT_REPLIES);
+    this.write();
+  }
+
+  /** The wait a request for keys was about; '' when only the disk remembers it (before a restart): no longer awaited. */
+  private keyRequestAt(bot: Stored, messageId: number): string | undefined {
+    return this.keyMessages.get(`${bot.id}|${messageId}`) ?? (bot.keyRequests?.includes(messageId) ? '' : undefined);
   }
 }
 
