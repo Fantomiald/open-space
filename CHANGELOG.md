@@ -1,5 +1,9 @@
 # Versions
 
+## 1.36.5
+
+- Telegram : quand un agent attend une clé (`os-secret ask`), le bot nomme les clés et à quoi elles servent ; tu peux répondre à son message avec leurs valeurs (une par ligne). Ton message est effacé aussitôt et la clé va seulement dans le coffre de la session, jamais dans la conversation de l'agent. Une réponse qui arrive trop tard, même après un redémarrage d'Open Space, est effacée elle aussi et n'est passée à personne. (PR #61 de JbPons)
+
 ## 1.36.4
 
 - Téléphone : sur un écran tactile de téléphone, Open Space s'ouvre sur la liste des sessions (le mode focus) au lieu de la salle ; une session ouverte prend tout l'écran et la croix ramène à la liste. Le header ne garde que Dashboards, Sessions, Mods, Recherche et Réglages, sans radio. L'interface va d'un bord à l'autre, sans espace ni arrondi autour des blocs, et l'état de la session est à côté de son nom. Une fenêtre de Mac rétrécie garde l'interface habituelle.
