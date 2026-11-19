@@ -36,6 +36,7 @@ import { runningShells } from './state/feed.ts';
 import { isRunning } from './state/labels.ts';
 import { selectAttentionCount, useSessions } from './state/sessions.ts';
 import { tabTitle } from './state/queue.ts';
+import { usePhone } from './lib/phone.ts';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -44,6 +45,11 @@ export function App() {
   // Alt held shows the grab cursors over the room and the windows (drag.ts)
   useAltKey();
   const view = useSessions((s) => s.view);
+  const phone = usePhone();
+  // on a phone, the sessions' list in place of the rooms: the pixel office has no room there
+  useEffect(() => {
+    if (phone && view !== 'focus' && view !== 'dashboards') useSessions.getState().setView('focus');
+  }, [phone, view]);
   // the server room is always there to go to; it fills up once there is a trigger or the external runs' folder
   const room = view === 'repos' ? 'lounge' : view === 'automates' ? 'automata' : 'office';
   const day = useFestival();
@@ -219,7 +225,7 @@ export function App() {
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
   return (
-    <div className="cp-app" data-view={view} data-bare={bare}>
+    <div className="cp-app" data-view={view} data-bare={bare} data-device={phone ? 'phone' : undefined}>
       <Sky key={theme} festival={day.festival} />
       <Header />
       <ConnectionBanner />

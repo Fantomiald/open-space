@@ -3347,3 +3347,20 @@ a.cp-button { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .cp-mod.cp-dashboards__tile, .cp-dashboards__spot, .cp-dashboards__grid { transition: none; }
 }
+
+/* A phone (App.tsx data-device): the sessions' list and the dashboards only; nothing that needs a keyboard or a second column */
+.cp-app[data-device='phone'] .cp-header__search kbd { display: none; }
+.cp-app[data-device='phone'] .cp-list__head > .cp-icon-button { display: none; }
+.cp-app[data-device='phone'] .cp-list__new { display: none; }
+/* edge to edge like a native app: no gutter, the blocks square and parted by a line; small controls keep their rounding */
+.cp-app[data-device='phone'] { --gutter: 0; }
+.cp-app[data-device='phone'] .cp-header { gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--glass-surface); border-bottom: var(--border-width) solid var(--glass-edge); }
+.cp-app[data-device='phone'] :is(.cp-header__where, .cp-header__tools) { background: none; border: 0; box-shadow: none; }
+.cp-app[data-device='phone'] :is(.cp-list, .cp-detail, .cp-launcher) { border-radius: 0; border-width: 0; box-shadow: none; }
+.cp-app[data-device='phone'] .cp-launcher { border-top: var(--border-width) solid var(--glass-edge); }
+.cp-app[data-device='phone'] .cp-detail__head { gap: var(--space-1); padding: var(--space-2) var(--space-3); }
+/* the state beside the name, on the controls' line */
+.cp-app[data-device='phone'] .cp-detail .cp-detail__title { display: flex; align-items: center; gap: var(--space-2); }
+.cp-app[data-device='phone'] .cp-detail__title h2 { min-width: 0; font-size: var(--text-lg); }
+.cp-app[data-device='phone'] .cp-detail__title > .cp-badge { flex: none; }
+.cp-app[data-device='phone'] .cp-detail__title .cp-detail__controls { margin-inline-start: auto; }

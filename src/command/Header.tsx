@@ -11,6 +11,7 @@ import { AutomatonIcon, DashboardIcon, DeskIcon, FocusIcon, SearchIcon, Settings
 import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
+import { usePhone } from '../lib/phone.ts';
 
 /** The rooms; the server room is always there, as the triggers are made from it (ServerRoomEmpty when it is empty, its orb after). */
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['automates', AutomatonIcon, 'automata']] as const satisfies readonly (readonly [View, () => unknown, RoomKind])[];
@@ -22,6 +23,7 @@ export const DASHBOARDS_BAR = 'cp-dashboards-bar';
 
 export function Header() {
   const view = useSessions((s) => s.view);
+  const phone = usePhone();
   const setView = useSessions((s) => s.setView);
   const quota = useSessions((s) => s.quota);
   const connection = useSessions((s) => s.connection);
@@ -54,7 +56,7 @@ export function Header() {
         {connection !== 'live' && <span className="cp-header__signal" data-connection={connection} title={words.disconnected} />}
         <h1 className="cp-sr-only">Open Space</h1>
         <nav className="cp-segmented" data-icons aria-label={words.rooms}>
-          {VIEWS.map(([id, ViewIcon, room]) => (
+          {!phone && VIEWS.map(([id, ViewIcon, room]) => (
             <Tooltip key={id} text={words[room]}>
               <button type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} onClick={() => setView(id)}>
                 <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
@@ -66,7 +68,7 @@ export function Header() {
               <DashboardIcon />
             </button>
           </Tooltip>
-          <span className="cp-header__divider" aria-hidden="true" />
+          {!phone && <span className="cp-header__divider" aria-hidden="true" />}
           <Tooltip text={words.focusTitle(FOCUS_KEYS)}>
             <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} onClick={() => setView('focus')}>
               <FocusIcon />
@@ -75,7 +77,7 @@ export function Header() {
         </nav>
       </div>
       <ProjectFilter />
-      {radio && <Radio />}
+      {radio && !phone && <Radio />}
       {/* the dashboards' tabs and buttons, put here by Dashboards.tsx: the grid keeps the whole page under the header */}
       {view === 'dashboards' && <div className="cp-header__dashboards" id={DASHBOARDS_BAR} />}
       <div className="cp-header__tools">
