@@ -11,9 +11,9 @@ import { SPOTIFY_ARTWORK } from '../shared/music.ts';
 import { relativePath } from './messages.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload, uploadPath } from './uploads.ts';
-import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
+import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, phoneModsHost, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
-import { isModId } from '../shared/mods.ts';
+import { isModId, PHONE_MODS_PORT } from '../shared/mods.ts';
 import { TESTERS } from './browser.ts';
 import { MAX_HOOK_BODY, type TriggerRunOutcome } from '../shared/triggers.ts';
 import { MAX_MCP_BODY, type Caller } from './mcp.ts';
@@ -152,7 +152,7 @@ export function createWebServer(options: WebServerOptions) {
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${SPOTIFY_ARTWORK}`,
     "font-src 'self' data:", "media-src 'self' blob: data: https:", "worker-src 'self' blob:",
     `connect-src 'self' ${[...policy.allowedHosts].flatMap((host) => [`ws://${host}`, `wss://${host}`]).join(' ')}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
-    ...(options.mods ? [`frame-src 'self' http://*.localhost:${options.mods.port}`] : []),
+    ...(options.mods ? [`frame-src 'self' http://*.localhost:${options.mods.port} ${[...policy.allowedOrigins].filter((origin) => origin.startsWith('https://')).map((origin) => `${origin}:${PHONE_MODS_PORT}`).join(' ')}`] : []),
   ].join('; ');
 
   /** A file sent whole, or the one range asked for ("bytes=start-end", "bytes=start-", "bytes=-suffix"). */
@@ -364,8 +364,11 @@ export function createWebServer(options: WebServerOptions) {
   async function serveMod(req: http.IncomingMessage, res: http.ServerResponse) {
     const mods = options.mods;
     const url = parseRequestUrl(req.url);
-    const named = MOD_HOST.exec(String(req.headers.host).toLowerCase());
-    if (!mods || !url || !named || Number(named[2]) !== mods.port || (req.method !== 'GET' && req.method !== 'HEAD')) { res.writeHead(404).end(); return; }
+    const host = String(req.headers.host).toLowerCase();
+    const named = MOD_HOST.exec(host);
+    // on the phone (tailscale serve), all mods share <name>:8443 and the path alone names the mod
+    const onPhone = phoneModsHost(policy, host, PHONE_MODS_PORT) !== null;
+    if (!mods || !url || !(onPhone || (named && Number(named[2]) === mods.port)) || (req.method !== 'GET' && req.method !== 'HEAD')) { res.writeHead(404).end(); return; }
     let parts: string[];
     try { parts = url.pathname.split('/').slice(1).map(decodeURIComponent); } catch { res.writeHead(400).end(); return; }
     if (parts[0] === 'mod-kit') {
@@ -375,7 +378,7 @@ export function createWebServer(options: WebServerOptions) {
       return;
     }
     const [root = '', key = '', id = '', ...rest] = parts;
-    const file = root === 'mods' && id === named[1] && isModId(id) && secretsMatch(mods.key(id), key) ? mods.file(id, rest.join('/')) : null;
+    const file = root === 'mods' && (onPhone || id === named?.[1]) && isModId(id) && secretsMatch(mods.key(id), key) ? mods.file(id, rest.join('/')) : null;
     if (!file) { res.writeHead(404).end(); return; }
     if (file.endsWith('.html')) {
       res.writeHead(200, {

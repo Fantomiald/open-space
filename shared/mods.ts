@@ -18,6 +18,15 @@ export const MOD_REFRESH = [0, 60, 300, 900, 1800, 3600] as const;
 export const MAX_MOD_ENV = 30;
 /** What a mod's page saves (the kit's OpenSpace.store): a name per value, a JSON value of this many bytes at most. */
 export const MAX_MOD_STORE = 256 * 1024;
+/** The https port `tailscale serve` gives the mods on the phone (server/tailscale.ts): <mod>.localhost only reaches the Mac itself. */
+export const PHONE_MODS_PORT = 8443;
+
+/** Where the page opens a mod: its own address on the Mac, the same path on the phone's mods port once opened through Tailscale (https). */
+export function modPageUrl(url: string, page: { protocol: string; hostname: string }): string {
+  if (page.protocol !== 'https:') return url;
+  const address = new URL(url);
+  return `https://${page.hostname}:${PHONE_MODS_PORT}${address.pathname}`;
+}
 export const isModStoreName = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
 export const MAX_MOD_ENV_LABEL = 80;
 

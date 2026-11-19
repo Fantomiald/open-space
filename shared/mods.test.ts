@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { hasNewData, isModId, MOD_SIZE, modIdFor, readManifest } from './mods.ts';
+import { hasNewData, isModId, MOD_SIZE, modIdFor, modPageUrl, readManifest } from './mods.ts';
 
 describe('mods', () => {
   it('names a mod by a folder name that cannot leave the mods folder', () => {
@@ -43,5 +43,15 @@ describe('mods', () => {
     assert.equal(hasNewData(10, undefined), true);
     assert.equal(hasNewData(10, 10), false);
     assert.equal(hasNewData(11, 10), true);
+  });
+});
+
+describe('modPageUrl', () => {
+  const url = 'http://ventes.localhost:4850/mods/abc/ventes/';
+  it('keeps the mod address on the Mac', () => {
+    assert.equal(modPageUrl(url, { protocol: 'http:', hostname: '127.0.0.1' }), url);
+  });
+  it('moves it to the phone mods port through Tailscale', () => {
+    assert.equal(modPageUrl(url, { protocol: 'https:', hostname: 'mac.tail1.ts.net' }), 'https://mac.tail1.ts.net:8443/mods/abc/ventes/');
   });
 });

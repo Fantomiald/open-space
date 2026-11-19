@@ -58,6 +58,14 @@ export function forgetPhone(policy: AccessPolicy, name: string) {
   policy.allowedOrigins.delete(`https://${name}`);
 }
 
+/** The phone's name when `host` is its mods address (<name>:8443, see allowPhone), else null. */
+export function phoneModsHost(policy: AccessPolicy, host: string, modsPort: number): string | null {
+  const suffix = `:${modsPort}`;
+  if (!host.endsWith(suffix)) return null;
+  const name = host.slice(0, -suffix.length);
+  return policy.allowedOrigins.has(`https://${name}`) ? name : null;
+}
+
 /** Constant-time comparison (both sides hashed first so lengths never leak). */
 export function secretsMatch(expected: string, provided: unknown): boolean {
   if (typeof provided !== 'string' || provided.length === 0) return false;

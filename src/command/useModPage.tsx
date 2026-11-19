@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
-import { isModStoreName, type ModInfo } from '../../shared/mods.ts';
+import { isModStoreName, modPageUrl, type ModInfo } from '../../shared/mods.ts';
 import type { SessionState } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { awaitModEnv, costsForMods, isModData, MOD_TOKENS, onModStore, quotaForMods, sessionsForMods, type ModData } from '../state/mods.ts';
@@ -126,7 +126,7 @@ export function useModPage(mod: ModInfo, paced: boolean) {
   useEffect(() => {
     const watched = new Map<ModData, () => void>();
     // to the mod's own origin only: its variables never reach a page it navigated to
-    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, new URL(mod.url).origin);
+    const post = (message: object) => frame.current?.contentWindow?.postMessage(message, new URL(modPageUrl(mod.url, location)).origin);
     const tellTheme = () => post({ openSpace: 'theme', ...currentTheme() });
     const tell = (name: ModData) => post({ openSpace: 'data', name, value: dataFor(name, useSessions.getState()) });
     const envWaits = new Set<() => void>();
@@ -200,7 +200,7 @@ export function useModPage(mod: ModInfo, paced: boolean) {
 
   const page = (
     <iframe
-      key={`${mod.version}:${loads}`} ref={frame} className="cp-mod__page" title={mod.name} src={`${mod.url}?v=${mod.version}`}
+      key={`${mod.version}:${loads}`} ref={frame} className="cp-mod__page" title={mod.name} src={`${modPageUrl(mod.url, location)}?v=${mod.version}`}
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation"
       allow="fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write"
       referrerPolicy="no-referrer" onLoad={() => refreshed.current()}

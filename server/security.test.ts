@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { allowPhone, checkUpgrade, createSecret, forgetPhone, hostAllowed, loopbackPolicy, parseRequestUrl, readCookie, readOrCreateSecret, secretsMatch, sessionCookie } from './security.ts';
+import { allowPhone, checkUpgrade, createSecret, forgetPhone, hostAllowed, phoneModsHost, loopbackPolicy, parseRequestUrl, readCookie, readOrCreateSecret, secretsMatch, sessionCookie } from './security.ts';
 
 const fakeRequest = (headers: Record<string, string>) => ({ headers }) as unknown as IncomingMessage;
 const policy = loopbackPolicy([4848], 'secret-value');
@@ -100,7 +100,11 @@ describe('phone access', () => {
     assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, host: `${name}:443` })), 'ok');
     assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, origin: `http://${name}` })), 'bad-origin');
     assert.equal(checkUpgrade(phone, fakeRequest({ ...headers, cookie: '' })), 'bad-cookie');
+    assert.equal(phoneModsHost(phone, `${name}:8443`, 8443), name);
+    assert.equal(phoneModsHost(phone, 'evil.ts.net:8443', 8443), null);
+    assert.equal(phoneModsHost(phone, name, 8443), null);
     forgetPhone(phone, name);
+    assert.equal(phoneModsHost(phone, `${name}:8443`, 8443), null);
     assert.equal(checkUpgrade(phone, fakeRequest(headers)), 'bad-host');
     assert.equal(hostAllowed(phone, fakeRequest({ host: '127.0.0.1:4848' })), true);
   });

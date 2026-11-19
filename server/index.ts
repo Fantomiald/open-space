@@ -26,7 +26,7 @@ import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
 import { parseClientMessage } from './messages.ts';
 import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
-import { findTailscale, readTailscaleName, serveBridge, stopServing } from './tailscale.ts';
+import { findTailscale, readTailscaleName, serveBridge, serveMods, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { pathFinder } from './file-mentions.ts';
@@ -836,6 +836,7 @@ function applyPhoneAccess(): Promise<void> {
     if (cli && wanted && wanted !== phoneName) {
       try {
         await serveBridge(cli, config.port);
+        await serveMods(cli, config.modsPort).catch((error: unknown) => log('cannot serve the mods to the phone', error));
         allowPhone(policy, wanted);
         phoneName = wanted;
       } catch (error) {
