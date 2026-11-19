@@ -1,5 +1,9 @@
 # Versions
 
+## 1.36.2
+
+- Téléphone : l'app lancée depuis le Dock voit enfin Tailscale (son outil en ligne de commande ne répondait pas sans terminal, d'où « Tailscale est arrêté ou déconnecté »).
+
 ## 1.36.1
 
 - Téléphone : Open Space s'ouvre dans le Safari de ton téléphone, où que tu sois, par Tailscale (installé sur le Mac et sur le téléphone, même compte, HTTPS activé dans la page DNS de la console Tailscale). Le réglage Téléphone (Automates et connexions) lance `tailscale serve` en https sur `https://<ton-mac>.<tailnet>.ts.net` : le serveur reste sur 127.0.0.1, seuls tes appareils Tailscale y arrivent, et chacun doit d'abord être autorisé par le lien que le réglage donne à copier. Couper le réglage ferme l'adresse. Les mods ne s'affichent pas encore sur le téléphone.
