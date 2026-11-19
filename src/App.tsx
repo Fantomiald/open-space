@@ -223,7 +223,8 @@ export function App() {
       <Sky key={theme} festival={day.festival} />
       <Header />
       <ConnectionBanner />
-      <main className="cp-main" data-detail={selectedId !== null} data-view={view}>
+      {/* the dashboards show no session: one still selected must not take their place on a narrow screen */}
+      <main className="cp-main" data-detail={view !== 'dashboards' && selectedId !== null} data-view={view}>
         <div className="cp-main__content">
           {view === 'focus' ? <SessionList /> : view === 'dashboards' ? <Dashboards /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
