@@ -382,6 +382,8 @@ export const session: Dictionary['session'] = {
     later: 'Later',
     laterTitle: 'Move it to Done until this changes',
     putOff: (count: number) => `${count} for later`,
+    more: (count: number) => `+ ${count} more`,
+    less: 'Show less',
   },
   todo: {
     allow: (tool, name) => `Allow ${tool ?? 'an action'} for ${name}`,

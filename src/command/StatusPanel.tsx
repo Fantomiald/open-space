@@ -27,6 +27,10 @@ const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
 const writeFolded = (folded: boolean) => { try { localStorage.setItem(FOLDED_KEY, String(folded)); } catch { /* not kept: it folds for this visit only */ } };
 
+// folded, a card takes at most two rows: its two lines, or its first line and « + N more »; unfolding is remembered per session
+const OPEN_CARDS_KEY = 'statusOpenCards';
+const CLOSED_ROWS = 2;
+
 type Group = 'waiting' | 'working' | 'finish' | 'ready' | 'automata';
 
 function StatusGroup({ group, count, folded, onFold, children }: { group: Group; count: number; folded: boolean; onFold: () => void; children: ReactNode }) {
@@ -62,6 +66,15 @@ function RowName({ session, label, marked = false }: { session: SessionInfo; lab
 function PendingCard({ entry, now, current }: { entry: PendingEntry; now: number; current: boolean }) {
   const show = useSessions((s) => s.show);
   const { session, items, git } = entry;
+  const [open, setOpen] = useState(() => readPreference<string[]>(OPEN_CARDS_KEY, []).includes(session.id));
+  const toggle = () => {
+    const others = readPreference<string[]>(OPEN_CARDS_KEY, []).filter((id) => id !== session.id);
+    writePreference(OPEN_CARDS_KEY, open ? others : [...others, session.id]);
+    setOpen(!open);
+  };
+  const lines = [...items.map((item) => item.text), ...(git ? [git] : [])];
+  const hidden = lines.length > CLOSED_ROWS ? lines.length - 1 : 0;
+  const words = t.session.pending;
   return (
     <li className="cp-status__pending" data-current={current}>
       <button type="button" className="cp-status__item" data-kind="pending" aria-current={current} onClick={() => show(session.id)}>
@@ -70,9 +83,14 @@ function PendingCard({ entry, now, current }: { entry: PendingEntry; now: number
         <span className="cp-status__time">{formatAge(now - (items[0]?.since ?? session.stateSince))}</span>
       </button>
       <ul className="cp-status__tasks">
-        {[...items.map((item) => item.text), ...(git ? [git] : [])].map((line) => (
+        {(open || hidden === 0 ? lines : lines.slice(0, 1)).map((line) => (
           <li key={line} className="cp-status__task"><span className="cp-status__task-text" title={line}>{line}</span></li>
         ))}
+        {hidden > 0 && (
+          <li className="cp-status__task">
+            <button type="button" className="cp-status__more" aria-expanded={open} onClick={toggle}>{open ? words.less : words.more(hidden)}</button>
+          </li>
+        )}
       </ul>
     </li>
   );

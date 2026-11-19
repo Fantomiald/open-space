@@ -396,6 +396,8 @@ export const session = {
     later: 'Plus tard',
     laterTitle: 'La ranger dans Terminées jusqu’à ce que ça change',
     putOff: (count: number) => (count === 1 ? '1 pour plus tard' : `${count} pour plus tard`),
+    more: (count: number) => (count === 1 ? '+ 1 autre' : `+ ${count} autres`),
+    less: 'Réduire',
   },
   todo: {
     allow: (tool: string | undefined, name: string) => `Autoriser ${tool ?? 'une action'} pour ${name}`,
