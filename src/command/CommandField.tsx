@@ -5,6 +5,7 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { foldQuery } from '../../shared/search.ts';
 import { t } from '../i18n/index.ts';
 import { folderName } from '../lib/format.ts';
+import { usePhone } from '../lib/phone.ts';
 import { commandAt, commandSuggestions, typedName, withOwnCommands } from '../state/commands.ts';
 import type { PathScope } from '../state/path-mentions.ts';
 import { commandsIn, useSessions } from '../state/sessions.ts';
@@ -156,6 +157,7 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
   };
   const track = (e: React.SyntheticEvent<HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart + (shellMode ? 1 : 0));
 
+  const phone = usePhone();
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
     if (offered && e.key === 'Tab' && !e.shiftKey) {
@@ -172,7 +174,8 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && typing?.typed !== current.whole)) { e.preventDefault(); complete(current); return; }
     }
     if (shellMode && e.key === 'Backspace' && e.currentTarget.selectionStart === 0 && e.currentTarget.selectionEnd === 0) { e.preventDefault(); edit(shown); return; }
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit(); }
+    // on a phone the return key adds a line, like in Messages: the send button sends
+    if (e.key === 'Enter' && !e.shiftKey && !phone) { e.preventDefault(); onSubmit(); }
   };
 
   return (

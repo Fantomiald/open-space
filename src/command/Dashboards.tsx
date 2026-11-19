@@ -167,6 +167,8 @@ function Grid({ tiles, onChange }: { tiles: DashboardTile[]; onChange: (tiles: D
   const mods = useSessions((s) => s.mods);
   const grid = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  // the empty grid and the filled one are two elements: the one shown is watched
+  const filled = tiles.length > 0;
   useLayoutEffect(() => {
     const element = grid.current;
     if (!element) return;
@@ -174,7 +176,7 @@ function Grid({ tiles, onChange }: { tiles: DashboardTile[]; onChange: (tiles: D
     observer.observe(element);
     setWidth(element.clientWidth);
     return () => observer.disconnect();
-  }, []);
+  }, [filled]);
   const [carry, setCarry] = useState<Carry | null>(null);
 
   // a mod deleted since it was put here is left out of the grid, the others close up
@@ -254,7 +256,7 @@ function Grid({ tiles, onChange }: { tiles: DashboardTile[]; onChange: (tiles: D
         const box = carried?.mod === tile.mod ? carriedBox(carried, column) : at;
         return (
           <Tile
-            key={tile.mod} mod={mod} box={box} carried={carried?.mod === tile.mod} narrow={narrow}
+            key={tile.mod} mod={mod} box={box} carried={carried?.mod === tile.mod} narrow={narrow} order={layout.findIndex((each) => each.mod === tile.mod)}
             onPress={(resize, event) => press(tile.mod, resize, event)} onFollow={move} onDrop={drop}
             onTakeOff={() => onChange(removeTile(known, tile.mod))}
           />
@@ -273,12 +275,15 @@ function carriedBox(carry: Carry, column: number) {
 }
 
 /** One mod on the dashboard: its title bar (carries it), its page, and its corner (resizes it). */
-function Tile({ mod, box, carried, narrow, onPress, onFollow, onDrop, onTakeOff }: {
-  mod: ModInfo; box: { left: number; top: number; width: number; height: number }; carried: boolean; narrow: boolean;
+function Tile({ mod, box, carried, narrow, order, onPress, onFollow, onDrop, onTakeOff }: {
+  mod: ModInfo; box: { left: number; top: number; width: number; height: number }; carried: boolean; narrow: boolean; order: number;
   onPress: (resize: boolean, event: ReactPointerEvent<HTMLElement>) => void; onFollow: (event: ReactPointerEvent<HTMLElement>) => void; onDrop: () => void; onTakeOff: () => void;
 }) {
   const words = t.mods;
-  const { page, question, refreshNow, refreshing, refreshTitle } = useModPage(mod, true);
+  const { page, question, fit, refreshNow, refreshing, refreshTitle } = useModPage(mod, true);
+  // one column on a phone: as tall as its content, so a swipe over it scrolls the dashboards instead of a frame that eats it
+  const fitted = narrow && !!fit;
+  const style = { ...boxVariables(box), ...(narrow && { order }), ...(fitted && { '--fit': `${fit}px` }) } as CSSProperties;
   const openModSettings = useSessions((s) => s.openModSettings);
   const writer = useSessions((s) => Object.values(s.sessions).find((session) => session.cwd === mod.folder));
   const show = useSessions((s) => s.show);
@@ -288,7 +293,7 @@ function Tile({ mod, box, carried, narrow, onPress, onFollow, onDrop, onTakeOff 
   const [fresh, setFresh] = useState(mod.unread);
   useEffect(() => { if (mod.unread) setFresh(true); }, [mod.unread]);
   return (
-    <section className="cp-mod cp-dashboards__tile" aria-label={words.dashboards.tileLabel(mod.name)} data-carried={carried || undefined} data-building={mod.draft} style={boxVariables(box)} onPointerEnter={() => setFresh(false)}>
+    <section className="cp-mod cp-dashboards__tile" aria-label={words.dashboards.tileLabel(mod.name)} data-carried={carried || undefined} data-building={mod.draft} data-fitted={fitted || undefined} style={style} onPointerEnter={() => setFresh(false)}>
       <header className="cp-mod__head" data-fixed={narrow || undefined} onPointerDown={(event) => onPress(false, event)} {...carry}>
         <span className="cp-mod__icon"><Icon /></span>
         <span className="cp-mod__title">{mod.name}</span>

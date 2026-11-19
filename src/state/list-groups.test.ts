@@ -42,4 +42,11 @@ describe('the list in groups', () => {
     assert.deepEqual(keys(listGroups([first, opened], { a: 1 }, 'state'))[0], ['waiting', ['e']]);
     assert.deepEqual(keys(listGroups([first, opened], { a: 1 }, 'state', { id: 'a', index: 0 })), [['waiting', ['a', 'e']]]);
   });
+
+  it('shows the latest waiting first, a blocked session still on top', () => {
+    const old = session('o', '/code/app', { stateSince: 1 });
+    const recent = session('r', '/code/app', { stateSince: 9 });
+    const asking = session('p', '/code/app', { state: 'perm', permissions: [{}], stateSince: 0 } as unknown as Partial<SessionInfo>);
+    assert.deepEqual(keys(listGroups([old, recent, asking], {}, 'state')), [['waiting', ['p', 'r', 'o']]]);
+  });
 });

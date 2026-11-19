@@ -1,5 +1,13 @@
 # Versions
 
+## 1.36.6
+
+- Téléphone : la page d'un dashboard défile enfin ; chaque mod prend toute sa hauteur au lieu d'attraper le glissé.
+- Téléphone : plus de zoom quand on touche un champ, et le texte ne grossit plus tout seul dans la file d'attente.
+- Téléphone : la touche retour va à la ligne, le bouton envoie.
+- Téléphone : ouvert depuis l'écran d'accueil, l'interface laisse la place de l'encoche et de la barre du bas.
+- À toi : la session qui attend depuis le moins longtemps est en haut (une session bloquée reste en tête).
+
 ## 1.36.5
 
 - Telegram : quand un agent attend une clé (`os-secret ask`), le bot nomme les clés et à quoi elles servent ; tu peux répondre à son message avec leurs valeurs (une par ligne). Ton message est effacé aussitôt et la clé va seulement dans le coffre de la session, jamais dans la conversation de l'agent. Une réponse qui arrive trop tard, même après un redémarrage d'Open Space, est effacée elle aussi et n'est passée à personne. (PR #61 de JbPons)

@@ -84,6 +84,7 @@ export const composer: Dictionary['composer'] = {
     placeholderResume: 'A message to resume with (optional)…',
     placeholderPickFirst: 'Pick a conversation above first',
     placeholder: 'What are we doing? (Enter starts, / for a command)',
+    placeholderShort: 'What are we doing? (/ for a command)',
     model: 'Model',
     permissions: 'Permissions',
     start: 'Start',

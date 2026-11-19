@@ -18,6 +18,7 @@ import { FolderPicker } from './FolderPicker.tsx';
 import { Snippet } from './Snippet.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 import { TuneMenu } from './TuneMenu.tsx';
+import { usePhone } from '../lib/phone.ts';
 
 
 /**
@@ -133,6 +134,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   };
 
   const words = t.composer.launcher;
+  const phone = usePhone();
   const branchWords = t.branches.launcher;
   // the branch it will get: with someone asked for, the name the server will give; else the work's part only
   const slug = workSlug(text);
@@ -231,7 +233,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
         <CommandField
           ref={field} id="launcher-field" label={words.fieldLabel} value={text} onChange={setText} onSubmit={() => { if (text.trim() || attachments.items.length) start(); }}
           onPaste={attachments.onPaste} people={mentionable} paths={{ cwd }}
-          placeholder={resuming ? (resumeId ? words.placeholderResume : words.placeholderPickFirst) : words.placeholder}
+          placeholder={resuming ? (resumeId ? words.placeholderResume : words.placeholderPickFirst) : phone ? words.placeholderShort : words.placeholder}
         />
         <div className="cp-launcher__options">
           {people.length > 0 && <PersonPicker people={people} chosen={person} onChoose={setAsked} />}

@@ -18,6 +18,7 @@ import { runOwnCommand } from './ownCommands.ts';
 import { TuneMenu } from './TuneMenu.tsx';
 import type { Attachments } from './useAttachments.ts';
 import { WindowCompactContext } from './useWindowDrag.ts';
+import { usePhone } from '../lib/phone.ts';
 
 /**
  * The message field of a session. During a turn, what the user sends waits in a queue (kept by the server) shown above
@@ -38,6 +39,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const showPanel = useSessions((s) => s.showPanel);
   // a small window (several open, this one not zoomed): icons beside a one-line field
   const stacked = use(WindowCompactContext);
+  const phone = usePhone();
   const people = useMentionable(session.id);
   const suggesting = useSessions((s) => s.preferences.promptSuggestions);
   const stopped = session.state === 'closed' || session.state === 'done' || session.state === 'error';
@@ -90,7 +92,7 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
   const placeholder = note ?? (shellCommand !== null ? words.placeholderShell : stopped ? words.placeholderStopped
     : session.state === 'perm' ? words.placeholderPermission
       : busy ? words.placeholderBusy(session.name)
-        : stacked ? words.placeholderShort : words.placeholder);
+        : stacked || phone ? words.placeholderShort : words.placeholder);
 
   const sendLabel = shellCommand !== null ? words.run : asideQuestion(text) !== null ? words.askAside : stopped ? words.resumeAndSend : waits ? words.queue : words.send;
   const field = (

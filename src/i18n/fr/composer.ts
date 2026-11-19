@@ -86,6 +86,7 @@ export const composer = {
     placeholderResume: 'Un message pour reprendre (facultatif)…',
     placeholderPickFirst: 'Choisis d’abord une conversation au-dessus',
     placeholder: 'Qu’est-ce qu’on fait ? (Entrée lance, / pour une commande)',
+    placeholderShort: 'Qu’est-ce qu’on fait ? (/ pour une commande)',
     model: 'Modèle',
     permissions: 'Autorisations',
     start: 'Lancer',

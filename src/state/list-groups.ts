@@ -6,7 +6,7 @@ import { roomSessions } from '../room/cast.ts';
 import { pendingEntries } from './pending.ts';
 import { isPutOff } from './pending-later.ts';
 import { projectOf } from './projects.ts';
-import { attentionKind, type SeenSequences } from './queue.ts';
+import { ATTENTION_RANK, attentionKind, type SeenSequences } from './queue.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
 
 export const LIST_GROUPINGS = ['state', 'project'] as const;
@@ -30,7 +30,10 @@ export function listGroups(
   const [resting] = roomSessions(all, seen, 'lounge');
   const automata = roomSessions(all, seen, 'automata').flat();
   const finishing = new Set(pendingEntries(idle).filter((entry) => !isPutOff(later, entry.session)).map((entry) => entry.session.id));
-  let waiting = queue;
+  // unlike the queue (the longest waiting first), the list shows the latest first, blocked sessions still on top
+  const rank = (session: SessionInfo) => ATTENTION_RANK[attentionKind(session, seen) ?? 'finished'];
+  const waitingNow = [...queue].sort((a, b) => rank(a) - rank(b) || b.stateSince - a.stateSince);
+  let waiting = waitingNow;
   let finish = latestFirst(idle.filter((session) => finishing.has(session.id)));
   let ready = latestFirst(idle.filter((session) => !finishing.has(session.id)));
   // opened, it stops waiting: it would jump to another group under the pointer
@@ -38,7 +41,7 @@ export function listGroups(
   if (moved && kept) {
     finish = finish.filter((session) => session !== moved);
     ready = ready.filter((session) => session !== moved);
-    waiting = [...queue.slice(0, kept.index), moved, ...queue.slice(kept.index)];
+    waiting = [...waitingNow.slice(0, kept.index), moved, ...waitingNow.slice(kept.index)];
   }
   const count = (list: readonly SessionInfo[]) => list.filter((session) => attentionKind(session, seen) !== null).length;
   const states: [StateGroup, SessionInfo[]][] = [['working', working], ['waiting', waiting], ['finish', finish], ['ready', ready], ['resting', latestFirst(resting)]];

@@ -21,13 +21,13 @@ export function attentionKind(session: SessionInfo, seen: SeenSequences = {}): A
   return null;
 }
 
-const RANK: Record<AttentionKind, number> = { permission: 0, question: 0, finished: 1, error: 2 };
+export const ATTENTION_RANK: Record<AttentionKind, number> = { permission: 0, question: 0, finished: 1, error: 2 };
 
 /** Permissions and questions first (the session is blocked), then finished turns, then errors; the one waiting the longest comes first in each group. */
 export function attentionQueue(sessions: readonly SessionInfo[], seen: SeenSequences = {}): AttentionItem[] {
   return sessions
     .flatMap((session) => { const kind = attentionKind(session, seen); return kind ? [{ session, kind }] : []; })
-    .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.session.stateSince - b.session.stateSince);
+    .sort((a, b) => ATTENTION_RANK[a.kind] - ATTENTION_RANK[b.kind] || a.session.stateSince - b.session.stateSince);
 }
 
 /** The usage limit stopped it: it resumes on its own at `pausedUntil`, nothing for the user to read meanwhile. */

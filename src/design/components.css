@@ -5,6 +5,7 @@
  */
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   background: var(--color-bg);
   color: var(--color-text);
@@ -26,6 +27,8 @@ h1, h2, p { margin: 0; }
 /* ── Shell ── */
 /* flex, not grid rows: the connection banner is not always there, and the main area must always get the remaining height */
 .cp-app { height: 100%; display: flex; flex-direction: column; background: var(--color-backdrop); isolation: isolate; }
+/* opened from the home screen (or in landscape), the page runs under the status bar and the home bar: kept clear of them */
+.cp-app { padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 /* the pixel sky behind everything (src/room/sky.ts), over the plain gradient it stands in for */
 .cp-sky { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
 /* what floats over the room: frosted glass (see --glass-surface in tokens.css) */
@@ -207,7 +210,7 @@ h1, h2, p { margin: 0; }
    */
   .cp-main[data-detail='false'] { display: contents; }
   .cp-main[data-detail='false'] > .cp-main__content { order: 1; flex: 1 1 0; min-height: 0; }
-  .cp-app:has(.cp-main[data-detail='false']) { gap: var(--gutter); padding-bottom: var(--gutter); }
+  .cp-app:has(.cp-main[data-detail='false']) { gap: var(--gutter); padding-bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px)); }
   .cp-main[data-detail='false'] > .cp-main__content { min-height: 9rem; }
   .cp-main[data-detail='false'] ~ .cp-status { order: 2; position: static; width: auto; margin: 0 var(--gutter); flex: none; }
   .cp-main[data-detail='false'] ~ .cp-status .cp-status__body { max-height: 20vh; }
@@ -3333,6 +3336,12 @@ a.cp-button { text-decoration: none; }
 .cp-dashboards__grid[data-carrying] .cp-mod__page { pointer-events: none; }
 .cp-dashboards__grid[data-carrying] { user-select: none; }
 .cp-dashboards__tile .cp-mod__head[data-fixed] { cursor: default; }
+/* one column (narrow): the tiles follow each other in the page at their content's height, and a swipe on a title scrolls */
+.cp-dashboards__grid[data-narrow] { height: auto; display: flex; flex-direction: column; gap: var(--space-3); }
+.cp-mod.cp-dashboards__tile:is([data-narrow] *) { position: relative; translate: none; width: auto; flex: none; transition: none; }
+.cp-mod.cp-dashboards__tile[data-fitted] { height: auto; }
+.cp-dashboards__tile[data-fitted] .cp-mod__page { flex: none; height: var(--fit); }
+.cp-dashboards__tile .cp-mod__head[data-fixed] { touch-action: pan-y; }
 /* where the carried tile lands */
 .cp-dashboards__spot {
   position: absolute; left: 0; top: 0; z-index: 0; translate: var(--x) var(--y); width: var(--w); height: var(--h);
@@ -3353,7 +3362,7 @@ a.cp-button { text-decoration: none; }
 .cp-app[data-device='phone'] .cp-list__head > .cp-icon-button { display: none; }
 .cp-app[data-device='phone'] .cp-list__new { display: none; }
 /* edge to edge like a native app: no gutter, the blocks square and parted by a line; small controls keep their rounding */
-.cp-app[data-device='phone'] { --gutter: 0; }
+.cp-app[data-device='phone'] { --gutter: 0px; }
 .cp-app[data-device='phone'] .cp-header { gap: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--glass-surface); border-bottom: var(--border-width) solid var(--glass-edge); }
 .cp-app[data-device='phone'] :is(.cp-header__where, .cp-header__tools) { background: none; border: 0; box-shadow: none; }
 .cp-app[data-device='phone'] :is(.cp-list, .cp-detail, .cp-launcher) { border-radius: 0; border-width: 0; box-shadow: none; }
