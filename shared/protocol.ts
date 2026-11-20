@@ -3,7 +3,7 @@
 // (no compilation step), and so does Vite.
 import type { Dashboard } from './dashboards.ts';
 import type { AgentRole, AutomataState } from './automata.ts';
-import type { TriggerInput, TriggersState, TriggerTag } from './triggers.ts';
+import type { TriggerInput, TriggerRestrict, TriggersState, TriggerTag } from './triggers.ts';
 import type { SecretEntry } from './secrets.ts';
 import type { MessengerInput } from './messengers.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
@@ -410,6 +410,8 @@ export interface SessionInfo {
   role?: string;
   /** what it does without asking, on top of its mode (its trigger's rules), given with --allowedTools at every launch */
   allowedTools?: string[];
+  /** what it starts without (its trigger's restrictions), merged into --settings at every launch; absent when nothing is */
+  restrict?: TriggerRestrict;
 }
 
 /** A line a session leaves pending: `since` is when its agent first said it (epoch ms). */

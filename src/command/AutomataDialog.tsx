@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { automatonPersonId, roleLabel, type AutomatonRun } from '../../shared/automata.ts';
 import { ACCOUNTS_BROWSERS, PERMISSION_MODES, type PermissionMode } from '../../shared/protocol.ts';
-import { ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, MAX_RUN_COST, MAX_RUN_MINUTES, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput } from '../../shared/triggers.ts';
+import { ALL_PLUGINS, ALLOW_PRESETS, DEFAULT_TRIGGER, hookUrl, inputOf, lastRuns, MAX_RUN_COST, MAX_RUN_MINUTES, parseTriggerInput, type AllowPreset, type Trigger, type TriggerInput, type TriggerRestrict } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { formatAgo, formatClock, formatDuration, homeRelative } from '../lib/format.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
@@ -16,8 +16,8 @@ import { Copyable } from './Copyable.tsx';
 import { Feed } from './Feed.tsx';
 import { FolderPicker } from './FolderPicker.tsx';
 import {
-  AutomatonIcon, BrandIcon, ChevronDownIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, GlobeIcon, KeyIcon, LinkIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon, PlusIcon,
-  PowerIcon, RemoveIcon, RulesIcon, SparklesIcon, StopIcon, TagIcon, TimerIcon, TuneIcon, WebhookIcon,
+  AutomatonIcon, BrandIcon, ChevronDownIcon, ClockIcon, CostIcon, FileCodeIcon, FolderIcon, GlobeIcon, InstructionsOffIcon, KeyIcon, LinkIcon, MemoryOffIcon, MessageIcon, PauseIcon, PhoneIcon, PlanIcon, PlayIcon,
+  PluginOffIcon, PlusIcon, PowerIcon, RemoveIcon, RulesIcon, ServerOffIcon, SparklesIcon, StopIcon, TagIcon, TimerIcon, TuneIcon, WebhookIcon,
 } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { PageHead } from './PageHead.tsx';
@@ -129,6 +129,13 @@ function Automata() {
   );
 }
 
+/** A list typed one name per line, sent as its lines that are not blank (a line being written stays as typed). */
+function LinesField({ value, label, placeholder, onChange }: { value: readonly string[]; label: string; placeholder: string; onChange: (lines: string[]) => void }) {
+  const [text, setText] = useState(value.join('\n'));
+  const type = (typed: string) => { setText(typed); onChange(typed.split('\n').map((line) => line.trim()).filter(Boolean)); };
+  return <textarea className="cp-trigger__body" rows={Math.min(Math.max(text.split('\n').length, 2), 12)} spellCheck={false} value={text} placeholder={placeholder} aria-label={label} onChange={(e) => type(e.target.value)} />;
+}
+
 /** A trigger's page (a new one when `trigger` is null): what it does, when, how it works, and its last runs. A trigger saves itself as it changes; a new one is made by its button. */
 function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () => void }) {
   const sessions = useSessions((s) => s.sessions);
@@ -185,6 +192,7 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
     setRulesText(next.join('\n'));
     change({ allowedTools: next });
   };
+  const restrict = (next: Partial<TriggerRestrict>) => change({ restrict: { ...draft.restrict, ...next } });
   const shownError = problem ?? (serverError ? words.errors[serverError] : null);
   const nextLabel = next === undefined ? fields.scheduleHint
     : next === null ? fields.noNext
@@ -335,6 +343,23 @@ function TriggerPage({ trigger, close }: { trigger: Trigger | null; close: () =>
                 <TriggerKeys triggerId={trigger.id} />
               </Row>
             )}
+          </div>
+        </section>
+        <section className="cp-prefs__group" aria-label={words.groups.restrict}>
+          <h4 className="cp-prefs__group-title">{words.groups.restrict}</h4>
+          <div className="cp-prefs__card">
+            <Row id="trigger-plugins-off" wide icon={<PluginOffIcon />} title={fields.pluginsOff} hint={fields.pluginsOffHint}>
+              <LinesField value={draft.restrict.plugins} label={fields.pluginsOff} placeholder={ALL_PLUGINS} onChange={(plugins) => restrict({ plugins })} />
+            </Row>
+            <Row id="trigger-servers-off" wide icon={<ServerOffIcon />} title={fields.serversOff} hint={fields.serversOffHint}>
+              <LinesField value={draft.restrict.mcpServers} label={fields.serversOff} placeholder="github" onChange={(mcpServers) => restrict({ mcpServers })} />
+            </Row>
+            <Row id="trigger-claude-md-off" wide icon={<InstructionsOffIcon />} title={fields.claudeMdOff} hint={fields.claudeMdOffHint}>
+              <LinesField value={draft.restrict.claudeMd} label={fields.claudeMdOff} placeholder="/path/to/CLAUDE.md" onChange={(claudeMd) => restrict({ claudeMd })} />
+            </Row>
+            <Row id="trigger-memory-off" icon={<MemoryOffIcon />} title={fields.memoryOff} hint={fields.memoryOffHint}>
+              <Switch checked={draft.restrict.autoMemoryOff} label={fields.memoryOff} onChange={(autoMemoryOff) => restrict({ autoMemoryOff })} />
+            </Row>
           </div>
         </section>
         <section className="cp-prefs__group" aria-label={words.groups.options}>

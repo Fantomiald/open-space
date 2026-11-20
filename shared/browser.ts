@@ -9,6 +9,12 @@ export const browserId = (sessionId: string, lane = 0) => (lane ? `${sessionId}.
 export const SHARED_LANE = 99;
 /** The lane of the user's own Chrome in a session's Browser view: no browser of Open Space's, what the agent last saw there. */
 export const CHROME_LANE = 98;
+/** The name of the server `claude --chrome` adds, on the user's own Chrome: its tools' prefix. */
+export const CHROME_SERVER = 'claude-in-chrome';
+/** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */
+export const SHARED_SERVER = 'shared-browser';
+/** The name of the session's Playwright server on its own browser when the user has none of theirs (server/browser.ts). */
+export const PLAYWRIGHT_SERVER = 'playwright';
 export const sessionOfBrowser = (id: string) => id.split('.')[0];
 export const laneOf = (id: string) => Number(id.split('.')[1] ?? 0);
 /** The lanes of a session's running browsers, its own first. */

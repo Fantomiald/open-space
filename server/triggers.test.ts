@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import type { SessionInfo } from '../shared/protocol.ts';
-import { DEFAULT_TRIGGER, hooksAddressOf, parseAllowRules, parseTriggerInput, type Trigger, type TriggerInput } from '../shared/triggers.ts';
+import { DEFAULT_TRIGGER, hooksAddressOf, NO_RESTRICT, parseAllowRules, parseRestrict, parseTriggerInput, type Trigger, type TriggerInput } from '../shared/triggers.ts';
 import { parseClientMessage } from './messages.ts';
 import { runPrompt, stillBusy, Triggers } from './triggers.ts';
 
@@ -85,6 +85,38 @@ describe('the triggers', () => {
     assert.ok('input' in wild && wild.input.maxCost === 1000 && wild.input.maxMinutes === 0, 'capped at the highest, a negative one left out');
     const kept = parseTriggerInput({ maxMinutes: 'soon' }, { ...DEFAULT_TRIGGER, ...input(), maxMinutes: 30 });
     assert.ok('input' in kept && kept.input.maxMinutes === 30, 'what does not fit leaves it as it was');
+  });
+
+  it('takes restrictions that only turn things off: plugins, MCP servers, CLAUDE.md files, auto memory', () => {
+    const { restrict: _none, ...before } = input();
+    const plain = parseTriggerInput(before);
+    assert.ok('input' in plain);
+    assert.deepEqual(plain.input.restrict, NO_RESTRICT, 'none for a trigger saved before them');
+    const restrict = { plugins: ['*', 'ecc@ecc', 'ecc@ecc'], mcpServers: ['github', 'plugin:ecc:chrome-devtools', 'claude.ai Gmail'], claudeMd: ['/tmp/work/CLAUDE.md', '/tmp/notes/**', '**/legacy/CLAUDE.md', 'C:\\work\\CLAUDE.md'], autoMemoryOff: true };
+    const full = parseTriggerInput({ ...input(), restrict });
+    assert.ok('input' in full);
+    assert.deepEqual(full.input.restrict, { ...restrict, plugins: ['*', 'ecc@ecc'] }, 'kept as given, without repeats');
+    // update_trigger: the keys given change, the others stay
+    const kept = parseTriggerInput({ restrict: { autoMemoryOff: false } }, full.input);
+    assert.ok('input' in kept && kept.input.restrict.plugins.length === 2 && kept.input.restrict.claudeMd.length === 4 && !kept.input.restrict.autoMemoryOff);
+    assert.deepEqual(parseRestrict({ plugins: [] }, full.input.restrict), { ...full.input.restrict, plugins: [] }, 'an empty list clears it');
+  });
+
+  it('refuses a restriction of the wrong shape, an empty name, or anything that would turn something on', () => {
+    const refused = (restrict: unknown) => {
+      const parsed = parseTriggerInput({ ...input(), restrict });
+      return 'error' in parsed ? parsed.error : 'accepted';
+    };
+    for (const wrong of [null, [], 'plugins', { plugins: 'ecc@ecc' }, { plugins: { 'ecc@ecc': true } }, { enabledPlugins: { 'ecc@ecc': true } }, { autoMemoryEnabled: true }, { autoMemoryOff: 'yes' }, { autoMemoryOff: 1 }]) {
+      assert.equal(refused(wrong), 'restrict', JSON.stringify(wrong));
+    }
+    for (const plugins of [[''], ['ecc'], [' ecc@ecc'], ['@ecc'], [42], ['a@b@c']]) assert.equal(refused({ plugins }), 'restrict', JSON.stringify(plugins));
+    for (const mcpServers of [[''], [' github'], ['git hub '], [true], ['x'.repeat(101)]]) assert.equal(refused({ mcpServers }), 'restrict', JSON.stringify(mcpServers));
+    for (const claudeMd of [[''], ['CLAUDE.md'], ['~/CLAUDE.md'], ['./CLAUDE.md'], ['/tmp/a\nb'], [`/${'x'.repeat(500)}`]]) assert.equal(refused({ claudeMd }), 'restrict', JSON.stringify(claudeMd));
+    assert.equal(refused({ mcpServers: Array.from({ length: 51 }, (_, at) => `server-${at}`) }), 'restrict', '50 at most');
+    assert.equal(refused({ mcpServers: Array.from({ length: 50 }, (_, at) => `server-${at}`) }), 'accepted');
+    // the servers Open Space gives its sessions: its own, their browsers and their testers'
+    for (const name of ['open-space', 'playwright', 'shared-browser', 'claude-in-chrome', 'tester-browser-2', 'tester-shared-4']) assert.equal(refused({ mcpServers: ['github', name] }), 'ownServer', name);
   });
 
   it('keeps triggers in a private file, inside the allowed folders only', async () => {

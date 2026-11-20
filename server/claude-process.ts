@@ -9,7 +9,8 @@ import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
-import { MCP_SERVER_NAME, SWITCH_BROWSER_TOOL } from '../shared/triggers.ts';
+import { ALL_PLUGINS, MCP_SERVER_NAME, SWITCH_BROWSER_TOOL, type TriggerRestrict } from '../shared/triggers.ts';
+import { userPlugins } from './claude-settings.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
@@ -143,6 +144,10 @@ export interface LaunchOptions {
   run?: boolean;
   /** permission rules it uses without asking (a trigger's), --allowedTools */
   allowedTools?: readonly string[];
+  /** what it starts without (a trigger's), merged into --settings (restrictionSettings) */
+  restrict?: TriggerRestrict;
+  /** the user's home, whose Claude Code settings say which plugins a restriction's ALL_PLUGINS turns off; replaceable in tests */
+  home?: string;
   /** files it may not read nor change (Open Space's keys), --disallowedTools */
   hidden?: readonly string[];
   /** the user's own Chrome through the Claude in Chrome extension, for their accounts (Preferences.accountsBrowser) */
@@ -183,7 +188,7 @@ const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => 
 /** Every session with Open Space's server is asked to say what it leaves pending at the end of a turn: never a permission prompt for that. */
 const SET_PENDING = `mcp__${MCP_SERVER_NAME}__set_pending`;
 
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions' | 'restrict' | 'home'>): string[] {
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -198,7 +203,8 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   // both (checked with 2.1.325, in auto mode and with the tool in --allowedTools), and the yes can come from Telegram or
   // Remote Control, since it is a permission of Claude Code's
   const askRules = options.openSpaceMcp ? { permissions: { ask: [SWITCH_BROWSER_TOOL] } } : {};
-  const settings = { ...options.settings, ...askRules, ...(options.ultracode ? { ultracode: true } : {}), ...(options.fastMode ? { fastMode: true } : {}) };
+  const restricted = options.restrict ? restrictionSettings(options.restrict, options.home, configServers([options.mcpConfig, options.openSpaceMcp])) : {};
+  const settings = { ...options.settings, ...restricted, ...askRules, ...(options.ultracode ? { ultracode: true } : {}), ...(options.fastMode ? { fastMode: true } : {}) };
   if (Object.keys(settings).length) args.push('--settings', JSON.stringify(settings));
   for (const directory of options.addDirs ?? []) args.push('--add-dir', directory);
   // a server of the same name in the user's settings gives way to this one (checked with 2.1.306)
@@ -217,6 +223,31 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.untrusted) args.push('--setting-sources', 'user');
   if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run, !!options.openSpaceMcp));
   return args;
+}
+
+/**
+ * What a trigger's restrictions add to a session's --settings: each key only turns something off, never on (checked
+ * with 2.1.329: as flag settings, the plugins and servers named are gone from the init, the CLAUDE.md files and auto
+ * memory left out, a run's first context 48k tokens instead of 127k). ALL_PLUGINS stands for the plugins the user's
+ * settings turn on, read now. A server of the session's own --mcp-config is never denied (`kept`): it is its browser or
+ * Open Space's, even under the name of a server of the user's it takes the place of.
+ */
+export function restrictionSettings(restrict: TriggerRestrict, home?: string, kept: ReadonlySet<string> = new Set()): Record<string, unknown> {
+  const plugins = [...new Set(restrict.plugins.flatMap((plugin) => (plugin === ALL_PLUGINS ? userPlugins(home) : [plugin])))];
+  const servers = restrict.mcpServers.filter((name) => !kept.has(name));
+  return {
+    ...(plugins.length ? { enabledPlugins: Object.fromEntries(plugins.map((plugin) => [plugin, false])) } : {}),
+    ...(servers.length ? { deniedMcpServers: servers.map((serverName) => ({ serverName })) } : {}),
+    ...(restrict.claudeMd.length ? { claudeMdExcludes: [...restrict.claudeMd] } : {}),
+    ...(restrict.autoMemoryOff ? { autoMemoryEnabled: false } : {}),
+  };
+}
+
+/** The servers named in --mcp-config configurations (JSON text). */
+function configServers(configs: readonly (string | undefined)[]): Set<string> {
+  return new Set(configs.flatMap((config) => {
+    try { return config ? Object.keys(asJson(asJson(JSON.parse(config)).mcpServers)) : []; } catch { return []; }
+  }));
 }
 
 /**

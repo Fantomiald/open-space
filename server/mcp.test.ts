@@ -166,6 +166,20 @@ describe('the open-space MCP server', () => {
     assert.equal((await tool(api, 'create_trigger', { name: 'Arcade', prompt: '/tz-arcade', kind: 'cron', cwd: '/work/app', browser: 'chrome' }, EXTERNAL)).isError, false);
   });
 
+  it('lets a session set what a trigger\'s runs start without, since it only takes away', async () => {
+    const { api, triggers } = fakeApi();
+    const restrict = { plugins: ['*'], mcpServers: ['github'], claudeMd: ['/tmp/work/CLAUDE.md'], autoMemoryOff: true };
+    assert.equal((await tool(api, 'create_trigger', { name: 'Lean', prompt: 'Go', kind: 'cron', restrict }, S1)).isError, false);
+    assert.deepEqual(triggers[0].restrict, restrict);
+    assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, restrict: { mcpServers: [] } }, S1)).isError, false);
+    assert.deepEqual(triggers[0].restrict, { ...restrict, mcpServers: [] }, 'only the keys given change');
+    assert.match(JSON.parse((await tool(api, 'list_triggers', {}, S1)).text)[0].restrict.plugins[0], /^\*$/);
+    const own = await tool(api, 'update_trigger', { id: triggers[0].id, restrict: { mcpServers: ['open-space'] } }, S1);
+    assert.equal(own.isError, true, 'never a server Open Space gives its sessions');
+    assert.match(own.text, /Open Space/);
+    assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, restrict: { plugin: ['x@y'] } }, S1)).isError, true, 'a key it does not know is refused, not ignored');
+  });
+
   it('lets a session rename itself, and a trigger\'s run say it is done', async () => {
     const { api, done } = fakeApi();
     const RUN: Caller = { session: 's5' };

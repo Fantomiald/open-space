@@ -5,7 +5,7 @@ import type { ModIcon } from '../../shared/mods.ts';
 import {
   AppWindow, Archive, ShieldCheck, Blend, Cpu, Eraser, FileDiff, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
   Clock, Folder, FolderOpen, FolderPlus, FilePlus, Save, FileCode, FileBraces, FileImage, FileCog, FileLock, FileArchive, FilePlay, FileMusic, FileSpreadsheet, Copy, Languages, PartyPopper, Activity, Webhook, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, Square, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, KeyRound, PictureInPicture2, Pin, PinOff, SquareArrowOutUpRight, SquareArrowDownLeft,CodeXml, Eye, FolderSearch, type LucideIcon, List, Puzzle, Coins, ChartLine, Heart,
-  Radio, Focus, ListFilter, MousePointer2, LayoutDashboard, GripVertical, FastForward,
+  Radio, Focus, ListFilter, MousePointer2, LayoutDashboard, GripVertical, FastForward, Unplug, ServerOff, FileX, BookX,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -158,6 +158,11 @@ export const DuplicateIcon = icon(CopyPlus);
 export const CompactIcon = icon(Shrink);
 export const PlanIcon = icon(ListChecks);
 export const RulesIcon = icon(ShieldCheck);
+/** What a trigger's runs start without (shared/triggers.ts TriggerRestrict): plugins, MCP servers, CLAUDE.md files, auto memory. */
+export const PluginOffIcon = icon(Unplug);
+export const ServerOffIcon = icon(ServerOff);
+export const InstructionsOffIcon = icon(FileX);
+export const MemoryOffIcon = icon(BookX);
 export const WorkflowIcon = icon(Workflow);
 export const InboxIcon = icon(Inbox);
 export const PeakIcon = icon(Zap);

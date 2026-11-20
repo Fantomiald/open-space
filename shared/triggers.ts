@@ -1,6 +1,7 @@
 // The triggers: what starts a session on its own, at a time (cron) or when another program calls Open Space (webhook).
 // A trigger's run is an ordinary Open Space session, started the same way as from the page (server/triggers.ts), that
 // stands in the server room as a robot. Shared by the server, the page and the open-space MCP server.
+import { CHROME_SERVER, PLAYWRIGHT_SERVER, SHARED_SERVER } from './browser.ts';
 import { isCron } from './cron.ts';
 import { parseMessengerIds, type Messenger } from './messengers.ts';
 import { ACCOUNTS_BROWSERS, isPermissionMode, type AccountsBrowser, type PermissionMode } from './protocol.ts';
@@ -44,6 +45,26 @@ export interface TriggerInput {
   maxCost: number;
   /** a run is stopped after this many minutes (0: no cap) */
   maxMinutes: number;
+  /**
+   * what its runs start without, to start lighter. It only turns things off, so it needs no folder trust and a session
+   * may set it through the MCP server, unlike allowedTools and browser.
+   */
+  restrict: TriggerRestrict;
+}
+
+/**
+ * What a trigger's runs start without, merged into their --settings (server/claude-process.ts restrictionSettings):
+ * every key turns something off, none turns anything on.
+ */
+export interface TriggerRestrict {
+  /** plugins turned off, as "name@marketplace"; ALL_PLUGINS for every plugin the user's Claude Code settings turn on */
+  plugins: string[];
+  /** MCP servers turned off, by name (never one Open Space gives its sessions itself: isOwnServer) */
+  mcpServers: string[];
+  /** CLAUDE.md files not loaded when a run starts: absolute paths or globs, as claudeMdExcludes takes them */
+  claudeMd: string[];
+  /** auto memory off */
+  autoMemoryOff: boolean;
 }
 
 /** A trigger as kept: its input, its id, and for a webhook its token (the page shows it in the URL; the MCP server never). */
@@ -151,8 +172,46 @@ export function parseAllowRules(raw: unknown): string[] | null {
 
 const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
 
+export const NO_RESTRICT: TriggerRestrict = { plugins: [], mcpServers: [], claudeMd: [], autoMemoryOff: false };
+/** In TriggerRestrict.plugins: every plugin turned on in the user's ~/.claude/settings.json, read when a run starts. */
+export const ALL_PLUGINS = '*';
+/** The most names a restriction list takes. */
+export const MAX_RESTRICTED = 50;
+const PLUGIN_NAME = /^\w[\w.-]{0,99}@\w[\w.-]{0,99}$/;
+/** An MCP server's name: "jira", "plugin:ecc:chrome-devtools", "claude.ai Gmail". */
+const SERVER_NAME = /^[\w.:@-](?:[\w .:@-]{0,98}[\w.:@-])?$/;
+/** A CLAUDE.md to leave out: an absolute path or glob, or a glob of any folder ("**\/CLAUDE.md"), on one line. */
+const CLAUDE_MD = /^(?:\/|[A-Za-z]:[\\/]|\*\*\/)\P{Cc}{1,499}$/u;
+
+/** The MCP servers Open Space gives its sessions itself (its own, their browsers, their testers'): a run needs them. */
+export const isOwnServer = (name: string) => [MCP_SERVER_NAME, PLAYWRIGHT_SERVER, SHARED_SERVER, CHROME_SERVER].includes(name) || /^tester-(browser|shared)-\d+$/.test(name);
+
+/** Whether a restriction turns anything off. */
+export const isRestricted = (restrict: TriggerRestrict) => restrict.plugins.length + restrict.mcpServers.length + restrict.claudeMd.length > 0 || restrict.autoMemoryOff;
+
+/**
+ * A trigger's restrictions from outside, over `base` for a key left out; the error's key when one does not fit: an
+ * unknown key, a wrong type, a name empty, malformed or too long, too many names, a server of Open Space's own.
+ */
+export function parseRestrict(raw: unknown, base: TriggerRestrict = NO_RESTRICT): TriggerRestrict | 'restrict' | 'ownServer' {
+  if (!isRecord(raw) || Object.keys(raw).some((key) => !Object.hasOwn(NO_RESTRICT, key))) return 'restrict';
+  const list = (key: 'plugins' | 'mcpServers' | 'claudeMd', fits: (name: string) => boolean): string[] | null => {
+    const given = raw[key];
+    if (given === undefined) return base[key];
+    if (!Array.isArray(given) || given.length > MAX_RESTRICTED || !given.every((name) => typeof name === 'string' && fits(name))) return null;
+    return [...new Set(given as string[])];
+  };
+  const plugins = list('plugins', (name) => name === ALL_PLUGINS || PLUGIN_NAME.test(name));
+  const mcpServers = list('mcpServers', (name) => SERVER_NAME.test(name));
+  const claudeMd = list('claudeMd', (name) => CLAUDE_MD.test(name));
+  const autoMemoryOff = raw.autoMemoryOff === undefined ? base.autoMemoryOff : raw.autoMemoryOff;
+  if (!plugins || !mcpServers || !claudeMd || typeof autoMemoryOff !== 'boolean') return 'restrict';
+  if (mcpServers.some(isOwnServer)) return 'ownServer';
+  return { plugins, mcpServers, claudeMd, autoMemoryOff };
+}
+
 export const DEFAULT_TRIGGER: TriggerInput = {
-  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, browser: '', allowedTools: [], messengers: [], notifyDone: true, maxCost: 0, maxMinutes: 0,
+  name: '', cwd: '', prompt: '', kind: 'cron', cron: '0 8 * * 1-5', enabled: true, role: '', model: '', permissionMode: 'auto', remote: true, browser: '', allowedTools: [], messengers: [], notifyDone: true, maxCost: 0, maxMinutes: 0, restrict: NO_RESTRICT,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -177,6 +236,9 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
   if (!allowedTools) return { error: 'rules' };
   const messengers = raw.messengers === undefined ? base.messengers : parseMessengerIds(raw.messengers);
   if (!messengers) return { error: 'invalid' };
+  // a trigger saved before restrictions has none
+  const restrict = raw.restrict === undefined ? base.restrict ?? NO_RESTRICT : parseRestrict(raw.restrict, base.restrict ?? NO_RESTRICT);
+  if (typeof restrict === 'string') return { error: restrict };
   const input: TriggerInput = {
     name: text('name', base.name, MAX_TRIGGER_NAME),
     cwd: text('cwd', base.cwd, 1000),
@@ -194,6 +256,7 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
     notifyDone: flag('notifyDone', base.notifyDone),
     maxCost: cap('maxCost', base.maxCost, MAX_RUN_COST, 0.01),
     maxMinutes: cap('maxMinutes', base.maxMinutes, MAX_RUN_MINUTES, 1),
+    restrict,
   };
   if (!input.name) return { error: 'name' };
   if (!input.cwd) return { error: 'folder' };
@@ -204,7 +267,7 @@ export function parseTriggerInput(raw: unknown, base: TriggerInput = DEFAULT_TRI
   return { input };
 }
 
-export type TriggerError = 'invalid' | 'name' | 'folder' | 'prompt' | 'cron' | 'role' | 'model' | 'mode' | 'rules' | 'unknown' | 'tooMany';
+export type TriggerError = 'invalid' | 'name' | 'folder' | 'prompt' | 'cron' | 'role' | 'model' | 'mode' | 'rules' | 'restrict' | 'ownServer' | 'unknown' | 'tooMany';
 
 /** The input part of a trigger (to edit it). */
 export const inputOf = ({ id: _id, token: _token, createdAt: _createdAt, ...input }: Trigger): TriggerInput => input;
