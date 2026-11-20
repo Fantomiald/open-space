@@ -249,6 +249,8 @@ export const fr = {
       invalid: 'Ces réglages ne vont pas.', name: 'Donne un nom au déclencheur.', folder: 'Ce dossier n’est pas dans les dossiers autorisés.',
       prompt: 'Écris le message de départ.', cron: 'L’horaire n’est pas une expression cron à 5 champs.', role: 'Ce nom de rôle ne va pas.',
       model: 'Ce nom de modèle ne va pas.', mode: 'Ce mode de permission n’est pas proposé.', rules: 'Une règle ne va pas : un outil, et entre parenthèses ce qu’il vise, comme Bash(git push *). 40 au plus.', unknown: 'Ce déclencheur n’existe plus.', tooMany: 'Trop de déclencheurs (50 au plus).',
+      restrict: 'Une restriction ne va pas : les plugins en nom@marketplace ou *, des noms de serveurs, les CLAUDE.md en chemins absolus ou motifs, 50 de chaque au plus.',
+      ownServer: 'Ce serveur MCP est un de ceux qu’Open Space donne à ses sessions : ses runs en ont besoin.',
     },
     mcp: {
       settingRefused: (key: string) => `Le réglage « ${key} » ne se change pas d’ici.`,

@@ -17,7 +17,7 @@ import type http from 'node:http';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import type { BrowserAction, BrowserFormat, BrowserInput, BrowserPointer, BrowserState, BrowserTab } from '../shared/browser.ts';
-import { addressOf, browserId, FORMATS, laneOf, MODIFIERS, SHARED_LANE, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
+import { addressOf, browserId, CHROME_SERVER, FORMATS, laneOf, MODIFIERS, PLAYWRIGHT_SERVER, SHARED_LANE, SHARED_SERVER, sessionOfBrowser, shownFormat } from '../shared/browser.ts';
 import type { AccountsBrowser } from '../shared/protocol.ts';
 import { asArray, asJson, isJson } from './json.ts';
 import { type CdpMessage, cookiesToClear, hostOf, isKept, PASS_THROUGH, readSites, relayCdp, relaySharedCdp, SHARED_PROFILE, SharedTabs, SITES_FILE, writeSites } from './shared-browser.ts';
@@ -153,7 +153,7 @@ type McpServer = Record<string, unknown> & { command?: string; args?: string[] }
 function playwrightServer(endpoint: string, userServers: Record<string, unknown>, filter?: string): { name: string; server: McpServer } {
   const found = Object.entries(userServers).find(([name, raw]) => {
     const server = asJson(raw);
-    return name === 'playwright' || (Array.isArray(server.args) && server.args.some((arg) => typeof arg === 'string' && arg.includes('@playwright/mcp')));
+    return name === PLAYWRIGHT_SERVER || (Array.isArray(server.args) && server.args.some((arg) => typeof arg === 'string' && arg.includes('@playwright/mcp')));
   });
   const base: McpServer = found ? { ...asJson(found[1]) } : process.platform === 'win32'
     ? { type: 'stdio', command: 'cmd.exe', args: ['/d', '/c', 'npx', '-y', '@playwright/mcp@latest'] }
@@ -167,7 +167,7 @@ function playwrightServer(endpoint: string, userServers: Record<string, unknown>
   }
   const server = { ...base, args: [...args, '--cdp-endpoint', endpoint] };
   const filtered = filter && typeof server.command === 'string' ? { ...server, command: 'node', args: [filter, server.command, ...server.args] } : server;
-  return { name: found?.[0] ?? 'playwright', server: filtered };
+  return { name: found?.[0] ?? PLAYWRIGHT_SERVER, server: filtered };
 }
 
 /**
@@ -187,12 +187,6 @@ export function openUserChrome(platform: NodeJS.Platform = process.platform, run
   // pgrep fails when no process has that name
   run('pgrep', ['-x', 'Google Chrome'], (error) => { if (error) run('open', ['-g', '-a', 'Google Chrome'], () => {}); });
 }
-
-/** The name of the server `claude --chrome` adds, on the user's own Chrome: its tools' prefix. */
-export const CHROME_SERVER = 'claude-in-chrome';
-
-/** The name of the session's Playwright server on the shared browser (server/shared-browser.ts), its tools' prefix. */
-export const SHARED_SERVER = 'shared-browser';
 
 /** Whether a session's --mcp-config gives it the shared browser. */
 export function hasSharedBrowser(mcpConfig: string | undefined): boolean {
