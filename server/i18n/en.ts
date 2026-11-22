@@ -240,6 +240,7 @@ export const en: ServerDictionary = {
       keysInPage: 'A request for keys is only answered in Open Space.',
       rulesFromPage: 'What a trigger does without asking is set in Open Space, not from a session.',
       browserFromPage: 'A trigger\'s browser is set in Open Space, not from a session.',
+      claudeMdFromPage: 'A session may leave out project CLAUDE.md files by their path, not the user\'s ~/.claude ones nor a glob: set those in Open Space.',
       noBot: 'No bot yet: add one in Open Space, Connections page.',
       whichBot: (known: string[]) => `Which bot? Your bots: ${known.join(', ')}.`,
       unknownBot: (name: string, known: string[]) => `No bot "${name}". ${known.length ? `Your bots: ${known.join(', ')}.` : 'Add one in Open Space, Connections page.'}`,

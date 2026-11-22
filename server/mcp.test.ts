@@ -180,6 +180,20 @@ describe('the open-space MCP server', () => {
     assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, restrict: { plugin: ['x@y'] } }, S1)).isError, true, 'a key it does not know is refused, not ignored');
   });
 
+  it('keeps the user\'s own CLAUDE.md files in a session\'s triggers, and lets the external program leave them out', async () => {
+    const { api, triggers } = fakeApi();
+    const userRules = path.join(os.homedir(), '.claude', 'CLAUDE.md');
+    for (const claudeMd of [[userRules], [path.join(os.homedir(), '.claude', 'rules', 'git.md')], ['**/CLAUDE.md'], ['/tmp/work/*/CLAUDE.md']]) {
+      const refused = await tool(api, 'create_trigger', { name: 'Lean', prompt: 'Go', kind: 'cron', restrict: { claudeMd } }, S1);
+      assert.equal(refused.isError, true, JSON.stringify(claudeMd));
+      assert.match(refused.text, /~\/\.claude/);
+    }
+    assert.equal(triggers.length, 0);
+    assert.equal((await tool(api, 'create_trigger', { name: 'Lean', prompt: 'Go', kind: 'cron', restrict: { claudeMd: ['/tmp/work/CLAUDE.md'] } }, S1)).isError, false, 'a project file by its path');
+    assert.equal((await tool(api, 'update_trigger', { id: triggers[0].id, restrict: { claudeMd: [userRules] } }, S1)).isError, true);
+    assert.equal((await tool(api, 'create_trigger', { name: 'Team', prompt: 'Go', kind: 'cron', cwd: '/work/app', restrict: { claudeMd: [userRules, '**/legacy/CLAUDE.md'] } }, EXTERNAL)).isError, false);
+  });
+
   it('lets a session rename itself, and a trigger\'s run say it is done', async () => {
     const { api, done } = fakeApi();
     const RUN: Caller = { session: 's5' };

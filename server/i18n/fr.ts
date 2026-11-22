@@ -264,6 +264,7 @@ export const fr = {
       keysInPage: 'Une demande de clés ne se répond que dans Open Space.',
       rulesFromPage: 'Ce qu’un déclencheur fait sans demander se règle dans Open Space, pas depuis une session.',
       browserFromPage: 'Le navigateur d’un déclencheur se règle dans Open Space, pas depuis une session.',
+      claudeMdFromPage: 'Une session peut écarter des CLAUDE.md de projet par leur chemin, pas ceux de ~/.claude de l’utilisateur ni un motif : ceux-là se règlent dans Open Space.',
       noBot: 'Pas encore de bot : ajoute-en un dans Open Space, page Connexions.',
       whichBot: (known: string[]) => `Quel bot ? Tes bots : ${known.join(', ')}.`,
       unknownBot: (name: string, known: string[]) => `Pas de bot « ${name} ». ${known.length ? `Tes bots : ${known.join(', ')}.` : 'Ajoute-en un dans Open Space, page Connexions.'}`,
