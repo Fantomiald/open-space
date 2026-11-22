@@ -80,4 +80,4 @@ Un déclencheur peut avoir ses propres clés, données à chaque run à son lanc
 
 ## Les variables des mods
 
-Les variables d'un mod (une clé d'API dont sa page a besoin) ne sont pas des clés de session. Tu les remplis dans les réglages du mod, et et seule sa page les reçoit. Elles vont dans le coffre, avec la portée « ce mod » (sans coffre, dans `mods-env.json`). Au démarrage, un ancien `trigger-keys.json` ou `mods-env.json` est migré dans le coffre, puis supprimé une fois l'écriture réussie. Voir [Mods](mods.fr.md).
+Les variables d'un mod (une clé d'API dont sa page a besoin) ne sont pas des clés de session. Tu les remplis dans les réglages du mod, et seule sa page les reçoit. Elles vont dans le coffre, avec la portée « ce mod » (sans coffre, dans `mods-env.json`). Au démarrage, un ancien `trigger-keys.json` ou `mods-env.json` est migré dans le coffre, puis supprimé une fois l'écriture réussie. Voir [Mods](mods.fr.md).

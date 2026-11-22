@@ -71,17 +71,18 @@ export const showcase = {
     reopen: 'Voir les nouveautés',
     tour: 'Revoir la visite',
     releases: {
-      '1.36': {
-        title: 'Ce qui reste à faire',
+      '1.37': {
+        title: 'Tes clés, collées une fois',
         items: {
-          finish: { title: 'À finir', text: 'Une session lue qui te laisse quelque chose (une clé à fournir, des fichiers pas commités) passe dans À finir, avec ce qui reste. Terminées ne garde que celles où il n’y a plus rien.' },
-          pause: { title: 'La limite de 5 h ne casse plus rien', text: 'Une session arrêtée par la limite se met en pause et reprend seule à la remise à zéro, avec ce que tu lui as envoyé entre-temps.' },
-          files: { title: 'Tes fichiers avec @', text: 'Après les sessions, « @ » propose les fichiers et dossiers de la session, écrits comme Claude Code les lit.' },
-          links: { title: 'Les liens survivent au copier', text: 'Copier un message garde l’adresse de ses liens, en Markdown dans un terminal, en vrai lien dans Slack ou Notion.' },
+          vault: { title: 'Le coffre de clés', text: 'Une clé collée dans la carte d’un agent va dans le coffre, chiffrée par ton système. Les agents la reçoivent par son nom, sans jamais voir la valeur.' },
+          scope: { title: 'Pour qui, tu choisis', text: 'Chaque clé vaut pour cette session (par défaut), ce projet ou partout. Dans une même carte, tu peux garder une clé et pas l’autre.' },
+          trust: { title: 'Toujours pour ce projet', text: 'Une clé enregistrée passe sans carte là où tu l’as permis. Une session lancée par un agent ou depuis Telegram te redemande toujours.' },
+          manage: { title: 'Tout dans Réglages, Clés', text: 'Les clés des sessions, des automates et des mods au même endroit : qui les a utilisées et quand, remplacer, retirer.' },
+          light: { title: 'Automates plus légers', text: 'Un automate peut démarrer sans tes plugins, serveurs MCP ou CLAUDE.md inutiles : son premier contexte passe de 127k à 48k jetons.' },
         },
-        thanks: 'Merci à Guillaume pour À finir et la pause (PR #57 et #58), et à Jean-Baptiste pour @ et les liens (PR #59 et #60).',
+        thanks: 'Merci à Jean-Baptiste pour le départ allégé des automates (PR #62).',
       },
     },
-    actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite', dashboards: 'Ouvrir les dashboards' },
+    actions: { automata: 'Ouvrir les automates', mods: 'Voir mes mods', settings: 'Ouvrir le réglage', tour: 'Faire la visite', dashboards: 'Ouvrir les dashboards', keys: 'Ouvrir les clés' },
   },
 };

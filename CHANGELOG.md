@@ -1,5 +1,14 @@
 # Versions
 
+## 1.37.0
+
+- Coffre de clés : une clé collée dans la carte d'un agent (`os-secret ask`) peut rester pour cette session (par défaut), ce projet ou partout, choisi clé par clé dans la même carte. Elle va dans le coffre de l'app, chiffrée par ton système (le Trousseau sur macOS), et les agents la reçoivent par son nom sans jamais voir la valeur. Une clé déjà enregistrée repasse par la carte tant que tu n'as pas coché « Toujours pour ce projet » ; une session lancée par un agent ou par `/new` sur Telegram te redemande toujours, et un run d'automate ne reçoit que les clés de son automate.
+- Réglages, Clés : toutes les clés au même endroit (sessions, projets, automates, mods), avec leur portée, qui les a utilisées et quand, Remplacer et Retirer. Les anciens `trigger-keys.json` et `mods-env.json` sont migrés dans le coffre au premier lancement.
+- `os-secret` : `ask` prend la clé enregistrée ou la demande, `ask --again --why` quand une clé ne marche plus, `file NOM -- commande` pour un outil qui veut un fichier (une clé `.p8`), effacé à la fin. `run` masque aussi les valeurs sur plusieurs lignes, et `env` refuse d'écrire un `.env` que git n'ignore pas.
+- Sans l'app (`npm start`), le serveur dit que les clés du coffre sont hors d'atteinte au lieu de lancer un run sans elles. Sur Windows et Linux, les réglages disent que les clés sont chiffrées sur le disque mais lisibles par un programme lancé sous ton compte.
+- App macOS durcie : elle ne se lance plus comme Node ni avec un débogueur, ne charge que son propre code signé, et n'accepte plus de bibliothèque signée par un autre.
+- Automates, Départ allégé : un automate peut partir sans des plugins, des serveurs MCP, des `CLAUDE.md` ou la mémoire auto dont ses runs n'ont pas besoin (le premier contexte d'un run passe de 127k à 48k jetons). Une session qui règle un automate par le MCP n'écarte que des `CLAUDE.md` de projet, jamais ceux de `~/.claude`. (PR #62 de JbPons)
+
 ## 1.36.6
 
 - Téléphone : la page d'un dashboard défile enfin ; chaque mod prend toute sa hauteur au lieu d'attraper le glissé.

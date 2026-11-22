@@ -69,17 +69,18 @@ export const showcase: Dictionary['showcase'] = {
     reopen: 'See what’s new',
     tour: 'Take the tour again',
     releases: {
-      '1.36': {
-        title: 'What is left to do',
+      '1.37': {
+        title: 'Your keys, pasted once',
         items: {
-          finish: { title: 'To finish', text: 'A read session that leaves you something (a key to provide, files not committed) goes to To finish, with what is left. Done keeps only those with nothing left.' },
-          pause: { title: 'The 5-hour limit breaks nothing', text: 'A session stopped by the limit pauses and picks up on its own when the limit resets, with what you sent it meanwhile.' },
-          files: { title: 'Your files with @', text: 'After the sessions, "@" offers the session’s files and folders, written the way Claude Code reads them.' },
-          links: { title: 'Links survive a copy', text: 'Copying a message keeps its links’ addresses, as Markdown in a terminal, as real links in Slack or Notion.' },
+          vault: { title: 'The key vault', text: 'A key pasted into an agent’s card goes to the vault, encrypted by your system. Agents get it by name and never see the value.' },
+          scope: { title: 'You pick who gets it', text: 'Each key is for this session (by default), this project or everywhere. In one card, you can keep one key and not the other.' },
+          trust: { title: 'Always for this project', text: 'A saved key goes through without a card where you allowed it. A session started by an agent or from Telegram always asks again.' },
+          manage: { title: 'All in Settings, Keys', text: 'Keys of sessions, automatons and mods in one place: who used them and when, replace, remove.' },
+          light: { title: 'Lighter automatons', text: 'An automaton can start without the plugins, MCP servers or CLAUDE.md it does not need: its first context drops from 127k to 48k tokens.' },
         },
-        thanks: 'Thanks to Guillaume for To finish and the pause (PR #57 and #58), and to Jean-Baptiste for @ and links (PR #59 and #60).',
+        thanks: 'Thanks to Jean-Baptiste for the lighter automaton start (PR #62).',
       },
     },
-    actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour', dashboards: 'Open dashboards' },
+    actions: { automata: 'Open automatons', mods: 'See my mods', settings: 'Open the setting', tour: 'Take the tour', dashboards: 'Open dashboards', keys: 'Open keys' },
   },
 };
