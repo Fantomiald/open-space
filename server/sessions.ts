@@ -8,7 +8,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_PERMISSION_MODE, EFFORTS, isPermissionMode, type Conversation, type ImageUpload, type LoggedEvent, type PermissionDecision, type SearchHit, type Quota, type ServerMessage, type SessionInfo, type SessionOptions, type SlashCommand, type Effort, type ModelChoice, type TuneChange } from '../shared/protocol.ts';
-import { parseAllowRules, ROLE_NAME, TRIGGER_ID, type TriggerTag } from '../shared/triggers.ts';
+import { isRestricted, parseAllowRules, parseRestrict, ROLE_NAME, TRIGGER_ID, type TriggerRestrict, type TriggerTag } from '../shared/triggers.ts';
 import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { modsFolder } from './mods.ts';
@@ -668,7 +668,7 @@ export class SessionManager {
    * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
    * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
    */
-  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser } = {}): Promise<SessionInfo> {
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; restrict?: TriggerRestrict; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.roots());
@@ -700,6 +700,7 @@ export class SessionManager {
     if (started.trigger) info.trigger = started.trigger;
     if (started.role) info.role = started.role;
     if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
+    if (started.restrict && isRestricted(started.restrict)) info.restrict = started.restrict;
     if (started.accountsBrowser && started.accountsBrowser !== (this.deps.accountsBrowser?.() ?? 'shared')) info.accountsBrowser = started.accountsBrowser;
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1110,7 +1111,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}), ...(source.restrict ? { restrict: source.restrict } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1348,10 +1349,17 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     trigger: parseTriggerTag(raw.trigger),
     role: ROLE_NAME.test(asString(raw.role)) ? asString(raw.role) : undefined,
     allowedTools: parseAllowRules(raw.allowedTools)?.length ? parseAllowRules(raw.allowedTools)! : undefined,
+    restrict: storedRestrict(raw.restrict),
     // fields of older versions (restricted, permissions, lastSeq) are ignored: they are not stored any more, or recomputed
     stateSince: asNumber(raw.stateSince), createdAt: asNumber(raw.createdAt), turns: asNumber(raw.turns),
     subagents: [], command: asString(raw.command), lastMessage: asString(raw.lastMessage), error: asString(raw.error) || undefined, resumable: raw.resumable === true,
   };
+}
+
+/** The restrictions of a saved session; undefined when none, or when they no longer fit. */
+function storedRestrict(raw: unknown): TriggerRestrict | undefined {
+  const restrict = raw === undefined ? null : parseRestrict(raw);
+  return typeof restrict === 'object' && restrict && isRestricted(restrict) ? restrict : undefined;
 }
 
 /** The pending lines of a saved session, with their ids and ages; undefined when none is valid. */

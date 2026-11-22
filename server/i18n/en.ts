@@ -225,6 +225,8 @@ export const en: ServerDictionary = {
       invalid: 'These settings do not fit.', name: 'Give the trigger a name.', folder: 'This folder is not among the allowed folders.',
       prompt: 'Write the first message.', cron: 'The schedule is not a 5-field cron expression.', role: 'This role name does not fit.',
       model: 'This model name does not fit.', mode: 'This permission mode is not offered.', rules: 'A rule does not fit: a tool, and what it applies to in brackets, like Bash(git push *). 40 at most.', unknown: 'This trigger no longer exists.', tooMany: 'Too many triggers (50 at most).',
+      restrict: 'A restriction does not fit: plugins as name@marketplace or *, server names, CLAUDE.md as absolute paths or globs, 50 of each at most.',
+      ownServer: 'This MCP server is one Open Space gives its sessions: its runs need it.',
     },
     mcp: {
       settingRefused: (key: string) => `The setting "${key}" cannot be changed from here.`,
@@ -238,6 +240,7 @@ export const en: ServerDictionary = {
       keysInPage: 'A request for keys is only answered in Open Space.',
       rulesFromPage: 'What a trigger does without asking is set in Open Space, not from a session.',
       browserFromPage: 'A trigger\'s browser is set in Open Space, not from a session.',
+      claudeMdFromPage: 'A session may leave out project CLAUDE.md files by their path, not the user\'s ~/.claude ones nor a glob: set those in Open Space.',
       noBot: 'No bot yet: add one in Open Space, Connections page.',
       whichBot: (known: string[]) => `Which bot? Your bots: ${known.join(', ')}.`,
       unknownBot: (name: string, known: string[]) => `No bot "${name}". ${known.length ? `Your bots: ${known.join(', ')}.` : 'Add one in Open Space, Connections page.'}`,

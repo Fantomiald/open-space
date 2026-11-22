@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, it } from 'node:test';
-import { buildClaudeArgs, claudeCommand, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote } from './claude-process.ts';
+import { after, describe, it } from 'node:test';
+import { NO_RESTRICT } from '../shared/triggers.ts';
+import { buildClaudeArgs, claudeCommand, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote, restrictionSettings } from './claude-process.ts';
 import { setServerLanguage } from './i18n/index.ts';
 
 it('passes npm Claude arguments directly to Node without shell interpretation on Windows', () => {
@@ -171,6 +174,46 @@ describe('parseCatalog', () => {
     assert.deepEqual(args.slice(args.indexOf('--settings'), args.indexOf('--settings') + 2), ['--settings', '{"ultracode":true}']);
     assert.ok(args.includes('--effort'));
     assert.ok(!buildClaudeArgs({ sessionId: 'id', resume: true, model: 'opus', permissionMode: 'auto', name: 'Ana' }).includes('--settings'));
+  });
+});
+
+describe('a trigger\'s restrictions', () => {
+  const base = { sessionId: 'id', resume: false, model: '', permissionMode: 'auto' as const, name: 'Ana' };
+  // a home whose Claude Code settings turn two plugins on and one off
+  const home = mkdtempSync(path.join(os.tmpdir(), 'restrict-home-'));
+  after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(path.join(home, '.claude'));
+  writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'docs@market': true, 'old@market': false, 'review@market': true }, model: 'opus' }));
+  const settingsOf = (args: string[]) => JSON.parse(args[args.indexOf('--settings') + 1]);
+
+  it('merges what they turn off into the --settings Open Space already gives, keeping its keys', () => {
+    const restrict = { plugins: ['*', 'review@market', 'extra@market'], mcpServers: ['github', 'plugin:ecc:chrome-devtools'], claudeMd: ['/tmp/work/CLAUDE.md', '/tmp/notes/**'], autoMemoryOff: true };
+    const args = buildClaudeArgs({ ...base, home, settings: { autoCompactEnabled: false }, fastMode: true, openSpaceMcp: '{"mcpServers":{"open-space":{}}}', restrict });
+    assert.deepEqual(settingsOf(args), {
+      autoCompactEnabled: false,
+      enabledPlugins: { 'docs@market': false, 'review@market': false, 'extra@market': false },
+      deniedMcpServers: [{ serverName: 'github' }, { serverName: 'plugin:ecc:chrome-devtools' }],
+      claudeMdExcludes: ['/tmp/work/CLAUDE.md', '/tmp/notes/**'],
+      autoMemoryEnabled: false,
+      permissions: { ask: ['mcp__open-space__switch_browser'] },
+      fastMode: true,
+    });
+    assert.equal(args.filter((arg) => arg === '--settings').length, 1);
+  });
+
+  it('expands "*" to the plugins the home\'s settings turn on, and never turns one on', () => {
+    const all = restrictionSettings({ ...NO_RESTRICT, plugins: ['*'] }, home);
+    assert.deepEqual(all, { enabledPlugins: { 'docs@market': false, 'review@market': false } }, 'one already off is left alone');
+    assert.deepEqual(restrictionSettings({ ...NO_RESTRICT, plugins: ['*'] }, path.join(home, 'nobody')), {}, 'no settings file: nothing to turn off');
+    assert.deepEqual(restrictionSettings({ ...NO_RESTRICT, plugins: ['solo@market'] }, path.join(home, 'nobody')), { enabledPlugins: { 'solo@market': false } }, 'named plugins need no file');
+  });
+
+  it('gives no --settings for nothing restricted, and never denies a server of the session\'s own --mcp-config', () => {
+    assert.ok(!buildClaudeArgs({ ...base, home, restrict: NO_RESTRICT }).includes('--settings'));
+    // the session's browser takes the name of the user's Playwright server: denying it would cut the run off its browser
+    const mcpConfig = JSON.stringify({ mcpServers: { 'playwright-bridge': { command: 'npx' } } });
+    const args = buildClaudeArgs({ ...base, home, mcpConfig, restrict: { ...NO_RESTRICT, mcpServers: ['playwright-bridge', 'github'] } });
+    assert.deepEqual(settingsOf(args).deniedMcpServers, [{ serverName: 'github' }]);
   });
 });
 

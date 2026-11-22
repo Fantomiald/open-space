@@ -41,7 +41,7 @@ export type ScheduleChange =
 /** The tab a claude-in-chrome call worked on, as its result tells it, and the screenshot the call took there, if any. */
 export interface ChromeSight { url: string; title: string; picture?: ImageUpload }
 
-/** The tools `claude --chrome` gives, on the user's own Chrome (server/browser.ts CHROME_SERVER). */
+/** The tools `claude --chrome` gives, on the user's own Chrome (shared/browser.ts CHROME_SERVER). */
 const CHROME_TOOL = /^mcp__claude-in-chrome__/;
 
 /** The longest prompt suggestion kept: Claude Code predicts a short message, a field's worth at most. */

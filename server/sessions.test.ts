@@ -425,6 +425,28 @@ describe('the user’s own Chrome', () => {
     await manager.shutdown();
   });
 
+  it('a trigger\'s run starts without what its trigger restricts, after a restart and in a duplicate too', async () => {
+    const dataDir = path.join(base, `data-restrict-${++counter}`);
+    const restrict = { plugins: ['*'], mcpServers: ['github'], claudeMd: ['/tmp/work/CLAUDE.md'], autoMemoryOff: true };
+    const first = setup({}, dataDir);
+    await first.manager.init();
+    const { id } = await first.manager.create({ cwd: projectA(), text: 'go' }, { trigger: { id: 't1', name: 'Lean' }, restrict });
+    const plain = await first.manager.create({ cwd: projectA(), text: 'go' }, { trigger: { id: 't2', name: 'Full' }, restrict: { plugins: [], mcpServers: [], claudeMd: [], autoMemoryOff: false } });
+    assert.deepEqual(first.processes[0].launch.restrict, restrict);
+    assert.equal(first.processes[1].launch.restrict, undefined, 'nothing restricted, nothing kept');
+    assert.equal(first.find(plain.id).restrict, undefined);
+    first.processes[0].feed('simple-turn');
+    const copy = await first.manager.duplicate(id);
+    assert.deepEqual(first.find(copy.id).restrict, restrict);
+    await first.manager.shutdown();
+    const second = setup({}, dataDir);
+    await second.manager.init();
+    assert.deepEqual(second.find(id).restrict, restrict, 'kept in sessions.json');
+    second.manager.send(id, 'again');
+    assert.deepEqual(second.processes[0].launch.restrict, restrict);
+    await second.manager.shutdown();
+  });
+
   it('the setting switches the sessions without a choice of their own, one at work once its turn is over', async () => {
     const setting = { browser: 'shared' as AccountsBrowser };
     const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, byChoice(setting));

@@ -13,6 +13,7 @@
 // answers a permission: that stays the user's buttons. A request for keys (os-secret) is only answered from the page.
 import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { Job } from '../shared/jobs.ts';
 import { ACCOUNTS_BROWSERS, type AccountsBrowser, type PermissionDecision, type PermissionPrompt, type Preferences, type SessionInfo } from '../shared/protocol.ts';
@@ -151,6 +152,16 @@ const triggerFields: Json = {
   notifyDone: { type: 'boolean', description: 'Its bots are also told when a run finishes (default true)' },
   maxCost: { type: 'number', description: 'A run is stopped once it has spent this many dollars, estimated at list prices (0: no cap, the default)' },
   maxMinutes: { type: 'number', description: 'A run is stopped after this many minutes (0: no cap, the default)' },
+  restrict: {
+    type: 'object', additionalProperties: false,
+    description: 'What its runs start without, for a lighter start. Each key only turns something off; the keys left out stay as they were.',
+    properties: {
+      plugins: { type: 'array', items: { type: 'string' }, description: 'Plugins turned off, as "name@marketplace"; "*" for every plugin turned on in the user\'s ~/.claude/settings.json' },
+      mcpServers: { type: 'array', items: { type: 'string' }, description: 'MCP servers turned off, by name; never open-space nor the browser servers Open Space adds' },
+      claudeMd: { type: 'array', items: { type: 'string' }, description: 'CLAUDE.md files not loaded at start: absolute paths or globs, e.g. "/path/to/repo/CLAUDE.md", "/path/to/notes/**", "**/legacy/CLAUDE.md". From a session: project files by absolute path only, never the user\'s ~/.claude ones nor a glob' },
+      autoMemoryOff: { type: 'boolean', description: 'true: auto memory off' },
+    },
+  },
 };
 
 const read = { readOnlyHint: true, openWorldHint: false };
@@ -365,8 +376,10 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
       const fields: Record<string, unknown> = { ...given };
       // an agent would widen its own rights through a trigger it starts
       if (!('external' in caller) && fields.allowedTools !== undefined) return failure(st.triggers.mcp.rulesFromPage);
-      // nor reach the user's Chrome without the yes switch_browser asks for
+      // nor reach the user's Chrome without the yes switch_browser asks for; its restrictions only take away, so a session may set them
       if (!('external' in caller) && fields.browser !== undefined) return failure(st.triggers.mcp.browserFromPage);
+      // and the user's own CLAUDE.md files stay loaded: a run would otherwise drop the rules they set for every session
+      if (!('external' in caller) && dropsUserRules(fields.restrict)) return failure(st.triggers.mcp.claudeMdFromPage);
       if (fields.messengers !== undefined) {
         const bots = botIds(api, fields.messengers);
         if ('unknown' in bots) return failure(st.triggers.mcp.unknownBot(bots.unknown, api.bots().map((bot) => bot.name)));
@@ -498,4 +511,15 @@ export async function handleMcp(api: OpenSpaceApi, caller: Caller, body: string,
   }
   const one = await answer(api, caller, parsed, version);
   return one ? { status: 200, json: one } : { status: 202, json: null };
+}
+
+/**
+ * Whether restrictions a session gives would leave out a CLAUDE.md of the user's ~/.claude, or any file through a glob
+ * (a glob may match those too). The page and the external program may still; a session names project files one by one.
+ */
+function dropsUserRules(restrict: unknown): boolean {
+  const claudeMd = restrict && typeof restrict === 'object' && 'claudeMd' in restrict ? restrict.claudeMd : undefined;
+  if (!Array.isArray(claudeMd)) return false;
+  const userDir = path.join(os.homedir(), '.claude');
+  return claudeMd.some((entry) => typeof entry === 'string' && (/[*?[{]/.test(entry) || path.resolve(entry) === userDir || path.resolve(entry).startsWith(userDir + path.sep)));
 }
