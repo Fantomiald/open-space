@@ -51,7 +51,7 @@ Alt (Option sur Mac) + glisser déplace la salle ; Alt + molette ou le pincement
 - **Voir ce qui a changé** : `+X −Y` dans l'en-tête, puis chaque fichier avec son diff.
 - **Surveiller le contexte** : une jauge se remplit et le champ propose de compacter. `/context`, `/mcp` et `/usage` s'ouvrent en vues dans la page.
 - **Voir ce que Claude t'envoie** : images, schémas, vidéos, pages Markdown et HTML s'affichent dans le fil. Une page publiée sur claude.ai s'affiche en aperçu vivant.
-- **Donner une clé sans la montrer.** Quand une session a besoin d'une clé d'API, une boîte s'ouvre dans le fil : tu colles la valeur, l'agent n'en a que le nom. Avec `os-secret`, il l'écrit dans un `.env`, lance une commande avec, ou la pose en cookie dans son navigateur, sans jamais la lire. Les clés restent en mémoire, 12 h au plus, et partent quand la session s'éteint.
+- **Donner une clé sans la montrer.** Quand une session a besoin d'une clé d'API, une boîte s'ouvre dans le fil : tu colles la valeur, l'agent n'en a que le nom. Avec `os-secret`, il l'écrit dans un `.env`, lance une commande avec, ou la pose en cookie dans son navigateur, sans jamais la lire. Une clé peut valoir pour la session seule (en mémoire, 12 h au plus), pour un projet ou pour toutes les sessions : les deux dernières sont chiffrées par le trousseau de ton système dans le coffre de l'app, et une session ne les reçoit qu'avec ton accord.
 
 ![Lina demande une clé de test Stripe : la boîte dans son fil, où l'on colle la valeur, et l'agent n'en voit que le nom](docs/images/secret-box.png)
 

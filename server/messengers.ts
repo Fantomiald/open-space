@@ -110,8 +110,9 @@ export function questionKeyboard(choice: number, question: Question, picked: rea
 export function waitMessage(session: SessionInfo, wait: PermissionPrompt, choice: number): { text: string; buttons: Button[][] } {
   const words = st.messengers;
   const who = session.trigger ? `${session.name} (${session.trigger.name})` : session.name;
-  // no buttons: the values come as a reply to this message (Messengers.takeKeys)
-  if (wait.secrets) return { text: telegram.fit(words.keys(who, wait.secrets, wait.detail ?? '')), buttons: [] };
+  // no buttons: the values come as a reply to this message (Messengers.takeKeys); keys of the vault are handed over in the page only
+  if (wait.secrets?.length) return { text: telegram.fit(words.keys(who, wait.secrets, wait.detail ?? '')), buttons: [] };
+  if (wait.secrets) return { text: telegram.fit(words.keysInPage(who, (wait.keys?.stored ?? []).map((each) => each.name))), buttons: [] };
   const question = wait.questions?.[0];
   if (question) {
     return { text: telegram.fit(`${words.question(who, question.question)}\n\n${words.orReply}`), buttons: questionKeyboard(choice, question) };
@@ -511,6 +512,13 @@ export class Messengers {
     await this.api.call(bot.token, 'editMessageText', { chat_id: sent.chatId, message_id: sent.messageId, text: telegram.fit(`${sent.text}\n\n${outcome}`) }).catch(() => undefined);
   }
 
+  /** Whether a linked bot follows the session: someone can answer it from a chat (its keys too). */
+  followedSession(sessionId: string): boolean {
+    const session = this.deps.sessions().find((each) => each.id === sessionId);
+    const triggers = this.deps.triggers();
+    return !!session && this.bots.some((bot) => bot.chatId !== null && this.follows(bot, session, triggers));
+  }
+
   private follows(bot: Stored, session: SessionInfo, triggers: readonly Trigger[]): { done: boolean } | null {
     const key = `${bot.id}|${session.id}`;
     const forced = this.forced.get(key);
@@ -550,14 +558,14 @@ export class Messengers {
     const choice = this.nextChoice++;
     const { text, buttons } = waitMessage(session, wait, choice);
     if (buttons.length) this.choices.set(choice, { botId: bot.id, sessionId: session.id, requestId: wait.requestId, ...(wait.questions ? { questions: wait.questions } : {}), answers: {}, picked: [] });
-    if (wait.secrets) this.keyWaits.set(key, { sessionId: session.id, requestId: wait.requestId, names: wait.secrets });
+    if (wait.secrets?.length) this.keyWaits.set(key, { sessionId: session.id, requestId: wait.requestId, names: wait.secrets });
     // kept before sending: the next tick does not send it twice while this one waits for Telegram
     this.sent.set(key, { chatId: bot.chatId!, messageId: 0, text });
     try {
       const message = await this.api.call<TelegramMessage>(bot.token, 'sendMessage', { chat_id: bot.chatId, text, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}) });
       this.sent.set(key, { chatId: bot.chatId!, messageId: message.message_id, text });
       // a reply to a request for keys is never routed to the session (takeKeys)
-      if (wait.secrets) this.rememberKeys(bot, message.message_id, key);
+      if (wait.secrets?.length) this.rememberKeys(bot, message.message_id, key);
       else this.remember(bot, message.message_id, session.id);
     } catch (error) {
       this.sent.delete(key);

@@ -47,14 +47,16 @@ import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } f
 import { AutomataWatch } from './automata-watch.ts';
 import { rolesFor } from './agent-roles.ts';
 import { Triggers } from './triggers.ts';
-import { TriggerKeys } from './trigger-keys.ts';
+import { KeyFile } from './key-file.ts';
+import { migrateShelf, pruneShelf, readVaultOwners, Vault, VaultShelf, writeVaultOwners, type KeyShelf } from './vault.ts';
+import { projectOf } from './worktrees.ts';
 import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi } from './mcp.ts';
 import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
 import { parsePreferences } from './settings.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
 import { modKey, Mods, modsFolder } from './mods.ts';
 import { saveAvatar } from './crew.ts';
-import { appPort } from './app-port.ts';
+import { appCipher, appPort, vaultPlace } from './app-port.ts';
 import { installFilter } from './playwright-filter.ts';
 import { answerSecrets, installScript, SecretStore, secretsKey } from './secrets.ts';
 import { accountsBrowserOf, Browsers, browserKey, browserMcpConfig, findChrome, openUserChrome, testerAgents, testerLane, userMcpServers } from './browser.ts';
@@ -143,9 +145,40 @@ function browserMcp(sessionId: string, untrusted: boolean, chosen: AccountsBrows
   return { ...chrome, mcpConfig: browserMcpConfig(endpoint, mcpServers(), shared, playwrightFilter), agents: testerAgents(endpoint, mcpServers(), st.prompt.tester, shared, accounts === 'chrome', playwrightFilter) };
 }
 
+/** the keys kept beyond a session (server/vault.ts): only inside the desktop app, with a real keyring; otherwise every key stays in memory */
+const vaultAt = vaultPlace(process.env);
+const vault = vaultAt && appPort ? await Vault.open(vaultAt.file, appCipher(appPort), vaultAt.storage) : null;
 /** the keys the user gives the sessions, and the os-secret command that uses them (server/secrets.ts) */
-const secretStore = new SecretStore((sessionId) => sessions.secretsChanged(sessionId));
+const secretStore = new SecretStore((sessionId) => sessions.secretsChanged(sessionId), Date.now, {
+  vault,
+  place: (sessionId) => {
+    const place = sessions.placeOf(sessionId);
+    // a session an agent or a program started gets the box every time, like one of a folder not trusted
+    return place && { name: place.name, project: place.project ?? projectOf(place.cwd), trigger: place.trigger, untrusted: place.untrusted || place.spawned };
+  },
+});
 setInterval(() => secretStore.sweep(), 60_000).unref();
+/** Where the keys of each trigger or each mod live: the vault, once the file they were in is moved there; else that file. */
+async function keyShelf(kind: 'trigger' | 'mod', file: string): Promise<KeyShelf> {
+  const own = new KeyFile(path.join(config.dataDir, file));
+  if (!vault) return own;
+  try {
+    await migrateShelf(path.join(config.dataDir, file), own, new VaultShelf(vault, kind), vault);
+  } catch (error) {
+    // the file stays the keys' home for this start: the next one tries again, never over a value the vault holds
+    log(`cannot move ${file} into the keys vault`, error);
+    return own;
+  }
+  return new VaultShelf(vault, kind);
+}
+/** the names of the vault's trigger and mod keys, for Open Space started without its app (server/vault.ts VaultOwners) */
+const VAULT_OWNERS = path.join(config.dataDir, 'vault-keys.json');
+const vaultElsewhere = vault ? null : readVaultOwners(VAULT_OWNERS);
+/** Whether a JSON file reads, or is not there yet. */
+function readableOrMissing(file: string) {
+  try { JSON.parse(readFileSync(file, 'utf8')); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOENT'; }
+}
+const keysMessage = (): ServerMessage => ({ t: 'keys', state: { storage: vault?.storage ?? 'memory', keys: vault?.list() ?? [], trashedMods: mods.inTrash(), ...(vaultElsewhere ? { unreachable: vaultElsewhere } : {}) } });
 const secretsBin = installScript(config.dataDir);
 /** the filter around the sessions' Playwright servers, which hides their keys in what those answer (server/playwright-filter.ts) */
 const playwrightFilter = installFilter(config.dataDir);
@@ -158,7 +191,7 @@ function secretsEnv(sessionId: string): Record<string, string> {
 }
 
 /** Open Space's keys: no session's file tools reach them (claude-process.ts hiddenRules) */
-const HIDDEN_FILES = ['secret', 'mcp-key', 'trigger-keys.json', 'messengers.json'].map((file) => path.join(config.dataDir, file));
+const HIDDEN_FILES = [...['secret', 'mcp-key', 'trigger-keys.json', 'mods-env.json', 'messengers.json'].map((file) => path.join(config.dataDir, file)), ...(vaultAt ? [vaultAt.file] : [])];
 
 const crew = new Crew(path.join(config.dataDir, 'crew.json'));
 await crew.load();
@@ -259,20 +292,22 @@ const messengers = new Messengers({
   log,
 });
 
-/** the keys each trigger hands its runs (server/trigger-keys.ts) */
-const triggerKeys = new TriggerKeys(path.join(config.dataDir, 'trigger-keys.json'));
+/** the keys each trigger hands its runs: in the vault, else in a file (server/key-file.ts) */
+const triggerKeys = await keyShelf('trigger', 'trigger-keys.json');
 
 /** The triggers (server/triggers.ts): their runs are sessions started by startSession, in Remote Control when they say so, with their trigger's keys. */
 const triggers = new Triggers({
   file: path.join(config.dataDir, 'triggers.json'),
   start: async (trigger, prompt) => {
+    // its keys are in the app's vault, out of reach: no run without them
+    if (vaultElsewhere?.triggers[trigger.id]?.some((name) => !triggerKeys.names(trigger.id).includes(name))) throw new Error(st.triggers.keysElsewhere);
     try {
       const { session } = await startSession(
         { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
         { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, restrict: trigger.restrict, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes }, ...(trigger.browser ? { accountsBrowser: trigger.browser } : {}) },
       );
       const keys = triggerKeys.entries(trigger.id);
-      if (keys.length) sessions.giveSecrets(session.id, undefined, keys);
+      if (keys.length) { sessions.giveSecrets(session.id, undefined, keys); vault?.touchOwner({ kind: 'trigger', id: trigger.id }, trigger.name); }
       return session;
     } catch (error) {
       // nobody is there to answer the trust question: the folder must be approved once from the page
@@ -286,6 +321,8 @@ const triggers = new Triggers({
   log,
 });
 await triggers.load();
+// keys of triggers deleted before their keys went with them; not when triggers.json could not be read (its triggers are unknown)
+if (readableOrMissing(path.join(config.dataDir, 'triggers.json'))) pruneShelf(triggerKeys, (id) => !!triggers.get(id));
 triggers.start();
 messengers.start();
 /** the open-space MCP access of another program of this computer (server/mcp.ts) */
@@ -374,7 +411,7 @@ const mcpApi: OpenSpaceApi = {
     if (!mode) throw new Error(st.triggers.errors.mode);
     if (role && !ROLE_NAME.test(role)) throw new Error(st.triggers.errors.role);
     try {
-      const { session } = await startSession({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote });
+      const { session } = await startSession({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote, spawned: true });
       return session;
     } catch (error) {
       if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
@@ -455,8 +492,17 @@ const preferencesMessage = (): ServerMessage => ({ t: 'preferences', preferences
 prepareSounds(config.dataDir, log);
 /** the kit the mods load, and the guide their sessions read: beside the page once built, in public/ while developing */
 const MOD_KIT = path.join(DEV ? path.join(ROOT, 'public') : DIST, 'mod-kit');
-const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), envFile: path.join(config.dataDir, 'mods-env.json'), secret, port: config.modsPort, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
+const mods = new Mods({ folder: modsFolder(config.dataDir), kitDir: MOD_KIT, seenFile: path.join(config.dataDir, 'mods-seen.json'), keys: await keyShelf('mod', 'mods-env.json'), trashFile: path.join(config.dataDir, 'mods-trashed.json'), secret, port: config.modsPort, onChange: (list) => broadcast({ t: 'mods', mods: list }), log });
 await mods.prepare();
+// a key of the vault changed: the sessions it was handed to, Settings > Keys, the triggers' and the mods' names
+if (vault) writeVaultOwners(VAULT_OWNERS, vault);
+vault?.watch(() => {
+  writeVaultOwners(VAULT_OWNERS, vault);
+  secretStore.vaultChanged();
+  broadcast(keysMessage());
+  broadcast(triggersMessage());
+  broadcast({ t: 'mods', mods: mods.list() });
+});
 /** Checks a session may use its browser for `os-secret` (the shared one: only if it was given it). */
 function browserOf(sessionId: string, shared: boolean) {
   if (!browsers.available) throw new Error(st.sessions.noBrowser);
@@ -474,7 +520,9 @@ const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: D
     known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     answer: (sessionId, action, form) => answerSecrets({ sessionId, action, form }, {
       store: secretStore, roots: () => config.roots,
-      ask: (id, names, why) => sessions.askSecrets(id, names, why),
+      ask: (id, names, why, card) => sessions.askSecrets(id, names, why, card),
+      // a run nobody follows on a chat bot cannot wait for an answer in the page
+      unattended: (id) => !!sessions.placeOf(id)?.trigger && !messengers.followedSession(id),
       setCookie: (id, cookie, shared) => { browserOf(id, shared); return browsers.setCookie(id, cookie, shared); },
       signIn: (id, { url, username, password }) => { browserOf(id, false); return browsers.signIn(id, url, { username, password }); },
       type: (id, { value, url, shared, anyField }) => { browserOf(id, shared); return browsers.typeInto(id, value, url, shared, anyField); },
@@ -524,6 +572,7 @@ function onConnection(socket: WebSocket) {
   }).catch((error: unknown) => log('cannot read the Claude Code settings', error));
   send({ t: 'automata', state: automata.state });
   send(triggersMessage());
+  send(keysMessage());
   send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
     if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
@@ -575,7 +624,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'send': sessions.send(message.sessionId, message.text, message.images, message.files); break;
     case 'answer': sessions.answer(message.sessionId, message.requestId, message.decision); break;
     case 'reply': sessions.reply(message.sessionId, message.requestId, message.answers); break;
-    case 'secrets': sessions.giveSecrets(message.sessionId, message.requestId, message.entries); break;
+    case 'secrets': sessions.giveSecrets(message.sessionId, message.requestId, message.entries, { stored: message.stored ?? [], always: message.always === true }); break;
     case 'forgetSecrets': sessions.forgetSecrets(message.sessionId, message.names); break;
     case 'interrupt': sessions.interrupt(message.sessionId); break;
     case 'unqueue': sessions.unqueue(message.sessionId, message.queueId); break;
@@ -752,7 +801,10 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'deleteMod': await mods.remove(message.id); break;
     case 'modSeen': await mods.markSeen(message.id); break;
     case 'configureMod': await mods.configure(message.id, message.settings); break;
-    case 'modEnv': send({ t: 'modEnv', id: message.id, env: mods.envOf(message.id) }); break;
+    case 'modEnv':
+      send({ t: 'modEnv', id: message.id, env: mods.envOf(message.id) });
+      vault?.touchOwner({ kind: 'mod', id: message.id }, mods.list().find((mod) => mod.id === message.id)?.name ?? message.id);
+      break;
     case 'modStoreGet': send({ t: 'modStore', id: message.id, name: message.name, value: await mods.stored(message.id, message.name) }); break;
     case 'modStoreSet': if (mods.store(message.id, message.name, message.value)) broadcast({ t: 'modStore', id: message.id, name: message.name, value: message.value }); break;
     case 'automatonLog': send({ t: 'automatonLog', runId: message.runId, ...await automata.thread(message.runId) }); break;
@@ -774,6 +826,15 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'deleteMessenger': messengers.remove(message.id); break;
     case 'testMessenger': await messengers.test(message.id); break;
     case 'relinkMessenger': messengers.relink(message.id); break;
+    case 'saveKey': {
+      if (!vault) break;
+      const folder = message.scope.kind === 'project' ? resolveAllowedDirectory(message.scope.path, config.roots) : null;
+      if (message.scope.kind === 'project' && !folder) break;
+      vault.set(message.name, folder ? { kind: 'project', path: projectOf(folder) } : { kind: 'all' }, message.value);
+      break;
+    }
+    case 'replaceKey': vault?.replace(message.id, message.value); break;
+    case 'deleteKey': vault?.remove(message.id); break;
     case 'forgetTriggerKey':
       triggerKeys.drop(message.id, message.name);
       broadcast(triggersMessage());

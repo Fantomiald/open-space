@@ -80,7 +80,7 @@ The trigger keeps its last 100 runs. Each has a source (`cron`, `webhook`, `manu
 
 ## Keys
 
-The keys of a trigger are given to each run's `os-secret` when it starts. The session uses them without seeing their value. Once saved they cannot be read again, only replaced. They never go through the MCP server. See [Secrets](secrets.md).
+The keys of a trigger are given to each run's `os-secret` when it starts. The session uses them without seeing their value. Once saved they cannot be read again, only replaced. They are kept in the vault with the scope "this trigger" (without a vault, in `trigger-keys.json`). A trigger's runs only get their own trigger's keys, never the project or everywhere ones. They never go through the MCP server. See [Secrets](secrets.md).
 
 ## Ending a run
 

@@ -102,12 +102,30 @@ export function checkoutHome(folder: string): string | null {
       const own = path.resolve(top, gitdir);
       const common = path.resolve(own, readFileSync(path.join(own, 'commondir'), 'utf8').trim());
       if (path.basename(common) !== '.git' || !statSync(common).isDirectory()) return null;
+      // git's own link back: the repository lists this worktree, and its entry names this very folder (a file written
+      // by hand to name another repository has neither)
+      if (real(path.dirname(own)) !== real(path.join(common, 'worktrees'))) return null;
+      if (real(path.resolve(own, readFileSync(path.join(own, 'gitdir'), 'utf8').trim())) !== real(dotGit)) return null;
       const main = real(path.dirname(common));
       const home = path.join(main, path.relative(top, start));
       return existsSync(home) ? real(home) : main;
     } catch {
       return null;
     }
+  }
+}
+
+/**
+ * The project a folder belongs to, for the keys kept "for this project" (server/vault.ts): the main checkout of its git
+ * repository (a linked worktree's too), else the top of the repository it is in, else the folder itself. Real paths,
+ * compared whole (never as a prefix). Reads files, runs no git.
+ */
+export function projectOf(folder: string): string {
+  const start = real(folder);
+  for (let top = start; ; top = path.dirname(top)) {
+    let isFile: boolean;
+    try { isFile = statSync(path.join(top, '.git')).isFile(); } catch { if (path.dirname(top) === top) return start; continue; }
+    return isFile ? (checkoutHome(top) ?? top) : top;
   }
 }
 

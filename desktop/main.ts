@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSy
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
@@ -31,6 +31,8 @@ const address = `http://127.0.0.1:${config.port}`;
 const logFile = path.join(config.dataDir, 'server.log');
 const boundsFile = path.join(app.getPath('userData'), 'window.json');
 const outFile = path.join(app.getPath('userData'), 'out-windows.json');
+/** the keys vault (server/vault.ts): in this app's own folder, so the app run from the repo (app:dev) has another one */
+const vaultFile = path.join(app.getPath('userData'), 'keys-vault.json');
 /** how long the window stays still before where it is gets written down */
 const BOUNDS_SAVE_MS = 500;
 /** a window taken out of Open Space (src/state/out.ts): a session, a mod or a browser */
@@ -85,6 +87,27 @@ async function alreadyRunning(): Promise<boolean> {
   }
 }
 
+/**
+ * How the vault's values can be sealed here, once the app is ready: by the Keychain, by Windows for the user's account,
+ * by a Linux keyring; null when there is none (Linux with no keyring gives "basic_text", a key written in clear).
+ */
+async function vaultStorage(): Promise<'keychain' | 'windows' | 'linux' | null> {
+  if (process.platform === 'linux' && ['basic_text', 'unknown'].includes(safeStorage.getSelectedStorageBackend())) return null;
+  try { if (!(await safeStorage.isAsyncEncryptionAvailable())) return null; } catch { return null; }
+  return process.platform === 'darwin' ? 'keychain' : process.platform === 'win32' ? 'windows' : 'linux';
+}
+
+/** Seals or opens values of the vault for the bridge (only this app's main process has safeStorage). */
+async function answerVault(child: UtilityProcess, message: Extract<AppMessage, { t: 'seal' | 'open' }>) {
+  if (message.t === 'seal') {
+    const sealed = await safeStorage.encryptStringAsync(message.text).then((bytes) => bytes.toString('base64'), () => null);
+    child.postMessage({ t: 'sealed', id: message.id, sealed } satisfies AppNews);
+    return;
+  }
+  const texts = await Promise.all(message.sealed.map((each) => safeStorage.decryptStringAsync(Buffer.from(each, 'base64')).then(({ result }) => result, () => null)));
+  child.postMessage({ t: 'opened', id: message.id, texts } satisfies AppNews);
+}
+
 /** Starts the bridge; resolves with its /pair link once it listens. It is started again if it stops on its own. */
 function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
   const startedAt = Date.now();
@@ -98,6 +121,7 @@ function startBridge(environment: NodeJS.ProcessEnv): Promise<string> {
       else if (message.t === 'notify') showNotification(message.title, message.body, message.sessionId);
       else if (message.t === 'restart' && update?.state === 'ready') { installing = true; quitting = true; stopBridge(child); }
       else if (message.t === 'check') checkNow();
+      else if (message.t === 'seal' || message.t === 'open') void answerVault(child, message);
     });
     child.once('exit', (code) => {
       bridge = null;
@@ -500,9 +524,10 @@ async function start() {
       return;
     }
   } else {
-    const found = await loginPath();
+    const [found, storage] = await Promise.all([loginPath(), vaultStorage()]);
     try {
       page = await startBridge({ ...process.env, ...(found ? { PATH: found } : {}),
+        OPEN_SPACE_VAULT: storage ? vaultFile : '', OPEN_SPACE_VAULT_STORAGE: storage ?? '',
         ...(process.platform === 'win32' ? { OPEN_SPACE_KNOWN_FOLDERS: JSON.stringify([app.getPath('desktop'), app.getPath('documents')]) } : {}),
       });
     } catch {

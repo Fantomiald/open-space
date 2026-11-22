@@ -5,7 +5,7 @@ import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { modsNews } from '../room/metrics.ts';
 import { useSessions } from '../state/sessions.ts';
-import { BackIcon, KeyIcon, MOD_ICONS, ModsIcon, PencilIcon, PlayIcon, RefreshIcon, RemoveIcon, SendIcon, SettingsIcon } from './Icons.tsx';
+import { AlertIcon, BackIcon, KeyIcon, MOD_ICONS, ModsIcon, PencilIcon, PlayIcon, RefreshIcon, RemoveIcon, SendIcon, SettingsIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
 import { SecretRows } from './SecretPrompt.tsx';
 
@@ -127,6 +127,7 @@ function ModSettingsView({ mod }: { mod: ModInfo }) {
   // one gone since it was chosen: the button only reloads
   const [refreshTrigger, setRefreshTrigger] = useState(triggers.some((each) => each.id === mod.refreshTrigger) ? mod.refreshTrigger : null);
   const asked = mod.env.map((need) => need.name);
+  const elsewhere = useSessions((s) => s.keys.unreachable?.mods[mod.id]);
   const [rows, setRows] = useState<SecretEntry[]>(() => {
     const names = [...asked, ...mod.envSet.filter((each) => !asked.includes(each))];
     return names.length ? names.map((each) => ({ name: each, value: '' })) : [{ name: '', value: '' }];
@@ -208,6 +209,7 @@ function ModSettingsView({ mod }: { mod: ModInfo }) {
         <h4 className="cp-prefs__group-title" id="cp-mod-settings-env">{words.env}</h4>
         <div className="cp-prefs__card cp-mod-settings__env">
           <p className="cp-mod-settings__note"><KeyIcon />{words.envHint}</p>
+          {elsewhere?.length ? <p className="cp-keys__warning" role="status"><AlertIcon />{t.settings.keys.modUnreachable(elsewhere)}</p> : null}
           <SecretRows rows={rows} setRows={setRows} fixed={asked} kept={mod.envSet} hints={hints} addLabel={words.addVariable} />
           {!rowsValid && <p className="cp-mod-settings__error" role="alert">{words.envInvalid}</p>}
         </div>

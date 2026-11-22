@@ -17,6 +17,10 @@ Open Space lit ces variables une fois, au démarrage du serveur (`server/config.
 
 Les variables numériques (`PORT`, `OFFICE_HOOKS_PORT`, `OFFICE_MODS_PORT`, `OFFICE_MAX_LIVE`, `OFFICE_IDLE_MINUTES`) doivent être des nombres entiers positifs. Toute autre valeur fait prendre la valeur par défaut.
 
+## Le coffre de clés
+
+L'app de bureau passe deux variables au serveur qu'elle lance : `OPEN_SPACE_VAULT` (le chemin de `keys-vault.json` dans le dossier propre à l'app) et `OPEN_SPACE_VAULT_STORAGE` (`keychain`, `windows` ou `linux`). Les deux sont vides sans coffre (pas d'app de bureau, ou Linux sans trousseau). Ne les règle pas toi-même. Voir [Secrets](secrets.fr.md).
+
 ## Le navigateur des agents
 
 `OFFICE_CHROME` (lue dans `server/browser.ts`, pas dans `server/config.ts`) est le chemin du navigateur Chromium qu'Open Space lance pour les agents. Quand elle est fixée et que le fichier n'existe pas, aucun navigateur n'est trouvé. Sans elle, Open Space prend le premier installé parmi Google Chrome, Chromium, Microsoft Edge et Brave.

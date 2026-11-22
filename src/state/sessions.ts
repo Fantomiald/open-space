@@ -6,7 +6,7 @@ import { appendRunEvents, type RunLog } from './automata.ts';
 import type { ModInfo, ModSettings } from '../../shared/mods.ts';
 import { heardModEnv, heardModStore } from './mods.ts';
 import { heardPaths } from './path-mentions.ts';
-import type { SecretEntry } from '../../shared/secrets.ts';
+import type { KeysState, SecretEntry, VaultScope } from '../../shared/secrets.ts';
 import type { MessengerInput } from '../../shared/messengers.ts';
 import { create } from 'zustand';
 import { floatsOutOfSight } from './browser.ts';
@@ -64,7 +64,7 @@ const writeWindows = (state: CommandPostState) =>
 export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
 
 /** The parts of the settings dialog, in the order of its menu. */
-export const SETTINGS_SECTIONS = ['general', 'office', 'sessions', 'claude', 'folders', 'connections', 'usage', 'shortcuts', 'about'] as const;
+export const SETTINGS_SECTIONS = ['general', 'office', 'sessions', 'claude', 'folders', 'connections', 'keys', 'usage', 'shortcuts', 'about'] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 /** The latest search sent over every session's thread: only its answer is kept. */
@@ -136,6 +136,8 @@ export interface CommandPostState {
   automatonLogs: Record<string, RunLog>;
   /** the triggers and their last firings, as the server last told them (shared/triggers.ts) */
   triggers: TriggersState;
+  /** the keys of the vault (names only) and how they are kept (Settings > Keys) */
+  keys: KeysState;
   /** why the last trigger sent could not be saved (shared/triggers.ts TriggerError), until the next one */
   triggerError: TriggerError | null;
   /** the roles a session of a folder can run as, as last asked for (null: not asked yet) */
@@ -414,8 +416,12 @@ export interface CommandPostState {
   sendText: (sessionId: string, text: string, images?: ImageUpload[], files?: string[]) => boolean;
   answerPermission: (sessionId: string, requestId: string, decision: PermissionDecision) => boolean;
   answerQuestions: (sessionId: string, requestId: string, answers: Record<string, string>) => boolean;
-  /** keys for a session (`requestId`: the os-secret ask they answer); their values go to the server only */
-  giveSecrets: (sessionId: string, requestId: string | undefined, entries: SecretEntry[]) => boolean;
+  /** keys for a session (`requestId`: the os-secret ask they answer), and keys of the vault handed over (`stored`, `always` for its project); values go to the server only */
+  giveSecrets: (sessionId: string, requestId: string | undefined, entries: SecretEntry[], consent?: { stored: string[]; always: boolean }) => boolean;
+  /** Settings > Keys: adds a key to the vault, replaces one's value, removes one */
+  saveKey: (name: string, value: string, scope: VaultScope) => boolean;
+  replaceKey: (id: string, value: string) => boolean;
+  deleteKey: (id: string) => void;
   /** forgets some of a session's keys, or all of them */
   forgetSecrets: (sessionId: string, names?: string[]) => void;
 }
@@ -467,6 +473,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   automatonAgent: null,
   automatonLogs: {},
   triggers: NO_TRIGGERS,
+  keys: { storage: 'memory', keys: [] },
   triggerError: null,
   agentRoles: null,
   musicApps: [],
@@ -701,6 +708,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'noteMatches': set({ noteMatches: { query: message.query, matches: message.matches } }); break;
       case 'automata': set({ automata: message.state }); break;
       case 'triggers': set({ triggers: message.state }); break;
+      case 'keys': set({ keys: message.state }); break;
       case 'triggerError': set({ triggerError: message.error as TriggerError }); break;
       case 'agentRoles': set({ agentRoles: { cwd: message.cwd, roles: message.roles } }); break;
       case 'automatonLog': set({ automatonLogs: { ...s.automatonLogs, [message.runId]: { events: message.events, truncated: message.truncated } } }); break;
@@ -1129,7 +1137,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     if (sent) announceSpeech(answerSpeech(sessionId, decision));
     return sent;
   },
-  giveSecrets: (sessionId, requestId, entries) => get().send({ t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries }),
+  giveSecrets: (sessionId, requestId, entries, consent) => get().send({ t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries, ...(consent?.stored.length ? { stored: consent.stored } : {}), ...(consent?.always ? { always: true as const } : {}) }),
+  saveKey: (name, value, scope) => get().send({ t: 'saveKey', name, value, scope }),
+  replaceKey: (id, value) => get().send({ t: 'replaceKey', id, value }),
+  deleteKey: (id) => { get().send({ t: 'deleteKey', id }); },
   forgetSecrets: (sessionId, names) => { get().send({ t: 'forgetSecrets', sessionId, ...(names ? { names } : {}) }); },
   answerQuestions: (sessionId, requestId, answers) => {
     const sent = answerAllowed() && get().send({ t: 'reply', sessionId, requestId, answers });

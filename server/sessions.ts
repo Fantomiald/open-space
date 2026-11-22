@@ -14,8 +14,8 @@ import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { modsFolder } from './mods.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import { hasSharedBrowser } from './browser.ts';
-import type { SecretStore } from './secrets.ts';
-import type { SecretEntry } from '../shared/secrets.ts';
+import type { KeyConsent, SecretStore } from './secrets.ts';
+import type { KeysCard, SecretEntry } from '../shared/secrets.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
 import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, GitPending, InspectView, McpAction, MergeProblem, PendingItem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
@@ -39,7 +39,7 @@ import { SessionLog, switchedOffFolder } from './session-log.ts';
 import { searchSessions } from './search.ts';
 import {
   borrowedPlace, branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
-  listBranches, moveConversation, recreateWorktree, removeWorktree, setBranchNote,
+  listBranches, moveConversation, projectOf, recreateWorktree, removeWorktree, setBranchNote,
 } from './worktrees.ts';
 
 const STATES: ReadonlySet<string> = new Set(['starting', 'work', 'perm', 'wait', 'done', 'closed', 'error']);
@@ -170,6 +170,8 @@ export class SessionManager {
     this.commands = stored.commands;
     this.quota = stored.quota;
     for (const info of stored.sessions) {
+      // saved before the vault: its project is read once, then kept (see create)
+      info.project ??= projectOf(info.worktree?.home ?? info.cwd);
       const log = await this.openLog(info.id);
       const session = this.createSession(info, log);
       session.markInterrupted();
@@ -419,6 +421,7 @@ export class SessionManager {
       sharedBrowser: () => this.hasSharedBrowser(info.id),
       chrome: () => !!this.launchedBrowsers.get(info.id)?.chrome,
       ...(this.deps.secrets ? { secretNames: () => this.deps.secrets?.store.names(info.id) ?? [] } : {}),
+      ...(this.deps.secrets?.store.lasting ? { inheritedSecrets: () => this.deps.secrets?.store.inherited(info.id) ?? [] } : {}),
       identity: this.deps.identity,
       claudeSettings: this.deps.claudeSettings,
       hidden: this.deps.hidden,
@@ -668,7 +671,7 @@ export class SessionManager {
    * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
    * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
    */
-  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; restrict?: TriggerRestrict; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser } = {}): Promise<SessionInfo> {
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; restrict?: TriggerRestrict; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser; spawned?: boolean } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.roots());
@@ -697,6 +700,10 @@ export class SessionManager {
     if (options.ultracode) info.ultracode = true;
     if (options.fastMode) info.fastMode = true;
     if (!trusted && options.trust === 'restricted') info.untrusted = true;
+    // the project of its keys (server/vault.ts), read now from the folder the user chose and kept: never read again from
+    // files its agent could write (one naming another repository); its worktrees are of the same repository
+    info.project = projectOf(cwd);
+    if (started.spawned) info.spawned = true;
     if (started.trigger) info.trigger = started.trigger;
     if (started.role) info.role = started.role;
     if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
@@ -1111,7 +1118,7 @@ export class SessionManager {
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
       forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
-      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}), ...(source.restrict ? { restrict: source.restrict } : {}),
+      ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.project ? { project: source.project } : {}), ...(source.spawned ? { spawned: true as const } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}), ...(source.restrict ? { restrict: source.restrict } : {}),
     });
     const log = await this.openLog(info.id);
     const session = this.createSession(info, log);
@@ -1151,12 +1158,18 @@ export class SessionManager {
   }
   answer(id: string, requestId: string, decision: PermissionDecision) { this.session(id).answer(requestId, decision); }
   reply(id: string, requestId: string, answers: Record<string, string>) { this.session(id).reply(requestId, answers); }
-  askSecrets(id: string, names: string[], why: string) { return this.session(id).askSecrets(names, why); }
+  askSecrets(id: string, names: string[], why: string, keys?: KeysCard) { return this.session(id).askSecrets(names, why, keys); }
 
-  /** Keys the user gave a session, in the box of an `os-secret ask` (`requestId`) or on their own: the names kept. */
-  giveSecrets(id: string, requestId: string | undefined, entries: readonly SecretEntry[]): string[] {
+  /** Where a session stands for the vault (server/secrets.ts KeyPlace), but its project: null for an unknown one. */
+  placeOf(id: string) { return this.sessions.get(id)?.keyPlace ?? null; }
+
+  /**
+   * Keys the user gave a session, in the box of an `os-secret ask` (`requestId`) or on their own, and the keys of the vault
+   * they handed over (`consent`): the names kept.
+   */
+  giveSecrets(id: string, requestId: string | undefined, entries: readonly SecretEntry[], consent?: KeyConsent): string[] {
     const session = this.session(id);
-    const kept = this.deps.secrets?.store.set(id, entries) ?? [];
+    const kept = this.deps.secrets?.store.give(id, entries, consent) ?? [];
     if (!kept.length) throw new Error(st.sessions.noSecret);
     if (requestId) session.secretsGiven(requestId);
     return kept;
@@ -1337,6 +1350,8 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     resting: raw.resting === true || undefined,
     remoteSession: /^cse_\w{1,100}$/.test(asString(raw.remoteSession)) ? asString(raw.remoteSession) : undefined,
     untrusted: raw.untrusted === true || undefined,
+    project: typeof raw.project === 'string' && path.isAbsolute(raw.project) ? raw.project : undefined,
+    spawned: raw.spawned === true || undefined,
     queued: parseQueue(raw.queued),
     pausedUntil: typeof raw.pausedUntil === 'number' && raw.pausedUntil > 0 ? raw.pausedUntil : undefined,
     pausedCrons: typeof raw.pausedCrons === 'number' && Number.isInteger(raw.pausedCrons) && raw.pausedCrons > 0 ? raw.pausedCrons : undefined,
