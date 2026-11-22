@@ -51,7 +51,7 @@ Alt (Option on Mac) + drag moves the room; Alt + scroll or pinch zooms it. Sizes
 - **See what changed**: `+X −Y` in the header, then each file with its diff.
 - **Watch the context**: a gauge fills up and the field offers to compact. `/context`, `/mcp` and `/usage` open as views in the page.
 - **See what Claude sends you**: pictures, diagrams, videos, Markdown and HTML pages show in the thread. A page published on claude.ai shows as a live preview.
-- **Give a key without showing it.** When a session needs an API key, a box opens in the thread: you paste the value, the agent only gets its name. With `os-secret` it writes it to a `.env`, runs a command with it or sets it as a browser cookie, never reads it. Keys live in memory, 12 h at most, and go when the session switches off.
+- **Give a key without showing it.** When a session needs an API key, a box opens in the thread: you paste the value, the agent only gets its name. With `os-secret` it writes it to a `.env`, runs a command with it or sets it as a browser cookie, never reads it. A key can be kept for the session only (in memory, 12 h at most), for a project or for every session: the last two are encrypted by your system's keychain in the app's vault, and a session only gets them with your go.
 
 ![Lina asks for a Stripe test key: the box in her thread, where the value is pasted, and the agent only ever sees the name](docs/images/secret-box.png)
 

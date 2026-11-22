@@ -26,7 +26,7 @@ When a file in a mod's `data/` folder changes while its window is closed, Open S
 
 ## Variables
 
-A mod's page can need a key or a setting, such as an API key. You fill these in the mod's **Settings**, under **Environment variables**. Open Space keeps them in `mods-env.json` under `OFFICE_DIR`, outside the mod's folder: the agent that writes the mod never sees their values, and only the mod's page gets them.
+A mod's page can need a key or a setting, such as an API key. You fill these in the mod's **Settings**, under **Environment variables**. Open Space keeps them in its keys vault with the scope "this mod" (without a vault, in `mods-env.json` under `OFFICE_DIR`), outside the mod's folder: the agent that writes the mod never sees their values, and only the mod's page gets them.
 
 ## A mod that starts a trigger
 

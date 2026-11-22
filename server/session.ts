@@ -10,6 +10,7 @@ import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
 import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, GitPending, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
+import type { KeysCard } from '../shared/secrets.ts';
 import { agentLaunch } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asString, type Json } from './json.ts';
@@ -42,6 +43,8 @@ export interface SessionDeps {
   chrome?: () => boolean;
   /** the names of the keys the user gave it (server/secrets.ts); absent without os-secret */
   secretNames?: () => string[];
+  /** of those, the ones handed from the vault (server/vault.ts); absent without a vault */
+  inheritedSecrets?: () => string[];
   /** stores a picture sent by the user and returns its name (see attachments.ts) */
   saveImage: (image: ImageUpload) => string;
   /** where a file the user uploaded is (see uploads.ts), or null */
@@ -104,7 +107,7 @@ type StopRequest = { reason: 'closed' | 'idle'; note: string; after?: () => void
 interface PendingRequest { input: Record<string, unknown>; suggestions: Json[]; prompt: PermissionPrompt; given?: (names: string[] | null) => void; fields?: ElicitationField[] }
 
 /** Session fields that are computed, not stored. */
-export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'checkout' | 'suggestion'>;
+export type StoredInfo = Omit<SessionInfo, 'permissions' | 'lastSeq' | 'remote' | 'secrets' | 'inheritedSecrets' | 'checkout' | 'suggestion'>;
 
 /** How long a finished run stays after its last turn before closing (Session.finishAfterTurn), and one that never said so. */
 const FINISH_DELAY_MS = 5000;
@@ -191,6 +194,8 @@ export class Session {
   }
 
   get id() { return this.info.id; }
+  /** what the vault needs to know of it, read without a snapshot (server/secrets.ts KeyPlace) */
+  get keyPlace() { return { name: this.info.name, cwd: this.info.cwd, project: this.info.project, trigger: !!this.info.trigger, untrusted: !!this.info.untrusted, spawned: !!this.info.spawned }; }
   get alive() { return !!this.process?.alive; }
   /** its process is alive but asked to go, having waited long enough: it no longer counts against the limit */
   get leaving() { return !!this.process?.alive && this.stopRequest?.reason === 'idle'; }
@@ -198,7 +203,8 @@ export class Session {
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
     const secrets = this.deps.secretNames?.() ?? [];
-    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.checkout && !this.info.worktree ? { checkout: this.checkout } : {}), ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(this.suggestion ? { suggestion: this.suggestion } : {}), ...(secrets.length ? { secrets } : {}) };
+    const inherited = this.deps.inheritedSecrets?.() ?? [];
+    return { ...this.info, permissions: [...this.requests.values()].map((request) => request.prompt), lastSeq: this.deps.log.lastSeq, ...(this.checkout && !this.info.worktree ? { checkout: this.checkout } : {}), ...(this.remote ? { remote: this.remote } : {}), ...(this.chrome ? { chrome: this.chrome } : {}), ...(this.suggestion ? { suggestion: this.suggestion } : {}), ...(secrets.length ? { secrets } : {}), ...(inherited.length ? { inheritedSecrets: inherited } : {}) };
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -892,12 +898,12 @@ export class Session {
 
   /**
    * `os-secret ask`, run by the agent's Bash during its turn: a box asks the user for the keys `names` (`why`: what they
-   * are for), as a permission would. Resolves with the names given, or null when the user refuses or the turn ends.
+   * are for) and for those of the vault in `keys`, as a permission would. Resolves with the names given, or null when the user refuses or the turn ends.
    */
-  askSecrets(names: string[], why: string): Promise<string[] | null> {
+  askSecrets(names: string[], why: string, keys?: KeysCard): Promise<string[] | null> {
     if (!this.process?.alive || (this.context.state !== 'work' && this.context.state !== 'perm')) return Promise.reject(new Error(st.sessions.secretsOutsideTurn));
     const requestId = `secrets-${randomUUID()}`;
-    const prompt: PermissionPrompt = { requestId, who: 'chef', tool: 'os-secret', detail: why, canAlways: false, secrets: names };
+    const prompt: PermissionPrompt = { requestId, who: 'chef', tool: 'os-secret', detail: why, canAlways: false, secrets: names, ...(keys ? { keys } : {}) };
     return new Promise((resolve) => {
       this.requests.set(requestId, { input: {}, suggestions: [], prompt, given: resolve });
       this.record({ k: 'ask', ...prompt });

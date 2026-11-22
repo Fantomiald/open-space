@@ -11,6 +11,16 @@ files:
   - out/**/*
   - package.json
   - "!node_modules/**/*"
+# The keys vault (server/vault.ts) trusts that only this app's own code asks the main process to decrypt: no running it
+# as plain node, no NODE_OPTIONS or inspector to inject code, and only the signed app.asar is loaded. That matters on
+# macOS, where the Keychain gives the key to this signed app alone; on Windows (DPAPI) and Linux (the session keyring)
+# any program of the user's account can decrypt the file anyway, so there the vault only keeps keys off the disk in clear.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 mac:
   category: public.app-category.developer-tools
   target:

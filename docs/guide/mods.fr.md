@@ -26,7 +26,7 @@ Quand un fichier du dossier `data/` d'un mod change alors que sa fenêtre est fe
 
 ## Les variables
 
-La page d'un mod peut avoir besoin d'une clé ou d'un réglage, une clé d'API par exemple. Tu les remplis dans les **Réglages** du mod, sous **Variables d'environnement**. Open Space les garde dans `mods-env.json` sous `OFFICE_DIR`, hors du dossier du mod : l'agent qui écrit le mod n'en voit jamais la valeur, et seule la page du mod les reçoit.
+La page d'un mod peut avoir besoin d'une clé ou d'un réglage, une clé d'API par exemple. Tu les remplis dans les **Réglages** du mod, sous **Variables d'environnement**. Open Space les garde dans son coffre de clés avec la portée « ce mod » (sans coffre, dans `mods-env.json` sous `OFFICE_DIR`), hors du dossier du mod : l'agent qui écrit le mod n'en voit jamais la valeur, et seule la page du mod les reçoit.
 
 ## Un mod qui lance un déclencheur
 

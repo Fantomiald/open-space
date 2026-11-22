@@ -15,12 +15,13 @@ function freeName(folder: string, name: string): string {
 
 /**
  * Puts a file or a folder in the user's Trash (macOS) under a free name, or in the Recycle Bin (Windows); deletes it
- * where there is neither. `trash`, given by the tests, is the Trash folder, on every platform.
+ * where there is neither. `trash`, given by the tests, is the Trash folder, on every platform. Returns where it went in
+ * the Trash folder (gone once the Trash is emptied), null when it was deleted or went to the Recycle Bin.
  */
-export async function moveToTrash(target: string, folder: boolean, trash?: string): Promise<void> {
-  if (trash === undefined && process.platform === 'win32') { await recycle(target, folder); return; }
+export async function moveToTrash(target: string, folder: boolean, trash?: string): Promise<string | null> {
+  if (trash === undefined && process.platform === 'win32') { await recycle(target, folder); return null; }
   trash ??= path.join(os.homedir(), '.Trash');
-  if (!existsSync(trash)) { await rm(target, { recursive: folder }); return; }
+  if (!existsSync(trash)) { await rm(target, { recursive: folder }); return null; }
   const destination = freeName(trash, path.basename(target));
   try {
     await rename(target, destination);
@@ -30,4 +31,5 @@ export async function moveToTrash(target: string, folder: boolean, trash?: strin
     await cp(target, destination, { recursive: true, verbatimSymlinks: true });
     await rm(target, { recursive: true });
   }
+  return destination;
 }

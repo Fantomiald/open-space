@@ -7,7 +7,7 @@ import { IS_MAC, IS_WINDOWS } from '../lib/platform.ts';
 
 export type SettingRow = keyof typeof t.settings.prefs.rows;
 
-/** Where each row lives. A section without rows (usage, shortcuts) is found by its own name. */
+/** Where each row lives. A section without rows (keys, usage, shortcuts) is found by its own name. */
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   language: 'general', timeFormat: 'general', reduceMotion: 'office', glassOpacity: 'office', windowStyle: 'office', tagColors: 'office', sound: 'general', notifications: 'general', terminal: 'general',
   timestamps: 'general', turnDuration: 'general', detailedActions: 'general', copyOnSelect: 'general',
@@ -36,6 +36,6 @@ export function settingEntries(): SettingEntry[] {
     const { title, hint } = words.rows[row] as { title: string; hint?: string };
     return { section: ROWS[row], row, label: title, sectionLabel: words.sections[ROWS[row]], words: `${hint ?? ''} ${CONFIG_LABELS[row] ? `${CONFIG_LABELS[row]} /config` : ''}` };
   });
-  const whole = (['usage', 'shortcuts'] as const).map((section) => ({ section, row: section, label: words.sections[section], sectionLabel: words.sections[section], words: words.intros[section] }));
+  const whole = (['keys', 'usage', 'shortcuts'] as const).map((section) => ({ section, row: section, label: words.sections[section], sectionLabel: words.sections[section], words: words.intros[section] }));
   return [...whole, ...rows];
 }

@@ -2266,3 +2266,20 @@ describe('persistence and resynchronisation', () => {
     await manager.shutdown();
   });
 });
+
+describe('the project of a session, for its keys', () => {
+  it('is read once when it is made and kept, whatever its agent writes in the folder later', async () => {
+    const { manager } = setup();
+    await manager.init();
+    const session = await manager.create({ cwd: projectA(), model: 'haiku' });
+    assert.equal(manager.placeOf(session.id)?.project, projectA());
+    const planted = path.join(projectA(), '.git');
+    writeFileSync(planted, `gitdir: ${path.join(root, 'project-b', '.git', 'worktrees', 'x')}\n`);
+    assert.equal(manager.placeOf(session.id)?.project, projectA(), 'not read again');
+    rmSync(planted);
+    assert.equal(manager.placeOf(session.id)?.spawned, false);
+    const spawned = await manager.create({ cwd: projectA(), model: 'haiku' }, { spawned: true });
+    assert.equal(manager.placeOf(spawned.id)?.spawned, true, 'started through the MCP');
+    await manager.shutdown();
+  });
+});

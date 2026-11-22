@@ -17,6 +17,10 @@ Open Space reads these variables once, when the server starts (`server/config.ts
 
 The numeric variables (`PORT`, `OFFICE_HOOKS_PORT`, `OFFICE_MODS_PORT`, `OFFICE_MAX_LIVE`, `OFFICE_IDLE_MINUTES`) must be positive whole numbers. Any other value falls back to the default.
 
+## The keys vault
+
+The desktop app passes two variables to the server it starts: `OPEN_SPACE_VAULT` (the path of `keys-vault.json` in the app's own folder) and `OPEN_SPACE_VAULT_STORAGE` (`keychain`, `windows` or `linux`). Both are empty when there is no vault (no desktop app, or Linux without a keyring). Do not set them yourself. See [Secrets](secrets.md).
+
 ## The agents' browser
 
 `OFFICE_CHROME` (read in `server/browser.ts`, not in `server/config.ts`) is the path of the Chromium browser Open Space launches for agents. When it is set and the file does not exist, no browser is found. When it is not set, Open Space takes the first one installed among Google Chrome, Chromium, Microsoft Edge and Brave.

@@ -10,7 +10,7 @@ import { parseBirthday } from '../shared/festivals.ts';
 import { MAX_NOTE, NOTE_NAME } from '../shared/journal.ts';
 import { isEntryName } from './files.ts';
 import { parseJobs } from '../shared/jobs.ts';
-import { isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
+import { isPasteScope, isSecretName, MAX_SECRET_LENGTH, MAX_SECRETS, type SecretEntry } from '../shared/secrets.ts';
 import { parseLook } from '../shared/look.ts';
 import { storedTags } from '../shared/tags.ts';
 import { isModId, isModStoreName, MAX_MOD_DESCRIPTION, MAX_MOD_ENV, MAX_MOD_NAME, MAX_MOD_REQUEST, MAX_MOD_STORE, MOD_ICONS, MOD_REFRESH, type ModSettings } from '../shared/mods.ts';
@@ -209,8 +209,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'secrets': {
       const requestId = raw.requestId === undefined ? undefined : identifier(raw.requestId);
       const entries = Array.isArray(raw.entries) && raw.entries.length <= MAX_SECRETS ? raw.entries.map(parseSecret) : null;
-      if (!sessionId || requestId === null || !entries?.length || entries.some((entry) => !entry)) return null;
-      return { t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries: entries as SecretEntry[] };
+      const stored = raw.stored === undefined ? [] : Array.isArray(raw.stored) && raw.stored.length <= MAX_SECRETS && raw.stored.every((name) => typeof name === 'string' && isSecretName(name)) ? raw.stored as string[] : null;
+      if (!sessionId || requestId === null || !entries || !stored || !(entries.length || stored.length) || entries.some((entry) => !entry)) return null;
+      return { t: 'secrets', sessionId, ...(requestId ? { requestId } : {}), entries: entries as SecretEntry[], ...(stored.length ? { stored } : {}), ...(raw.always === true ? { always: true } : {}) };
     }
     case 'forgetSecrets': {
       if (!sessionId) return null;
@@ -425,6 +426,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'testMessenger': case 'relinkMessenger':
     case 'deleteMessenger': return typeof raw.id === 'string' && MESSENGER_ID.test(raw.id) ? { t: raw.t, id: raw.id } : null;
+    case 'saveKey': {
+      if (typeof raw.name !== 'string' || !isSecretName(raw.name) || !isKeyValue(raw.value) || !isJson(raw.scope)) return null;
+      if (raw.scope.kind === 'all') return { t: raw.t, name: raw.name, value: raw.value, scope: { kind: 'all' } };
+      return raw.scope.kind === 'project' && typeof raw.scope.path === 'string' && raw.scope.path.length <= 4096 ? { t: raw.t, name: raw.name, value: raw.value, scope: { kind: 'project', path: raw.scope.path } } : null;
+    }
+    case 'replaceKey': return typeof raw.id === 'string' && KEY_ID.test(raw.id) && isKeyValue(raw.value) ? { t: raw.t, id: raw.id, value: raw.value } : null;
+    case 'deleteKey': return typeof raw.id === 'string' && KEY_ID.test(raw.id) ? { t: raw.t, id: raw.id } : null;
     case 'forgetTriggerKey':
       return typeof raw.id === 'string' && TRIGGER_ID.test(raw.id) && typeof raw.name === 'string' && isSecretName(raw.name) ? { t: raw.t, id: raw.id, name: raw.name } : null;
     case 'runTrigger': {
@@ -549,5 +557,10 @@ function parseModSettings(raw: unknown): ModSettings | null {
 /** A key given in the box: a variable name and a value, never trimmed (a token is taken as pasted). */
 function parseSecret(raw: unknown): SecretEntry | null {
   if (!isJson(raw) || typeof raw.name !== 'string' || typeof raw.value !== 'string') return null;
-  return isSecretName(raw.name) && raw.value && raw.value.length <= MAX_SECRET_LENGTH ? { name: raw.name, value: raw.value } : null;
+  if (raw.scope !== undefined && !isPasteScope(raw.scope)) return null;
+  const scope = raw.scope && raw.scope !== 'session' ? { scope: raw.scope } : {};
+  return isSecretName(raw.name) && raw.value && raw.value.length <= MAX_SECRET_LENGTH ? { name: raw.name, value: raw.value, ...scope } : null;
 }
+
+const KEY_ID = /^[\w-]{1,64}$/;
+const isKeyValue = (value: unknown): value is string => typeof value === 'string' && value !== '' && value.length <= MAX_SECRET_LENGTH;

@@ -1,7 +1,7 @@
 // The user's mods (shared/mods.ts): one folder each under OFFICE_DIR/mods, written by sessions that run there. This
 // lists them, makes the folder of a new one, watches their files, and remembers when the user last saw each one's data
 // (OFFICE_DIR/mods-seen.json). The variables the user gives a mod in its settings are kept apart from its folder, which its
-// session reads (OFFICE_DIR/mods-env.json, the user's alone), and go only to its page when it asks. The folder's CLAUDE.md, the rules a session writing a mod reads, is Open Space's own
+// session reads (in the vault, else OFFICE_DIR/mods-env.json: see `keys`), and go only to its page when it asks. The folder's CLAUDE.md, the rules a session writing a mod reads, is Open Space's own
 // (the kit's GUIDE.md): written again whenever it differs.
 import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
@@ -11,6 +11,7 @@ import path from 'node:path';
 import { hasNewData, isModId, MOD_DATA_FOLDER, modIdFor, readManifest, type ModInfo, type ModSettings } from '../shared/mods.ts';
 import { asJson } from './json.ts';
 import { resolveInside } from './paths.ts';
+import { pruneShelf, type KeyShelf } from './vault.ts';
 import { moveToTrash } from './trash.ts';
 
 /** The folder the mods live in; sessions may run in it, beside the user's own folders. */
@@ -54,6 +55,9 @@ function changedAt(folder: string): number | null {
   return latest === null ? null : Math.round(latest);
 }
 
+/** how often the mods in the Trash are looked for: put back, or the Trash emptied */
+const TRASH_CHECK_MS = 60_000;
+
 export interface ModsOptions {
   /** OFFICE_DIR/mods */
   folder: string;
@@ -61,8 +65,12 @@ export interface ModsOptions {
   kitDir: string;
   /** OFFICE_DIR/mods-seen.json */
   seenFile: string;
-  /** OFFICE_DIR/mods-env.json */
-  envFile: string;
+  /** the variables given to each mod, by mod id: in the vault (server/vault.ts), else OFFICE_DIR/mods-env.json (server/key-file.ts) */
+  keys: KeyShelf;
+  /** OFFICE_DIR/mods-trashed.json: the mods put in the Trash, whose variables stay until the Trash is emptied */
+  trashFile: string;
+  /** the Trash folder, given by the tests */
+  trash?: string;
   secret: string;
   /** the port the mods' pages are served on (config.modsPort) */
   port: number;
@@ -73,13 +81,15 @@ export interface ModsOptions {
 export class Mods {
   private options: ModsOptions;
   private seen: Record<string, number> = {};
-  private env: Record<string, Record<string, string>> = {};
   private watcher: FSWatcher | null = null;
   private settling: NodeJS.Timeout | null = null;
   private last = '';
   /** the values saved and not written yet, by mod then name */
   private unwritten = new Map<string, Map<string, unknown>>();
   private flushing: NodeJS.Timeout | null = null;
+  /** the mods in the Trash: their name, and where their folder went */
+  private trashed: Record<string, { name: string; path: string }> = {};
+  private trashCheck: NodeJS.Timeout | null = null;
 
   constructor(options: ModsOptions) {
     this.options = options;
@@ -87,7 +97,7 @@ export class Mods {
 
   /** Makes the folder, writes the guide, reads what was seen, and starts watching. */
   async prepare() {
-    const { folder, kitDir, seenFile, envFile, log } = this.options;
+    const { folder, kitDir, seenFile, log } = this.options;
     mkdirSync(folder, { recursive: true, mode: 0o700 });
     try {
       const guide = readFileSync(path.join(kitDir, GUIDE), 'utf8');
@@ -99,16 +109,18 @@ export class Mods {
       for (const [id, at] of Object.entries(raw)) if (isModId(id) && typeof at === 'number') this.seen[id] = at;
     } catch { /* nothing seen yet */ }
     try {
-      const raw = asJson(JSON.parse(await readFile(envFile, 'utf8')));
-      for (const [id, values] of Object.entries(raw)) {
-        if (!isModId(id)) continue;
-        const kept = Object.entries(asJson(values)).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
-        if (kept.length) this.env[id] = Object.fromEntries(kept);
+      const raw = asJson(JSON.parse(await readFile(this.options.trashFile, 'utf8')));
+      for (const [id, entry] of Object.entries(raw)) {
+        const { name, path: where } = asJson(entry);
+        if (isModId(id) && typeof name === 'string' && typeof where === 'string') this.trashed[id] = { name, path: where };
       }
-    } catch { /* no variable given yet */ }
+    } catch { /* none in the Trash */ }
     const mods = this.list();
     for (const mod of mods) this.writeAddress(mod);
     this.last = JSON.stringify(mods);
+    this.forgetGone(mods);
+    this.trashCheck = setInterval(() => this.checkTrash(), TRASH_CHECK_MS);
+    this.trashCheck.unref();
     try {
       this.watcher = watch(folder, { recursive: true }, () => {
         if (this.settling) clearTimeout(this.settling);
@@ -120,6 +132,7 @@ export class Mods {
 
   stop() {
     this.watcher?.close();
+    if (this.trashCheck) clearInterval(this.trashCheck);
     if (this.settling) clearTimeout(this.settling);
     this.flushStore();
   }
@@ -194,7 +207,7 @@ export class Mods {
         ...readManifest(raw, id), id, folder: own, url: modUrl(secret, id, this.options.port),
         version: changedAt(own) ?? 0,
         unread: hasNewData(changedAt(path.join(own, MOD_DATA_FOLDER)), this.seen[id]),
-        envSet: Object.keys(this.env[id] ?? {}).sort(),
+        envSet: this.options.keys.names(id),
       });
     }
     return mods.sort((a, b) => a.name.localeCompare(b.name));
@@ -220,15 +233,44 @@ export class Mods {
     try { return readFileSync(path.join(this.options.folder, 'CLAUDE.md'), 'utf8'); } catch { return ''; }
   }
 
-  /** Puts a mod's folder in the Trash. */
+  /**
+   * Puts a mod's folder in the Trash. Its variables stay while it can be put back (checkTrash), and go at once when it
+   * was deleted or sent to the Recycle Bin, where Open Space cannot tell when it goes.
+   */
   async remove(id: string) {
     const own = this.folderOf(id);
     if (!own) return;
-    await moveToTrash(own, true);
+    const name = this.list().find((mod) => mod.id === id)?.name ?? id;
+    const where = await moveToTrash(own, true, this.options.trash);
     delete this.seen[id];
     await this.saveSeen();
-    if (this.env[id]) { delete this.env[id]; await this.saveEnv(); }
+    if (where) { this.trashed[id] = { name, path: where }; await this.saveTrashed(); }
+    else this.options.keys.drop(id);
     this.announce();
+  }
+
+  /** The mods in the Trash, by id, with their name: their variables are still kept. */
+  inTrash(): Record<string, string> {
+    return Object.fromEntries(Object.entries(this.trashed).map(([id, { name }]) => [id, name]));
+  }
+
+  /** A mod put back from the Trash is no longer in it; one whose folder left the Trash (emptied) loses its variables. */
+  async checkTrash() {
+    let changed = false;
+    for (const [id, { path: where }] of Object.entries(this.trashed)) {
+      const back = existsSync(path.join(this.folderOf(id) ?? '', 'mod.json'));
+      if (!back && existsSync(where)) continue;
+      if (!back) this.options.keys.drop(id);
+      delete this.trashed[id];
+      changed = true;
+    }
+    if (changed) await this.saveTrashed();
+  }
+
+  /** The variables of mods that are neither here nor in the Trash (removed before this was kept), when the folder could be read. */
+  private forgetGone(mods: readonly ModInfo[]) {
+    try { readdirSync(this.options.folder); } catch { return; }
+    pruneShelf(this.options.keys, (id) => mods.some((mod) => mod.id === id) || id in this.trashed);
   }
 
   /**
@@ -243,20 +285,16 @@ export class Mods {
     try { raw = asJson(JSON.parse(await readFile(manifest, 'utf8'))); } catch { /* rewritten whole */ }
     const { name, description, icon, refresh, refreshTrigger } = settings;
     await writeFile(manifest, `${JSON.stringify({ ...raw, name, description, icon, refresh, refreshTrigger }, null, 2)}\n`);
-    const before = this.env[id] ?? {};
-    const after = Object.fromEntries(settings.env.flatMap(({ name, value }) => {
-      const kept = value || before[name];
-      return kept ? [[name, kept]] : [];
-    }));
-    if (Object.keys(after).length) this.env[id] = after;
-    else delete this.env[id];
-    await this.saveEnv();
+    const { keys } = this.options;
+    const before = keys.names(id);
+    for (const name of before) if (!settings.env.some((each) => each.name === name)) keys.drop(id, name);
+    keys.set(id, settings.env.filter(({ value }) => value));
     this.announce();
   }
 
   /** The variables the user gave a mod, for its page. */
   envOf(id: string): Record<string, string> {
-    return { ...(this.env[id] ?? {}) };
+    return Object.fromEntries(this.options.keys.entries(id).map(({ name, value }) => [name, value]));
   }
 
   /** The user has the mod in sight: its data as it is now counts as seen. */
@@ -273,7 +311,7 @@ export class Mods {
     try { writeFileSync(path.join(mod.folder, ADDRESS), `${mod.url}\n`); } catch (error) { this.options.log(`cannot write the address of mod ${mod.id}`, error); }
   }
 
-  private saveEnv = () => writeFile(this.options.envFile, `${JSON.stringify(this.env)}\n`, { mode: 0o600 });
+  private saveTrashed = () => writeFile(this.options.trashFile, `${JSON.stringify(this.trashed)}\n`, { mode: 0o600 });
 
   private saveSeen = () => writeFile(this.options.seenFile, `${JSON.stringify(this.seen)}\n`, { mode: 0o600 });
 

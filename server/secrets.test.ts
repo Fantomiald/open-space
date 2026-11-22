@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -105,7 +105,7 @@ describe('what os-secret asks for', () => {
     const reply = await answerSecrets({ sessionId: 's', action: 'ask', form: form({ names: ' HELD NEW' }) }, api);
     assert.equal(reply.status, 200);
     assert.deepEqual(asked, [['NEW']]);
-    assert.match(reply.text, /Ready: HELD, NEW/);
+    assert.match(reply.text, /Ready: HELD \(pasted\), NEW \(pasted\)/);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'ask', form: form({ names: 'OTHER' }) }, deps(store, [base], null))).status, 409);
     assert.equal((await answerSecrets({ sessionId: 's', action: 'ask', form: form({ names: 'not-a-name' }) }, api)).status, 400);
   });
@@ -240,6 +240,38 @@ describe('the os-secret command', { skip: process.platform === 'win32' }, () => 
     const unknown = await run(['run', 'NOPE', '--', 'true']);
     assert.equal(unknown.code, 1);
     assert.match(unknown.err, /No key named NOPE/);
+  });
+
+  it('masks every line of a key of several lines, a .p8 key, but its BEGIN and END lines', async () => {
+    const p8 = '-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg\nVd3kq8wY2Lr7cQe0b7uZ1kT9pXn8aB3cD4eF5gH6iJ7kL\nshort\n-----END PRIVATE KEY-----';
+    store.set('s', [{ name: 'ASC_KEY', value: p8 }]);
+    const printed = await run(['run', 'ASC_KEY', '--', 'sh', '-c', 'printf "%s\\n" "$ASC_KEY"']);
+    assert.equal(printed.code, 0, printed.err);
+    assert.doesNotMatch(printed.out, /MIGTAgEAMBMG|Vd3kq8wY2L/);
+    assert.equal(printed.out.trim(), '-----BEGIN PRIVATE KEY-----\n[secret]\n[secret]\nshort\n-----END PRIVATE KEY-----');
+  });
+
+  it('hands a key as a file of its own, removed after the command, even when it fails', async () => {
+    store.set('s', [{ name: 'ASC_KEY', value: 'line one of the key\nline two of the key' }]);
+    const read = await run(['file', 'ASC_KEY', '--', 'sh', '-c', 'ls -l "$ASC_KEY_FILE" | cut -c1-10; cat "$ASC_KEY_FILE"; echo "$ASC_KEY_FILE" > used-path; exit 4']);
+    assert.equal(read.code, 4, 'its exit code kept');
+    assert.match(read.out, /^-rw-------/);
+    assert.match(read.out, /\[secret\]\n\[secret\]/, 'its value masked in what it prints');
+    const used = readFileSync(path.join(base, 'used-path'), 'utf8').trim();
+    assert.equal(existsSync(used), false, 'removed');
+    assert.equal((await run(['file', 'ASC_KEY'])).code, 2, 'a command is needed');
+  });
+
+  it('refuses to write a key into a .env git does not ignore', async () => {
+    const repo = path.join(base, 'repo-env');
+    mkdirSync(repo, { recursive: true });
+    await new Promise((resolve) => execFile('git', ['-C', repo, 'init', '-q'], resolve));
+    const refused = await run(['env', 'GEMINI_KEY'], repo);
+    assert.equal(refused.code, 1);
+    assert.match(refused.out, /not ignored by git/);
+    assert.equal(existsSync(path.join(repo, '.env')), false);
+    writeFileSync(path.join(repo, '.gitignore'), '.env\n');
+    assert.equal((await run(['env', 'GEMINI_KEY'], repo)).code, 0);
   });
 
   it('passes the browser commands their flags, in any order', async () => {

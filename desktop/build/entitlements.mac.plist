@@ -7,9 +7,6 @@
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
-  <!-- an ad hoc signature (npm run app) has no team to validate the Electron frameworks against -->
-  <key>com.apple.security.cs.disable-library-validation</key>
-  <true/>
   <!-- osascript for Music, Spotify and the terminal (server/music.ts, server/desktop.ts) -->
   <key>com.apple.security.automation.apple-events</key>
   <true/>

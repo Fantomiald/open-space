@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import type { ModInfo } from '../shared/mods.ts';
+import { KeyFile } from './key-file.ts';
 import { modKey, Mods } from './mods.ts';
 
 const base = mkdtempSync(path.join(os.tmpdir(), 'office-mods-'));
@@ -12,9 +13,10 @@ const kitDir = path.join(base, 'kit');
 mkdirSync(kitDir);
 writeFileSync(path.join(kitDir, 'GUIDE.md'), '# the rules\n');
 writeFileSync(path.join(kitDir, 'starter.html'), '<!doctype html><os-loading></os-loading>\n');
+mkdirSync(path.join(base, 'Trash'));
 
 async function prepared(name: string, changes: ModInfo[][] = []) {
-  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), envFile: path.join(base, name, 'env.json'), secret: 'secret', port: 4850, onChange: (list) => changes.push(list), log: () => {} });
+  const mods = new Mods({ folder: path.join(base, name, 'mods'), kitDir, seenFile: path.join(base, name, 'seen.json'), keys: new KeyFile(path.join(base, name, 'env.json')), trashFile: path.join(base, name, 'trashed.json'), trash: path.join(base, 'Trash'), secret: 'secret', port: 4850, onChange: (list) => changes.push(list), log: () => {} });
   await mods.prepare();
   after(() => mods.stop());
   return mods;
@@ -37,7 +39,28 @@ describe('mods folder', () => {
     const again = await prepared('settings');
     assert.deepEqual(again.envOf(made.id), { TOKEN: 'abc' }, 'read back after a restart');
     await again.remove(made.id);
-    assert.deepEqual(again.envOf(made.id), {});
+    assert.deepEqual(again.envOf(made.id), { TOKEN: 'abc' }, 'kept while it is in the Trash');
+    assert.deepEqual(again.inTrash(), { [made.id]: 'Tickets' });
+    rmSync(path.join(base, 'Trash'), { recursive: true, force: true });
+    mkdirSync(path.join(base, 'Trash'));
+    await again.checkTrash();
+    assert.deepEqual(again.envOf(made.id), {}, 'gone once the Trash is emptied');
+    assert.deepEqual(again.inTrash(), {});
+  });
+
+  it('keeps the variables of a mod put back from the Trash, and forgets those of mods gone for good', async () => {
+    const mods = await prepared('restore');
+    const made = mods.create('restore test');
+    await mods.configure(made.id, { name: 'Back', description: '', icon: 'list', refresh: 0, refreshTrigger: null, env: [{ name: 'TOKEN', value: 'abc' }] });
+    await mods.remove(made.id);
+    renameSync(path.join(base, 'Trash', path.basename(made.folder)), made.folder);
+    await mods.checkTrash();
+    assert.deepEqual(mods.inTrash(), {});
+    assert.deepEqual(mods.envOf(made.id), { TOKEN: 'abc' });
+    new KeyFile(path.join(base, 'restore', 'env.json')).set('long-gone', [{ name: 'OLD', value: 'old' }]);
+    const again = await prepared('restore');
+    assert.deepEqual(again.envOf('long-gone'), {}, 'neither here nor in the Trash');
+    assert.deepEqual(again.envOf(made.id), { TOKEN: 'abc' });
   });
 
   it('writes the rules as the folder’s CLAUDE.md, and makes a new mod a draft from the starter', async () => {

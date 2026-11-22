@@ -80,7 +80,7 @@ Le déclencheur garde ses 100 derniers runs. Chacun a une source (`cron`, `webho
 
 ## Les clés
 
-Les clés d'un déclencheur sont données au `os-secret` de chaque run à son lancement. La session s'en sert sans voir leur valeur. Une fois enregistrées, elles ne peuvent plus être relues, seulement remplacées. Elles ne passent jamais par le serveur MCP. Voir [Secrets](secrets.fr.md).
+Les clés d'un déclencheur sont données au `os-secret` de chaque run à son lancement. La session s'en sert sans voir leur valeur. Une fois enregistrées, elles ne peuvent plus être relues, seulement remplacées. Elles sont gardées dans le coffre avec la portée « ce déclencheur » (sans coffre, dans `trigger-keys.json`). Les runs d'un déclencheur ne reçoivent que les clés de leur déclencheur, jamais celles d'un projet ou de partout. Elles ne passent jamais par le serveur MCP. Voir [Secrets](secrets.fr.md).
 
 ## Finir un run
 

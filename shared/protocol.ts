@@ -4,7 +4,7 @@
 import type { Dashboard } from './dashboards.ts';
 import type { AgentRole, AutomataState } from './automata.ts';
 import type { TriggerInput, TriggersState, TriggerTag } from './triggers.ts';
-import type { SecretEntry } from './secrets.ts';
+import type { KeysCard, KeysState, SecretEntry, VaultScope } from './secrets.ts';
 import type { MessengerInput } from './messengers.ts';
 import type { BrowserAction, BrowserInput, BrowserState } from './browser.ts';
 import type { PathEntry } from './file-mentions.ts';
@@ -51,7 +51,7 @@ export type OfficeEvent =
   /** a sub-agent finished its work */
   | { k: 'leave'; who: string; ok: boolean; tokens: number; tools: number; ms: number }
   /** questions = an AskUserQuestion call, answered with a reply instead of yes/no */
-  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; declinable?: boolean }
+  | { k: 'ask'; who: string; requestId: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; keys?: KeysCard; declinable?: boolean }
   | { k: 'ask_done'; requestId: string; allow: boolean; cancelled?: boolean }
   /** a turn ended */
   | { k: 'end'; ok: boolean; text: string; ms: number; stopped?: boolean }
@@ -147,7 +147,7 @@ export interface Question { question: string; header: string; options: QuestionO
 /** `always`: what "Toujours" would allow for the rest of the session, in words (one line per rule). */
 /** `secrets`: the names of keys the agent asks for with `os-secret ask` (see shared/secrets.ts); `detail` is then what they are for. */
 /** `declinable`: questions an MCP server asks (an elicitation), which the user may refuse to answer with a no. */
-export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; declinable?: boolean }
+export interface PermissionPrompt { requestId: string; who: string; tool: string; detail: string; canAlways: boolean; always?: string[]; questions?: Question[]; secrets?: string[]; keys?: KeysCard; declinable?: boolean }
 
 /** Claude Code permission modes offered per session (bypassPermissions and dontAsk are left out on purpose). */
 export const PERMISSION_MODES = ['auto', 'acceptEdits', 'manual', 'plan'] as const;
@@ -354,6 +354,12 @@ export interface SessionInfo {
   permissions: PermissionPrompt[];
   /** the names of the keys the user gave it (shared/secrets.ts), never their values; absent when none */
   secrets?: string[];
+  /** of `secrets`, those handed from the vault (kept for its project or every session, server/vault.ts); absent when none */
+  inheritedSecrets?: string[];
+  /** its project for the keys kept for one: the main checkout of its repository (worktrees.ts projectOf), read once when it was made */
+  project?: string;
+  /** started by an agent or another program through the MCP (create_session): handed no saved key without asking */
+  spawned?: true;
   /** sub-agents currently working, oldest first */
   subagents: SubagentInfo[];
   /** commands it left running in the background, oldest first; absent when none */
@@ -666,7 +672,8 @@ export type ClientMessage =
   /** answers to an AskUserQuestion call: question text -> chosen label(s) or the user's own text */
   | { t: 'reply'; sessionId: string; requestId: string; answers: Record<string, string> }
   /** keys given to a session (`requestId`: the `os-secret ask` they answer), or forgotten (`forget`: their names, none = all) */
-  | { t: 'secrets'; sessionId: string; requestId?: string; entries: SecretEntry[] }
+  /** keys given to a session, in the box of an `os-secret ask` (`requestId`) or its menu; `stored`: keys of the vault handed over, `always` for its project from now on */
+  | { t: 'secrets'; sessionId: string; requestId?: string; entries: SecretEntry[]; stored?: string[]; always?: true }
   | { t: 'forgetSecrets'; sessionId: string; names?: string[] }
   | { t: 'interrupt'; sessionId: string }
   /** takes a queued message back */
@@ -796,8 +803,12 @@ export type ClientMessage =
   /** adds a trigger (no `id`) or changes one (answered with `triggers`, or a `triggerError`) */
   | { t: 'saveTrigger'; id?: string; trigger: TriggerInput }
   | { t: 'deleteTrigger'; id: string }
-  /** keys a trigger hands each of its runs' `os-secret` (server/trigger-keys.ts), added or replaced */
+  /** keys a trigger hands each of its runs' `os-secret` (in the vault, else server/key-file.ts), added or replaced */
   | { t: 'triggerKeys'; id: string; entries: SecretEntry[] }
+  /** Settings > Keys: a key added to the vault (`scope`, a project's folder checked by the server) or one replaced (`id`) */
+  | { t: 'saveKey'; name: string; value: string; scope: VaultScope }
+  | { t: 'replaceKey'; id: string; value: string }
+  | { t: 'deleteKey'; id: string }
   /** adds a chat bot (no `id`) or changes one (shared/messengers.ts) */
   | { t: 'saveMessenger'; id?: string; messenger: MessengerInput }
   | { t: 'deleteMessenger'; id: string }
@@ -884,6 +895,8 @@ export type ServerMessage =
   | { t: 'automatonEvents'; runId: string; events: LoggedEvent[] }
   /** the triggers and their last firings (shared/triggers.ts): sent at connection and whenever they change */
   | { t: 'triggers'; state: TriggersState }
+  /** the keys of the vault (names only) and how they are kept: at connection, and whenever they change */
+  | { t: 'keys'; state: KeysState }
   /** a trigger could not be saved: the reason's key (shared/triggers.ts TriggerError) */
   | { t: 'triggerError'; error: string }
   | { t: 'agentRoles'; cwd: string; roles: AgentRole[] }
