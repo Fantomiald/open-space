@@ -58,6 +58,18 @@ describe('Claude Code conversations on disk', () => {
     assert.deepEqual(await searchConversations(searched, 'PROJ-1569', new Set([A]), home), []);
   });
 
+  it('finds first the conversations whose kept tags hold every word, even when no message does', async () => {
+    const searched = '/Users/me/code/tagged';
+    mkdirSync(projectFolder(searched, home), { recursive: true });
+    writeFileSync(path.join(projectFolder(searched, home), `${A}.jsonl`), line({ type: 'user', message: { role: 'user', content: 'Corrige le build' } }));
+    writeFileSync(path.join(projectFolder(searched, home), `${B}.jsonl`), line({ type: 'user', message: { role: 'user', content: 'Le build de EX-1576 casse' } }));
+    const tags = new Map([[A, ['EX-1576', 'Kiin']]]);
+    assert.deepEqual((await searchConversations(searched, 'ex-1576', new Set(), home, tags)).map(({ id, match }) => ({ id, matched: !!match })),
+      [{ id: A, matched: false }, { id: B, matched: true }]);
+    assert.deepEqual((await searchConversations(searched, 'kiin build', new Set(), home, tags)).map(({ id }) => id), [], 'every word in the tags, or every word in one message');
+    assert.deepEqual(await searchConversations(searched, 'ex-1576', new Set([A, B]), home, tags), []);
+  });
+
   it('puts the name of an Open Space session (its custom title) before what it was asked', async () => {
     const named = '/Users/me/code/named';
     mkdirSync(projectFolder(named, home), { recursive: true });

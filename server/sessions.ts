@@ -12,6 +12,7 @@ import { isRestricted, parseAllowRules, parseRestrict, ROLE_NAME, TRIGGER_ID, ty
 import { attachmentsFolder, bundlePage, copyAttachment, saveAttachment, sweepAttachments } from './attachments.ts';
 import { sweepUploads, uploadPath, uploadsFolder } from './uploads.ts';
 import { modsFolder } from './mods.ts';
+import { ConversationTags } from './conversation-tags.ts';
 import { TrustedFolders, folderCode, runsCode, trustedInClaudeCode } from './trust.ts';
 import { hasSharedBrowser } from './browser.ts';
 import type { KeyConsent, SecretStore } from './secrets.ts';
@@ -140,6 +141,7 @@ export class SessionManager {
   private stateFile: string;
   private logsDir: string;
   private trusted: TrustedFolders;
+  private conversationTags: ConversationTags;
   /** the side question of each session that has one, and how to withdraw it while it is asked */
   private asides = new Map<string, { aside: Aside; stop: () => void }>();
   /** new conversations started here that have not sent a message with words yet: that message gives their tag */
@@ -156,6 +158,7 @@ export class SessionManager {
     this.stateFile = path.join(deps.config.dataDir, 'sessions.json');
     this.logsDir = path.join(deps.config.dataDir, 'logs');
     this.trusted = new TrustedFolders(path.join(deps.config.dataDir, 'trusted-folders.json'));
+    this.conversationTags = new ConversationTags(path.join(deps.config.dataDir, 'conversation-tags.json'));
   }
 
   private now() { return (this.deps.now ?? Date.now)(); }
@@ -166,6 +169,7 @@ export class SessionManager {
     await mkdir(uploadsFolder(this.deps.config.dataDir), { recursive: true, mode: 0o700 });
     await mkdir(modsFolder(this.deps.config.dataDir), { recursive: true, mode: 0o700 });
     await this.trusted.load();
+    await this.conversationTags.load();
     const stored = await this.readStoredState();
     this.commands = stored.commands;
     this.quota = stored.quota;
@@ -543,10 +547,13 @@ export class SessionManager {
     if (!cwd) throw new Error(st.sessions.outsideRoots);
     const open = new Set([...this.sessions.values()].map((session) => session.conversationId));
     const [found, archived] = await Promise.all([
-      query ? searchConversations(cwd, query, open, this.deps.home) : listConversations(cwd, open, this.deps.home),
+      query ? searchConversations(cwd, query, open, this.deps.home, this.conversationTags.all()) : listConversations(cwd, open, this.deps.home),
       desktopArchived(this.deps.home).catch(() => new Set<string>()),
     ]);
-    return found.map((conversation) => (archived.has(conversation.id) ? { ...conversation, archived: true } : conversation));
+    return found.map((conversation) => {
+      const tags = this.conversationTags.get(conversation.id);
+      return { ...conversation, ...(tags ? { tags } : {}), ...(archived.has(conversation.id) ? { archived: true } : {}) };
+    });
   }
 
   private session(id: string): Session {
@@ -694,6 +701,8 @@ export class SessionManager {
     const info = newSessionInfo({ id: options.resumeId ?? randomUUID(), name, cwd, model: options.model ?? '', permissionMode: options.permissionMode ?? DEFAULT_PERMISSION_MODE }, this.now());
     if (options.resumeId) info.resumable = true;
     if (formerName) info.introducedAs = formerName;
+    const formerTags = resumeId && this.conversationTags.get(resumeId);
+    if (formerTags) info.tags = [...formerTags];
     // switched off, its session left its thread aside (see forget): it comes back whole
     const restored = options.resumeId ? await rename(this.switchedOffLog(options.resumeId), path.join(this.logsDir, `${options.resumeId}.jsonl`)).then(() => true, () => false) : false;
     if (options.effort) info.effort = options.effort;
@@ -1243,6 +1252,8 @@ export class SessionManager {
     await mkdir(switchedOffFolder(this.logsDir), { recursive: true, mode: 0o700 });
     await rename(path.join(this.logsDir, `${id}.jsonl`), this.switchedOffLog(session.conversationId))
       .catch(() => rm(path.join(this.logsDir, `${id}.jsonl`), { force: true }));
+    await this.conversationTags.set(session.conversationId, session.snapshot().tags ?? [])
+      .catch((error) => this.deps.log('cannot keep the tags of a conversation', error));
     this.deps.broadcast({ t: 'forgotten', sessionId: id });
     this.save();
     this.sweep();

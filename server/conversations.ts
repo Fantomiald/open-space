@@ -226,15 +226,21 @@ async function matchingLines(file: string, patterns: RegExp[]): Promise<string[]
 
 /**
  * The folder's conversations with a message (the user's or Claude's) that holds every word of `query`, most recent
- * first, each with its latest such message.
+ * first, each with its latest such message; before them, those whose `tags` (kept when their session left) hold them all.
  */
-export async function searchConversations(cwd: string, query: string, exclude: ReadonlySet<string>, home = os.homedir()): Promise<Conversation[]> {
+export async function searchConversations(cwd: string, query: string, exclude: ReadonlySet<string>, home = os.homedir(), tags: ReadonlyMap<string, readonly string[]> = new Map()): Promise<Conversation[]> {
   const patterns = bytePatterns(query);
   if (!patterns.length) return [];
+  const tagged: Conversation[] = [];
   const conversations: Conversation[] = [];
   for (const { id, file, updatedAt, worktree } of await conversationFiles(cwd, exclude, home)) {
-    if (conversations.length >= LIST_LIMIT) break;
+    if (tagged.length + conversations.length >= LIST_LIMIT) break;
     try {
+      if (matchesAll((tags.get(id) ?? []).join(' '), query)) {
+        const conversation = await describe(id, file, updatedAt, worktree);
+        if (conversation) tagged.push(conversation);
+        continue;
+      }
       let found = '';
       for (const record of records((await matchingLines(file, patterns)).join('\n'))) {
         const said = userText(record, Infinity) ?? assistantText(record, Infinity);
@@ -245,7 +251,7 @@ export async function searchConversations(cwd: string, query: string, exclude: R
       if (conversation) conversations.push({ ...conversation, match });
     } catch { /* unreadable: skipped */ }
   }
-  return conversations;
+  return [...tagged, ...conversations];
 }
 
 /** The last exchanges of a conversation (what the user said, what Claude answered), oldest first. */

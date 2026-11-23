@@ -1,5 +1,9 @@
 # Versions
 
+## 1.37.3
+
+- Reprendre : la recherche trouve aussi une conversation par ses tags (une clé de ticket mise seulement en tag), en tête de liste. Une session qui quitte Open Space garde ses tags : ils s'affichent dans la liste et reviennent quand on la reprend.
+
 ## 1.37.2
 
 - Clés : la consigne des agents leur dit de ne pas lister les processus avec leurs arguments (`ps aux`, `pgrep -fl`) pendant un `os-secret run` : sur macOS, ils montrent aussi l'environnement, donc la clé.

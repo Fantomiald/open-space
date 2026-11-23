@@ -674,6 +674,7 @@ describe('resuming a conversation started elsewhere', () => {
     const { manager, processes, messages, find, dataDir } = setup({}, undefined, undefined, home);
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), name: 'Zard', text: 'Fais la story' });
+    manager.setTags(id, ['EX-1576']);
     await manager.forget(id);
     assert.ok(existsSync(path.join(dataDir, 'logs', 'off', `${id}.jsonl`)));
     const folder = projectFolder(projectA(), home);
@@ -683,9 +684,11 @@ describe('resuming a conversation started elsewhere', () => {
       JSON.stringify({ type: 'user', message: { content: 'Fais la story' } }),
     ].join('\n'));
     assert.equal((await manager.conversations(projectA()))[0].name, 'Zard');
+    assert.deepEqual((await manager.conversations(projectA(), 'ex-1576')).map(({ id: found, tags }) => ({ found, tags })), [{ found: id, tags: ['EX-1576'] }], 'found by the tag its session had');
     messages.length = 0;
     await manager.create({ cwd: projectA(), resumeId: id, text: 'Et en anglais ?' });
     assert.equal(find(id).name, 'Zard');
+    assert.deepEqual(find(id).tags, ['EX-1576']);
     assert.equal(processes[1].sent.at(-1), 'Et en anglais ?');
     assert.ok(manager.logSince(id, 0).events.some((logged) => logged.ev.k === 'start' && logged.ev.text === 'Fais la story'));
     assert.ok(!existsSync(path.join(dataDir, 'logs', 'off', `${id}.jsonl`)));

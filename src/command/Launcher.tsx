@@ -13,7 +13,8 @@ import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
-import { BranchIcon, CleanIcon, CloseIcon, KeepIcon, SendIcon } from './Icons.tsx';
+import { BranchIcon, CleanIcon, CloseIcon, KeepIcon, SendIcon, TagIcon } from './Icons.tsx';
+import { sessionTagHues } from '../design/tag-colors.ts';
 import { FolderPicker } from './FolderPicker.tsx';
 import { Snippet } from './Snippet.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
@@ -178,6 +179,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
                         <button type="button" className="cp-resume__item" aria-pressed={resumeId === conversation.id} onClick={() => { setResumeId(conversation.id); if (conversation.name) setAsked(conversation.name); field.current?.focus(); }}>
                           <span className="cp-resume__title">{conversation.title}</span>
                           <span className="cp-resume__when">
+                            {conversation.tags && <ResumeTags tags={conversation.tags} />}
                             {conversation.archived && <span className="cp-tag cp-resume__archived" title={words.archivedTitle}><KeepIcon />{words.archived}</span>}
                             {formatAgo(Date.now() - conversation.updatedAt)}
                           </span>
@@ -246,4 +248,10 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
       </form>
     </aside>
   );
+}
+
+/** The tags a conversation's session had when it left, as its session showed them. */
+function ResumeTags({ tags }: { tags: readonly string[] }) {
+  const hues = sessionTagHues(tags);
+  return tags.map((tag, index) => <span key={tag} className="cp-tag cp-resume__tag" data-hue={hues[index]}><TagIcon />{tag}</span>);
 }
