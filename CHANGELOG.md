@@ -1,5 +1,9 @@
 # Versions
 
+## 1.37.2
+
+- Clés : la consigne des agents leur dit de ne pas lister les processus avec leurs arguments (`ps aux`, `pgrep -fl`) pendant un `os-secret run` : sur macOS, ils montrent aussi l'environnement, donc la clé.
+
 ## 1.37.1
 
 - Téléphone : l'interface prend tout l'écran, plus de bande du ciel sous la barre d'état ni sous la barre du bas.
