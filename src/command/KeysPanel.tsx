@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { SecretEntry, StoredKey, VaultScope } from '../../shared/secrets.ts';
 import { t } from '../i18n/index.ts';
 import { folderName, formatAgo, homeRelative } from '../lib/format.ts';
-import { filterKeys, isStale, KEYS_FILTERS, projectChoices, sortKeys, type KeysFilter } from '../state/keys.ts';
+import { isStale, projectChoices, sortKeys } from '../state/keys.ts';
 import { useSessions } from '../state/sessions.ts';
 import { AlertIcon, LockIcon, PlusIcon } from './Icons.tsx';
 import { SecretRows } from './SecretPrompt.tsx';
@@ -18,18 +18,12 @@ type Editing = { kind: 'add' } | { kind: 'replace'; key: StoredKey } | null;
 export function KeysPanel() {
   const { storage, keys, unreachable } = useSessions((s) => s.keys);
   const here = useSessions((s) => (s.selectedId ? s.sessions[s.selectedId]?.project : undefined));
-  const [filter, setFilter] = useState<KeysFilter>('all');
   const [editing, setEditing] = useState<Editing>(null);
   const words = t.settings.keys;
-  const shown = sortKeys(filterKeys(keys, filter, here));
-  const filters = KEYS_FILTERS.filter((each) => each !== 'here' || here);
-  const label = (each: KeysFilter) => (each === 'all' ? words.all(keys.length) : each === 'everywhere' ? words.everywhere : words.here);
+  const shown = sortKeys(keys);
   return (
     <section className="cp-prefs__group cp-keys" aria-label={t.settings.prefs.sections.keys}>
       <div className="cp-keys__tools">
-        <div className="cp-segmented" role="group" aria-label={words.filters}>
-          {filters.map((each) => <button key={each} type="button" aria-pressed={filter === each} onClick={() => setFilter(each)}>{label(each)}</button>)}
-        </div>
         {storage !== 'memory' && !editing && <button type="button" className="cp-button" data-variant="primary" data-size="small" onClick={() => setEditing({ kind: 'add' })}><PlusIcon />{words.add}</button>}
       </div>
       {unreachable && <p className="cp-keys__warning" role="status"><AlertIcon />{words.unreachable}</p>}
@@ -44,7 +38,7 @@ export function KeysPanel() {
           </table>
         </div>
       ) : (
-        <p className="cp-prefs__empty">{keys.length ? words.noneHere : storage === 'memory' ? words.storage.memory : words.empty}</p>
+        <p className="cp-prefs__empty">{storage === 'memory' ? words.storage.memory : words.empty}</p>
       )}
       <p className="cp-keys__storage" data-storage={storage}><LockIcon />{words.storage[storage]}</p>
     </section>

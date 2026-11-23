@@ -54,10 +54,7 @@ export const settings = {
     elsewhere: ['Ton prénom, ton perso et les anniversaires se changent dans Équipe. Sur Mac, l’app du Dock se crée (ou prend ton nouveau perso comme icône) avec ', '.'],
   },
   keys: {
-    filters: 'Filtrer les clés',
-    all: (count: number) => `Toutes · ${count}`,
     everywhere: 'Partout',
-    here: 'Ce projet',
     add: 'Ajouter une clé',
     columns: { name: 'Nom', scope: 'Portée', usedBy: 'Utilisée par', lastUsed: 'Dernier usage', actions: 'Actions' },
     trigger: (name: string) => `automate ${name}`,
@@ -80,7 +77,6 @@ export const settings = {
     scope: 'Portée',
     replaceTitle: (name: string) => `Nouvelle valeur pour ${name}`,
     empty: 'Aucune clé enregistrée. Quand un agent en demande une, choisis « Ce projet » ou « Partout » pour la garder.',
-    noneHere: 'Aucune clé pour ce filtre.',
     storage: {
       keychain: 'Chiffrées par le Trousseau macOS.',
       windows: 'Chiffrées sur le disque par Windows pour ton compte : un autre compte ne peut pas les lire, mais un programme lancé sous ton compte, oui.',

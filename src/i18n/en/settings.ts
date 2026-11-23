@@ -50,10 +50,7 @@ export const settings: Dictionary['settings'] = {
     elsewhere: ['Your first name, your character and birthdays are changed in Crew. On a Mac, the Dock app is created (or takes your new character as its icon) with ', '.'],
   },
   keys: {
-    filters: 'Filter the keys',
-    all: (count: number) => `All · ${count}`,
     everywhere: 'Everywhere',
-    here: 'This project',
     add: 'Add a key',
     columns: { name: 'Name', scope: 'Scope', usedBy: 'Used by', lastUsed: 'Last used', actions: 'Actions' },
     trigger: (name: string) => `automaton ${name}`,
@@ -76,7 +73,6 @@ export const settings: Dictionary['settings'] = {
     scope: 'Scope',
     replaceTitle: (name: string) => `New value for ${name}`,
     empty: 'No saved key yet. When an agent asks for one, pick “This project” or “Everywhere” to keep it.',
-    noneHere: 'No key for this filter.',
     storage: {
       keychain: 'Encrypted by the macOS Keychain.',
       windows: 'Encrypted on disk by Windows for your account: another account cannot read them, but a program running under your account can.',

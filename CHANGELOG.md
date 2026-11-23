@@ -1,5 +1,11 @@
 # Versions
 
+## 1.37.1
+
+- Téléphone : l'interface prend tout l'écran, plus de bande du ciel sous la barre d'état ni sous la barre du bas.
+- Téléphone : le fond est le bleu de nuit d'Open Space au lieu du ciel du thème (plus de lave du donjon).
+- Réglages, Clés : plus de filtre Toutes / Partout / Ce projet, la portée de chaque clé est déjà dans sa ligne.
+
 ## 1.37.0
 
 - Coffre de clés : une clé collée dans la carte d'un agent (`os-secret ask`) peut rester pour cette session (par défaut), ce projet ou partout, choisi clé par clé dans la même carte. Elle va dans le coffre de l'app, chiffrée par ton système (le Trousseau sur macOS), et les agents la reçoivent par son nom sans jamais voir la valeur. Une clé déjà enregistrée repasse par la carte tant que tu n'as pas coché « Toujours pour ce projet » ; une session lancée par un agent ou par `/new` sur Telegram te redemande toujours, et un run d'automate ne reçoit que les clés de son automate.
