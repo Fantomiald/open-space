@@ -349,6 +349,13 @@ export const en: ServerDictionary = {
     linkNeedsItem: 'Say which task to link the address to (item), or a worker linked to a task.',
     notYourWorker: (session: string) => `${session} is not one of your workers.`,
     dismissed: (tags: string) => `The user set aside ${tags}: do not ask again.`,
+    notPm: 'Only a project manager session has this tool, while project managers are on in the Settings.',
+    badItem: 'Give the task by its tag, e.g. W3.',
+    badAsk: 'Give the question by its tag, e.g. Q3.',
+    notYourself: 'You cannot be your own worker.',
+    otherPm: (name: string) => `${name} is a project manager, not a worker.`,
+    othersWorker: (name: string) => `${name} is another project manager’s worker.`,
+    otherProject: (name: string) => `${name} works on another project than yours.`,
   },
   server: {
     stoppingRetry: 'The server is stopping: try again once it’s back.',

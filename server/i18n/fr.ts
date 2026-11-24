@@ -376,6 +376,14 @@ export const fr = {
     notYourWorker: (session: string) => `${session} n’est pas un de tes workers.`,
     /** the footer of a pm_* result: questions the user set aside since the PM last heard */
     dismissed: (tags: string) => `L’utilisateur a écarté ${tags} : ne pas redemander.`,
+    /** the pm_* tools of the open-space MCP server (server/pm-tools.ts) */
+    notPm: 'Seule une session chef de projet a cet outil, quand les chefs de projet sont activés dans les Réglages.',
+    badItem: 'Donne la tâche par son tag, par exemple W3.',
+    badAsk: 'Donne la question par son tag, par exemple Q3.',
+    notYourself: 'Tu ne peux pas être ton propre worker.',
+    otherPm: (name: string) => `${name} est un chef de projet, pas un worker.`,
+    othersWorker: (name: string) => `${name} est le worker d’un autre chef de projet.`,
+    otherProject: (name: string) => `${name} travaille sur un autre projet que le tien.`,
   },
   server: {
     stoppingRetry: 'Le serveur s’arrête : réessaie une fois relancé.',

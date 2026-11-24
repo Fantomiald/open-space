@@ -25,6 +25,8 @@ import { MCP_SERVER_NAME, SWITCH_BROWSER, type Trigger, type TriggerError, type 
 import { st } from './i18n/index.ts';
 import { MAX_PENDING } from '../shared/pending.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
+import type { PmBook } from './pm.ts';
+import { callPmTool, isPmTool, PM_TOOLS } from './pm-tools.ts';
 
 /** The protocol versions known; another asked for gets the newest. */
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -78,6 +80,19 @@ export type Caller = { session: string } | { external: true } | { messenger: str
 type Audience = 'session' | 'external' | 'messenger';
 const audienceOf = (caller: Caller): Audience => ('session' in caller ? 'session' : 'external' in caller ? 'external' : 'messenger');
 
+/** What the pm_* tools reach of Open Space (index.ts, server/pm-tools.ts). */
+export interface PmApi {
+  /** the session is a PM (SessionInfo.pm), the setting is on and its folder approved */
+  isPm: (sessionId: string) => boolean;
+  book: PmBook;
+  now: () => number;
+  /** starts a worker of `pm` in its permission mode; throws when the folder is not allowed, or runs code and was never approved */
+  startWorker: (pm: string, options: { title: string; brief: string; cwd?: string; model?: string; effort?: string; isolate?: boolean }) => Promise<SessionInfo>;
+  stopWorker: (worker: string) => void;
+  /** marks the session as a worker of `pm` (SessionInfo.pmOf), or of no one; for a session adopted or let go */
+  setWorkerOf?: (session: string, pm: string | undefined) => void;
+}
+
 /** What the tools reach of Open Space (index.ts). */
 export interface OpenSpaceApi {
   triggers: () => Trigger[];
@@ -128,10 +143,12 @@ export interface OpenSpaceApi {
   deleteMod: (id: string) => Promise<boolean>;
   /** sends a file of an allowed folder to a bot's chat */
   sendFile: (botId: string, file: string, caption: string) => Promise<void>;
+  /** the project managers' tools; none: no session gets them */
+  pm?: PmApi;
 }
 
 /** `for`: who is given it (everyone when absent). */
-interface Tool { name: string; description: string; inputSchema: Json; annotations: Json; for?: readonly Audience[] }
+export interface Tool { name: string; description: string; inputSchema: Json; annotations: Json; for?: readonly Audience[] }
 
 const FOLLOWERS: readonly Audience[] = ['external', 'messenger'];
 
@@ -284,8 +301,9 @@ function chosenBot(api: OpenSpaceApi, name: unknown): { id: string } | { error: 
 
 const givenTo = (tool: Tool, caller: Caller) => !tool.for || tool.for.includes(audienceOf(caller));
 
-/** The tools a caller is given: a session never gets those that follow or answer the sessions. */
-export const toolsFor = (caller: Caller) => TOOLS.filter((each) => givenTo(each, caller)).map(({ for: _for, ...each }) => each);
+/** The tools a caller is given: a session never gets those that follow or answer the sessions; a PM session also gets the pm_* ones. */
+export const toolsFor = (caller: Caller, isPm = false) =>
+  [...TOOLS.filter((each) => givenTo(each, caller)), ...(isPm && 'session' in caller ? PM_TOOLS : [])].map(({ for: _for, ...each }) => each);
 
 /** A wait as the external program sees it; a request for keys only says so, it is answered from the page. */
 const shownWait = ({ requestId, tool, detail, canAlways, questions, secrets }: PermissionPrompt) => (secrets
@@ -296,8 +314,10 @@ const shownWait = ({ requestId, tool, detail, canAlways, questions, secrets }: P
 const text = (value: unknown) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
 const failure = (message: string) => ({ ...text(message), isError: true });
 
-/** Runs a tool. Errors a tool meets are answered as a tool result with isError, as MCP wants. */
-export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, args: Json): Promise<Json> {
+/** Runs a tool. Errors a tool meets are answered as a tool result with isError, as MCP wants. `isPm`: the caller is a PM session. */
+export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, args: Json, isPm = false): Promise<Json> {
+  // refused at once when the caller is no PM (any more): nothing read nor written
+  if (isPmTool(name)) return isPm && 'session' in caller ? callPmTool(api, caller.session, name, args) : failure(st.pm.notPm);
   const folder = () => asString(args.cwd) || api.callerFolder(caller) || '';
   const tool = TOOLS.find((each) => each.name === name);
   if (!tool || !givenTo(tool, caller)) return failure(st.triggers.mcp.unknownTool(name));
@@ -474,7 +494,7 @@ const result = (id: unknown, value: Json) => ({ jsonrpc: '2.0', id, result: valu
 const error = (id: unknown, code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
 
 /** One JSON-RPC message; null for a notification (nothing to answer). */
-async function answer(api: OpenSpaceApi, caller: Caller, message: unknown, version: string): Promise<Json | null> {
+async function answer(api: OpenSpaceApi, caller: Caller, message: unknown, version: string, isPm: boolean): Promise<Json | null> {
   if (!isJson(message) || message.jsonrpc !== '2.0' || typeof message.method !== 'string') return error(isJson(message) ? message.id : null, -32600, 'Invalid request');
   if (message.id === undefined) return null;
   const params = asJson(message.params);
@@ -489,10 +509,10 @@ async function answer(api: OpenSpaceApi, caller: Caller, message: unknown, versi
       });
     }
     case 'ping': return result(message.id, {});
-    case 'tools/list': return result(message.id, { tools: toolsFor(caller) });
+    case 'tools/list': return result(message.id, { tools: toolsFor(caller, isPm) });
     case 'tools/call': {
       try {
-        return result(message.id, await callTool(api, caller, asString(params.name), asJson(params.arguments)));
+        return result(message.id, await callTool(api, caller, asString(params.name), asJson(params.arguments), isPm));
       } catch (problem) {
         return result(message.id, failure(problem instanceof Error ? problem.message : String(problem)));
       }
@@ -505,11 +525,13 @@ async function answer(api: OpenSpaceApi, caller: Caller, message: unknown, versi
 export async function handleMcp(api: OpenSpaceApi, caller: Caller, body: string, version: string): Promise<{ status: number; json: unknown }> {
   let parsed: unknown;
   try { parsed = JSON.parse(body); } catch { return { status: 400, json: error(null, -32700, 'Parse error') }; }
+  // asked once per request: whether the calling session is a PM now (its tools listed and callable)
+  const isPm = 'session' in caller && api.pm?.isPm(caller.session) === true;
   if (Array.isArray(parsed)) {
-    const answers = (await Promise.all(parsed.map((message) => answer(api, caller, message, version)))).filter((each) => each !== null);
+    const answers = (await Promise.all(parsed.map((message) => answer(api, caller, message, version, isPm)))).filter((each) => each !== null);
     return answers.length ? { status: 200, json: answers } : { status: 202, json: null };
   }
-  const one = await answer(api, caller, parsed, version);
+  const one = await answer(api, caller, parsed, version, isPm);
   return one ? { status: 200, json: one } : { status: 202, json: null };
 }
 
