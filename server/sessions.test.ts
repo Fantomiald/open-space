@@ -648,6 +648,25 @@ describe('making a session a project manager, and back', () => {
     await manager.shutdown();
   });
 
+  it('a PM started while the setting was off runs as one once it is back on, after its turn, told its playbook', async () => {
+    const setting = { enabled: false };
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { pmEnabled: () => setting.enabled });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    assert.equal(processes[0].launch.pm, undefined);
+    setting.enabled = true;
+    manager.pmSettingChanged();
+    assert.equal(manager.roleChanged(id), true, 'its reports wait (PmWatch)');
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1);
+    assert.equal(manager.roleChanged(id), false);
+    manager.send(id, 'le plan ?');
+    assert.equal(processes[1].launch.pm, true);
+    assert.ok(processes[1].sent.at(-1)!.includes(st.prompt.pm('')));
+    await manager.shutdown();
+  });
+
   it('a PM made an ordinary session again is told so, resumes without the PM tools, and lets its workers go', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
     await manager.init();

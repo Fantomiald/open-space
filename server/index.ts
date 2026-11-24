@@ -366,12 +366,15 @@ async function applyPreferences(changes: Partial<typeof settings.preferences>) {
   const { roots, ...rest } = changes;
   const before = settings.preferences.claude;
   const accountsBefore = settings.preferences.accountsBrowser;
+  const pmBefore = pmSettings(settings.preferences).enabled;
   await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
   setServerLanguage(settings.preferences.language ?? 'fr');
   applyRoots();
   broadcast(preferencesMessage());
   await sessions.applySettings(changedSettings(before, settings.preferences.claude));
   if (settings.preferences.accountsBrowser !== accountsBefore) sessions.accountsBrowserChanged();
+  // the PMs started while it was off run as PMs from their next idle moment
+  if (!pmBefore && pmSettings(settings.preferences).enabled) sessions.pmSettingChanged();
   await applyPhoneAccess();
   await automata.poll();
 }
@@ -524,6 +527,7 @@ const pmWatch = new PmWatch({
     return (info && sessions.logSince(sessionId, info.lastSeq - 1).events.at(-1)?.at) || info?.stateSince || 0;
   },
   deliver: (pm, text, tag) => sessions.send(pm, text, [], [], tag),
+  roleChanged: (sessionId) => sessions.roleChanged(sessionId),
   releaseWorker: (session, pm) => sessions.releaseWorker(session, pm),
   log,
 });

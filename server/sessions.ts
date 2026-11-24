@@ -372,6 +372,14 @@ export class SessionManager {
     else this.changingRole.add(id);
   }
 
+  /** Preferences.pm.enabled turned on: the PMs whose process was launched while it was off are released for their role. */
+  pmSettingChanged() {
+    for (const id of this.sessions.keys()) this.releaseForRole(id);
+  }
+
+  /** Whether the session's process runs as another role than it has now (Session.roleChanged). */
+  roleChanged(id: string): boolean { return !!this.sessions.get(id)?.roleChanged; }
+
   /**
    * Makes the session a worker of `pm` unless it is another PM's (false then, and for a session unknown). Synchronous,
    * so that of two PMs adopting the same session at once only one gets it.

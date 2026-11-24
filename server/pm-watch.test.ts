@@ -30,11 +30,14 @@ async function office() {
   const setting = { enabled: true };
   const words = new Map<string, string>();
   const lastEvent = new Map<string, number>();
+  /** the sessions whose process runs without their role yet */
+  const stale = new Set<string>();
   const book = new PmBook(mkdtempSync(path.join(base, 'book-')));
   const watch = new PmWatch({
     now: () => clock.now, sessions: () => [...live.values()], book, enabled: () => setting.enabled, quietMs: () => QUIET,
     lastWords: (id) => words.get(id) ?? '', lastEventAt: (id) => lastEvent.get(id) ?? 200,
     deliver: (pm, text, tag) => { delivered.push({ pm, text, tag }); },
+    roleChanged: (id) => stale.has(id),
     releaseWorker: (id, pm) => { const one = live.get(id); if (one?.pmOf === pm) live.set(id, { ...one, pmOf: undefined }); },
   });
   live.set(PM, info(PM, { pm: true }));
@@ -42,7 +45,7 @@ async function office() {
   await book.change(PM, (file) => linkWorker(file, W, 100));
   const put = (id: string, fields: Partial<SessionInfo>) => { const one = live.get(id) as SessionInfo; live.set(id, { ...one, ...fields }); return live.get(id) as SessionInfo; };
   const kinds = () => delivered.map((one) => (one.tag as { report: { kind: string } }).report.kind);
-  return { clock, live, delivered, setting, words, lastEvent, book, watch, put, kinds };
+  return { clock, live, delivered, setting, words, lastEvent, stale, book, watch, put, kinds };
 }
 
 const worker = (watch: PmWorker['watch'] = { round: 0 }): PmWorker => ({ session: W, linkedAt: 100, watch });
@@ -212,6 +215,19 @@ describe('the reports of a PM\'s workers', () => {
     await watch.sweep();
     assert.deepEqual(kinds(), []);
     put(PM, { state: 'wait' });
+    await watch.sweep();
+    await watch.sweep();
+    assert.deepEqual(kinds(), ['finished']);
+  });
+
+  it('keeps the reports of a PM whose process does not run as one yet, and catches up once it does', async () => {
+    const { watch, put, stale, kinds } = await office();
+    // started while the setting was off: no PM tools nor playbook until it is relaunched
+    stale.add(PM);
+    await watch.turnEnded(put(W, { state: 'wait', stateSince: 900_000, lastSeq: 10, turns: 1 }), 'done');
+    await watch.sweep();
+    assert.deepEqual(kinds(), []);
+    stale.delete(PM);
     await watch.sweep();
     await watch.sweep();
     assert.deepEqual(kinds(), ['finished']);

@@ -25,6 +25,11 @@ export interface WatchDeps {
   lastEventAt: (sessionId: string) => number;
   /** sends a message to the PM: sessions.send(pm, text, [], [], tag) */
   deliver: (pm: string, text: string, tag: PmMessageTag) => void;
+  /**
+   * the session's process runs without the role it has now (SessionManager.roleChanged): a PM's that does not run as one
+   * yet (started while the setting was off) takes no report until it is relaunched, then catches up
+   */
+  roleChanged: (sessionId: string) => boolean;
   /** the session is no longer a worker of `pm` (sessions.releaseWorker, as pm_worker_resolve does) */
   releaseWorker: (session: string, pm: string) => void;
   log?: (message: string, error: unknown) => void;
@@ -177,9 +182,12 @@ export class PmWatch {
     return on;
   }
 
-  /** A PM that takes reports: there, still a PM, not a trigger's run, not closed by the user (one at rest is woken up). */
+  /**
+   * A PM that takes reports: there, still a PM, not a trigger's run, not closed by the user (one at rest is woken up),
+   * its process, if any, running as a PM (else it would be told it is none, and have no PM tools).
+   */
   private isLivePm(session: SessionInfo | undefined): session is SessionInfo {
-    return !!session?.pm && !session.trigger && (session.state !== 'closed' || !!session.resting);
+    return !!session?.pm && !session.trigger && (session.state !== 'closed' || !!session.resting) && !this.deps.roleChanged(session.id);
   }
 
   private livePmIds(): Set<string> {
