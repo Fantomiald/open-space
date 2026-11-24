@@ -651,13 +651,13 @@ function onConnection(socket: WebSocket) {
   send(keysMessage());
   send({ t: 'musicApps', apps: musicApps });
   socket.on('message', (data) => {
-    if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry }); return; }
     let message: ClientMessage | null = null;
     try { message = parseClientMessage(JSON.parse(String(data))); } catch { /* not JSON */ }
     if (!message) return;
     if (message.t === 'presence') { presence.set(socket, message.active); return; }
     // a request for a new session that fails says so to its page, which then stops waiting for that session to open it
     const refused = NEW_SESSION_REQUESTS.has(message.t) ? { refused: 'new' as const } : {};
+    if (stopping) { send({ t: 'toast', kind: 'error', text: st.server.stoppingRetry, ...refused }); return; }
     handle(message, send).catch((error: unknown) => send({ t: 'toast', kind: 'error', text: error instanceof Error ? error.message : String(error), ...refused }));
   });
 }
