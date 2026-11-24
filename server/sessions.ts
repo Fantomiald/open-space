@@ -19,7 +19,7 @@ import type { KeyConsent, SecretStore } from './secrets.ts';
 import type { KeysCard, SecretEntry } from '../shared/secrets.ts';
 import type { ShellRunner } from './shell.ts';
 import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
-import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, GitPending, InspectView, McpAction, MergeProblem, PendingItem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, Aside, AttentionKind, BranchRow, CleanedBranch, FolderCode, FolderRepo, GitPending, InspectView, McpAction, MergeProblem, PendingItem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
@@ -154,6 +154,12 @@ export class SessionManager {
   private switchingBrowsers = new Set<string>();
   /** the sessions switch_browser switches: they go on by themselves once relaunched (see switchBrowserOnRequest) */
   private browserRequests = new Map<string, AccountsBrowser>();
+  /** who else hears of turn ends, attention and pauses (onSessionTurnEnd, onSessionAttention, onSessionPaused) */
+  private turnEndListeners: ((session: SessionInfo, how: TurnEnd) => void)[] = [];
+  private attentionListeners: ((kind: AttentionKind, session: SessionInfo) => void)[] = [];
+  private pausedListeners: ((session: SessionInfo) => void)[] = [];
+  /** the sessions the usage limit pauses: a pause moved later is not a new one (onSessionPaused) */
+  private pausedIds = new Set<string>();
 
   constructor(deps: SessionManagerDeps) {
     this.deps = deps;
@@ -218,6 +224,38 @@ export class SessionManager {
     if (!pauses.length || this.stopping) return;
     this.limitTimer = setTimeout(() => this.resumeDue(), Math.min(MAX_TIMER_MS, Math.max(0, Math.min(...pauses) + LIMIT_RESUME_DELAY_MS - this.now())));
     this.limitTimer.unref();
+  }
+
+  /** Hears every turn that ends, beside what the manager does then (see Session's onTurnEnd). */
+  onSessionTurnEnd(listener: (session: SessionInfo, how: TurnEnd) => void) { this.turnEndListeners.push(listener); }
+
+  /** Hears every session that now waits for the user, beside deps.onAttention. */
+  onSessionAttention(listener: (kind: AttentionKind, session: SessionInfo) => void) { this.attentionListeners.push(listener); }
+
+  /** Hears every session the usage limit pauses, once per pause (not when it is moved later). */
+  onSessionPaused(listener: (session: SessionInfo) => void) { this.pausedListeners.push(listener); }
+
+  /** Calls each listener; one that throws or rejects is logged and keeps neither the others nor the session from going on. */
+  private tell<L>(listeners: readonly L[], call: (listener: L) => unknown) {
+    const failed = (error: unknown) => this.deps.log('a session listener failed', error);
+    for (const listener of listeners) {
+      try {
+        const result = call(listener);
+        if (result instanceof Promise) result.catch(failed);
+      } catch (error) {
+        failed(error);
+      }
+    }
+  }
+
+  /** A pause began, moved or was lifted: the listeners hear of the ones that began. */
+  private notePause(id: string) {
+    const session = this.sessions.get(id);
+    if (session?.pausedUntil === undefined) { this.pausedIds.delete(id); return; }
+    if (this.pausedIds.has(id)) return;
+    this.pausedIds.add(id);
+    const snapshot = session.snapshot();
+    this.tell(this.pausedListeners, (listener) => listener(snapshot));
   }
 
   /** The user would not wait for the usage limit to reset: the session resumes now. */
@@ -396,6 +434,8 @@ export class SessionManager {
   }
 
   private createSession(info: StoredInfo, log: SessionLog): Session {
+    // paused before a restart: the limit hit again is no new pause
+    if (info.pausedUntil !== undefined) this.pausedIds.add(info.id);
     return new Session(info, {
       spawnProcess: (launch, handlers) => {
         if (this.stopping) throw new Error(st.sessions.stoppingNoStart);
@@ -418,14 +458,17 @@ export class SessionManager {
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
       onQuota: (quota) => this.setQuota(quota),
       knownReset: () => this.knownReset(),
-      onPauseChanged: () => this.armLimitTimer(),
+      onPauseChanged: () => { this.armLimitTimer(); this.notePause(info.id); },
       onCleared: () => this.awaitingTag.add(info.id),
       allowedDirectory: (cwd) => resolveAllowedDirectory(cwd, this.roots()),
       saveImage: (image) => saveAttachment(attachmentsFolder(this.deps.config.dataDir), image),
       uploadPath: (id) => uploadPath(uploadsFolder(this.deps.config.dataDir), id),
       copyFile: (file) => copyAttachment(attachmentsFolder(this.deps.config.dataDir), file),
       bundlePage: (page, files) => bundlePage(attachmentsFolder(this.deps.config.dataDir), page, files),
-      onAttention: (kind, session) => this.deps.onAttention?.(kind, session),
+      onAttention: (kind, session) => {
+        this.deps.onAttention?.(kind, session);
+        this.tell(this.attentionListeners, (listener) => listener(kind, session));
+      },
       onSubagentLeft: (type) => this.deps.onSubagentLeft?.(info.id, type),
       sharedBrowser: () => this.hasSharedBrowser(info.id),
       chrome: () => !!this.launchedBrowsers.get(info.id)?.chrome,
@@ -444,7 +487,10 @@ export class SessionManager {
       now: this.deps.now,
       graceMs: this.deps.graceMs,
       runShell: this.deps.runShell,
-      onTurnEnd: (session, how) => this.onTurnEnd(session.id, how),
+      onTurnEnd: (session, how) => {
+        this.onTurnEnd(session.id, how);
+        this.tell(this.turnEndListeners, (listener) => listener(session, how));
+      },
       onAutoCompactFailed: () => { this.idleCompactPaused = true; },
     });
   }
@@ -1251,6 +1297,7 @@ export class SessionManager {
     }
     this.closeAside(id);
     this.sessions.delete(id);
+    this.pausedIds.delete(id);
     this.launchedBrowsers.delete(id);
     this.switchingBrowsers.delete(id);
     this.browserRequests.delete(id);

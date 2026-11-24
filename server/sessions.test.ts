@@ -1852,6 +1852,70 @@ describe('the usage limit', () => {
   });
 });
 
+describe('session listeners', () => {
+  it('tells every listener of a permission and of a turn done, beside the attention callback', async () => {
+    const { manager, processes, attention } = setup();
+    await manager.init();
+    const turnEnds: [string, string, string][] = [];
+    const asks: [string, string, string][] = [];
+    for (const listener of ['first', 'second']) {
+      manager.onSessionTurnEnd((session, how) => turnEnds.push([listener, session.id, how]));
+      manager.onSessionAttention((kind, session) => asks.push([listener, kind, session.id]));
+    }
+    const { id } = await manager.create({ cwd: projectA(), text: 'touch a file' });
+    const lines = fixtureLines('permission-allowed');
+    const controlRequest = lines.findIndex((line) => line.includes('"type":"control_request"'));
+    processes[0].feed('permission-allowed', 0, controlRequest + 1);
+    manager.answer(id, askedPermission(manager, id), 'allow');
+    processes[0].feed('permission-allowed', controlRequest + 1);
+    for (const listener of ['first', 'second']) {
+      assert.ok(asks.some(([who, kind, session]) => who === listener && kind === 'permission' && session === id), `${listener} told of the permission`);
+      assert.deepEqual(turnEnds.filter(([who]) => who === listener), [[listener, id, 'done']]);
+    }
+    assert.ok(attention.some(([kind, session]) => kind === 'permission' && session === id), 'the attention callback still runs');
+    await manager.shutdown();
+  });
+
+  it('keeps telling the other listeners when one throws or rejects, and logs it', async () => {
+    const logged: unknown[] = [];
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, { log: (_message, error) => logged.push(error) });
+    await manager.init();
+    const thrown = new Error('sync listener broke');
+    const rejected = new Error('async listener broke');
+    const told: string[] = [];
+    manager.onSessionTurnEnd(() => { throw thrown; });
+    manager.onSessionTurnEnd(async () => { throw rejected; });
+    manager.onSessionTurnEnd((_session, how) => told.push(how));
+    const { id } = await manager.create({ cwd: projectA(), text: 'ping' });
+    processes[0].feed('simple-turn');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(told, ['done']);
+    assert.ok(logged.includes(thrown) && logged.includes(rejected), 'both failures are logged');
+    assert.equal(find(id).state, 'wait');
+    await manager.shutdown();
+  });
+
+  it('tells of a usage-limit pause once, even when the limit is hit again during it', async () => {
+    const RESET = 1794002400_000;
+    const { manager, processes } = setup({}, undefined, () => RESET - 3_600_000);
+    await manager.init();
+    const paused: SessionInfo[] = [];
+    manager.onSessionPaused((session) => paused.push(session));
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' });
+    processes[0].feed('rate-limit-hit');
+    processes[0].feed('rate-limit-hit', 1);
+    assert.deepEqual(paused.map((session) => [session.id, session.pausedUntil]), [[id, RESET]]);
+    await manager.shutdown();
+  });
+});
+
+/** The request id of the permission a session asks for. */
+function askedPermission(manager: SessionManager, id: string): string {
+  const prompt = manager.list().find((session) => session.id === id)?.permissions[0];
+  assert.ok(prompt, 'a permission is asked');
+  return prompt.requestId;
+}
+
 describe('process life cycle', () => {
   it('turns a crash into an error with the stderr tail, and restarts with --resume once the conversation exists', async () => {
     const { manager, processes, find } = setup();
