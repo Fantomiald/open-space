@@ -1,13 +1,18 @@
 // The PM files: one per project manager session, OFFICE_DIR/pm/<id of the PM>.json, read when asked for and written whole.
 // Changes to one PM's file run one after the other (the model calls several pm_* tools at once), so no W or Q number is
-// handed out twice and no write is lost. A file is written to a temporary name then renamed, as sessions.json is.
-import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+// handed out twice and no write is lost.
+import { constants, mkdirSync } from 'node:fs';
+import { copyFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { emptyPm, type PmFile, parsePmFile } from '../shared/pm.ts';
+import { writeFileAtomic } from './atomic-write.ts';
 import { st } from './i18n/index.ts';
-import { SESSION_ID } from './pm-ops.ts';
+
+/** A session id, as sessions.ts reads it from sessions.json: a PM's id names its file. */
+export const SESSION_ID = /^[\w-]{1,100}$/;
+
+/** An edit of a PM file: synchronous, since what it changes after an await would be compared too early and never written. */
+type Edit<T> = (file: PmFile) => T extends PromiseLike<unknown> ? never : T;
 
 export class PmBook {
   private readonly dir: string;
@@ -24,14 +29,18 @@ export class PmBook {
     return this.queue(pm, (file) => this.load(file));
   }
 
-  /** Runs `edit` on the PM's file once the changes before it are done, then writes the file if `edit` changed it. */
-  change<T>(pm: string, edit: (file: PmFile) => T): Promise<T> {
+  /**
+   * Runs `edit` on the PM's file once the changes before it are done, then writes the file if `edit` changed it.
+   * An edit that gives `{ error }` must have changed nothing (the operations of pm-ops.ts check everything first), and
+   * its caller stops there: the error is the result, nothing else is done in the same edit.
+   */
+  change<T>(pm: string, edit: Edit<T>): Promise<T> {
     return this.queue(pm, async (file) => {
       const data = await this.load(file);
       const before = JSON.stringify(data);
       const result = edit(data);
       const after = JSON.stringify(data);
-      if (after !== before) await write(file, after);
+      if (after !== before) await writeFileAtomic(file, after);
       return result;
     });
   }
@@ -64,18 +73,9 @@ export class PmBook {
     try {
       return parsePmFile(JSON.parse(text));
     } catch {
+      // kept for inspection before the next change writes over it; the first copy stays, a later one would be the empty file
+      await copyFile(file, `${file}.bad`, constants.COPYFILE_EXCL).catch(() => {});
       return parsePmFile(undefined);
     }
-  }
-}
-
-async function write(file: string, text: string) {
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, text, { mode: 0o600 });
-    await rename(temporary, file);
-  } catch (error) {
-    await rm(temporary, { force: true }).catch(() => {});
-    throw error;
   }
 }

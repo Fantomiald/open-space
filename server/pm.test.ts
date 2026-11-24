@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
-import { emptyPm, itemStatus, type PmFile, parsePmFile } from '../shared/pm.ts';
+import { emptyPm, itemStatus, openWaits, type PmFile, parsePmFile } from '../shared/pm.ts';
+import { writeFileAtomic } from './atomic-write.ts';
 import { PmBook } from './pm.ts';
 import {
   addAsk, addItem, addLink, answerAsk, dismissedNotice, forget, linkWorker, ownWorker, remember, resolveWorker, setInstructions, setMission,
@@ -69,6 +70,25 @@ describe('PM tasks', () => {
     updateItem(file, { item: 1, status: 'done', done: 'Done' }, 4);
     file.turn = 9;
     assert.equal(itemStatus(file.items[1], file, []), 'idle');
+  });
+
+  it('lifts a text wait only when told to, and its lifted waits leave room for new ones', () => {
+    const file = withItems(1);
+    for (let wait = 1; wait <= 10; wait++) updateItem(file, { item: 1, wait: `Bob ${wait}` }, 1);
+    assert.ok(isError(updateItem(file, { item: 1, wait: 'Bob 11' }, 2)));
+    updateItem(file, { item: 1, clearWaits: true }, 3);
+    assert.deepEqual(openWaits(file.items[0], file), []);
+    assert.ok(file.items[0].waits.every((wait) => wait.cleared === 3));
+    assert.ok(!isError(updateItem(file, { item: 1, wait: 'Bob 11' }, 4)));
+  });
+
+  it('lifts the waits of a task once it is finished or dropped', () => {
+    const file = withItems(2);
+    updateItem(file, { item: 1, wait: 'Bob' }, 1);
+    updateItem(file, { item: 2, wait: 'Alice' }, 1);
+    updateItem(file, { item: 1, status: 'done', done: 'Shipped' }, 2);
+    updateItem(file, { item: 2, status: 'drop' }, 2);
+    assert.deepEqual(file.items.flatMap((item) => item.waits.map((wait) => wait.cleared)), [2, 2]);
   });
 });
 
@@ -181,6 +201,16 @@ describe('the PM book', () => {
     assert.equal((await book.read('odd')).mission, 'Ship');
   });
 
+  it('keeps a file that does not read as JSON aside, once, before writing over it', async () => {
+    const folder = path.join(base, 'kept');
+    const book = new PmBook(folder);
+    writeFileSync(path.join(folder, 'p.json'), '{"mission":"Ship');
+    await book.change('p', (file) => setMission(file, 'Again'));
+    writeFileSync(path.join(folder, 'p.json'), 'later damage');
+    await book.read('p');
+    assert.equal(readFileSync(path.join(folder, 'p.json.bad'), 'utf8'), '{"mission":"Ship');
+  });
+
   it('numbers tasks added at the same time one after the other, and loses none', async () => {
     const book = new PmBook(path.join(base, 'parallel'));
     await Promise.all(Array.from({ length: 20 }, (_, index) => book.change('p', (file) => addItem(file, `Task ${index}`, 1))));
@@ -208,10 +238,32 @@ describe('the PM book', () => {
     assert.deepEqual(await book.read('p'), emptyPm());
   });
 
+  it('takes only an edit that is done when it returns, so that what it changes is written', () => {
+    const book = new PmBook(path.join(base, 'sync'));
+    // @ts-expect-error an async edit would change the file after it was compared and written
+    const asyncEdit = () => book.change('p', async (file) => setMission(file, 'Late'));
+    assert.equal(typeof asyncEdit, 'function');
+  });
+
   it('refuses a PM id that is not a session id, so no path leaves its folder', async () => {
     const book = new PmBook(path.join(base, 'ids'));
     await assert.rejects(book.read('../sessions'));
     await assert.rejects(book.change('../sessions', (file) => setMission(file, 'x')));
     await assert.rejects(book.remove('..'));
+  });
+});
+
+describe('writing a file whole', () => {
+  it('replaces the file, owner only, and leaves no temporary file when the write fails', async () => {
+    const folder = path.join(base, 'atomic');
+    mkdirSync(folder);
+    const file = path.join(folder, 'state.json');
+    await writeFileAtomic(file, 'one');
+    await writeFileAtomic(file, 'two');
+    assert.equal(readFileSync(file, 'utf8'), 'two');
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
+    mkdirSync(path.join(folder, 'taken'));
+    await assert.rejects(writeFileAtomic(path.join(folder, 'taken'), 'three'));
+    assert.deepEqual(readdirSync(folder).sort(), ['state.json', 'taken']);
   });
 });

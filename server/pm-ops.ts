@@ -5,6 +5,7 @@
 // `now` is a time in ms, above 0: the parser reads 0 as no time at all.
 import { askTag, itemTag, openWaits, PM_LIMITS, type PmAsk, type PmFile, type PmItem, type PmLink, type PmWait, type PmWorker, parseTag } from '../shared/pm.ts';
 import { st } from './i18n/index.ts';
+import { SESSION_ID } from './pm.ts';
 
 export type Err = { error: string };
 
@@ -13,8 +14,6 @@ const MAX_ITEMS = 500;
 const MAX_ASKS = 1000;
 const MAX_LINKS = 30;
 const MAX_WAITS = 10;
-/** A session id, as sessions.ts reads it from sessions.json. */
-export const SESSION_ID = /^[\w-]{1,100}$/;
 
 const fail = (error: string): Err => ({ error });
 const clean = (text: string, max: number): string => text.trim().slice(0, max);
@@ -60,7 +59,7 @@ export function addItem(file: PmFile, title: string, now: number, worker?: strin
 }
 
 export interface ItemUpdate {
-  item: number; title?: string; now?: string; step?: string; stepDone?: number; chore?: boolean; wait?: string;
+  item: number; title?: string; now?: string; step?: string; stepDone?: number; chore?: boolean; wait?: string; clearWaits?: boolean;
   status?: 'done' | 'drop' | 'later' | 'restore'; done?: string;
 }
 
@@ -74,9 +73,10 @@ function waitOn(file: PmFile, text: string): Pick<PmWait, 'on' | 'ref'> | Err {
 }
 
 /**
- * Changes a task: `step` adds a step (a chore with `chore`), `stepDone` ticks step n (from 1), `wait` adds a wait.
- * `status`: 'done' needs `done`, the line kept about what was done, and leaves its open questions open; 'drop' withdraws
- * them; 'restore' puts a finished, dropped or later task back in motion. The task counts as touched in the PM's turn.
+ * Changes a task: `step` adds a step (a chore with `chore`), `stepDone` ticks step n (from 1), `clearWaits` lifts every wait
+ * still holding it (a text wait lifts no other way), then `wait` adds one. `status`: 'done' needs `done`, the line kept about
+ * what was done, and leaves its open questions open; 'drop' withdraws them; both lift its waits; 'restore' puts a finished,
+ * dropped or later task back in motion. The task counts as touched in the PM's turn.
  */
 export function updateItem(file: PmFile, update: ItemUpdate, now: number): PmItem | Err {
   const item = findItem(file, update.item);
@@ -91,8 +91,8 @@ export function updateItem(file: PmFile, update: ItemUpdate, now: number): PmIte
   if (ticked !== undefined && !(Number.isInteger(ticked) && item.steps[ticked - 1])) return fail(st.pm.noStep(tag, ticked));
   const wait = update.wait === undefined ? undefined : waitOn(file, update.wait);
   if (wait && 'error' in wait) return wait;
-  // lifted waits are let go, so the cap counts only those still holding the task
-  const waits = openWaits(item, file);
+  // the cap counts only the waits still holding the task
+  const waits = update.clearWaits ? [] : openWaits(item, file);
   const known = wait && waits.some((one) => one.on === wait.on && one.ref === wait.ref);
   if (wait && !known && waits.length >= MAX_WAITS) return fail(st.pm.tooManyWaits(tag, MAX_WAITS));
   const done = update.done === undefined ? undefined : clean(update.done, PM_LIMITS.line);
@@ -102,8 +102,12 @@ export function updateItem(file: PmFile, update: ItemUpdate, now: number): PmIte
   if (update.now !== undefined) item.now = clean(update.now, PM_LIMITS.line);
   if (step !== undefined) item.steps.push({ text: step, done: false, chore: update.chore === true, at: now });
   if (ticked !== undefined) item.steps[ticked - 1].done = true;
-  if (wait) item.waits = known ? waits : [...waits, { ...wait, since: now }];
+  const lift = () => { for (const one of openWaits(item, file)) one.cleared = now; };
+  if (update.clearWaits) lift();
+  // a new wait lets go of the lifted ones, so the list stays short
+  if (wait && !known) item.waits = [...openWaits(item, file), { ...wait, since: now }];
   if (done !== undefined) item.done = done;
+  if (update.status === 'done' || update.status === 'drop') lift();
   if (update.status === 'done') item.state = 'finished';
   if (update.status === 'later') item.state = 'later';
   if (update.status === 'restore') item.state = 'moving';
