@@ -628,6 +628,10 @@ export class Session {
       this.info.toldSharedBrowser = undefined;
       this.info.toldChrome = undefined;
       this.info.toldSecrets = undefined;
+      // the PM note went with it too; and whether the new conversation got the playbook in its system prompt depends on
+      // how this process was launched (--append-system-prompt only with a new one): told again, to be sure
+      this.info.toldPm = undefined;
+      this.info.pmPrompt = undefined;
       this.info.tags = undefined;
       this.info.pending = undefined;
       this.info.dismissedPending = undefined;

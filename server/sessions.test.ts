@@ -674,6 +674,21 @@ describe('making a session a project manager, and back', () => {
     await manager.shutdown();
   });
 
+  it('a PM made one since its conversation started is told its playbook again after a /clear', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    manager.setPm(id, true);
+    manager.send(id, 'le plan ?');
+    turn(processes[1], id);
+    // /clear: Claude Code goes on in a new conversation, without the note
+    turn(processes[1], 'cleared-conversation');
+    manager.send(id, 'on repart');
+    assert.ok(processes[1].sent.at(-1)!.includes(st.prompt.pm('')));
+    await manager.shutdown();
+  });
+
   it('a PM started as one keeps its playbook through a compaction, without a note', async () => {
     const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
     await manager.init();
