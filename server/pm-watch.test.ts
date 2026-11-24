@@ -63,11 +63,14 @@ describe('what a worker event reports to its PM', () => {
       [{}, { kind: 'attention', attention: 'error' }, 'error'],
       [{}, { kind: 'attention', attention: 'finished' }, null],
       [{ pausedUntil: 5 }, { kind: 'paused' }, 'paused'],
-      [{ state: 'wait' }, { kind: 'reconcile' }, 'finished'],
-      [{ state: 'wait', pausedUntil: 5 }, { kind: 'reconcile' }, 'paused'],
-      [{ state: 'closed' }, { kind: 'reconcile' }, 'restarted'],
-      [{ state: 'error' }, { kind: 'reconcile' }, 'error'],
-      [{ state: 'work' }, { kind: 'reconcile' }, null],
+      // at startup, for a worker whose state changed since it was linked
+      [{ state: 'wait', stateSince: 500 }, { kind: 'reconcile' }, 'finished'],
+      [{ state: 'wait', stateSince: 500, pausedUntil: 5 }, { kind: 'reconcile' }, 'paused'],
+      [{ state: 'closed', stateSince: 500 }, { kind: 'reconcile' }, 'restarted'],
+      [{ state: 'closed', stateSince: 500, resting: true }, { kind: 'reconcile' }, null],
+      [{ state: 'error', stateSince: 500 }, { kind: 'reconcile' }, 'error'],
+      [{ state: 'work', stateSince: 500 }, { kind: 'reconcile' }, null],
+      [{ state: 'wait', stateSince: 50 }, { kind: 'reconcile' }, null],
     ];
     for (const [fields, event, expected] of cases) assert.equal(decideReport(worker(), info(W, fields), event), expected, JSON.stringify([fields, event]));
   });
@@ -90,14 +93,22 @@ describe('the reports of a PM\'s workers', () => {
 
   it('reports a turn end once when the startup check sees it again', async () => {
     const { watch, put, delivered } = await office();
-    await watch.turnEnded(put(W, { state: 'wait', lastSeq: 10 }), 'done');
+    await watch.turnEnded(put(W, { state: 'wait', stateSince: 900_000, lastSeq: 10 }), 'done');
+    await watch.reconcile();
+    assert.equal(delivered.length, 1);
+  });
+
+  it('does not report a finished turn again because the idle worker\'s log grew', async () => {
+    const { watch, put, delivered } = await office();
+    await watch.turnEnded(put(W, { state: 'wait', stateSince: 900_000, lastSeq: 10 }), 'done');
+    put(W, { lastSeq: 12 });
     await watch.reconcile();
     assert.equal(delivered.length, 1);
   });
 
   it('reports once a worker found idle at startup with nothing reported since its last events', async () => {
     const { watch, put, kinds } = await office();
-    put(W, { state: 'wait', lastSeq: 12 });
+    put(W, { state: 'wait', stateSince: 500, lastSeq: 12 });
     await watch.reconcile();
     await watch.reconcile();
     assert.deepEqual(kinds(), ['finished']);
@@ -110,19 +121,20 @@ describe('the reports of a PM\'s workers', () => {
     assert.deepEqual(kinds(), ['error']);
   });
 
-  it('reports a pause once, however often it is heard', async () => {
+  it('reports a pause once, however often it is heard, the turn it stopped included', async () => {
     const { watch, put, kinds } = await office();
-    const paused = put(W, { state: 'wait', pausedUntil: 2_000_000, lastSeq: 4 });
-    await watch.paused(paused);
-    await watch.paused(paused);
-    await watch.turnEnded(paused, 'failed');
+    // heard during the turn, then the turn ends (later in the log), then heard again, then the startup check
+    await watch.paused(put(W, { state: 'work', stateSince: 500, pausedUntil: 2_000_000, lastSeq: 4 }));
+    await watch.turnEnded(put(W, { state: 'wait', stateSince: 600, lastSeq: 6 }), 'failed');
+    await watch.paused(put(W, {}));
+    await watch.reconcile();
     assert.deepEqual(kinds(), ['paused']);
   });
 
   it('stays quiet on a stop the PM asked for, then and at the next startup', async () => {
     const { watch, put, book, delivered } = await office();
     await book.change(PM, (file) => { file.workers[0].watch.stopAsked = 500; });
-    await watch.turnEnded(put(W, { state: 'wait', lastSeq: 9 }), 'interrupted');
+    await watch.turnEnded(put(W, { state: 'wait', stateSince: 900_000, lastSeq: 9 }), 'interrupted');
     await watch.reconcile();
     assert.equal(delivered.length, 0);
     // the next interruption, not asked for, is one
@@ -170,7 +182,7 @@ describe('the reports of a PM\'s workers', () => {
     assert.deepEqual(kinds(), []);
     assert.deepEqual(nudged, []);
     setting.enabled = true;
-    put(W, { state: 'wait' });
+    put(W, { state: 'wait', stateSince: clock.now });
     await watch.reconcile();
     await watch.reconcile();
     assert.deepEqual(kinds(), ['finished']);
@@ -205,7 +217,7 @@ describe('the reports of a PM\'s workers', () => {
       assert.equal(delivered.length, 0, how);
     }
     const { watch, put, book, kinds } = await office();
-    put(W, { state: 'closed', lastSeq: 40 });
+    put(W, { state: 'closed', stateSince: 500, lastSeq: 40 });
     await watch.reconcile();
     assert.deepEqual(kinds(), ['restarted']);
     assert.equal((await book.read(PM)).workers[0].resolvedAt, undefined);

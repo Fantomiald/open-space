@@ -44,10 +44,15 @@ export function decideReport(worker: PmWorker, session: SessionInfo, event: Watc
     case 'attention':
       if (event.attention === 'permission' || event.attention === 'question') return 'waiting';
       return event.attention === 'error' ? 'error' : null;
-    case 'paused': return 'paused';
+    // heard again for the same pause (it could not resume yet): its report stands until the session moves
+    case 'paused': return worker.lastReport?.kind === 'paused' && session.stateSince <= worker.lastReport.at ? null : 'paused';
     case 'reconcile':
+      // nothing changed since its last report (or since it was linked): its log may have grown meanwhile (a shell
+      // command, a note), its state did not
+      if (session.stateSince <= (worker.lastReport?.at ?? worker.linkedAt)) return null;
       if (session.state === 'wait') return session.pausedUntil !== undefined ? 'paused' : 'finished';
-      if (session.state === 'closed') return 'restarted';
+      // put to rest by the user, it is not cut off
+      if (session.state === 'closed') return session.resting ? null : 'restarted';
       return session.state === 'error' ? 'error' : null;
   }
 }
@@ -107,6 +112,8 @@ export class PmWatch {
         const { watch } = worker;
         const last = this.deps.lastEventAt(session.id);
         const quiet = session.state === 'work' && session.pausedUntil === undefined && now - last > quietMs;
+        // a stop asked while it did not work (no turn to end) must not hide its next interruption
+        if (session.state !== 'work' && session.state !== 'starting' && session.state !== 'perm') delete watch.stopAsked;
         if (!quiet) {
           delete watch.nudgedAt;
           delete watch.quietSince;
@@ -144,8 +151,7 @@ export class PmWatch {
         if (!session) { resolveWorker(file, worker.session, now); return []; }
         if (session.pm || session.pmOf !== lead.id) return [];
         const kind = decideReport(worker, session, { kind: 'reconcile' });
-        // nothing since its last report (any kind: a stop seen at that point is not a finished turn), or since it was linked
-        if (!kind || (worker.lastReport?.seq ?? 0) >= session.lastSeq || this.deps.lastEventAt(session.id) <= worker.linkedAt) return [];
+        if (!kind) return [];
         const sent = this.write(lead.id, file, worker, session, kind, now);
         return sent ? [sent] : [];
       }));
@@ -160,9 +166,9 @@ export class PmWatch {
     return on;
   }
 
-  /** A PM that takes reports: there, still a PM, not a trigger's run, not closed by the user. */
+  /** A PM that takes reports: there, still a PM, not a trigger's run, not closed by the user (one at rest is woken up). */
   private isLivePm(session: SessionInfo | undefined): session is SessionInfo {
-    return !!session?.pm && !session.trigger && session.state !== 'closed';
+    return !!session?.pm && !session.trigger && (session.state !== 'closed' || !!session.resting);
   }
 
   /** The live workers of each PM that takes reports. */
@@ -188,20 +194,28 @@ export class PmWatch {
       const stopAsked = event.kind === 'turnEnd' && worker.watch.stopAsked !== undefined;
       if (event.kind === 'turnEnd') delete worker.watch.stopAsked;
       if (kind) return this.write(pm, file, worker, session, kind, now);
-      // the stop the PM asked for is noted as seen, so that the startup check does not take it for a finished turn
-      if (stopAsked && (event.how === 'interrupted' || event.how === 'failed')) this.write(pm, file, worker, session, 'stopped', now);
+      // Noted as seen without a word, so that the startup check does not take them for a finished turn: the stop the PM
+      // asked for, and the end of the turn the usage limit stopped (its pause is reported).
+      if (stopAsked && (event.how === 'interrupted' || event.how === 'failed')) this.write(pm, file, worker, session, 'stopped', now, true);
+      if (event.kind === 'turnEnd' && session.pausedUntil !== undefined && worker.lastReport?.kind === 'paused') {
+        worker.lastReport = { ...worker.lastReport, at: now, seq: session.lastSeq };
+      }
       return null;
     });
     if (sent) this.send(() => this.deps.deliver(sent.pm, sent.text, sent.tag));
   }
 
-  /** Writes the report in the PM's file and gives the message to send; null when it was written already. */
-  private write(pm: string, file: PmFile, worker: PmWorker, session: SessionInfo, kind: ReportKind, now: number): Outgoing | null {
+  /**
+   * Writes the report in the PM's file and gives the message to send; null when it was written already, or when it is
+   * `silent` (noted as seen, nothing to tell the PM, so no line either).
+   */
+  private write(pm: string, file: PmFile, worker: PmWorker, session: SessionInfo, kind: ReportKind, now: number, silent = false): Outgoing | null {
     const key = `${session.id}:${kind}:${session.lastSeq}`;
     if (file.reports.some((one) => one.key === key)) return null;
-    const line = st.pm.report(kind, nameOf(session), worker.item ? itemTag(worker.item) : undefined, session.pausedUntil);
+    const line = silent ? '' : st.pm.report(kind, nameOf(session), worker.item ? itemTag(worker.item) : undefined, session.pausedUntil);
     file.reports = [...file.reports, { key, worker: session.id, kind, at: now }].slice(-PM_LIMITS.reports);
     worker.lastReport = { kind, at: now, line: line.slice(0, PM_LIMITS.line), seq: session.lastSeq };
+    if (silent) return null;
     const said = kind === 'finished' || kind === 'waiting' ? this.deps.lastWords(session.id).slice(0, LAST_WORDS) : '';
     return { pm, text: said ? `${line}\n\n${said}` : line, tag: { report: { worker: session.id, kind } } };
   }
