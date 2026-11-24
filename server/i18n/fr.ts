@@ -399,6 +399,7 @@ export const fr = {
     briefFooter: (pm: string) => `\n\n---\nTu es un worker du chef de projet « ${pm} ». Ton dernier message est ton rapport : il lui part tout seul quand ton tour finit. Dis-y ce que tu as fait, la preuve (tests, captures, commandes lancées) et ce qui reste. N’écris jamais au chef de projet toi-même (ni SendMessage, ni autre moyen) ; une décision dont tu as besoin va dans ton rapport final. Ne fusionne pas, ne pousse pas et ne lance aucune commande destructrice (suppression, reset, push forcé, migration de données) sans qu’on te l’ait demandé. Arrête tes tâches de fond avant de rendre ton rapport.`,
     /** refusals of the page's PM requests (server/index.ts) */
     disabled: 'Les chefs de projet sont désactivés dans les Réglages.',
+    untrustedFolder: (folder: string) => `Le dossier ${folder} fait tourner du code à lui (hooks, serveurs MCP) et n’a jamais été approuvé : ouvre une fois une session dans ce dossier pour l’approuver, puis crée le chef de projet.`,
     untrusted: (name: string) => `${name} travaille dans un dossier non approuvé, sans les outils d’Open Space : elle ne peut pas être chef de projet.`,
     /** a worker's report to its PM (server/pm-watch.ts), one line; its last reply follows for finished and waiting; `until`: the end of a pause */
     report: (kind: ReportKind, worker: string, item?: string, until?: number) => {

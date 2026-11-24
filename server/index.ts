@@ -268,15 +268,18 @@ async function startSession(options: SessionOptions, started: Parameters<typeof 
   return { session, takenName: asked && taken.has(asked) ? asked : null };
 }
 
+/** The model asked for, else the settings' ('' : Claude Code's default). */
+const modelOr = (model?: string) => model || settings.preferences.model;
+
 /**
  * Starts a session the way the page does, for someone who cannot answer the trust question (a trigger's run, a session
  * an agent starts, a PM and its workers): a folder that runs code of its own must have been approved once from the page.
  */
-async function startUnasked(options: SessionOptions, started: Parameters<typeof sessions.create>[1] = {}) {
+async function startUnasked(options: SessionOptions, started: Parameters<typeof sessions.create>[1] = {}, refused = (cwd: string) => st.triggers.trustNeeded(cwd)) {
   try {
     return (await startSession(options, started)).session;
   } catch (error) {
-    if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
+    if (error instanceof TrustNeeded) throw new Error(refused(error.cwd));
     throw error;
   }
 }
@@ -408,7 +411,7 @@ const pmApi: PmApi = {
     const folder = resolveAllowedDirectory(cwd ?? lead.worktree?.home ?? lead.cwd, config.roots);
     if (!folder) throw new Error(st.sessions.outsideRoots);
     if (model && !MODEL_PATTERN.test(model)) throw new Error(st.triggers.errors.model);
-    const chosenModel = model || settings.preferences.model;
+    const chosenModel = modelOr(model);
     const chosenEffort = EFFORTS.find((one) => one === effort) ?? (settings.preferences.effort || undefined);
     return startUnasked({
       cwd: folder, text: `${brief}${st.pm.briefFooter(lead.name)}`, permissionMode: lead.permissionMode,
@@ -463,7 +466,7 @@ const mcpApi: OpenSpaceApi = {
     const mode = permissionMode === undefined ? settings.preferences.permissionMode : isPermissionMode(permissionMode) ? permissionMode : null;
     if (!mode) throw new Error(st.triggers.errors.mode);
     if (role && !ROLE_NAME.test(role)) throw new Error(st.triggers.errors.role);
-    return startUnasked({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote, spawned: true });
+    return startUnasked({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(modelOr(model) ? { model: modelOr(model) } : {}) }, { ...(role ? { role } : {}), remote, spawned: true });
   },
   addMember: async (name, jobs) => {
     await crew.save(null, name, null, undefined, jobs);
@@ -732,10 +735,10 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'pmCreate': {
       checkPmOn();
       const pm = pmSettings(settings.preferences);
-      const model = message.model || pm.lastModel || settings.preferences.model;
+      const model = modelOr(message.model || pm.lastModel);
       const { effort, permissionMode } = settings.preferences;
       // no trust question here: the page asks it with a plain create, so the folder must have been approved before
-      const session = await startUnasked({ cwd: message.cwd, name: st.pm.newName, permissionMode, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, { pm: true });
+      const session = await startUnasked({ cwd: message.cwd, name: st.pm.newName, permissionMode, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, { pm: true }, st.pm.untrustedFolder);
       sessions.send(session.id, st.prompt.pmSetup, [], [], { setup: true });
       // the model chosen for a PM is the next one's (settings.update replaces `pm` whole)
       if (message.model && message.model !== pm.lastModel) {

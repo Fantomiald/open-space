@@ -353,6 +353,8 @@ export class SessionManager {
     if (on && info.trigger) throw new Error(st.pm.triggerRun(info.name));
     if (!!info.pm === on) return;
     session.setPm(on);
+    // an ordinary session again lets its workers go (its file stays: made a PM again, it links them anew)
+    if (!on) for (const other of this.sessions.values()) if (other.snapshot().pmOf === id) other.setPmOf(undefined);
     this.releaseForRole(id);
   }
 
@@ -1227,7 +1229,7 @@ export class SessionManager {
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
-      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}), ...(source.toldPm ? { toldPm: true as const } : {}),
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}), ...(source.toldPm ? { toldPm: true as const } : {}), ...(source.pmPrompt ? { pmPrompt: true as const } : {}),
       ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.project ? { project: source.project } : {}), ...(source.spawned ? { spawned: true as const } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}), ...(source.restrict ? { restrict: source.restrict } : {}),
     });
     const log = await this.openLog(info.id);
@@ -1483,6 +1485,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     accountsBrowser: raw.accountsBrowser === 'chrome' || raw.accountsBrowser === 'shared' ? raw.accountsBrowser : undefined,
     toldSecrets: raw.toldSecrets === true || undefined,
     toldPm: raw.toldPm === true || undefined,
+    pmPrompt: raw.pmPrompt === true || undefined,
     trigger: parseTriggerTag(raw.trigger),
     role: ROLE_NAME.test(asString(raw.role)) ? asString(raw.role) : undefined,
     allowedTools: parseAllowRules(raw.allowedTools)?.length ? parseAllowRules(raw.allowedTools)! : undefined,

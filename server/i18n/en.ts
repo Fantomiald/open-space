@@ -365,6 +365,7 @@ export const en: ServerDictionary = {
     newName: 'New PM',
     briefFooter: (pm: string) => `\n\n---\nYou are a worker of the project manager "${pm}". Your last message is your report: it goes to them on its own when your turn ends. Say in it what you did, the proof (tests, screenshots, commands run) and what is left. Never write to the project manager yourself (no SendMessage, no other way); a decision you need goes in your final report. Do not merge, push or run any destructive command (deletion, reset, force push, data migration) unless asked to. Stop your background jobs before giving your report.`,
     disabled: 'Project managers are off in the Settings.',
+    untrustedFolder: (folder: string) => `The folder ${folder} runs code of its own (hooks, MCP servers) and was never approved: open a session in it once to approve it, then create the project manager.`,
     untrusted: (name: string) => `${name} works in a folder that was not approved, without Open Space's tools: it cannot be a project manager.`,
     report: (kind: ReportKind, worker: string, item?: string, until?: number) => {
       const who = `Report from ${worker}${item ? ` (${item})` : ''}: `;

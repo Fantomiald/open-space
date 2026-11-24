@@ -632,16 +632,57 @@ describe('making a session a project manager, and back', () => {
     await manager.shutdown();
   });
 
-  it('a PM made an ordinary session again is told so, and resumes without the PM tools', async () => {
+  it('a PM made an ordinary session again is told so, resumes without the PM tools, and lets its workers go', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
     await manager.init();
     const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    const worker = await manager.create({ cwd: projectA() }, { pmOf: id });
     turn(processes[0], id);
     manager.setPm(id, false);
     assert.equal(find(id).pm, undefined);
+    assert.equal(find(worker.id).pmOf, undefined, 'its workers go, its file stays');
     manager.send(id, 'merci');
     assert.equal(processes[1].launch.pm, undefined);
     assert.ok(processes[1].sent.at(-1)!.startsWith(st.prompt.pmOff));
+    await manager.shutdown();
+  });
+
+  /** a compaction of its conversation, as Claude Code reports one */
+  const compacted = (process: { handlers: ProcessHandlers }) =>
+    process.handlers.onMessage({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'auto', pre_tokens: 120_000, post_tokens: 9_000 } });
+
+  it('a compaction loses the note of a role changed since the conversation started: told again with the next message', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const made = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    const former = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    turn(processes[0], made.id);
+    turn(processes[1], former.id);
+    manager.setPm(made.id, true);
+    manager.setPm(former.id, false);
+    manager.send(made.id, 'le plan ?');
+    manager.send(former.id, 'merci');
+    for (const [index, id] of [[2, made.id], [3, former.id]] as const) {
+      turn(processes[index], id);
+      compacted(processes[index]);
+      turn(processes[index], id);
+    }
+    manager.send(made.id, 'ensuite ?');
+    manager.send(former.id, 'encore');
+    assert.ok(processes[2].sent.at(-1)!.includes(st.prompt.pm('')), 'the playbook again');
+    assert.ok(processes[3].sent.at(-1)!.startsWith(st.prompt.pmOff), 'its system prompt still has the playbook');
+    await manager.shutdown();
+  });
+
+  it('a PM started as one keeps its playbook through a compaction, without a note', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    turn(processes[0], id);
+    compacted(processes[0]);
+    turn(processes[0], id);
+    manager.send(id, 'ensuite ?');
+    assert.equal(processes[0].sent.at(-1), 'ensuite ?');
     await manager.shutdown();
   });
 

@@ -423,6 +423,8 @@ export interface SessionInfo {
   toldSecrets?: true;
   /** its conversation was last told it is a PM (the playbook in its system prompt, or Session's PM note); absent: an ordinary session */
   toldPm?: true;
+  /** the PM playbook is in its conversation's system prompt (started as a PM): it outlives a compaction, a PM note does not */
+  pmPrompt?: true;
   /** started by a trigger (shared/triggers.ts): it stands in the server room as a robot, instead of the office */
   trigger?: TriggerTag;
   /** runs as this role of Claude Code (.claude/agents/<role>.md), given with --agent at every launch */

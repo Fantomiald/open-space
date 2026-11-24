@@ -586,7 +586,10 @@ export class Session {
     });
     this.launchedAsPm = !!(this.info.pm && !this.info.trigger && this.deps.pmEnabled?.());
     // a new conversation has the playbook in its system prompt
-    if (!this.info.resumable && !this.info.forkOf) this.info.toldPm = this.launchedAsPm || undefined;
+    if (!this.info.resumable && !this.info.forkOf) {
+      this.info.toldPm = this.launchedAsPm || undefined;
+      this.info.pmPrompt = this.launchedAsPm || undefined;
+    }
     const handle: ProcessHandle = this.deps.spawnProcess(
       { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.launchedAsPm ? { pm: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.info.restrict ? { restrict: this.info.restrict } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
@@ -841,7 +844,13 @@ export class Session {
     // what Claude says while Open Space compacts on its own (an error, the session limit) is not shown
     if (event.k === 'say' && this.autoCompaction) return;
     const ev: OfficeEvent = event.k === 'compact' && this.autoCompaction ? { ...event, idle: true } : event;
-    if (ev.k === 'compact') { this.info.compacting = undefined; if (this.autoCompaction) this.autoCompaction.compacted = true; this.publish(); }
+    if (ev.k === 'compact') {
+      this.info.compacting = undefined;
+      if (this.autoCompaction) this.autoCompaction.compacted = true;
+      // a PM note does not survive the summary, only the system prompt does: told again with the next message
+      this.info.toldPm = this.info.pmPrompt;
+      this.publish();
+    }
     // the whole message is here: what was left of it to send is not needed any more
     if (ev.k === 'say') this.partials.delete(ev.who);
     // Claude Code's init (it opens every turn) is not something happening in it
