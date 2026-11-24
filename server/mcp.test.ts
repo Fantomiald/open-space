@@ -365,7 +365,8 @@ function pmFake() {
         const cwd = options.cwd ?? '/work/app';
         starts.push(cwd);
         if (!cwd.startsWith('/work/')) throw new Error('not an allowed folder');
-        const worker = session(`w${live.length}`, cwd, { name: options.title, pmOf: pm, state: 'work' }) as unknown as SessionInfo;
+        // named like any session started without a name: someone of the crew
+        const worker = session(`w${live.length}`, cwd, { name: `Crew ${live.length}`, pmOf: pm, state: 'work' }) as unknown as SessionInfo;
         live.push(worker);
         return worker;
       },
@@ -427,7 +428,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
   // Review Focus 4
   it('writes to, reads and stops its own workers only', async () => {
     const { api, book, done } = pmFake();
-    const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix the login.' });
+    const { session: worker } = await json(api, 'pm_worker_start', { brief: 'Fix the login.' });
     for (const target of ['s5', 'nope', 's1', 's8']) {
       assert.equal((await tool(api, 'pm_worker_send', { session: target, text: 'Go on' }, PM)).isError, true, target);
       assert.equal((await tool(api, 'pm_worker_stop', { session: target }, PM)).isError, true, target);
@@ -446,7 +447,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
 
   it('no longer drives a worker that became a PM or another PM\'s', async () => {
     const { api, done, find } = pmFake();
-    const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' });
+    const { session: worker } = await json(api, 'pm_worker_start', { brief: 'Fix it.' });
     const live = find(worker)!;
     live.pm = true;
     assert.equal((await tool(api, 'pm_worker_send', { session: worker, text: 'Go on' }, PM)).isError, true, 'turned PM');
@@ -498,7 +499,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
       worker.id = 'not a valid id';
       return worker;
     };
-    assert.equal((await tool(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' }, PM)).isError, true);
+    assert.equal((await tool(api, 'pm_worker_start', { brief: 'Fix it.' }, PM)).isError, true);
     assert.equal(find('not a valid id')!.pmOf, undefined);
     assert.ok(done.includes('stopWorker not a valid id'));
     assert.deepEqual((await book.read('s1')).workers, []);
@@ -507,18 +508,18 @@ describe('the pm_* tools of the open-space MCP server', () => {
   it('starts a worker in an allowed folder only, and checks its task before starting it', async () => {
     const { api, book, starts } = pmFake();
     await json(api, 'pm_item_add', { title: 'Login' });
-    assert.equal((await tool(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.', cwd: '/etc' }, PM)).isError, true);
-    assert.equal((await tool(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.', item: 'W9' }, PM)).isError, true, 'an unknown task');
+    assert.equal((await tool(api, 'pm_worker_start', { brief: 'Fix it.', cwd: '/etc' }, PM)).isError, true);
+    assert.equal((await tool(api, 'pm_worker_start', { brief: 'Fix it.', item: 'W9' }, PM)).isError, true, 'an unknown task');
     assert.deepEqual(starts, ['/etc'], 'no session started for an unknown task');
     assert.deepEqual((await book.read('s1')).workers, []);
-    const started = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.', item: 'W1' });
+    const started = await json(api, 'pm_worker_start', { brief: 'Fix it.', item: 'W1' });
     assert.equal(started.item, 'W1');
     assert.deepEqual((await book.read('s1')).workers.map((each) => [each.session, each.item]), [[started.session, 1]]);
   });
 
   it('tells what a worker waits for, never the request id that would answer it', async () => {
     const { api, find } = pmFake();
-    const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' });
+    const { session: worker } = await json(api, 'pm_worker_start', { brief: 'Fix it.' });
     find(worker)!.permissions = [{ requestId: 'req-4242', who: 'W', tool: 'Bash', detail: 'npm install', canAlways: true }];
     const read = await tool(api, 'pm_worker_read', { session: worker }, PM);
     assert.equal(JSON.parse(read.text).waitsFor[0].kind, 'permission');
@@ -529,7 +530,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
     const { api, book } = pmFake();
     await json(api, 'pm_item_add', { title: 'Login' });
     await json(api, 'pm_item_add', { title: 'Later' });
-    await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.', item: 'W1' });
+    await json(api, 'pm_worker_start', { brief: 'Fix it.', item: 'W1' });
     await json(api, 'pm_ask', { title: 'Which phone?', detail: 'iPhone, Android or both' });
     // the PM's turns go on: W2, untouched since, has no one on it
     await book.change('s1', (file) => { file.asks[0].state = 'dismissed'; file.turn = 5; });
@@ -542,7 +543,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
 
   it('still tells the questions set aside when what the tool does fails', async () => {
     const { api, book } = pmFake();
-    const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' });
+    const { session: worker } = await json(api, 'pm_worker_start', { brief: 'Fix it.' });
     await json(api, 'pm_ask', { title: 'Which phone?', detail: 'iPhone, Android or both' });
     await book.change('s1', (file) => { file.asks[0].state = 'dismissed'; });
     const failing: OpenSpaceApi = { ...api, send: () => { throw new Error('gone'); } };
@@ -553,14 +554,14 @@ describe('the pm_* tools of the open-space MCP server', () => {
 
   it('never answers a worker\'s permission or question', async () => {
     const { api, done } = pmFake();
-    const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' });
-    const { session: spare } = await json(api, 'pm_worker_start', { title: 'Spare', brief: 'Wait.' });
+    const { session: worker } = await json(api, 'pm_worker_start', { brief: 'Fix it.' });
+    const { session: spare } = await json(api, 'pm_worker_start', { brief: 'Wait.' });
     await json(api, 'pm_ask', { title: 'Asked before', detail: 'Context' });
     const args: Record<(typeof PM_TOOL_NAMES)[number], Record<string, unknown>> = {
       pm_status: {}, pm_set_mission: { mission: 'Ship' }, pm_set_instructions: { instructions: 'Small PRs' }, pm_remember: { text: 'iPhone only' }, pm_forget: { number: 1 },
       pm_item_add: { title: 'Login', worker }, pm_item_update: { item: 'W1', now: 'Testing', step: 'Write the test' }, pm_item_list: {},
       pm_ask: { title: 'Which?', detail: 'Context' }, pm_ask_done: { tag: 'Q1' }, pm_ask_withdraw: { tag: 'Q2' }, pm_link_add: { item: 'W1', url: 'https://example.com/pull/1' },
-      pm_worker_start: { title: 'Two', brief: 'Go.' }, pm_worker_link: { session: 's2' }, pm_worker_unlink: { session: 's2' }, pm_worker_resolve: { session: spare },
+      pm_worker_start: { brief: 'Go.' }, pm_worker_link: { session: 's2' }, pm_worker_unlink: { session: 's2' }, pm_worker_resolve: { session: spare },
       pm_worker_send: { session: worker, text: 'yes' }, pm_worker_read: { session: worker }, pm_worker_stop: { session: worker },
     };
     // each one carried out, so that none stops short of what it does
@@ -613,16 +614,16 @@ describe('the pm_* tools of the open-space MCP server', () => {
     const { api, book, done } = pmFake();
     await json(api, 'pm_item_add', { title: 'Login' });
     await json(api, 'pm_item_add', { title: 'Docs' });
-    const { session: login } = await json(api, 'pm_worker_start', { title: 'Login fix', brief: 'Fix it.', item: 'W1' });
-    const { session: docs } = await json(api, 'pm_worker_start', { title: 'Docs pass', brief: 'Write them.', item: 'W2' });
-    const named: [Record<string, unknown>, string][] = [[{ session: login }, login], [{ session: 'W1' }, login], [{ item: 'W2' }, docs], [{ session: 'Docs pass' }, docs]];
+    const { session: login } = await json(api, 'pm_worker_start', { brief: 'Fix it.', item: 'W1' });
+    const { session: docs, name: docsName } = await json(api, 'pm_worker_start', { brief: 'Write them.', item: 'W2' });
+    const named: [Record<string, unknown>, string][] = [[{ session: login }, login], [{ session: 'W1' }, login], [{ item: 'W2' }, docs], [{ session: docsName }, docs]];
     for (const [args, to] of named) {
       done.length = 0;
       assert.equal((await tool(api, 'pm_worker_send', { ...args, text: 'Go on' }, PM)).isError, false, JSON.stringify(args));
       assert.deepEqual(done, [`send ${to} Go on`]);
     }
     done.length = 0;
-    await json(api, 'pm_worker_start', { title: 'Login tests', brief: 'Test it.', item: 'W1' });
+    await json(api, 'pm_worker_start', { brief: 'Test it.', item: 'W1' });
     for (const session of ['W1', 'W3', 'Nobody']) assert.equal((await tool(api, 'pm_worker_send', { session, text: 'Go on' }, PM)).isError, true, session);
     assert.deepEqual(done, [], 'two workers on W1: neither');
     assert.equal((await tool(api, 'pm_worker_resolve', { item: 'W2' }, PM)).isError, false);

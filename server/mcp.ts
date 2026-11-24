@@ -87,7 +87,7 @@ export interface PmApi {
   book: PmBook;
   now: () => number;
   /** starts a worker of `pm` in its permission mode; throws when the folder is not allowed, or runs code and was never approved */
-  startWorker: (pm: string, options: { title: string; brief: string; cwd?: string; model?: string; effort?: string; isolate?: boolean }) => Promise<SessionInfo>;
+  startWorker: (pm: string, options: { brief: string; cwd?: string; model?: string; effort?: string; isolate?: boolean }) => Promise<SessionInfo>;
   stopWorker: (worker: string) => void;
   /**
    * marks the session as a worker of `pm` (SessionInfo.pmOf) unless it is another PM's: false then. Synchronous, so that of

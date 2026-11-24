@@ -66,10 +66,10 @@ const tools: Record<PmToolName, Omit<Tool, 'name'>> = {
   pm_worker_start: {
     description: 'Starts a worker: a new Open Space session in your project with this brief as its first message, in your permission mode. Its reports come to you on their own. Returns its session id.',
     inputSchema: object({
-      title: string('What it works on, in a few words'), brief: string('Its first message: the task, the context, what proves it is done'), item: ITEM,
+      brief: string('Its first message: the task, the context, what proves it is done'), item: ITEM,
       cwd: string('Absolute folder, inside the folders Open Space allows (default: yours)'), model: string('Model alias or name (default: the settings\')'),
       effort: { type: 'string', enum: [...EFFORTS] }, isolate: { type: 'boolean', description: 'Works on a branch of its own (a worktree)' },
-    }, ['title', 'brief']),
+    }, ['brief']),
     annotations: write,
   },
   pm_worker_link: {
@@ -299,7 +299,7 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
       if (item !== undefined && !(await book.book.read(pm)).items.some((one) => one.no === item)) return failure(st.pm.noItem(itemTag(item)));
       const effort = EFFORTS.find((one) => one === args.effort);
       const started = await book.startWorker(pm, {
-        title: asString(args.title).trim(), brief: asString(args.brief).trim(),
+        brief: asString(args.brief).trim(),
         ...(asString(args.cwd) ? { cwd: asString(args.cwd) } : {}), ...(asString(args.model) ? { model: asString(args.model) } : {}),
         ...(effort ? { effort } : {}), ...(args.isolate === true ? { isolate: true } : {}),
       });

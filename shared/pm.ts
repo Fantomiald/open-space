@@ -61,7 +61,7 @@ export const PM_TOOL_USAGE: Record<(typeof PM_TOOL_NAMES)[number], string> = {
   pm_ask_done: 'pm_ask_done({ tag })',
   pm_ask_withdraw: 'pm_ask_withdraw({ tag })',
   pm_link_add: 'pm_link_add({ url, item?, worker? })',
-  pm_worker_start: 'pm_worker_start({ title, brief, item?, cwd?, model?, effort?, isolate? })',
+  pm_worker_start: 'pm_worker_start({ brief, item?, cwd?, model?, effort?, isolate? })',
   pm_worker_link: 'pm_worker_link({ session, item? })',
   pm_worker_unlink: 'pm_worker_unlink({ session | item })',
   pm_worker_resolve: 'pm_worker_resolve({ session | item })',
