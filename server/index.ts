@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import { EFFORTS, isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
+import { isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
 import { pmSettings } from '../shared/pm.ts';
 import type { PhoneProblem } from '../shared/triggers.ts';
@@ -25,7 +25,7 @@ import { changedSettings } from '../shared/claude-settings.ts';
 import { readClaudeDefaults } from './claude-settings.ts';
 import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
-import { MODEL_PATTERN, parseClientMessage } from './messages.ts';
+import { parseClientMessage } from './messages.ts';
 import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { findTailscale, readTailscaleName, serveBridge, serveMods, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
@@ -54,6 +54,7 @@ import { projectOf } from './worktrees.ts';
 import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi, type PmApi } from './mcp.ts';
 import { PmBook } from './pm.ts';
 import { resolveWorker } from './pm-ops.ts';
+import { actsAsPm, workerOptions } from './pm-guards.ts';
 import { PmWatch } from './pm-watch.ts';
 import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
 import { parsePreferences } from './settings.ts';
@@ -401,25 +402,13 @@ function checkPmOn() {
 /** What the pm_* tools reach (server/pm-tools.ts). */
 const pmApi: PmApi = {
   // a session of a folder not trusted has no open-space MCP server (see openSpaceMcp above), so no PM tools
-  isPm: (sessionId) => {
-    const info = findSession(sessionId);
-    return !!info?.pm && !info.trigger && !info.untrusted && pmSettings(settings.preferences).enabled;
-  },
+  isPm: (sessionId) => actsAsPm(findSession(sessionId), pmSettings(settings.preferences).enabled),
   book: pmBook,
   now: Date.now,
   // a worker takes its PM's permission mode, never another, and the folder's trust rules like a trigger's run
-  startWorker: async (pm, { brief, cwd, model, effort, isolate }) => {
-    const lead = findSession(pm);
-    if (!lead) throw new Error(st.triggers.mcp.noSession(pm));
-    const folder = resolveAllowedDirectory(cwd ?? lead.worktree?.home ?? lead.cwd, config.roots);
-    if (!folder) throw new Error(st.sessions.outsideRoots);
-    if (model && !MODEL_PATTERN.test(model)) throw new Error(st.triggers.errors.model);
-    const chosenModel = modelOr(model);
-    const chosenEffort = EFFORTS.find((one) => one === effort) ?? (settings.preferences.effort || undefined);
-    return startUnasked({
-      cwd: folder, text: `${brief}${st.pm.briefFooter(lead.name)}`, permissionMode: lead.permissionMode,
-      ...(chosenModel ? { model: chosenModel } : {}), ...(chosenEffort ? { effort: chosenEffort } : {}), ...(isolate ? { isolate: {} } : {}),
-    }, { pmOf: pm });
+  startWorker: async (pm, ask) => {
+    const { model, effort } = settings.preferences;
+    return startUnasked(workerOptions(findSession(pm), pm, ask, { roots: config.roots, model, effort }), { pmOf: pm });
   },
   stopWorker: (worker) => sessions.interrupt(worker),
   claimWorker: (session, pm) => sessions.claimWorker(session, pm),
