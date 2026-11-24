@@ -6,6 +6,7 @@ import { t } from '../i18n/index.ts';
 import { earlyBubbleText } from '../room/bubbles.ts';
 import { pauseLabel } from './labels.ts';
 import { writingStops } from './partials.ts';
+import { fromOpenSpace } from './pm.ts';
 
 /** The speaker of the user's own messages and answers. */
 export const USER_SPEAKER = 'user';
@@ -25,7 +26,8 @@ export function speechOf(sessionId: string, ev: OfficeEvent): Speech | null {
     return spokenEarly.delete(sessionId) ? null : { sessionId, speaker: ev.who, text: ev.text };
   }
   if (writingStops(ev)) spokenEarly.delete(sessionId);
-  if (ev.k === 'start') return { sessionId, speaker: USER_SPEAKER, text: ev.text };
+  // what Open Space writes to a PM (its setup, a worker's report) is nobody's speech
+  if (ev.k === 'start') return fromOpenSpace(ev.pm) ? null : { sessionId, speaker: USER_SPEAKER, text: ev.text };
   return null;
 }
 

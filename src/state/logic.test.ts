@@ -13,6 +13,7 @@ import { attentionKind, attentionQueue, newlyWaiting, otherSessions, tabTitle } 
 import { sessionStatus } from '../room/cast.ts';
 import { afterEvent, withPartial } from './partials.ts';
 import { questionAnswers } from './questions.ts';
+import { leadOf } from './pm.ts';
 import { quotaWindowName, resetLabel, usageLevel } from '../lib/format.ts';
 import { mdToHtml } from '../lib/markdown.ts';
 
@@ -286,6 +287,11 @@ describe('buildFeed', () => {
     assert.deepEqual(message?.kind === 'peer' && message.subagent, { agentId: 'task1', name: 'Mila' });
     const card = items.find((item) => item.kind === 'subagent');
     assert.equal(card?.kind === 'subagent' && card.report, 'All done.');
+  });
+
+  it('shows the setup Open Space sends a new PM as a line of its own, not as the user’s message', () => {
+    const items = buildFeed([logged(1, { k: 'start', text: 'Call pm_status', pm: { setup: true } }), logged(2, { k: 'say', who: 'chef', text: 'Brief?' })]).items;
+    assert.deepEqual(items.map((item) => item.kind), ['notice', 'assistant']);
   });
 
   it('survives an empty log and events about unknown sub-agents', () => {
@@ -625,5 +631,15 @@ describe('copying and exporting a conversation', () => {
   it('exports the messages and the answers, each with its time', () => {
     assert.equal(conversationMarkdown(items, { name: 'Iris', folder: '~/app', you: 'Toi', clock: () => '14:02' }),
       '# Iris\n\n~/app\n\n**Toi** · 14:02\n\nsalut\n\n**Iris** · 14:02\n\npremier\n\n**Iris** · 14:02\n\nsecond\n');
+  });
+});
+
+describe('project managers in the page', () => {
+  it('names the PM a worker works for only while that session is still a PM', () => {
+    const lead = session('lead', 'wait', { pm: true });
+    const worker = session('w', 'work', { pmOf: 'lead' });
+    assert.equal(leadOf(worker, { lead, w: worker })?.id, 'lead');
+    assert.equal(leadOf(worker, { lead: { ...lead, pm: undefined }, w: worker }), undefined, 'made an ordinary session again');
+    assert.equal(leadOf(worker, { w: worker }), undefined, 'gone');
   });
 });

@@ -501,6 +501,12 @@ describe('speech bubbles', () => {
     assert.equal(speechOf('s', { k: 'say', who: 'toolu_1', text: 'Je regarde' }), null, 'a sub-agent speaks in its tab only');
     assert.equal(speechOf('s', { k: 'act', who: 'chef', id: 'c', tool: 'Read', detail: '/a' }), null);
   });
+
+  it('never puts in the user’s mouth what Open Space writes to a PM, only their answers', () => {
+    assert.equal(speechOf('s', { k: 'start', text: 'Call pm_status', pm: { setup: true } }), null);
+    assert.equal(speechOf('s', { k: 'start', text: 'Lea finished', pm: { report: { worker: 'w', kind: 'finished' } } }), null);
+    assert.equal(speechOf('s', { k: 'start', text: 'W1 Q2: yes', pm: { answer: { ask: 2 } } })?.speaker, USER_SPEAKER);
+  });
 });
 
 describe('light of the day', () => {

@@ -103,7 +103,7 @@ export const settings: Dictionary['settings'] = {
     },
     groups: {
       appearance: 'Display', alerts: 'Alerts', text: 'Threads', reasoning: 'Thinking and answers', autonomy: 'Autonomy', workflows: 'Workflows', together: 'Between sessions',
-      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', system: 'System', life: 'Ambience', crew: 'Crew', automata: 'Automatons', phone: 'Phone', files: 'Files',
+      defaults: 'Defaults', agents: 'Agents', branches: 'Branches', browser: 'Browser', places: 'Work folders', system: 'System', life: 'Ambience', crew: 'Crew', automata: 'Automatons', phone: 'Phone', files: 'Files', pm: 'Project managers',
     },
     inherit: (value: string) => `As in Claude Code (${value})`,
     inheritAction: 'As in Claude Code',
@@ -148,6 +148,8 @@ export const settings: Dictionary['settings'] = {
       outputStyle: { title: 'Output style', hint: `How Claude answers you. Your own styles come from ${STYLES_FOLDER}.`, default: 'Default' },
       responseLanguage: { title: 'Answer language', hint: 'A language name or code (french, ja). Empty: as in Claude Code.', english: 'English' },
       promptSuggestions: { title: 'Prompt suggestions', hint: 'After a turn, the message Claude Code guesses you will send shows in grey in the empty field: Tab writes it, then Enter sends it. One small extra call per turn, except for a conversation’s first turns. A session already running picks it up at its next launch.' },
+      pm: { title: 'Project managers', hint: 'A session can keep a project’s plan, start other sessions to carry it out and get their reports. Off: their tools and reports stop, they are sessions like the others again, nothing is deleted.' },
+      pmQuiet: { title: 'Quiet delay', hint: 'A project manager’s session that works without a word for this long is reported to it.', minutes: (minutes: number) => `${minutes} min` },
       autoCompact: { title: 'Auto-compact', hint: 'Sums up the conversation when the context is nearly full.' },
       idleCompact: {
         title: 'Compact when idle',

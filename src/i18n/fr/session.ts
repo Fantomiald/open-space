@@ -30,6 +30,11 @@ export const session = {
     duplicateTitle: 'Une nouvelle session repart de cette conversation telle qu’elle est, pour essayer une autre piste. Celle-ci continue de son côté.',
     rest: 'Repos',
     restTitle: 'En salle de repos : Claude Code s’arrête, un message la rappelle',
+    /** project managers (PM): a session that keeps a plan and runs other sessions, its workers */
+    makePm: 'En faire un chef de projet',
+    makePmTitle: 'Elle tient un plan, lance des sessions pour le faire et reçoit leurs rapports. Elle change de rôle à la fin de son tour.',
+    unmakePm: 'Redevenir une session normale',
+    unmakePmTitle: 'Elle laisse partir ses sessions et oublie son rôle à la fin de son tour. Son plan est gardé, si elle redevient chef de projet.',
     switchOff: 'Éteindre',
     switchOffTitle: 'Éteindre : elle disparaît d’Open Space',
     zoom: 'Agrandir',
@@ -127,6 +132,8 @@ export const session = {
     compacted: (auto: boolean, before: number, after: number, idle = false) => `Conversation ${idle ? 'compactée pendant la pause' : auto ? 'compactée automatiquement' : 'compactée'} : ${tokenCount(before, 'fr-FR')} → ${tokenCount(after, 'fr-FR')} jetons`,
     compacting: { auto: 'Compacte la conversation tout seul…', manual: 'Compacte la conversation…' },
     cleared: 'Nouvelle conversation : Claude repart de zéro (/clear).',
+    /** in place of the first message Open Space sends a new project manager */
+    pmSetup: 'Chef de projet prêt : il attend ton brief.',
     phases: { thinking: 'réfléchit' },
     turnDone: (word: string, duration: string, time: string) => `${word} pendant ${duration} · fini à ${time}`,
     turnStopped: (duration: string, time: string) => `Interrompu au bout de ${duration} · ${time}`,
@@ -355,6 +362,12 @@ export const session = {
     title: 'Sessions',
     new: 'Nouvelle session',
     newIn: (project: string) => `Nouvelle session dans ${project}`,
+    newPmIn: (project: string) => `Nouveau chef de projet dans ${project}`,
+    /** a project manager's badge beside its name, here and in its window's head */
+    pmBadge: 'PM',
+    pmBadgeTitle: 'Chef de projet : il tient un plan et fait travailler d’autres sessions',
+    /** a worker's mark: the project manager it works for */
+    pmFor: (name: string) => `pour ${name}`,
     groups: { working: 'Au travail', waiting: 'À toi', finish: 'À finir', ready: 'Terminées', resting: 'Au repos', automata: 'Automates' },
     hints: { working: '', waiting: '', finish: '', ready: '', resting: '', automata: '' },
     groupBy: 'Grouper la liste',

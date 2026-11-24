@@ -2,7 +2,8 @@
 // to finish, who is done, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
 // look, as in the room), its state as a sign on the face, how long it has been so, and its tags (else its last words). A click opens it beside the open ones (or goes to it when open); a
 // group folds away, and the whole list down to the faces (remembered in this browser). A project's + (on hover, or
-// Alt+its digit, App.tsx) opens a new session in its folder.
+// Alt+its digit, App.tsx) opens a new session in its folder, its other button a new project manager there (PM, while the
+// setting is on). A PM wears a badge; a worker names its PM.
 import { useCallback, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
 import { t } from '../i18n/index.ts';
 import { formatAge, formatAgo } from '../lib/format.ts';
@@ -18,8 +19,11 @@ import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { pmSettings } from '../../shared/pm.ts';
+import { PmBadge } from '../design/PmBadge.tsx';
+import { leadOf } from '../state/pm.ts';
 import { BranchMark } from './BranchCard.tsx';
-import { CheckIcon, ChevronDownIcon, FilterIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
+import { CheckIcon, ChevronDownIcon, FilterIcon, FoldListIcon, PlusIcon, PmIcon, UnfoldListIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
 import { SessionFace } from './SessionFace.tsx';
@@ -32,6 +36,7 @@ export function SessionList() {
   const selectedId = useSessions((s) => s.selectedId);
   const show = useSessions((s) => s.show);
   const openNewSession = useSessions((s) => s.openNewSession);
+  const pmOn = useSessions((s) => pmSettings(s.preferences).enabled);
   const [folded, setFolded] = useState(() => readPreference<string[]>('listFolded', []));
   const fold = (group: string) => {
     const next = folded.includes(group) ? folded.filter((other) => other !== group) : [...folded, group];
@@ -100,7 +105,7 @@ export function SessionList() {
                 <span className="cp-list__hint">{hintOf(group)}</span>
                 {!group.state && group.waiting > 0 && <span className="cp-list__waiting" title={words.waitingCount(group.waiting)}>{group.waiting}</span>}
               </button>
-              {group.folder && <NewInProject folder={group.folder} label={titleOf(group)} digit={projectDigit(projects, group.folder)} onOpen={openNewSession} />}
+              {group.folder && <NewInProject folder={group.folder} label={titleOf(group)} digit={projectDigit(projects, group.folder)} onOpen={openNewSession} pm={pmOn} />}
             </h2>
             <ul className="cp-list__items" id={`list-${group.key}`} hidden={folded.includes(group.key)}>
               {group.sessions.map((session) => {
@@ -108,6 +113,7 @@ export function SessionList() {
                 const kind = attentionKind(session, seen);
                 const working = isWorking(session);
                 const elapsed = now - (working ? session.busySince ?? session.stateSince : session.stateSince);
+                const lead = pmOn ? leadOf(session, sessions) : undefined;
                 return (
                   <li key={session.id}>
                     <button
@@ -120,8 +126,10 @@ export function SessionList() {
                       <span className="cp-list__text">
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>
+                          {pmOn && session.pm && <PmBadge label={words.pmBadge} title={words.pmBadgeTitle} />}
                           {session.worktree && <BranchMark branch={session.worktree.branch} />}
                           {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
+                          {lead && <span className="cp-list__for">{words.pmFor(lead.name)}</span>}
                           <span className="cp-list__time">{working ? formatAge(elapsed) : formatAgo(elapsed)}</span>
                         </span>
                         {/* its tags say what it is about at a glance; without any, its last words */}
@@ -150,14 +158,24 @@ export function SessionList() {
   );
 }
 
-/** A project's +, shown when its title is under the pointer (or focused): a new session in its folder, with its shortcut. */
-function NewInProject({ folder, label, digit, onOpen }: { folder: string; label: string; digit: number | null; onOpen: (draft: { folder: string }) => void }) {
+/**
+ * A project's +, shown when its title is under the pointer (or focused): a new session in its folder, with its shortcut;
+ * with `pm`, beside it a new project manager there, which opens like a new session.
+ */
+function NewInProject({ folder, label, digit, onOpen, pm }: { folder: string; label: string; digit: number | null; onOpen: (draft: { folder: string }) => void; pm: boolean }) {
   const words = t.session.list;
   const keys = digit ? `${OPTION}+${digit}` : '';
   return (
-    <button type="button" className="cp-list__add" aria-label={words.newIn(label)} title={keys ? `${words.newIn(label)} (${keys})` : words.newIn(label)} onClick={() => onOpen({ folder })}>
-      {keys && <kbd className="cp-kbd">{keys}</kbd>}<PlusIcon />
-    </button>
+    <span className="cp-list__adds">
+      {pm && (
+        <button type="button" className="cp-list__add" aria-label={words.newPmIn(label)} title={words.newPmIn(label)} onClick={() => useSessions.getState().createPm(folder)}>
+          <PmIcon />
+        </button>
+      )}
+      <button type="button" className="cp-list__add" aria-label={words.newIn(label)} title={keys ? `${words.newIn(label)} (${keys})` : words.newIn(label)} onClick={() => onOpen({ folder })}>
+        {keys && <kbd className="cp-kbd">{keys}</kbd>}<PlusIcon />
+      </button>
+    </span>
   );
 }
 

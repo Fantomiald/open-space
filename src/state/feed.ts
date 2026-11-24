@@ -46,7 +46,12 @@ export function buildFeed(events: readonly LoggedEvent[]): Feed {
     // a command run with "!" is the user's own, outside the turns
     if (!turnFirst && ev.k !== 'state' && ev.k !== 'init' && ev.k !== 'shell' && ev.k !== 'shell_done') turnFirst = seq;
     switch (ev.k) {
-      case 'start': items.push({ id: seq, kind: 'user', at, text: ev.text, images: ev.images ?? [], files: ev.files ?? [] }); turnStart = items.length; break;
+      case 'start':
+        // the first message Open Space sends a new PM is told as a line of its own, not as the user's
+        if (ev.pm && 'setup' in ev.pm) items.push({ id: seq, kind: 'notice', at, text: t.session.feed.pmSetup });
+        else items.push({ id: seq, kind: 'user', at, text: ev.text, images: ev.images ?? [], files: ev.files ?? [] });
+        turnStart = items.length;
+        break;
       // older logs hold the sub-agents' hand-backs as messages from another session: their report is in their tab
       case 'peer': {
         if (isSubagentHandback(ev.text)) break;

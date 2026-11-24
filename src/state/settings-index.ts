@@ -11,7 +11,7 @@ export type SettingRow = keyof typeof t.settings.prefs.rows;
 export const ROWS: Readonly<Record<SettingRow, SettingsSection>> = {
   language: 'general', timeFormat: 'general', reduceMotion: 'office', glassOpacity: 'office', windowStyle: 'office', tagColors: 'office', sound: 'general', notifications: 'general', terminal: 'general',
   timestamps: 'general', turnDuration: 'general', detailedActions: 'general', copyOnSelect: 'general',
-  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', autoTagRule: 'sessions', remoteByDefault: 'sessions', isolate: 'sessions', accountsBrowser: 'sessions', autoPip: 'sessions', agentCursor: 'sessions',
+  model: 'sessions', effort: 'sessions', permissions: 'sessions', agentNote: 'sessions', autoTag: 'sessions', autoTagRule: 'sessions', remoteByDefault: 'sessions', pm: 'sessions', pmQuiet: 'sessions', isolate: 'sessions', accountsBrowser: 'sessions', autoPip: 'sessions', agentCursor: 'sessions',
   thinking: 'claude', outputStyle: 'claude', responseLanguage: 'claude', promptSuggestions: 'claude', autoCompact: 'claude', idleCompact: 'claude', autoContinue: 'claude', autoModeInPlan: 'claude',
   workflows: 'claude', ultracodeKeyword: 'claude', workflowSize: 'claude', inbound: 'claude', artifacts: 'claude',
   roots: 'folders', defaultFolder: 'folders',

@@ -10,6 +10,7 @@ import { INBOUND_POLICIES, WORKFLOW_SIZES, type ClaudeSettings, type ClaudeSwitc
 import { ACCOUNTS_BROWSERS, EFFORTS, GLASS_OPACITY, WINDOW_STYLES, IDLE_COMPACT_MINUTES, ISOLATE_MODES, PERMISSION_MODES, TIME_FORMATS, type Preferences } from '../../shared/protocol.ts';
 import { ROOM_THEMES, type RoomTheme } from '../../shared/room-themes.ts';
 import { matchesAll } from '../../shared/search.ts';
+import { PM_QUIET_MINUTES, pmSettings, type PmSettings } from '../../shared/pm.ts';
 import { t } from '../i18n/index.ts';
 import { homeRelative } from '../lib/format.ts';
 import { modeLabel, models } from '../state/labels.ts';
@@ -18,7 +19,7 @@ import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/setting
 import {
   ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, CursorIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, RadioIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
-  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WebhookIcon, WorkflowIcon,
+  OpacityIcon, PaletteIcon, PhoneIcon, PmIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WebhookIcon, WorkflowIcon,
 } from './Icons.tsx';
 import { Copyable } from './Copyable.tsx';
 import { AccountAction } from './AccountAction.tsx';
@@ -47,7 +48,7 @@ type Group = keyof typeof t.settings.prefs.groups;
 /** The rows of each section, by group, in the order shown. */
 const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group, readonly SettingRow[]])[]>>> = {
   general: [['appearance', ['language', 'timeFormat']], ...(IS_WINDOWS ? [['system', ['terminal']] as const] : []), ['text', ['timestamps', 'turnDuration', 'detailedActions', 'copyOnSelect']], ['alerts', ['sound', 'notifications']]],
-  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag', 'autoTagRule']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip', 'agentCursor']]],
+  sessions: [['defaults', ['model', 'effort', 'permissions', 'remoteByDefault']], ['agents', ['agentNote', 'autoTag', 'autoTagRule']], ['branches', ['isolate']], ['browser', ['accountsBrowser', 'autoPip', 'agentCursor']], ['pm', ['pm', 'pmQuiet']]],
   claude: [
     ['reasoning', ['thinking', 'outputStyle', 'responseLanguage', 'promptSuggestions']], ['autonomy', ['autoCompact', 'idleCompact', 'autoContinue', 'autoModeInPlan']],
     ['workflows', ['workflows', 'ultracodeKeyword', 'workflowSize']], ['together', ['inbound', 'artifacts']],
@@ -175,6 +176,9 @@ function SettingsEditor() {
     <button type="button" className="cp-prefs__inherit" title={words.inheritTitle} onClick={() => setClaude(key, undefined)}>{words.inherit(shown)}</button>
   );
   const onOff = (value: boolean | undefined) => (value === false ? words.off : words.on);
+  // the server replaces `pm` whole: every change sends all of it (lastModel included)
+  const pm = pmSettings(draft);
+  const changePm = (changes: Partial<PmSettings>) => change({ pm: { ...pm, ...changes } });
 
   const row = (id: SettingRow): ReactNode => {
     const rows = words.rows;
@@ -287,6 +291,20 @@ function SettingsEditor() {
       case 'promptSuggestions': return (
         <Row key={id} id={id} flash={flash} icon={<KeyboardIcon />} title={rows.promptSuggestions.title} hint={rows.promptSuggestions.hint} config={config}>
           <Switch checked={draft.promptSuggestions} onChange={(promptSuggestions) => change({ promptSuggestions })} label={rows.promptSuggestions.title} />
+        </Row>
+      );
+      case 'pm': return (
+        <Row key={id} id={id} flash={flash} icon={<PmIcon />} title={rows.pm.title} hint={rows.pm.hint}>
+          <Switch checked={pm.enabled} onChange={(enabled) => changePm({ enabled })} label={rows.pm.title} />
+        </Row>
+      );
+      case 'pmQuiet': return (
+        <Row key={id} id={id} flash={flash} icon={<TimerIcon />} title={rows.pmQuiet.title} hint={rows.pmQuiet.hint}>
+          <input
+            type="range" aria-labelledby={`setting-${id}-title`} min={PM_QUIET_MINUTES.min} max={PM_QUIET_MINUTES.max} step={1} value={pm.quietMinutes} disabled={!pm.enabled}
+            onChange={(e) => changePm({ quietMinutes: Number(e.target.value) })}
+          />
+          <output className="cp-prefs__value">{rows.pmQuiet.minutes(pm.quietMinutes)}</output>
         </Row>
       );
       case 'idleCompact': return (

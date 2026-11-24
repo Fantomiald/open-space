@@ -133,12 +133,17 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
                 <span className="cp-queue__text">{message.text}</span>
                 {message.images ? <span className="cp-queue__images" title={words.images(message.images)}><ImageIcon />{message.images}</span> : null}
                 {message.files ? <span className="cp-queue__images" title={words.files(message.files)}><FileIcon />{message.files}</span> : null}
-                <Tooltip text={words.edit}>
-                  <button type="button" className="cp-icon-button" aria-label={words.editLabel} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
-                </Tooltip>
-                <Tooltip text={words.remove}>
-                  <button type="button" className="cp-icon-button" aria-label={words.removeLabel} onClick={() => unqueue(message.id)}><CloseIcon /></button>
-                </Tooltip>
+                {/* a message of Open Space to a PM (a worker's report, told once) is not the user's to edit or take back */}
+                {!message.pm && (
+                  <>
+                    <Tooltip text={words.edit}>
+                      <button type="button" className="cp-icon-button" aria-label={words.editLabel} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>
+                    </Tooltip>
+                    <Tooltip text={words.remove}>
+                      <button type="button" className="cp-icon-button" aria-label={words.removeLabel} onClick={() => unqueue(message.id)}><CloseIcon /></button>
+                    </Tooltip>
+                  </>
+                )}
               </li>
             ))}
           </ol>

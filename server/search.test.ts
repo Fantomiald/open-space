@@ -27,6 +27,15 @@ describe('search over every session', () => {
     assert.deepEqual(hits.map((hit) => [hit.seq, hit.who]), [[6, 'agent'], [4, 'agent'], [3, 'peer'], [2, 'agent']]);
   });
 
+  it('gives the user none of what Open Space writes to a PM: its setup is no hit, a worker’s report is another session’s', () => {
+    const events: LoggedEvent[] = [
+      { seq: 1, at: 1, ev: { k: 'start', text: 'zebra setup', pm: { setup: true } } },
+      { seq: 2, at: 2, ev: { k: 'start', text: 'zebra report', pm: { report: { worker: 'w', kind: 'finished' } } } },
+      { seq: 3, at: 3, ev: { k: 'start', text: 'W1 Q1: zebra', pm: { answer: { ask: 1 } } } },
+    ];
+    assert.deepEqual(searchSessions([['a', events]], 'zebra', 10).map((hit) => [hit.seq, hit.who]), [[3, 'user'], [2, 'peer']]);
+  });
+
   it('keeps four hits a session, newest first, up to the limit', () => {
     const many = (id: string, from: number): [string, LoggedEvent[]] => [id, Array.from({ length: 6 }, (_, index) => say(index, from + index, 'mot clé'))];
     const hits = searchSessions([many('a', 100), many('b', 50)], 'mot');

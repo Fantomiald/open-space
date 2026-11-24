@@ -106,7 +106,7 @@ export const settings = {
       about: 'La version d’Open Space et de Claude Code.',
     },
     groups: {
-      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', system: 'Système', life: 'Ambiance', crew: 'Équipe', automata: 'Automates', phone: 'Téléphone', files: 'Fichiers',
+      appearance: 'Affichage', alerts: 'Alertes', text: 'Fils', reasoning: 'Réflexion et réponses', autonomy: 'Autonomie', workflows: 'Workflows', together: 'Entre sessions', defaults: 'Par défaut', agents: 'Agents', branches: 'Branches', browser: 'Navigateur', places: 'Dossiers de travail', system: 'Système', life: 'Ambiance', crew: 'Équipe', automata: 'Automates', phone: 'Téléphone', files: 'Fichiers', pm: 'Chefs de projet',
     },
     inherit: (value: string) => `Comme Claude Code (${value})`,
     inheritAction: 'Comme Claude Code',
@@ -151,6 +151,8 @@ export const settings = {
       outputStyle: { title: 'Style de sortie', hint: `La façon dont Claude te répond. Tes styles viennent de ${STYLES_FOLDER}.`, default: 'Par défaut' },
       responseLanguage: { title: 'Langue des réponses', hint: 'Le nom d’une langue ou son code (french, ja). Vide : comme Claude Code.', english: 'anglais' },
       promptSuggestions: { title: 'Suggestions de message', hint: 'Après un tour, le message que Claude Code devine que tu vas envoyer s’affiche en gris dans le champ vide : Tab l’écrit, puis Entrée l’envoie. Un petit appel en plus par tour, sauf aux premiers tours d’une conversation. Une session déjà lancée s’y met à son prochain démarrage.' },
+      pm: { title: 'Chefs de projet', hint: 'Une session peut tenir le plan d’un projet, lancer d’autres sessions pour le faire et recevoir leurs rapports. Coupé : leurs outils et leurs rapports s’arrêtent, elles redeviennent des sessions comme les autres, rien n’est effacé.' },
+      pmQuiet: { title: 'Délai de silence', hint: 'Une session d’un chef de projet qui travaille sans rien dire pendant ce temps lui est signalée.', minutes: (minutes: number) => `${minutes} min` },
       autoCompact: { title: 'Compactage auto', hint: 'Résume la conversation quand le contexte est presque plein.' },
       idleCompact: {
         title: 'Compacter au repos',

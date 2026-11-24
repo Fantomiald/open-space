@@ -1,6 +1,8 @@
 import { memo, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
 import { MAX_TAG, MAX_TAGS, parseTags, withoutTag } from '../../shared/tags.ts';
+import { pmSettings } from '../../shared/pm.ts';
+import { PmBadge } from '../design/PmBadge.tsx';
 import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { shortcut } from '../lib/platform.ts';
@@ -22,7 +24,7 @@ import { INTERACTIVE, WindowDragContext } from './useWindowDrag.ts';
 import { Feed, type Subagent } from './Feed.tsx';
 import { FilesView } from './FilesView.tsx';
 import { SessionTabs } from './SessionTabs.tsx';
-import { BranchIcon, CloseIcon, DuplicateIcon, FolderIcon, MaximizeIcon, MinimizeIcon, MoreIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PopOutIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon } from './Icons.tsx';
+import { BranchIcon, CloseIcon, DuplicateIcon, FolderIcon, MaximizeIcon, MinimizeIcon, MoreIcon, KeyIcon, PencilIcon, PhoneIcon, PlusIcon, PmIcon, PopOutIcon, PowerIcon, RestIcon, SearchIcon, TagIcon, TerminalIcon, UndoIcon } from './Icons.tsx';
 import { OutControls } from './OutControls.tsx';
 import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
@@ -45,6 +47,7 @@ const NO_EVENTS: never[] = [];
  */
 function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOff, onRename, zoom, popOut }: { session: SessionInfo; searchOpen: boolean; onSearch: () => void; onKeys: () => void; onRest: () => void; onSwitchOff: () => void; onRename: () => void; zoom?: { zoomed: boolean; toggle: () => void }; popOut?: () => void }) {
   const send = useSessions((s) => s.send);
+  const pmOn = useSessions((s) => pmSettings(s.preferences).enabled);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -69,6 +72,13 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
           )}
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
+          )}
+          {/* a trigger's run is never a project manager (the server refuses it too) */}
+          {pmOn && !session.pm && !session.trigger && (
+            <button type="button" role="menuitem" title={words.makePmTitle} onClick={pick(() => useSessions.getState().convertPm(session.id))}><PmIcon />{words.makePm}</button>
+          )}
+          {pmOn && session.pm && (
+            <button type="button" role="menuitem" title={words.unmakePmTitle} onClick={pick(() => useSessions.getState().revertPm(session.id))}><UndoIcon />{words.unmakePm}</button>
           )}
           <button type="button" role="menuitem" title={words.keysTitle} onClick={pick(onKeys)}><KeyIcon />{words.keys}</button>
           <button type="button" role="menuitem" title={words.terminalHereTitle} onClick={pick(() => useSessions.getState().openTerminal(session.id))}><TerminalIcon />{words.terminalHere}</button>
@@ -138,6 +148,7 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
   const [restAsked, setRestAsked] = useState(false);
   const secretsOpen = useSessions((s) => (s.secretsOpen?.sessionId === session.id ? s.secretsOpen : null));
   const openSecrets = useSessions((s) => s.openSecrets);
+  const pmOn = useSessions((s) => pmSettings(s.preferences).enabled);
   const rest = () => { send({ t: 'rest', sessionId }); hide(); };
   // the sub-agent whose thread is shown, null for the conversation
   const [agent, setAgent] = useState<string | null>(null);
@@ -195,6 +206,7 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
             <h2>
               {/* a double click on the name renames it (also in the menu) */}
               <span className="cp-detail__name" title={t.session.detail.renameHint} onDoubleClick={(e) => { e.stopPropagation(); setEditing('name'); }}>{session.name}</span>
+              {pmOn && session.pm && <PmBadge label={t.session.list.pmBadge} title={t.session.list.pmBadgeTitle} />}
               {/* shown only where the line under the title is hidden for room */}
               {tags.length
                 ? <button type="button" className="cp-tag cp-detail__title-tag" data-hue={hues[0]} title={t.session.detail.changeTag} onClick={() => setEditing('tags')}><TagIcon /><span>{tags.join(', ')}</span></button>
