@@ -5,7 +5,7 @@
 // set aside since the PM last heard, as a second text block.
 // Only types come from mcp.ts: it imports this file's values.
 import { askTag, itemStatus, itemTag, type PmFile, type PmItem, PM_TOOL_NAMES, parseTag, type WorkerLive } from '../shared/pm.ts';
-import type { PermissionPrompt, SessionInfo } from '../shared/protocol.ts';
+import { EFFORTS, type PermissionPrompt, type SessionInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asString, type Json } from './json.ts';
 import type { OpenSpaceApi, PmApi, Tool } from './mcp.ts';
@@ -66,7 +66,7 @@ const tools: Record<PmToolName, Omit<Tool, 'name'>> = {
     inputSchema: object({
       title: string('What it works on, in a few words'), brief: string('Its first message: the task, the context, what proves it is done'), item: ITEM,
       cwd: string('Absolute folder, inside the folders Open Space allows (default: yours)'), model: string('Model alias or name (default: the settings\')'),
-      effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] }, isolate: { type: 'boolean', description: 'Works on a branch of its own (a worktree)' },
+      effort: { type: 'string', enum: [...EFFORTS] }, isolate: { type: 'boolean', description: 'Works on a branch of its own (a worktree)' },
     }, ['title', 'brief']),
     annotations: write,
   },
@@ -149,7 +149,8 @@ const fullItem = (item: PmItem, file: PmFile, live: WorkerLive[]) => ({
 
 /**
  * Runs `edit` on the PM's file, then `after` with its result (what is sent or started once the file allows it). A refusal
- * is the result, with nothing changed nor told; otherwise the result ends with the questions the user set aside.
+ * is the result, with nothing changed nor told; otherwise the result ends with the questions the user set aside, even when
+ * `after` fails (they are marked told already).
  */
 async function run<T>(pm: PmApi, id: string, edit: (file: PmFile) => T | Err, after?: (value: T) => unknown): Promise<Json> {
   const done = await pm.book.change(id, (file) => {
@@ -157,8 +158,13 @@ async function run<T>(pm: PmApi, id: string, edit: (file: PmFile) => T | Err, af
     return isErr(value) ? { value } : { value, notice: dismissedNotice(file) };
   });
   if (isErr(done.value)) return failure(done.value.error);
-  const shown = after ? await after(done.value as T) : done.value;
-  return { content: [block(shown ?? 'done'), ...(done.notice ? [block(done.notice)] : [])] };
+  const notice = done.notice ? [block(done.notice)] : [];
+  try {
+    const shown = after ? await after(done.value as T) : done.value;
+    return { content: [block(shown ?? 'done'), ...notice] };
+  } catch (problem) {
+    return { content: [block(problem instanceof Error ? problem.message : String(problem)), ...notice], isError: true };
+  }
 }
 
 /** Runs pm tool `name` for PM session `pm`, once mcp.ts has checked it is one. */
@@ -224,7 +230,7 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
       if (!brief) return failure(st.triggers.mcp.noText);
       // checked before the session starts: a worker left unlinked would be no one's
       if (item !== undefined && !(await book.book.read(pm)).items.some((one) => one.no === item)) return failure(st.pm.noItem(itemTag(item)));
-      const effort = asString(args.effort);
+      const effort = EFFORTS.find((one) => one === args.effort);
       const started = await book.startWorker(pm, {
         title, brief, ...(asString(args.cwd) ? { cwd: asString(args.cwd) } : {}), ...(asString(args.model) ? { model: asString(args.model) } : {}),
         ...(effort ? { effort } : {}), ...(args.isolate === true ? { isolate: true } : {}),

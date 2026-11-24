@@ -466,14 +466,17 @@ describe('the pm_* tools of the open-space MCP server', () => {
   it('never answers a worker\'s permission or question', async () => {
     const { api, done } = pmFake();
     const { session: worker } = await json(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' });
+    const { session: spare } = await json(api, 'pm_worker_start', { title: 'Spare', brief: 'Wait.' });
+    await json(api, 'pm_ask', { title: 'Asked before', detail: '' });
     const args: Record<(typeof PM_TOOL_NAMES)[number], Record<string, unknown>> = {
       pm_status: {}, pm_set_mission: { text: 'Ship' }, pm_set_instructions: { text: 'Small PRs' }, pm_remember: { text: 'iPhone only' }, pm_forget: { number: 1 },
       pm_item_add: { title: 'Login', worker }, pm_item_update: { item: 'W1', now: 'Testing', step: 'Write the test' }, pm_item_list: {},
-      pm_ask: { title: 'Which?', detail: '' }, pm_ask_done: { tag: 'Q1' }, pm_ask_withdraw: { tag: 'Q1' }, pm_link_add: { item: 'W1', url: 'https://example.com/pull/1' },
-      pm_worker_start: { title: 'Two', brief: 'Go.' }, pm_worker_link: { session: 's5' }, pm_worker_unlink: { session: 's5' }, pm_worker_resolve: { session: worker },
+      pm_ask: { title: 'Which?', detail: '' }, pm_ask_done: { tag: 'Q1' }, pm_ask_withdraw: { tag: 'Q2' }, pm_link_add: { item: 'W1', url: 'https://example.com/pull/1' },
+      pm_worker_start: { title: 'Two', brief: 'Go.' }, pm_worker_link: { session: 's5' }, pm_worker_unlink: { session: 's5' }, pm_worker_resolve: { session: spare },
       pm_worker_send: { session: worker, text: 'yes' }, pm_worker_read: { session: worker }, pm_worker_stop: { session: worker },
     };
-    for (const name of PM_TOOL_NAMES) await tool(api, name, args[name], PM);
+    // each one carried out, so that none stops short of what it does
+    for (const name of PM_TOOL_NAMES) assert.equal((await tool(api, name, args[name], PM)).isError, false, name);
     assert.deepEqual(done.filter((each) => /^(answer|reply) /.test(each)), []);
   });
 });
