@@ -238,6 +238,9 @@ describe('the reports of a PM\'s workers', () => {
     const before = (await book.read(PM)).turn;
     await watch.turnEnded(put(PM, {}), 'done');
     assert.equal((await book.read(PM)).turn, before + 1);
+    // its process let go while it rests (closed, idle): no turn of its, its tasks must not look left alone sooner
+    await watch.turnEnded(put(PM, {}), 'exited');
+    assert.equal((await book.read(PM)).turn, before + 1);
   });
 
   it('resolves a worker the user forgot or closed, but reports one a restart cut off', async () => {

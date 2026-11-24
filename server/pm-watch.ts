@@ -80,11 +80,14 @@ export class PmWatch {
     this.deps = deps;
   }
 
-  /** A turn ended: a worker's is reported, a PM's own counts its turns (the statuses of its tasks follow them). */
+  /**
+   * A turn ended: a worker's is reported, a PM's own counts its turns (the statuses of its tasks follow them); its process
+   * let go while it rests ('exited') is no turn of its.
+   */
   async turnEnded(session: SessionInfo, how: TurnEnd): Promise<void> {
     if (!this.on()) return;
     if (session.pm) {
-      if (!session.trigger) await this.deps.book.change(session.id, (file) => { file.turn += 1; });
+      if (!session.trigger && how !== 'exited') await this.deps.book.change(session.id, (file) => { file.turn += 1; });
       return;
     }
     await this.report(session, { kind: 'turnEnd', how });
