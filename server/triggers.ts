@@ -22,6 +22,8 @@ const CHECK_MS = 20_000;
 /** how often the queues look for a run that ended */
 const DRAIN_MS = 2_000;
 const BUSY: ReadonlySet<SessionInfo['state']> = new Set(['starting', 'work', 'perm']);
+/** Runs of one trigger that may wait for the user's answer to their question without holding it. */
+const ANSWER_WAITS = 1;
 
 export const newTriggerId = () => randomBytes(8).toString('hex');
 const newRunId = newTriggerId;
@@ -74,6 +76,8 @@ export interface TriggersOptions {
   start: (trigger: Trigger, prompt: string) => Promise<SessionInfo>;
   /** the state of a session, null when it is gone */
   sessionState: (sessionId: string) => SessionInfo['state'] | null;
+  /** the session waits only for the user's answer to a question of its own (AskUserQuestion): no permission prompt, no key */
+  waitsOnAnswer?: (sessionId: string) => boolean;
   /** the real folder when it is inside the allowed roots, else null */
   allowedFolder: (cwd: string) => string | null;
   /** the triggers or their runs changed */
@@ -212,7 +216,11 @@ export class Triggers {
 
   /** How many more runs of this trigger may start now. */
   private room(trigger: Trigger) {
-    const working = this.runs.filter((run) => run.triggerId === trigger.id && run.outcome === 'started' && run.sessionId && stillBusy(this.options.sessionState(run.sessionId))).length;
+    const busy = this.runs.filter((run) => run.triggerId === trigger.id && run.outcome === 'started' && run.sessionId && stillBusy(this.options.sessionState(run.sessionId)));
+    // a run that only waits for the user's answer lets the next one start (it may work again beside it once answered);
+    // one such run at a time, so unanswered questions never pile up runs
+    const answering = busy.filter((run) => this.options.waitsOnAnswer?.(run.sessionId!) ?? false).length;
+    const working = busy.length - Math.min(answering, ANSWER_WAITS);
     return (trigger.kind === 'webhook' ? PARALLEL_HOOK_RUNS : 1) - working - (this.firing.get(trigger.id) ?? 0);
   }
 

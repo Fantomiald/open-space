@@ -45,7 +45,7 @@ The folder must have been approved once if its settings run code (hooks, MCP ser
 
 ## Cron triggers
 
-Open Space checks the schedules every 20 seconds and starts each matching trigger once per minute. One run at a time: while the previous run works or waits for your go, the next start is skipped.
+Open Space checks the schedules every 20 seconds and starts each matching trigger once per minute. One run at a time: while the previous run works or waits for your go, the next start is skipped. A run that only waits for your answer to its question does not hold the trigger: the next one starts, and your answer still reaches the run that asked (one such run at a time).
 
 ## Webhook triggers
 

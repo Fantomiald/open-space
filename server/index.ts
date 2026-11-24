@@ -316,6 +316,10 @@ const triggers = new Triggers({
     }
   },
   sessionState: (sessionId) => sessions.list().find((session) => session.id === sessionId)?.state ?? null,
+  waitsOnAnswer: (sessionId) => {
+    const session = sessions.list().find((each) => each.id === sessionId);
+    return session?.state === 'perm' && session.permissions.length > 0 && session.permissions.every((prompt) => !!prompt.questions?.length);
+  },
   allowedFolder: (cwd) => resolveAllowedDirectory(cwd, config.roots),
   onChange: () => broadcast(triggersMessage()),
   log,
