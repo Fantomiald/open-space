@@ -35,6 +35,7 @@ async function office() {
     now: () => clock.now, sessions: () => [...live.values()], book, enabled: () => setting.enabled, quietMs: () => QUIET,
     lastWords: (id) => words.get(id) ?? '', lastEventAt: (id) => lastEvent.get(id) ?? 200,
     deliver: (pm, text, tag) => { delivered.push({ pm, text, tag }); },
+    releaseWorker: (id, pm) => { const one = live.get(id); if (one?.pmOf === pm) live.set(id, { ...one, pmOf: undefined }); },
   });
   live.set(PM, info(PM, { pm: true }));
   live.set(W, info(W, { pmOf: PM }));
@@ -232,6 +233,8 @@ describe('the reports of a PM\'s workers', () => {
       await watch.reconcile();
       assert.ok((await book.read(PM)).workers[0].resolvedAt, how);
       assert.equal(delivered.length, 0, how);
+      // opened again, it is no one's worker: another PM may adopt it
+      if (how === 'closed') assert.equal(live.get(W)?.pmOf, undefined);
     }
     const { watch, put, book, kinds } = await office();
     put(W, { state: 'closed', stateSince: 500, lastSeq: 40 });

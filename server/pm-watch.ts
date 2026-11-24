@@ -25,6 +25,8 @@ export interface WatchDeps {
   lastEventAt: (sessionId: string) => number;
   /** sends a message to the PM: sessions.send(pm, text, [], [], tag) */
   deliver: (pm: string, text: string, tag: PmMessageTag) => void;
+  /** the session is no longer a worker of `pm` (sessions.releaseWorker, as pm_worker_resolve does) */
+  releaseWorker: (session: string, pm: string) => void;
   log?: (message: string, error: unknown) => void;
 }
 
@@ -96,7 +98,7 @@ export class PmWatch {
     if (session.pmOf) await this.resolve(session.pmOf, session.id);
   }
 
-  /** A worker the user closed: the same. */
+  /** A worker the user closed: the same, and it is no one's worker any more (opened again, another PM may adopt it). */
   async closedByUser(sessionId: string): Promise<void> {
     const pm = this.deps.sessions().find((one) => one.id === sessionId)?.pmOf;
     if (pm) await this.resolve(pm, sessionId);
@@ -234,8 +236,10 @@ export class PmWatch {
     return { pm, text: said ? `${line}\n\n${fenced('worker-words', st.pm.workerWords, said)}` : line, tag: { report: { worker: session.id, kind } } };
   }
 
+  /** Closes a worker's job in its PM's plan and lets it go, like pm_worker_resolve. */
   private async resolve(pm: string, worker: string): Promise<void> {
     await this.deps.book.change(pm, (file) => { resolveWorker(file, worker, this.deps.now()); });
+    this.deps.releaseWorker(worker, pm);
   }
 
   /** A message the PM cannot take (closing or switched off meanwhile) is dropped: its report stays written, it is not sent again. */
