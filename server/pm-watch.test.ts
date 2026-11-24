@@ -73,6 +73,8 @@ describe('what a worker event reports to its PM', () => {
       [{ state: 'closed', stateSince: 500, resting: true }, { kind: 'reconcile' }, null],
       [{ state: 'error', stateSince: 500 }, { kind: 'reconcile' }, 'error'],
       [{ state: 'work', stateSince: 500 }, { kind: 'reconcile' }, null],
+      // a request raised while its PM took no report
+      [{ state: 'perm', stateSince: 500 }, { kind: 'reconcile' }, 'waiting'],
       [{ state: 'wait', stateSince: 50 }, { kind: 'reconcile' }, null],
     ];
     for (const [fields, event, expected] of cases) assert.equal(decideReport(worker(), info(W, fields), event), expected, JSON.stringify([fields, event]));

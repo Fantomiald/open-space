@@ -516,8 +516,9 @@ export class Session {
       this.info.toldSecrets = true;
     }
     // made a PM or an ordinary session again since its conversation started: told once its process runs as one, with the
-    // whole playbook (a resumed conversation keeps the system prompt it started with)
-    if (this.launchedAsPm !== !!this.info.toldPm && !command) {
+    // whole playbook (a resumed conversation keeps the system prompt it started with); not while a role change is pending
+    // (a queued message leaves without the release): the relaunch will tell the right role
+    if (this.launchedAsPm !== !!this.info.toldPm && !command && !this.roleChanged) {
       outgoing = (this.launchedAsPm ? st.prompt.pmOn(this.deps.identity?.().user.trim() ?? '') : st.prompt.pmOff) + outgoing;
       this.info.toldPm = this.launchedAsPm || undefined;
     }

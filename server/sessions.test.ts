@@ -667,6 +667,29 @@ describe('making a session a project manager, and back', () => {
     await manager.shutdown();
   });
 
+  it('a queued message leaves without a role note while its process is to be released for its role', async () => {
+    const setting = { enabled: true };
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { pmEnabled: () => setting.enabled });
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    turn(processes[0], id);
+    await manager.remoteControl(id, true);
+    setting.enabled = false;
+    manager.pmSettingChanged();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(processes[1]?.launch.pm, undefined, 'relaunched as an ordinary session, without a message');
+    // a turn of its own (not from a message), the setting back on during it
+    processes[1].handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: id });
+    processes[1].handlers.onMessage({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'je travaille' }] } });
+    setting.enabled = true;
+    manager.pmSettingChanged();
+    assert.equal(manager.roleChanged(id), true);
+    manager.send(id, 'la suite');
+    processes[1].handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 });
+    assert.equal(processes[1].sent.at(-1), 'la suite');
+    await manager.shutdown();
+  });
+
   it('a PM made an ordinary session again is told so, resumes without the PM tools, and lets its workers go', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
     await manager.init();

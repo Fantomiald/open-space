@@ -55,6 +55,8 @@ export function decideReport(worker: PmWorker, session: SessionInfo, event: Watc
       // command, a note), its state did not
       if (session.stateSince <= (worker.lastReport?.at ?? worker.linkedAt)) return null;
       if (session.state === 'wait' && session.pausedUntil !== undefined) return 'paused';
+      // a request raised while its PM took no report (roleChanged): nothing else would raise it again
+      if (session.state === 'perm') return 'waiting';
       // a turn finished since the last report: a compaction by Open Space moves its state, not its turns
       if (session.state === 'wait') return worker.lastReport?.turns !== undefined && session.turns <= worker.lastReport.turns ? null : 'finished';
       // put to rest by the user, it is not cut off
