@@ -1,5 +1,9 @@
 # Versions
 
+## 1.37.5
+
+- Automates : un run qui attend seulement ta réponse à sa question (AskUserQuestion) ne bloque plus son automate, le suivant part, et ta réponse arrive quand même au run qui l’a posée. Un seul run de ce genre à la fois par automate ; une demande d’accord, de clé ou d’un serveur MCP bloque toujours. (PR #63 de JbPons)
+
 ## 1.37.4
 
 - Réglages, Clés : la question « Supprimer … ? » prend toute la ligne de la clé, au lieu d’élargir la colonne des boutons et d’écraser les noms des clés lettre par lettre.
