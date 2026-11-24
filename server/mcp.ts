@@ -89,8 +89,13 @@ export interface PmApi {
   /** starts a worker of `pm` in its permission mode; throws when the folder is not allowed, or runs code and was never approved */
   startWorker: (pm: string, options: { title: string; brief: string; cwd?: string; model?: string; effort?: string; isolate?: boolean }) => Promise<SessionInfo>;
   stopWorker: (worker: string) => void;
-  /** marks the session as a worker of `pm` (SessionInfo.pmOf), or of no one; for a session adopted or let go */
-  setWorkerOf?: (session: string, pm: string | undefined) => void;
+  /**
+   * marks the session as a worker of `pm` (SessionInfo.pmOf) unless it is another PM's: false then. Synchronous, so that of
+   * two PMs adopting the same session at once only one gets it.
+   */
+  claimWorker: (session: string, pm: string) => boolean;
+  /** the session is no longer a worker of `pm` (its pmOf cleared, only if it is `pm`) */
+  releaseWorker: (session: string, pm: string) => void;
 }
 
 /** What the tools reach of Open Space (index.ts). */
@@ -306,13 +311,13 @@ export const toolsFor = (caller: Caller, isPm = false) =>
   [...TOOLS.filter((each) => givenTo(each, caller)), ...(isPm && 'session' in caller ? PM_TOOLS : [])].map(({ for: _for, ...each }) => each);
 
 /** A wait as the external program sees it; a request for keys only says so, it is answered from the page. */
-const shownWait = ({ requestId, tool, detail, canAlways, questions, secrets }: PermissionPrompt) => (secrets
+export const shownWait = ({ requestId, tool, detail, canAlways, questions, secrets }: PermissionPrompt) => (secrets
   ? { requestId, kind: 'keys', note: st.triggers.mcp.keysInPage }
   : questions ? { requestId, kind: 'question', questions: questions.map(({ question, options, multiSelect }) => ({ question, options: options.map((option) => option.label), multiSelect })) }
   : { requestId, kind: 'permission', tool, detail, canAlways });
 
-const text = (value: unknown) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
-const failure = (message: string) => ({ ...text(message), isError: true });
+export const text = (value: unknown) => ({ content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
+export const failure = (message: string) => ({ ...text(message), isError: true });
 
 /** Runs a tool. Errors a tool meets are answered as a tool result with isError, as MCP wants. `isPm`: the caller is a PM session. */
 export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, args: Json, isPm = false): Promise<Json> {

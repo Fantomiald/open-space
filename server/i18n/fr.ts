@@ -381,6 +381,7 @@ export const fr = {
     badItem: 'Donne la tâche par son tag, par exemple W3.',
     badAsk: 'Donne la question par son tag, par exemple Q3.',
     notYourself: 'Tu ne peux pas être ton propre worker.',
+    triggerRun: (name: string) => `${name} est un run d’automate, pas une session à adopter.`,
     otherPm: (name: string) => `${name} est un chef de projet, pas un worker.`,
     othersWorker: (name: string) => `${name} est le worker d’un autre chef de projet.`,
     otherProject: (name: string) => `${name} travaille sur un autre projet que le tien.`,

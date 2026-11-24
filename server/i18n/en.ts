@@ -353,6 +353,7 @@ export const en: ServerDictionary = {
     badItem: 'Give the task by its tag, e.g. W3.',
     badAsk: 'Give the question by its tag, e.g. Q3.',
     notYourself: 'You cannot be your own worker.',
+    triggerRun: (name: string) => `${name} is an automaton’s run, not a session to adopt.`,
     otherPm: (name: string) => `${name} is a project manager, not a worker.`,
     othersWorker: (name: string) => `${name} is another project manager’s worker.`,
     otherProject: (name: string) => `${name} works on another project than yours.`,

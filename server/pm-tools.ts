@@ -3,12 +3,12 @@
 // drives its own workers only, never itself nor another session, and never answers a permission or a question of theirs.
 // Every change goes through the PM's file (server/pm.ts, server/pm-ops.ts); each result ends with the questions the user
 // set aside since the PM last heard, as a second text block.
-// Only types come from mcp.ts: it imports this file's values.
+// mcp.ts imports this file's values: what comes from it is only used inside functions, once both are loaded.
 import { askTag, itemStatus, itemTag, type PmFile, type PmItem, PM_TOOL_NAMES, parseTag, type WorkerLive } from '../shared/pm.ts';
-import { EFFORTS, type PermissionPrompt, type SessionInfo } from '../shared/protocol.ts';
+import { EFFORTS, type SessionInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asString, type Json } from './json.ts';
-import type { OpenSpaceApi, PmApi, Tool } from './mcp.ts';
+import { failure, type OpenSpaceApi, type PmApi, shownWait, type Tool, text } from './mcp.ts';
 import {
   addAsk, addItem, addLink, dismissedNotice, type Err, forget, type ItemUpdate, linkWorker, ownWorker, remember, resolveWorker, setInstructions,
   setMission, settleAsk, unlinkWorker, updateItem,
@@ -27,7 +27,7 @@ const LAST_WORDS = { shown: 3000, max: 20000 };
 
 const tools: Record<PmToolName, Omit<Tool, 'name'>> = {
   pm_status: {
-    description: 'Your plan as it stands: mission, instructions, numbered memory, tasks (W) with their status, open questions (Q), workers with their state and last report. Call it at the start of every request and after a compaction.',
+    description: 'Your plan as it stands: mission, instructions, numbered memory, tasks (W) under way with their status (finished and dropped ones only counted: pm_item_list has them all), open and answered questions (Q), workers with their state and last report. Call it at the start of every request and after a compaction.',
     inputSchema: object({}), annotations: read,
   },
   pm_set_mission: { description: 'Sets the mission of your project, in a sentence or two (replaces the previous one).', inputSchema: object({ text: { type: 'string' } }, ['text']), annotations: write },
@@ -91,8 +91,10 @@ export const PM_TOOLS: Tool[] = PM_TOOL_NAMES.map((name) => ({ name, ...tools[na
 export const isPmTool = (name: string): name is PmToolName => (PM_TOOL_NAMES as readonly string[]).includes(name);
 
 const isErr = (value: unknown): value is Err => typeof value === 'object' && value !== null && 'error' in value;
-const block = (value: unknown) => ({ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) });
-const failure = (message: string): Json => ({ content: [block(message)], isError: true });
+/** A result followed by the questions the user set aside, as a block of their own. */
+const told = (result: ReturnType<typeof text>, notice: string | undefined): Json => (notice ? { ...result, content: [...result.content, ...text(notice).content] } : result);
+/** A session's name as a result shows it: one line of 80 characters at most (the user or an agent named it). */
+const nameOf = (session: SessionInfo) => session.name.replace(/\s+/g, ' ').trim().slice(0, 80);
 
 /** A task or a question as the PM names it: a tag ("W3", "W4 Q3") or its number; undefined when not given, null when it names none. */
 function numberOf(value: unknown, kind: 'item' | 'ask'): number | undefined | null {
@@ -104,12 +106,6 @@ function numberOf(value: unknown, kind: 'item' | 'ask'): number | undefined | nu
 /** What a worker session is doing now, for the statuses of the tasks. */
 const liveOf = (sessions: SessionInfo[]): WorkerLive[] =>
   sessions.map((one) => ({ session: one.id, working: one.state === 'work' || one.state === 'starting', waiting: one.state === 'perm' }));
-
-/** A wait of a worker as its PM sees it: what kind, never its request id (only the user answers it). */
-const shownWait = ({ tool, detail, questions, secrets }: PermissionPrompt) => (secrets
-  ? { kind: 'keys' }
-  : questions ? { kind: 'question', questions: questions.map((one) => one.question) }
-  : { kind: 'permission', tool, detail });
 
 const shownItem = (item: PmItem, file: PmFile, live: WorkerLive[]) => ({
   tag: itemTag(item.no), title: item.title, status: itemStatus(item, file, live),
@@ -133,7 +129,7 @@ function status(file: PmFile, sessions: SessionInfo[]) {
     workers: file.workers.filter((worker) => !worker.resolvedAt).map((worker) => {
       const session = sessions.find((one) => one.id === worker.session);
       return {
-        session: worker.session, name: session?.name ?? null, state: session?.state ?? 'gone', item: worker.item ? itemTag(worker.item) : null,
+        session: worker.session, name: session ? nameOf(session) : null, state: session?.state ?? 'gone', item: worker.item ? itemTag(worker.item) : null,
         lastReport: worker.lastReport ? { kind: worker.lastReport.kind, at: new Date(worker.lastReport.at).toISOString(), line: worker.lastReport.line } : null,
       };
     }),
@@ -158,13 +154,25 @@ async function run<T>(pm: PmApi, id: string, edit: (file: PmFile) => T | Err, af
     return isErr(value) ? { value } : { value, notice: dismissedNotice(file) };
   });
   if (isErr(done.value)) return failure(done.value.error);
-  const notice = done.notice ? [block(done.notice)] : [];
   try {
     const shown = after ? await after(done.value as T) : done.value;
-    return { content: [block(shown ?? 'done'), ...notice] };
+    return told(text(shown ?? 'done'), done.notice);
   } catch (problem) {
-    return { content: [block(problem instanceof Error ? problem.message : String(problem)), ...notice], isError: true };
+    return told(failure(problem instanceof Error ? problem.message : String(problem)), done.notice);
   }
+}
+
+/** A worker's linking: `undo` when it is refused or fails, so that no session stays marked as the PM's for nothing. */
+async function linking(result: Promise<Json>, undo: () => void): Promise<Json> {
+  let linked: Json;
+  try {
+    linked = await result;
+  } catch (problem) {
+    undo();
+    throw problem;
+  }
+  if (linked.isError === true) undo();
+  return linked;
 }
 
 /** Runs pm tool `name` for PM session `pm`, once mcp.ts has checked it is one. */
@@ -175,8 +183,14 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
   const session = asString(args.session).trim();
   const item = numberOf(args.item, 'item');
   if (item === null) return failure(st.pm.badItem);
-  /** A session the PM may drive: one of its workers, linked and not resolved, never itself. */
-  const ownOnly = (file: PmFile) => (session !== pm && ownWorker(file, session)) || { error: st.pm.notYourWorker(session) };
+  /**
+   * A session the PM may drive: one of its workers in its file (linked, not resolved) that still is one live: never itself,
+   * a session gone, turned PM, or now another PM's.
+   */
+  const ownOnly = (file: PmFile) => {
+    const live = api.sessions().find((one) => one.id === session);
+    return (session !== pm && live && !live.pm && live.pmOf === pm && ownWorker(file, session)) || { error: st.pm.notYourWorker(session) };
+  };
 
   switch (name) {
     case 'pm_status': return run(book, pm, (file) => status(file, api.sessions()));
@@ -228,17 +242,18 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
       const brief = asString(args.brief).trim();
       if (!title) return failure(st.pm.noTitle);
       if (!brief) return failure(st.triggers.mcp.noText);
-      // checked before the session starts: a worker left unlinked would be no one's
+      // what linking checks, before the session starts: a worker left unlinked would be no one's
       if (item !== undefined && !(await book.book.read(pm)).items.some((one) => one.no === item)) return failure(st.pm.noItem(itemTag(item)));
       const effort = EFFORTS.find((one) => one === args.effort);
       const started = await book.startWorker(pm, {
         title, brief, ...(asString(args.cwd) ? { cwd: asString(args.cwd) } : {}), ...(asString(args.model) ? { model: asString(args.model) } : {}),
         ...(effort ? { effort } : {}), ...(args.isolate === true ? { isolate: true } : {}),
       });
-      return run(book, pm, (file) => linkWorker(file, started.id, now, item), (linked) => {
-        book.setWorkerOf?.(started.id, pm);
-        return { session: started.id, name: started.name, item: linked.item ? itemTag(linked.item) : null };
-      });
+      // started as its worker (pmOf): when it cannot be linked after all, it is let go and stopped
+      return linking(
+        run(book, pm, (file) => linkWorker(file, started.id, now, item), (linked) => ({ session: started.id, name: nameOf(started), item: linked.item ? itemTag(linked.item) : null })),
+        () => { book.releaseWorker(started.id, pm); book.stopWorker(started.id); },
+      );
     }
     case 'pm_worker_link': {
       const sessions = api.sessions();
@@ -246,16 +261,20 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
       const target = sessions.find((one) => one.id === session);
       if (!target) return failure(st.triggers.mcp.noSession(session));
       if (target.id === pm) return failure(st.pm.notYourself);
-      if (target.pm) return failure(st.pm.otherPm(target.name));
-      if (target.pmOf && target.pmOf !== pm) return failure(st.pm.othersWorker(target.name));
-      if (!self || (target.project ?? target.cwd) !== (self.project ?? self.cwd)) return failure(st.pm.otherProject(target.name));
-      return run(book, pm, (file) => linkWorker(file, target.id, now, item), (linked) => {
-        book.setWorkerOf?.(target.id, pm);
-        return { session: target.id, name: target.name, item: linked.item ? itemTag(linked.item) : null };
-      });
+      if (target.pm) return failure(st.pm.otherPm(nameOf(target)));
+      if (target.trigger) return failure(st.pm.triggerRun(nameOf(target)));
+      if (!self || (target.project ?? target.cwd) !== (self.project ?? self.cwd)) return failure(st.pm.otherProject(nameOf(target)));
+      // Adopted as it is: the user's own session, which the user named, keeps its permission mode (only a worker the PM
+      // starts takes the PM's). Claimed first, at once, so that two PMs never both adopt it.
+      const ours = target.pmOf === pm;
+      if (!book.claimWorker(target.id, pm)) return failure(st.pm.othersWorker(nameOf(target)));
+      return linking(
+        run(book, pm, (file) => linkWorker(file, target.id, now, item), (linked) => ({ session: target.id, name: nameOf(target), item: linked.item ? itemTag(linked.item) : null })),
+        () => { if (!ours) book.releaseWorker(target.id, pm); },
+      );
     }
-    case 'pm_worker_unlink': return run(book, pm, (file) => unlinkWorker(file, session) ?? 'unlinked', () => { book.setWorkerOf?.(session, undefined); return 'unlinked'; });
-    case 'pm_worker_resolve': return run(book, pm, (file) => resolveWorker(file, session, now) ?? 'resolved');
+    case 'pm_worker_unlink': return run(book, pm, (file) => unlinkWorker(file, session) ?? 'unlinked', (shown) => { book.releaseWorker(session, pm); return shown; });
+    case 'pm_worker_resolve': return run(book, pm, (file) => resolveWorker(file, session, now) ?? 'resolved', (shown) => { book.releaseWorker(session, pm); return shown; });
     case 'pm_worker_send': {
       const words = asString(args.text).trim();
       if (!words) return failure(st.triggers.mcp.noText);
@@ -266,8 +285,9 @@ export async function callPmTool(api: OpenSpaceApi, pm: string, name: string, ar
       if (!found) return { session, state: 'gone' };
       const last = typeof args.last === 'number' && args.last > 0 ? Math.min(Math.floor(args.last), LAST_WORDS.max) : LAST_WORDS.shown;
       return {
-        session, name: found.name, state: found.state, since: new Date(found.stateSince).toISOString(),
-        waitsFor: found.permissions.map(shownWait), lastWords: api.lastWords(session).slice(-last),
+        session, name: nameOf(found), state: found.state, since: new Date(found.stateSince).toISOString(),
+        // what kind of wait, never its request id: only the user answers it
+        waitsFor: found.permissions.map((wait) => { const { requestId: _requestId, ...shown } = shownWait(wait); return shown; }), lastWords: api.lastWords(session).slice(-last),
       };
     });
     case 'pm_worker_stop': return run(book, pm, (file) => {
