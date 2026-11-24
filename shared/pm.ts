@@ -42,6 +42,17 @@ export const PM_TOOL_NAMES = [
   'pm_worker_send', 'pm_worker_read', 'pm_worker_stop',
 ] as const;
 
+/** What a message sent to a PM by Open Space is: a worker's report, the user's answer to a question, or the PM's setup. */
+export type PmMessageTag = { report: { worker: string; kind: ReportKind } } | { answer: { ask: number } } | { setup: true };
+
+/** The PM settings (Preferences.pm): off, no PM tools nor reports; `quietMinutes` of silence before a worker is nudged. */
+export interface PmSettings { enabled: boolean; quietMinutes: number; lastModel?: string }
+export const PM_QUIET_MINUTES = { min: 2, max: 60 } as const;
+export const DEFAULT_PM_SETTINGS: PmSettings = { enabled: true, quietMinutes: 8 };
+
+/** The PM settings of the user's preferences, the defaults when there are none (settings.json of an older version). */
+export const pmSettings = (preferences: { pm?: PmSettings }): PmSettings => ({ ...DEFAULT_PM_SETTINGS, ...preferences.pm });
+
 const SESSION_ID = /^[\w-]{1,100}$/;
 
 export function emptyPm(): PmFile {

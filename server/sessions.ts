@@ -173,9 +173,12 @@ export class SessionManager {
     const stored = await this.readStoredState();
     this.commands = stored.commands;
     this.quota = stored.quota;
+    const storedIds = new Set(stored.sessions.map((info) => info.id));
     for (const info of stored.sessions) {
       // saved before the vault: its project is read once, then kept (see create)
       info.project ??= projectOf(info.worktree?.home ?? info.cwd);
+      // the worker of a PM forgotten since is no one's; of a session that is no PM any more, kept for when it is one again
+      if (info.pmOf && !storedIds.has(info.pmOf)) info.pmOf = undefined;
       const log = await this.openLog(info.id);
       const session = this.createSession(info, log);
       session.markInterrupted();
@@ -678,7 +681,7 @@ export class SessionManager {
    * A new session. `started`: what only the server sets, for a session a trigger starts (server/triggers.ts): the
    * trigger it comes from, the role it runs as, and Remote Control turned on whatever the settings say.
    */
-  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; restrict?: TriggerRestrict; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser; spawned?: boolean } = {}): Promise<SessionInfo> {
+  async create(options: SessionOptions, started: { trigger?: TriggerTag; role?: string; allowedTools?: string[]; restrict?: TriggerRestrict; remote?: boolean; caps?: { cost: number; minutes: number }; accountsBrowser?: AccountsBrowser; spawned?: boolean; pm?: boolean; pmOf?: string } = {}): Promise<SessionInfo> {
     if (this.stopping) throw new Error(st.sessions.stoppingNoCreate);
     if (!this.deps.spawnProcess) throw new Error(st.sessions.claudeMissing);
     const cwd = resolveAllowedDirectory(options.cwd, this.roots());
@@ -712,7 +715,10 @@ export class SessionManager {
     // the project of its keys (server/vault.ts), read now from the folder the user chose and kept: never read again from
     // files its agent could write (one naming another repository); its worktrees are of the same repository
     info.project = projectOf(cwd);
-    if (started.spawned) info.spawned = true;
+    // a PM's worker is started by an agent, like one of create_session
+    if (started.spawned || started.pmOf) info.spawned = true;
+    if (started.pm) info.pm = true;
+    if (started.pmOf) info.pmOf = started.pmOf;
     if (started.trigger) info.trigger = started.trigger;
     if (started.role) info.role = started.role;
     if (started.allowedTools?.length) info.allowedTools = [...started.allowedTools];
@@ -1352,6 +1358,8 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     permissionMode: isPermissionMode(raw.permissionMode) ? raw.permissionMode : 'manual',
     introducedAs: asString(raw.introducedAs) || undefined,
     forkOf: /^[\w-]{1,100}$/.test(asString(raw.forkOf)) ? asString(raw.forkOf) : undefined,
+    pm: raw.pm === true || undefined,
+    pmOf: /^[\w-]{1,100}$/.test(asString(raw.pmOf)) ? asString(raw.pmOf) : undefined,
     quietFrom: typeof raw.quietFrom === 'number' && Number.isInteger(raw.quietFrom) && raw.quietFrom >= 0 ? raw.quietFrom : undefined,
     conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,

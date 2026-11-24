@@ -1133,6 +1133,24 @@ describe('a normal turn', () => {
     await manager.shutdown();
   });
 
+  it('marks a PM and its worker, kept after a restart; a worker counts as started by an agent, a duplicate of either is ordinary', async () => {
+    const first = setup();
+    await first.manager.init();
+    const lead = await first.manager.create({ cwd: projectA(), text: 'plan' }, { pm: true });
+    const worker = await first.manager.create({ cwd: projectA(), text: 'build' }, { pmOf: lead.id });
+    assert.equal(first.find(lead.id).pm, true);
+    assert.deepEqual([first.find(worker.id).pmOf, first.find(worker.id).spawned], [lead.id, true]);
+    first.processes[0].feed('simple-turn');
+    first.processes[1].feed('simple-turn');
+    const copies = [await first.manager.duplicate(lead.id), await first.manager.duplicate(worker.id)];
+    for (const copy of copies) assert.deepEqual([first.find(copy.id).pm, first.find(copy.id).pmOf], [undefined, undefined]);
+    await first.manager.shutdown();
+    const second = setup({}, first.dataDir);
+    await second.manager.init();
+    assert.deepEqual([second.find(lead.id).pm, second.find(worker.id).pmOf], [true, lead.id]);
+    await second.manager.shutdown();
+  });
+
   it('releases the waiting sessions on an older Claude Code, so that their next message starts the one installed', async () => {
     const { manager, processes, find } = setup();
     await manager.init();
@@ -2243,6 +2261,23 @@ describe('persistence and resynchronisation', () => {
     assert.deepEqual(loaded.permissions, []);
     assert.equal(loaded.lastSeq, 0);
     assert.equal('restricted' in loaded, false);
+    await context.manager.shutdown();
+  });
+
+  it('reads the PM marks of saved sessions: a worker of a forgotten session is no one\'s, of a reverted PM still its own', async () => {
+    const context = setup();
+    mkdirSync(context.dataDir, { recursive: true });
+    const stored = (id: string, extra = {}) => ({ id, name: id, cwd: projectA(), state: 'wait', model: '', turns: 1, resumable: true, ...extra });
+    writeFileSync(path.join(context.dataDir, 'sessions.json'), JSON.stringify({ version: 1, commands: [], sessions: [
+      stored('lead', { pm: true }), stored('plain'), stored('w-lead', { pmOf: 'lead' }), stored('w-plain', { pmOf: 'plain' }), stored('w-gone', { pmOf: 'gone' }),
+      stored('bad-pm', { pm: 'yes', pmOf: '../x' }),
+    ] }));
+    await context.manager.init();
+    assert.equal(context.find('lead').pm, true);
+    assert.equal(context.find('w-lead').pmOf, 'lead');
+    assert.equal(context.find('w-plain').pmOf, 'plain', 'kept for when it is a PM again');
+    assert.equal(context.find('w-gone').pmOf, undefined);
+    assert.deepEqual([context.find('bad-pm').pm, context.find('bad-pm').pmOf], [undefined, undefined]);
     await context.manager.shutdown();
   });
 

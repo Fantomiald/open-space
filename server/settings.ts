@@ -11,6 +11,7 @@ import { hooksAddressOf } from '../shared/triggers.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { parseDashboards } from '../shared/dashboards.ts';
+import { DEFAULT_PM_SETTINGS, PM_QUIET_MINUTES, type PmSettings } from '../shared/pm.ts';
 import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 import { expandHomePath, isFullPath } from '../shared/paths.ts';
@@ -50,6 +51,8 @@ export const MAX_AGENT_NOTE = 600;
 export const MAX_TAG_RULE = 300;
 const MAX_ROOTS = 20;
 const MAX_FAVORITE_NOTES = 200;
+/** a model alias or full name, as Claude Code takes it ('' : its default) */
+const MODEL_NAME = /^[\w.:[\]-]{0,80}$/;
 
 /** The settings found in untrusted JSON: what is valid is kept, the rest left out. Folders must be absolute (the journal's and the numbers file's may start with "~"). */
 export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Preferences> {
@@ -72,7 +75,8 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (dashboards) found.dashboards = dashboards;
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && isFullPath(root)).map((root) => path.resolve(expandHomePath(root, home))))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
-  if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
+  if (typeof raw.model === 'string' && MODEL_NAME.test(raw.model)) found.model = raw.model;
+  if (isJson(raw.pm)) found.pm = parsePmSettings(raw.pm);
   if (isPermissionMode(raw.permissionMode)) found.permissionMode = raw.permissionMode;
   if (typeof raw.agentNote === 'string') found.agentNote = raw.agentNote.trim().slice(0, MAX_AGENT_NOTE);
   if (typeof raw.autoTagRule === 'string') found.autoTagRule = raw.autoTagRule.trim().slice(0, MAX_TAG_RULE);
@@ -92,6 +96,17 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   const hooksAddress = typeof raw.hooksAddress === 'string' ? hooksAddressOf(raw.hooksAddress) : null;
   if (hooksAddress !== null) found.hooksAddress = hooksAddress;
   return found;
+}
+
+/** The PM settings found: each part that is not valid gets its default, so that a bad delay never switches them back on. */
+function parsePmSettings(raw: Record<string, unknown>): PmSettings {
+  const quiet = raw.quietMinutes;
+  const valid = typeof quiet === 'number' && Number.isInteger(quiet) && quiet >= PM_QUIET_MINUTES.min && quiet <= PM_QUIET_MINUTES.max;
+  return {
+    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_PM_SETTINGS.enabled,
+    quietMinutes: valid ? quiet : DEFAULT_PM_SETTINGS.quietMinutes,
+    ...(typeof raw.lastModel === 'string' && raw.lastModel && MODEL_NAME.test(raw.lastModel) ? { lastModel: raw.lastModel } : {}),
+  };
 }
 
 export class Settings {

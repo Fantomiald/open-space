@@ -17,7 +17,10 @@ import type { Look } from './look.ts';
 import type { ModInfo, ModSettings } from './mods.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
 import type { TerminalChoice, TerminalKind } from './terminal.ts';
+import type { PmMessageTag, PmSettings } from './pm.ts';
 import type { CostReport } from './usage.ts';
+
+export type { PmMessageTag, PmSettings } from './pm.ts';
 
 /**
  * The longest text a message may carry (the server drops a longer one; the page refuses it first and keeps it in the
@@ -33,8 +36,8 @@ export interface PlanItem { text: string; status: 'pending' | 'in_progress' | 'c
  */
 export type OfficeEvent =
   /** a message was sent to the session */
-  /** a message from the user; `images`: the pictures sent with it, by name under /attachments/; `files`: the other files */
-  | { k: 'start'; text: string; images?: string[]; files?: UploadedFile[] }
+  /** a message from the user; `images`: the pictures sent with it, by name under /attachments/; `files`: the other files; `pm`: sent to a PM by Open Space (a report, an answer, its setup) */
+  | { k: 'start'; text: string; images?: string[]; files?: UploadedFile[]; pm?: PmMessageTag }
   | { k: 'init'; model: string }
   | { k: 'think'; who: string }
   | { k: 'say'; who: string; text: string }
@@ -303,6 +306,10 @@ export interface SessionInfo {
   activeModel: string;
   /** a duplicate, until it first starts: the Claude Code conversation it goes on from (--resume … --fork-session) */
   forkOf?: string;
+  /** a project manager (PM): it keeps a plan and runs workers through the pm_* tools (shared/pm.ts) */
+  pm?: true;
+  /** a worker: the id of the PM that started or linked it (kept when that session is no PM any more, cleared once it is forgotten) */
+  pmOf?: string;
   /** the version of Claude Code its process runs (none without a process) */
   claudeVersion?: string;
   /** its conversation is being compacted: on its own (Claude Code near the limit, or Open Space after a pause) or asked with /compact */
@@ -599,6 +606,8 @@ export interface Preferences {
   accountsBrowser: AccountsBrowser;
   /** the dashboards of mods (shared/dashboards.ts); absent until the first one is made */
   dashboards?: Dashboard[];
+  /** the project managers' settings; absent: the defaults (pmSettings in shared/pm.ts) */
+  pm?: PmSettings;
 }
 
 /**

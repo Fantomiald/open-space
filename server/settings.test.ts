@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
+import { pmSettings } from '../shared/pm.ts';
 import { DEFAULT_PREFERENCES, Settings, parsePreferences } from './settings.ts';
 
 const folder = mkdtempSync(path.join(os.tmpdir(), 'office-settings-'));
@@ -48,6 +49,17 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {
       enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis',
     }, 'only the keys Open Space offers, with known values');
+  });
+
+  it('keeps the PM settings, each invalid part back to its default, and applies the defaults when there are none', () => {
+    assert.deepEqual(parsePreferences({ pm: { enabled: false, quietMinutes: 5, lastModel: 'opus' } }).pm, { enabled: false, quietMinutes: 5, lastModel: 'opus' });
+    assert.deepEqual(parsePreferences({ pm: { enabled: false, quietMinutes: 61, lastModel: 'opus; rm -rf' } }).pm, { enabled: false, quietMinutes: 8 }, 'switched off stays off');
+    assert.equal(parsePreferences({ pm: { quietMinutes: 1 } }).pm?.quietMinutes, 8);
+    assert.equal(parsePreferences({ pm: { quietMinutes: 2.5 } }).pm?.quietMinutes, 8);
+    assert.equal(parsePreferences({ pm: { quietMinutes: 60 } }).pm?.quietMinutes, 60);
+    assert.equal(parsePreferences({}).pm, undefined);
+    assert.equal(parsePreferences({ pm: 'on' }).pm, undefined);
+    assert.deepEqual(pmSettings(DEFAULT_PREFERENCES), { enabled: true, quietMinutes: 8 });
   });
 
   it('a settings file from before worktrees offers to isolate when the folder is taken', async () => {
