@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
+import { PM_TOOL_NAMES } from '../shared/pm.ts';
 import { NO_RESTRICT } from '../shared/triggers.ts';
 import { buildClaudeArgs, claudeCommand, identityPrompt, parseAccount, parseCatalog, placeNote, renameNote, restrictionSettings } from './claude-process.ts';
-import { setServerLanguage } from './i18n/index.ts';
+import { setServerLanguage, st } from './i18n/index.ts';
 
 it('passes npm Claude arguments directly to Node without shell interpretation on Windows', () => {
   const args = ['--settings', JSON.stringify({ text: 'spaces & %PATH% "quotes"' })];
@@ -53,6 +54,42 @@ describe('buildClaudeArgs', () => {
     // switch_browser always waits for the user's yes, even in auto mode or allowed by the trigger
     assert.deepEqual(JSON.parse(alone[alone.indexOf('--settings') + 1]).permissions, { ask: ['mcp__open-space__switch_browser'] });
     assert.ok(!buildClaudeArgs(base).includes('--settings'), 'no open-space server, no rule');
+  });
+
+  describe('a project manager', () => {
+    const openSpace = JSON.stringify({ mcpServers: { 'open-space': { type: 'http', url: 'http://127.0.0.1:1/mcp/s/k' } } });
+    const allowedOf = (args: string[]) => (args.includes('--allowedTools') ? args[args.indexOf('--allowedTools') + 1].split(',') : []);
+    const promptOf = (args: string[]) => args[args.indexOf('--append-system-prompt') + 1];
+
+    it('runs its pm_* tools without a permission prompt, besides set_pending', () => {
+      const allowed = allowedOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace, pm: true }));
+      for (const tool of [...PM_TOOL_NAMES, 'set_pending']) assert.ok(allowed.includes(`mcp__open-space__${tool}`), tool);
+      assert.ok(!allowedOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace })).some((tool) => tool.includes('__pm_')), 'an ordinary session has none of them');
+    });
+
+    it('is given its playbook with its identity, and only a PM is', () => {
+      assert.ok(promptOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace, pm: true })).includes(st.prompt.pm('')));
+      assert.ok(!promptOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace })).includes(st.prompt.pm('')));
+    });
+
+    it('gets neither tools nor playbook in a folder without the open-space server (not trusted)', () => {
+      const args = buildClaudeArgs({ ...base, pm: true });
+      assert.ok(!allowedOf(args).some((tool) => tool.includes('__pm_')));
+      assert.ok(!promptOf(args).includes(st.prompt.pm('')));
+    });
+
+    it('is only told of tools it has, in both languages', () => {
+      try {
+        for (const language of ['fr', 'en'] as const) {
+          setServerLanguage(language);
+          const named = st.prompt.pm('').match(/\bpm_\w+/g) ?? [];
+          assert.ok(named.length > 0);
+          for (const tool of named) assert.ok((PM_TOOL_NAMES as readonly string[]).includes(tool), `${language}: ${tool}`);
+        }
+      } finally {
+        setServerLanguage('fr');
+      }
+    });
   });
 
   it('tells a session with the shared browser what it is for, and only then', () => {

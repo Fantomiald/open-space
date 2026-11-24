@@ -9,6 +9,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
+import { PM_TOOL_NAMES } from '../shared/pm.ts';
 import { ALL_PLUGINS, MCP_SERVER_NAME, SWITCH_BROWSER_TOOL, type TriggerRestrict } from '../shared/triggers.ts';
 import { userPlugins } from './claude-settings.ts';
 import { st } from './i18n/index.ts';
@@ -142,6 +143,8 @@ export interface LaunchOptions {
   agent?: string;
   /** a trigger's run: told to name itself and to say when it is done (st.prompt.run) */
   run?: boolean;
+  /** a project manager: its pm_* tools allowed and its playbook told (st.prompt.pm), only with the open-space server */
+  pm?: boolean;
   /** permission rules it uses without asking (a trigger's), --allowedTools */
   allowedTools?: readonly string[];
   /** what it starts without (a trigger's), merged into --settings (restrictionSettings) */
@@ -187,8 +190,12 @@ export interface LaunchOptions {
 const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 /** Every session with Open Space's server is asked to say what it leaves pending at the end of a turn: never a permission prompt for that. */
 const SET_PENDING = `mcp__${MCP_SERVER_NAME}__set_pending`;
+/** A PM runs its plan and its workers on its own: the user's choice when they made it a PM (spec 6.4). */
+const PM_TOOLS = PM_TOOL_NAMES.map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 
-export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'promptSuggestions' | 'restrict' | 'home'>): string[] {
+export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'pm' | 'promptSuggestions' | 'restrict' | 'home'>): string[] {
+  // its tools are the open-space server's: a folder without it (not trusted) gets neither them nor the playbook
+  const pm = !!options.pm && !!options.openSpaceMcp;
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,
@@ -213,7 +220,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (mcpConfigs.length) args.push('--mcp-config', ...mcpConfigs);
   if (options.agent) args.push('--agent', options.agent);
   // a run names itself and says it is done without asking (st.prompt.run)
-  const allowed = [...(options.allowedTools ?? []), ...(options.run ? RUN_TOOLS : options.openSpaceMcp ? [SET_PENDING] : [])];
+  const allowed = [...(options.allowedTools ?? []), ...(options.run ? RUN_TOOLS : options.openSpaceMcp ? [SET_PENDING] : []), ...(pm ? PM_TOOLS : [])];
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   if (options.hidden?.length) args.push('--disallowedTools', hiddenRules(options.hidden).join(','));
   if (options.agents) args.push('--agents', options.agents);
@@ -221,7 +228,7 @@ export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resu
   if (options.promptSuggestions) args.push('--prompt-suggestions');
   // the user's own settings only: none of the folder's hooks nor MCP servers (server/trust.ts)
   if (options.untrusted) args.push('--setting-sources', 'user');
-  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run, !!options.openSpaceMcp));
+  if (!options.resume && !options.forkOf) args.push('--append-system-prompt', identityPrompt(options.name, options.user, options.note, options.worktree, !!options.mcpConfig, hasSharedBrowser(options.mcpConfig), !!options.chrome, !!options.run, !!options.openSpaceMcp, pm));
   return args;
 }
 
@@ -267,9 +274,9 @@ export function hiddenRules(files: readonly string[]): string[] {
  * messages short: the user follows several sessions at once, in a narrow panel and in speech bubbles. `user`: their
  * first name; `note`: what they want every agent to know (their own words, added at the end).
  */
-export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false, run = false, pending = false): string {
+export function identityPrompt(name: string, user = '', note = '', worktree?: LaunchOptions['worktree'], browser = false, shared = false, chrome = false, run = false, pending = false, pm = false): string {
   const identity = st.prompt.identity(name, user.trim(), note.trim(), browser, shared, chrome);
-  return [identity, ...(pending ? [st.prompt.pending(user.trim())] : []), ...(worktree ? [st.prompt.worktree(worktree)] : []), ...(run ? [st.prompt.run] : [])].join('\n\n');
+  return [identity, ...(pending ? [st.prompt.pending(user.trim())] : []), ...(pm ? [st.prompt.pm(user.trim())] : []), ...(worktree ? [st.prompt.worktree(worktree)] : []), ...(run ? [st.prompt.run] : [])].join('\n\n');
 }
 
 /**

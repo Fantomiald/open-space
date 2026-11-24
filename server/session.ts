@@ -71,6 +71,8 @@ export interface SessionDeps {
   hidden?: readonly string[];
   /** Claude Code predicts the next message after each turn (Preferences.promptSuggestions), read at each launch */
   promptSuggestions?: () => boolean;
+  /** the PM setting is on (Preferences.pm.enabled), read at each launch: a PM runs as one only then */
+  pmEnabled?: () => boolean;
   /** the name of the session a SendMessage call goes to (see Normalizer) */
   peerName?: (address: string) => string;
   /** time source, replaceable in tests */
@@ -572,7 +574,7 @@ export class Session {
       cwd,
     });
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.info.restrict ? { restrict: this.info.restrict } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.pm && this.deps.pmEnabled?.() ? { pm: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.info.restrict ? { restrict: this.info.restrict } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking

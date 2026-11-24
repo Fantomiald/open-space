@@ -80,6 +80,8 @@ export interface SessionManagerDeps {
   hidden?: SessionDeps['hidden'];
   /** Preferences.promptSuggestions */
   promptSuggestions?: SessionDeps['promptSuggestions'];
+  /** Preferences.pm.enabled */
+  pmEnabled?: SessionDeps['pmEnabled'];
   /** asks a side question (/btw); null when Claude Code is not installed */
   askAside?: AsideRunner | null;
   /** names a new session's subject from its first message (Preferences.autoTag); null when Claude Code is not installed */
@@ -433,6 +435,7 @@ export class SessionManager {
       claudeSettings: this.deps.claudeSettings,
       hidden: this.deps.hidden,
       promptSuggestions: this.deps.promptSuggestions,
+      pmEnabled: this.deps.pmEnabled,
       peerName: (address) => this.peerName(address),
       liveCount: () => [...this.sessions.values()].filter((session) => session.alive && !session.leaving).length,
       makeRoom: () => this.makeRoom(info.id),

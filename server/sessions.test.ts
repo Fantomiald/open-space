@@ -575,6 +575,20 @@ describe('prompt suggestions', () => {
   });
 });
 
+describe('a project manager\'s launch', () => {
+  it('runs as a PM only while the PM setting is on, and an ordinary session never does', async () => {
+    let on = false;
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, { pmEnabled: () => on });
+    await manager.init();
+    await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    on = true;
+    await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    await manager.create({ cwd: projectA(), text: 'bonjour' });
+    assert.deepEqual(processes.map((process) => !!process.launch.pm), [false, true, false]);
+    await manager.shutdown();
+  });
+});
+
 describe('automatic tags', () => {
   const tagging = (enabled: boolean) => {
     const asked: string[] = [];

@@ -14,6 +14,7 @@ import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
 import { isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
+import { pmSettings } from '../shared/pm.ts';
 import type { PhoneProblem } from '../shared/triggers.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
@@ -212,6 +213,7 @@ const sessions = new SessionManager({
   claudeSettings: () => settings.preferences.claude,
   hidden: HIDDEN_FILES,
   promptSuggestions: () => settings.preferences.promptSuggestions,
+  pmEnabled: () => pmSettings(settings.preferences).enabled,
   broadcast,
   log,
   onAttention: (kind, session) => {
