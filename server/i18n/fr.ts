@@ -1,4 +1,4 @@
-import type { ReportKind } from '../../shared/pm.ts';
+import { PM_TOOL_NAMES, PM_TOOL_USAGE, type ReportKind } from '../../shared/pm.ts';
 import type { AsideExchange } from '../../shared/protocol.ts';
 
 /** where an isolated session works (see WorktreeInfo) */
@@ -28,7 +28,9 @@ export const fr = {
         `- Pour une décision de ${who}, pose une question avec pm_ask : un titre court, le détail (le contexte, les options et ce qu’elles changent), les réponses possibles et celle que tu recommandes. holds seulement quand ${who} doit agir maintenant et que la tâche ne peut pas avancer sans. Puis finis ton tour, sans attendre ni redemander. La réponse arrive en « W<n> Q<n>: … » (« Q<n>: … » pour une question hors tâche). pm_ask_withdraw retire une question qui ne se pose plus, pm_ask_done clôt une question réglée autrement.\n` +
         `- Tiens les tâches à jour avec pm_item_add et pm_item_update : now dit ce qui se passe maintenant et remplace le précédent ; step, seulement les étapes qui comptent pour ${who} ; wait, ce que la tâche attend (W<n>, Q<n> ou un texte) ; dans le tour même où c’est fini, status done avec done, la ligne à garder sur ce qui a été fait ; drop pour une tâche abandonnée, later pour plus tard. Une PR, une issue ou une adresse se lie avec pm_link_add.\n` +
         `- La mémoire (pm_remember) ne garde que ce que ${who} a accepté que tu gardes, avec son accord sur le texte exact. pm_forget retire une note qui ne vaut plus.\n` +
-        `- Ne demande jamais à un worker de fusionner, de pousser ni de lancer une commande destructrice (suppression, reset, push forcé, migration de données) sans l’accord de ${who}.`;
+        `- Ne demande jamais à un worker de fusionner, de pousser ni de lancer une commande destructrice (suppression, reset, push forcé, migration de données) sans l’accord de ${who}.\n` +
+        `Tes outils, avec leurs arguments exacts (? = facultatif ; un worker se désigne par l’id de sa session, son nom ou le tag de sa tâche, W<n>) :\n` +
+        PM_TOOL_NAMES.map((tool) => `- ${PM_TOOL_USAGE[tool]}`).join('\n');
     },
     /** told to a trigger's run, after its identity (server/claude-process.ts identityPrompt) */
     run: 'Tu es un run d’automate, lancé tout seul, et ces consignes passent avant celles de ton message. Si ce que tu reçois dit ce que tu traites (la clé d’un ticket, le titre d’une PR…), donne d’abord à ta session un nom court avec l’outil rename_session d’open-space (par exemple « PROJ-1549 »). Dernière étape de chaque run, toujours : si ta tâche est finie et que rien n’attend de réponse de l’utilisateur, appelle finish_run juste avant ta réponse finale ; ta session se ferme et sa conversation reste dans Reprendre. Ne l’appelle pas si tu attends son go ou une réponse.',
@@ -385,6 +387,9 @@ export const fr = {
     /** the footer of a pm_* result: questions the user set aside since the PM last heard */
     dismissed: (tags: string) => `L’utilisateur a écarté ${tags} : ne pas redemander.`,
     /** the pm_* tools of the open-space MCP server (server/pm-tools.ts) */
+    expected: (usage: string) => `Arguments attendus : ${usage}`,
+    noWorkerOn: (tag: string) => `Aucun de tes workers n’est sur ${tag}.`,
+    severalWorkers: (asked: string, workers: string) => `« ${asked} » désigne plusieurs de tes workers : ${workers}. Donne l’id de sa session.`,
     notPm: 'Seule une session chef de projet a cet outil, quand les chefs de projet sont activés dans les Réglages.',
     badItem: 'Donne la tâche par son tag, par exemple W3.',
     badAsk: 'Donne la question par son tag, par exemple Q3.',

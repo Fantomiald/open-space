@@ -1,4 +1,4 @@
-import type { ReportKind } from '../../shared/pm.ts';
+import { PM_TOOL_NAMES, PM_TOOL_USAGE, type ReportKind } from '../../shared/pm.ts';
 import type { AsideExchange } from '../../shared/protocol.ts';
 import type { ServerDictionary } from './index.ts';
 
@@ -26,7 +26,9 @@ export const en: ServerDictionary = {
         `- For a decision of ${who}'s, ask a question with pm_ask: a short title, the detail (the context, the options and what they change), the possible answers and the one you recommend. holds only when ${who} must act now and the task cannot move without it. Then end your turn, without waiting or asking again. The answer comes as "W<n> Q<n>: …" ("Q<n>: …" for a question outside a task). pm_ask_withdraw takes back a question that no longer stands, pm_ask_done closes one settled otherwise.\n` +
         `- Keep the tasks up to date with pm_item_add and pm_item_update: now says what is happening now and replaces the previous one; step, only the steps ${who} cares about; wait, what the task waits on (W<n>, Q<n> or a text); in the very turn it is over, status done with done, the line worth keeping about what was done; drop for a task given up, later for later. A PR, an issue or an address is linked with pm_link_add.\n` +
         `- The memory (pm_remember) only keeps what ${who} agreed you keep, with their yes on the exact wording. pm_forget removes a note that no longer holds.\n` +
-        `- Never ask a worker to merge, push or run a destructive command (a deletion, a reset, a force push, a data migration) without ${who}'s agreement.`;
+        `- Never ask a worker to merge, push or run a destructive command (a deletion, a reset, a force push, a data migration) without ${who}'s agreement.\n` +
+        `Your tools, with their exact arguments (? = optional; a worker is named by its session id, its name or the tag of its task, W<n>):\n` +
+        PM_TOOL_NAMES.map((tool) => `- ${PM_TOOL_USAGE[tool]}`).join('\n');
     },
     run: 'You are an automaton\'s run, started on your own, and these instructions come before those of your message. If what you receive says what you work on (a ticket\'s key, a PR\'s title…), first give your session a short name with the rename_session tool of open-space (for instance "PROJ-1549"). Last step of every run, always: if your task is done and nothing waits for an answer from the user, call finish_run just before your final answer; your session closes and its conversation stays in Resume. Do not call it if you wait for their go or an answer.',
     tester: {
@@ -354,6 +356,9 @@ export const en: ServerDictionary = {
     linkNeedsItem: 'Say which task to link the address to (item), or a worker linked to a task.',
     notYourWorker: (session: string) => `${session} is not one of your workers.`,
     dismissed: (tags: string) => `The user set aside ${tags}: do not ask again.`,
+    expected: (usage: string) => `Expected arguments: ${usage}`,
+    noWorkerOn: (tag: string) => `None of your workers is on ${tag}.`,
+    severalWorkers: (asked: string, workers: string) => `"${asked}" names several of your workers: ${workers}. Give its session id.`,
     notPm: 'Only a project manager session has this tool, while project managers are on in the Settings.',
     badItem: 'Give the task by its tag, e.g. W3.',
     badAsk: 'Give the question by its tag, e.g. Q3.',

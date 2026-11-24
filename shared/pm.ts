@@ -43,6 +43,33 @@ export const PM_TOOL_NAMES = [
   'pm_worker_send', 'pm_worker_read', 'pm_worker_stop',
 ] as const;
 
+/**
+ * Each pm_* tool with its exact arguments (`?`: optional), told to a PM in its playbook: Claude Code loads a tool's schema
+ * only when it is first called, and a model that guesses an argument's name otherwise gets it wrong. The server's schemas
+ * (server/pm-tools.ts) are checked against these lines.
+ */
+export const PM_TOOL_USAGE: Record<(typeof PM_TOOL_NAMES)[number], string> = {
+  pm_status: 'pm_status()',
+  pm_set_mission: 'pm_set_mission({ mission })',
+  pm_set_instructions: 'pm_set_instructions({ instructions })',
+  pm_remember: 'pm_remember({ text })',
+  pm_forget: 'pm_forget({ number })',
+  pm_item_add: 'pm_item_add({ title, worker? })',
+  pm_item_update: 'pm_item_update({ item, title?, now?, step?, chore?, step_done?, wait?, clear_waits?, status?: done|drop|later|restore, done? })',
+  pm_item_list: 'pm_item_list()',
+  pm_ask: 'pm_ask({ title, detail, item?, answers?: [text], recommended?, holds? })',
+  pm_ask_done: 'pm_ask_done({ tag })',
+  pm_ask_withdraw: 'pm_ask_withdraw({ tag })',
+  pm_link_add: 'pm_link_add({ url, item?, worker? })',
+  pm_worker_start: 'pm_worker_start({ title, brief, item?, cwd?, model?, effort?, isolate? })',
+  pm_worker_link: 'pm_worker_link({ session, item? })',
+  pm_worker_unlink: 'pm_worker_unlink({ session | item })',
+  pm_worker_resolve: 'pm_worker_resolve({ session | item })',
+  pm_worker_send: 'pm_worker_send({ session | item, text })',
+  pm_worker_read: 'pm_worker_read({ session | item, last? })',
+  pm_worker_stop: 'pm_worker_stop({ session | item })',
+};
+
 /** What a message sent to a PM by Open Space is: a worker's report, the user's answer to a question, or the PM's setup. */
 export type PmMessageTag = { report: { worker: string; kind: ReportKind } } | { answer: { ask: number } } | { setup: true };
 
