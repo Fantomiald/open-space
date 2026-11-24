@@ -61,13 +61,24 @@ describe('reading a PM file', () => {
 
   it('drops a worker, a report or a link that says nothing usable', () => {
     const file = parsePmFile({
-      items: [{ no: 1, links: [{ url: 42 }, { url: 'https://x.test' }] }],
+      items: [{ no: 1, links: [{ url: 42 }, { url: 'javascript:alert(1)' }, { url: `https://x.test/${'a'.repeat(PM_LIMITS.url)}` }, { url: 'https://x.test' }] }],
       workers: [{ session: '../x' }, { session: 'w-1' }],
       reports: [{ key: '', worker: 'w-1', kind: 'finished', at: 1 }, { key: 'k', worker: 'w-1', kind: 'bogus', at: 1 }, { key: 'k', worker: 'w-1', kind: 'quiet', at: 1 }],
     });
     assert.deepEqual(file.items[0].links.map((link) => link.url), ['https://x.test']);
     assert.deepEqual(file.workers.map((one) => one.session), ['w-1']);
     assert.deepEqual(file.reports, [{ key: 'k', worker: 'w-1', kind: 'quiet', at: 1 }]);
+  });
+
+  it('keeps the first of two tasks with the same number, and of the same worker twice', () => {
+    const file = parsePmFile({ items: [{ no: 1, title: 'A' }, { no: 1, title: 'B' }], workers: [{ session: 'w', item: 1 }, { session: 'w', item: 2 }] });
+    assert.deepEqual(file.items.map((one) => one.title), ['A']);
+    assert.deepEqual(file.workers.map((one) => one.item), [1]);
+  });
+
+  it('reads a wait stored with its tag as a wait on that number', () => {
+    const file = parsePmFile({ turn: 5, items: [{ no: 1, touchedTurn: 5, waits: [{ on: 'ask', ref: 'Q2' }] }], asks: [{ no: 2 }] });
+    assert.equal(itemStatus(file.items[0], file, []), 'waiting');
   });
 
   it('never hands out a W or Q number already taken', () => {
@@ -80,13 +91,17 @@ describe('reading a PM file', () => {
   it('keeps texts and lists within their limits', () => {
     const long = (size: number) => 'x'.repeat(size + 10);
     const file = parsePmFile({
+      mission: long(PM_LIMITS.mission), instructions: long(PM_LIMITS.instructions),
       memory: Array.from({ length: 70 }, (_, index) => ({ text: index === 0 ? long(PM_LIMITS.note) : `note ${index}`, at: index })),
       items: [{ no: 1, title: long(PM_LIMITS.title), now: long(PM_LIMITS.line), done: long(PM_LIMITS.line), steps: Array.from({ length: 40 }, () => ({ text: 'step' })) }],
       asks: [{ no: 1, title: long(PM_LIMITS.title), detail: long(PM_LIMITS.detail), answers: Array.from({ length: 8 }, () => long(PM_LIMITS.answer)) }],
       reports: Array.from({ length: 210 }, (_, index) => ({ key: `k${index}`, worker: 'w', kind: 'finished', at: index })),
     });
+    assert.equal(file.mission.length, PM_LIMITS.mission);
+    assert.equal(file.instructions.length, PM_LIMITS.instructions);
     assert.equal(file.memory.length, PM_LIMITS.memory);
     assert.equal(file.memory[0].text.length, PM_LIMITS.note);
+    assert.equal(file.memory.at(-1)?.text, 'note 59', 'the first notes are kept, so that their numbers stay');
     assert.equal(file.items[0].title.length, PM_LIMITS.title);
     assert.equal(file.items[0].now.length, PM_LIMITS.line);
     assert.equal(file.items[0].done.length, PM_LIMITS.line);
@@ -109,6 +124,10 @@ describe('the status shown for a task', () => {
       file: { workers: [linked('w')] }, live: [{ session: 'w', working: true, waiting: false }], expected: 'done',
     },
     { name: 'an open question that holds it', task: item(1), file: { asks: [ask(1, { item: 1, holds: true })] }, expected: 'blocked' },
+    {
+      name: 'an open question that holds it, even with its worker waiting', task: item(1), file: { asks: [ask(1, { item: 1, holds: true })], workers: [linked('w')] },
+      live: [{ session: 'w', working: false, waiting: true }], expected: 'blocked',
+    },
     { name: 'an open question that does not hold it', task: item(1), file: { turn: 5, asks: [ask(1, { item: 1 })] }, expected: 'idle' },
     { name: 'a holding question already answered', task: item(1), file: { turn: 5, asks: [ask(1, { item: 1, holds: true, state: 'answered' })] }, expected: 'idle' },
     {
@@ -120,17 +139,28 @@ describe('the status shown for a task', () => {
       name: 'a worker of another task, or one resolved, does not count', task: item(1), file: { turn: 5, workers: [worker('a', { item: 2 }), worker('b', { item: 1, resolvedAt: 3 })] },
       live: [{ session: 'a', working: true, waiting: true }, { session: 'b', working: true, waiting: true }], expected: 'idle',
     },
+    {
+      name: 'its worker works, even while the task waits', task: item(1, { waits: [{ on: 'text', ref: 'Bob', since: 1 }] }), file: { workers: [linked('w')] },
+      live: [{ session: 'w', working: true, waiting: false }], expected: 'inProgress',
+    },
     { name: 'a wait on an open question', task: item(1, { waits: [{ on: 'ask', ref: '2', since: 1 }] }), file: { asks: [ask(2)] }, expected: 'waiting' },
     ...(['answered', 'done', 'withdrawn', 'dismissed'] as const).map((state) => ({
       name: `a wait on a question ${state}`, task: item(1, { waits: [{ on: 'ask' as const, ref: '2', since: 1 }] }), file: { turn: 5, asks: [ask(2, { state })] }, expected: 'idle' as const,
     })),
     { name: 'a wait on an unfinished task', task: item(1, { waits: [{ on: 'item', ref: '2', since: 1 }] }), file: { items: [item(2)] }, expected: 'waiting' },
     { name: 'a wait on a finished task', task: item(1, { waits: [{ on: 'item', ref: '2', since: 1 }] }), file: { turn: 5, items: [item(2, { state: 'finished' })] }, expected: 'idle' },
+    { name: 'a wait on a dropped task', task: item(1, { waits: [{ on: 'item', ref: '2', since: 1 }] }), file: { turn: 5, items: [item(2, { state: 'dropped' })] }, expected: 'idle' },
+    { name: 'a wait on a task that is gone', task: item(1, { waits: [{ on: 'item', ref: '9', since: 1 }] }), file: { turn: 5 }, expected: 'idle' },
     { name: 'a wait on something else', task: item(1, { waits: [{ on: 'text', ref: 'Bob', since: 1 }] }), expected: 'waiting' },
+    { name: 'a wait, even on a task touched this turn', task: item(1, { touchedTurn: 5, waits: [{ on: 'text', ref: 'Bob', since: 1 }] }), file: { turn: 5 }, expected: 'waiting' },
     { name: 'a wait on something else, cleared', task: item(1, { waits: [{ on: 'text', ref: 'Bob', since: 1, cleared: 2 }] }), file: { turn: 5 }, expected: 'idle' },
     { name: 'touched by the PM this turn', task: item(1, { touchedTurn: 5 }), file: { turn: 5 }, expected: 'inProgress' },
     { name: 'touched by the PM the turn before', task: item(1, { touchedTurn: 4 }), file: { turn: 5 }, expected: 'inProgress' },
     { name: 'left alone for longer', task: item(1, { touchedTurn: 3 }), file: { turn: 5 }, expected: 'idle' },
+    ...(['waiting', 'needs'] as const).flatMap((state) => [
+      { name: `stored as ${state}, touched this turn`, task: item(1, { state, touchedTurn: 5 }), file: { turn: 5 }, expected: 'inProgress' as const },
+      { name: `stored as ${state}, left alone`, task: item(1, { state, touchedTurn: 3 }), file: { turn: 5 }, expected: 'idle' as const },
+    ]),
     { name: 'put off for later', task: item(1, { state: 'later' }), file: { turn: 5 }, expected: 'later' },
   ];
   for (const { name, task, file, live, expected } of cases) {

@@ -1,9 +1,12 @@
 // A project manager (PM) session's file: its plan (tasks W, questions Q, memory), its workers and their reports.
 // Pure logic shared by the server and the page: tolerant parsing, the status shown for a task, W/Q tags.
 
-export type ItemState = 'moving' | 'waiting' | 'needs' | 'later' | 'finished' | 'dropped';
-export type AskState = 'open' | 'answered' | 'done' | 'withdrawn' | 'dismissed';
-export type ReportKind = 'finished' | 'waiting' | 'quiet' | 'stopped' | 'error' | 'paused' | 'restarted';
+const ITEM_STATES = ['moving', 'waiting', 'needs', 'later', 'finished', 'dropped'] as const;
+const ASK_STATES = ['open', 'answered', 'done', 'withdrawn', 'dismissed'] as const;
+const REPORT_KINDS = ['finished', 'waiting', 'quiet', 'stopped', 'error', 'paused', 'restarted'] as const;
+export type ItemState = (typeof ITEM_STATES)[number];
+export type AskState = (typeof ASK_STATES)[number];
+export type ReportKind = (typeof REPORT_KINDS)[number];
 export interface PmStep { text: string; done: boolean; chore: boolean; at: number }
 export interface PmWait { on: 'item' | 'ask' | 'text'; ref: string; since: number; cleared?: number }
 export interface PmLink { url: string; kind: 'pr' | 'issue' | 'url'; title: string; worker?: string }
@@ -28,7 +31,9 @@ export interface PmFile {
   pages: unknown[];
 }
 
-export const PM_LIMITS = { memory: 60, note: 600, title: 200, detail: 4000, answers: 6, answer: 80, line: 300, steps: 30, reports: 200 } as const;
+export const PM_LIMITS = {
+  memory: 60, note: 600, title: 200, detail: 4000, answers: 6, answer: 80, line: 300, steps: 30, reports: 200, mission: 2000, instructions: 4000, url: 2000,
+} as const;
 
 /** The tools of the open-space MCP kept for PM sessions, without their `mcp__open-space__` prefix. */
 export const PM_TOOL_NAMES = [
@@ -37,9 +42,6 @@ export const PM_TOOL_NAMES = [
   'pm_worker_send', 'pm_worker_read', 'pm_worker_stop',
 ] as const;
 
-const ITEM_STATES: readonly ItemState[] = ['moving', 'waiting', 'needs', 'later', 'finished', 'dropped'];
-const ASK_STATES: readonly AskState[] = ['open', 'answered', 'done', 'withdrawn', 'dismissed'];
-const REPORT_KINDS: readonly ReportKind[] = ['finished', 'waiting', 'quiet', 'stopped', 'error', 'paused', 'restarted'];
 const SESSION_ID = /^[\w-]{1,100}$/;
 
 export function emptyPm(): PmFile {
@@ -69,11 +71,15 @@ const parseStep = (raw: Raw): PmStep | undefined =>
 
 const parseWait = (raw: Raw): PmWait | undefined => {
   const on = oneOf(raw.on, ['item', 'ask', 'text'] as const);
-  return on && { on, ref: text(raw.ref, PM_LIMITS.line), since: time(raw.since), ...optional('cleared', time(raw.cleared)) };
+  const ref = text(raw.ref, PM_LIMITS.line);
+  // a wait on a task or a question keeps its bare number ("2"), even when it was stored as "Q2"
+  const tagged = on !== 'text' && /^[wq]?(\d{1,9})$/i.exec(ref.trim());
+  return on && { on, ref: tagged ? String(Number(tagged[1])) : ref, since: time(raw.since), ...optional('cleared', time(raw.cleared)) };
 };
 
+// a truncated address would lead elsewhere: one too long is dropped, like one that is not a web page
 const parseLink = (raw: Raw): PmLink | undefined =>
-  (typeof raw.url === 'string' && raw.url
+  (typeof raw.url === 'string' && raw.url.length <= PM_LIMITS.url && /^https?:\/\/\S/i.test(raw.url)
     ? { url: raw.url, kind: oneOf(raw.kind, ['pr', 'issue', 'url'] as const) ?? 'url', title: text(raw.title, PM_LIMITS.title), ...optional('worker', session(raw.worker)) }
     : undefined);
 
@@ -125,10 +131,11 @@ export function parsePmFile(raw: unknown): PmFile {
   const items = firstOfEach(list(raw.items, parseItem), (item) => item.no);
   const asks = firstOfEach(list(raw.asks, parseAsk), (ask) => ask.no);
   // a W or Q number is never handed out twice, even when the counter was lost
-  const next = (stored: unknown, taken: { no: number }[]) => Math.max(number(stored) ?? 1, ...taken.map((one) => one.no + 1));
+  const next = (stored: unknown, taken: { no: number }[]) => taken.reduce((first, one) => Math.max(first, one.no + 1), number(stored) ?? 1);
   return {
-    version: 1, mission: typeof raw.mission === 'string' ? raw.mission : '', instructions: typeof raw.instructions === 'string' ? raw.instructions : '',
+    version: 1, mission: text(raw.mission, PM_LIMITS.mission), instructions: text(raw.instructions, PM_LIMITS.instructions),
     nextItem: next(raw.nextItem, items), nextAsk: next(raw.nextAsk, asks), turn: count(raw.turn),
+    // notes are numbered from the first: keeping the first 60 keeps their numbers
     memory: list(raw.memory, (note) => (typeof note.text === 'string' && note.text ? { text: text(note.text, PM_LIMITS.note), at: time(note.at) } : undefined)).slice(0, PM_LIMITS.memory),
     items, asks, workers: firstOfEach(list(raw.workers, parseWorker), (worker) => worker.session),
     reports: list(raw.reports, parseReportRecord).slice(-PM_LIMITS.reports),
@@ -140,12 +147,16 @@ export type ShownStatus = 'dropped' | 'done' | 'blocked' | 'needsYou' | 'inProgr
 /** What a worker session is doing now; `waiting` is a permission or a question waiting for the user. */
 export interface WorkerLive { session: string; working: boolean; waiting: boolean }
 
-/** The waits of a task not lifted yet: a wait on a question ends once it is settled, on a task once it is finished. */
+/** The waits of a task not lifted yet: a wait on a question ends once it is settled, on a task once it is finished or dropped,
+ * and on either once it is gone. */
 export function openWaits(item: PmItem, file: PmFile): PmWait[] {
   return item.waits.filter((wait) => {
     if (wait.cleared) return false;
     if (wait.on === 'ask') return file.asks.find((ask) => String(ask.no) === wait.ref)?.state === 'open';
-    if (wait.on === 'item') return file.items.find((other) => String(other.no) === wait.ref)?.state !== 'finished';
+    if (wait.on === 'item') {
+      const state = file.items.find((other) => String(other.no) === wait.ref)?.state;
+      return state !== undefined && state !== 'finished' && state !== 'dropped';
+    }
     return true;
   });
 }
