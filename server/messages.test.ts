@@ -21,6 +21,7 @@ describe('parseClientMessage', () => {
   it('reads the requests to create a project manager, or to make a session one and back', () => {
     assert.deepEqual(parseClientMessage({ t: 'pmCreate', cwd: '/x' }), { t: 'pmCreate', cwd: '/x' });
     assert.deepEqual(parseClientMessage({ t: 'pmCreate', cwd: '/x', model: 'opus' }), { t: 'pmCreate', cwd: '/x', model: 'opus' });
+    assert.deepEqual(parseClientMessage({ t: 'pmCreate', cwd: '/x', model: '' }), { t: 'pmCreate', cwd: '/x' }, 'no model chosen');
     assert.equal(parseClientMessage({ t: 'pmCreate' }), null);
     assert.equal(parseClientMessage({ t: 'pmCreate', cwd: '/x', model: '--settings x' }), null);
     assert.deepEqual(parseClientMessage({ t: 'pmConvert', sessionId: 's1' }), { t: 'pmConvert', sessionId: 's1' });

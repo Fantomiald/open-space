@@ -297,8 +297,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'duplicate': return sessionId ? { t: 'duplicate', sessionId } : null;
     case 'pmCreate': {
       const cwd = boundedString(raw.cwd, 1000);
-      if (!cwd || (raw.model !== undefined && (typeof raw.model !== 'string' || !MODEL_PATTERN.test(raw.model)))) return null;
-      return { t: 'pmCreate', cwd, ...(typeof raw.model === 'string' ? { model: raw.model } : {}) };
+      // '' : no model chosen, as in create
+      if (!cwd || (raw.model !== undefined && (typeof raw.model !== 'string' || (raw.model !== '' && !MODEL_PATTERN.test(raw.model))))) return null;
+      return { t: 'pmCreate', cwd, ...(typeof raw.model === 'string' && raw.model ? { model: raw.model } : {}) };
     }
     case 'pmConvert': return sessionId ? { t: 'pmConvert', sessionId } : null;
     case 'pmRevert': return sessionId ? { t: 'pmRevert', sessionId } : null;
