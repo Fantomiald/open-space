@@ -358,9 +358,17 @@ export class SessionManager {
     this.releaseForRole(id);
   }
 
+  /**
+   * A session whose process runs as another role than it has now: released while it waits; under Remote Control, which
+   * keeps its process, relaunched at once without a message, Remote Control on again (like switch_browser), unless its
+   * scheduled tasks hold the process; at work, once a turn of it is over.
+   */
   private releaseForRole(id: string) {
     const session = this.sessions.get(id);
-    if (!session?.alive || session.release(st.sessions.stopped.role)) this.changingRole.delete(id);
+    if (!session?.roleChanged) { this.changingRole.delete(id); return; }
+    const { remote, scheduled } = session.snapshot();
+    const note = st.sessions.stopped.role;
+    if (session.release(note) || (remote && !scheduled && session.relaunch('', note))) this.changingRole.delete(id);
     else this.changingRole.add(id);
   }
 

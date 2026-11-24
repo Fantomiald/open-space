@@ -205,6 +205,8 @@ export class Session {
   get alive() { return !!this.process?.alive; }
   /** its process is alive but asked to go, having waited long enough: it no longer counts against the limit */
   get leaving() { return !!this.process?.alive && this.stopRequest?.reason === 'idle'; }
+  /** Its process runs as another role than it has now (made a PM or not since, the PM setting turned on or off): see SessionManager.releaseForRole. */
+  get roleChanged() { return !!this.process?.alive && this.launchedAsPm !== this.wantsPm(); }
   /** True when a SendMessage address ("uds:/tmp/…" or the path alone) is this session's live process. */
   answersAt(address: string) { return !!this.socket && this.alive && address.replace(/^uds:/, '') === this.socket; }
   snapshot(): SessionInfo {
@@ -586,7 +588,7 @@ export class Session {
       agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
       cwd,
     });
-    this.launchedAsPm = !!(this.info.pm && !this.info.trigger && this.deps.pmEnabled?.());
+    this.launchedAsPm = this.wantsPm();
     // a new conversation has the playbook in its system prompt
     if (!this.info.resumable && !this.info.forkOf) {
       this.info.toldPm = this.launchedAsPm || undefined;
@@ -830,6 +832,9 @@ export class Session {
     this.info.scheduled = pendingSchedules(this.schedules, this.now()) || undefined;
     this.publish();
   }
+
+  /** It runs as a PM when it is one, not a trigger's run, and the setting is on (read at each launch). */
+  private wantsPm() { return !!(this.info.pm && !this.info.trigger && this.deps.pmEnabled?.()); }
 
   /** Sub-agents and commands still at work in the background would die with the process, and Remote Control with it. */
   private keepsProcess() {
@@ -1230,8 +1235,9 @@ export class Session {
   }
 
   /**
-   * Restarts its process right away with `text` as its next message (the conversation goes on with --resume), and
-   * Remote Control again if it was on. false: it is at work, or busy in the background.
+   * Restarts its process right away with `text` as its next message (the conversation goes on with --resume; '': none,
+   * the process only starts again for Remote Control), and Remote Control again if it was on. false: it is at work, or
+   * busy in the background.
    */
   relaunch(text: string, note: string): boolean {
     if (!this.process?.alive || this.context.state !== 'wait' || this.info.subagents.length > 0 || this.info.background) return false;

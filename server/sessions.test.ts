@@ -632,6 +632,22 @@ describe('making a session a project manager, and back', () => {
     await manager.shutdown();
   });
 
+  it('a session under Remote Control is relaunched as a PM at once, Remote Control on again, without a message', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    await manager.remoteControl(id, true);
+    manager.setPm(id, true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual([processes[1]?.launch.pm, processes[1]?.launch.resume], [true, true]);
+    assert.deepEqual(processes[1].remoteCalls, [true]);
+    assert.equal(processes[1].sent.length, 0, 'no message of its own');
+    manager.send(id, 'le plan ?');
+    assert.ok(processes[1].sent.at(-1)!.includes(st.prompt.pm('')));
+    await manager.shutdown();
+  });
+
   it('a PM made an ordinary session again is told so, resumes without the PM tools, and lets its workers go', async () => {
     const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
     await manager.init();
