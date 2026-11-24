@@ -54,6 +54,7 @@ import { projectOf } from './worktrees.ts';
 import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi, type PmApi } from './mcp.ts';
 import { PmBook } from './pm.ts';
 import { resolveWorker } from './pm-ops.ts';
+import { PmWatch } from './pm-watch.ts';
 import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
 import { parsePreferences } from './settings.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
@@ -504,6 +505,32 @@ const mcpApi: OpenSpaceApi = {
   pm: pmApi,
 };
 
+/**
+ * The workers' reports to their PM (server/pm-watch.ts), each sent once; silences looked at every 30 s, what was missed
+ * caught up now (sessions are loaded) and on the first sweep after the setting is back on.
+ */
+const pmWatch = new PmWatch({
+  now: Date.now,
+  sessions: () => sessions.list(),
+  book: pmBook,
+  enabled: () => pmSettings(settings.preferences).enabled && !stopping,
+  quietMs: () => pmSettings(settings.preferences).quietMinutes * 60_000,
+  lastWords: (sessionId) => mcpApi.lastWords(sessionId),
+  lastEventAt: (sessionId) => {
+    const info = findSession(sessionId);
+    return (info && sessions.logSince(sessionId, info.lastSeq - 1).events.at(-1)?.at) || info?.stateSince || 0;
+  },
+  deliver: (pm, text, tag) => sessions.send(pm, text, [], [], tag),
+  nudge: (worker, text) => sessions.send(worker, text),
+  log,
+});
+sessions.onSessionTurnEnd((session, how) => pmWatch.turnEnded(session, how));
+sessions.onSessionAttention((kind, session) => pmWatch.attention(kind, session));
+sessions.onSessionPaused((session) => pmWatch.paused(session));
+sessions.onSessionForgotten((session) => pmWatch.forgotten(session));
+setInterval(() => { pmWatch.sweep().catch((error: unknown) => log('cannot look at the PM workers', error)); }, 30_000).unref();
+pmWatch.reconcile().catch((error: unknown) => log('cannot catch up with the PM reports', error));
+
 
 /** The Claude Code installed now: its updater replaces it in the background, the next launches start the new one */
 let installedClaude = claude?.version ?? '';
@@ -693,7 +720,8 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'suggestRoots': send({ t: 'rootSuggestions', suggestions: suggestRoots(os.homedir(), process.platform === 'win32' ? await windowsKnownFolders(os.homedir(), process.env.OPEN_SPACE_KNOWN_FOLDERS) : undefined) }); break;
     case 'avatar': await saveAvatar(path.join(config.dataDir, 'avatar.png'), Buffer.from(message.png, 'base64')); break;
     case 'presence': break;
-    case 'close': await sessions.close(message.sessionId); break;
+    // a worker the user closes is done with: resolved in its PM's plan
+    case 'close': await sessions.close(message.sessionId); await pmWatch.closedByUser(message.sessionId); break;
     case 'tune': await sessions.tune(message.sessionId, { model: message.model, effort: message.effort, ultracode: message.ultracode, fastMode: message.fastMode, permissionMode: message.permissionMode }); break;
     case 'rename': sessions.rename(message.sessionId, message.name); break;
     case 'tags': sessions.setTags(message.sessionId, message.tags); break;

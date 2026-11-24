@@ -1,3 +1,4 @@
+import type { ReportKind } from '../../shared/pm.ts';
 import type { AsideExchange } from '../../shared/protocol.ts';
 import type { ServerDictionary } from './index.ts';
 
@@ -365,6 +366,21 @@ export const en: ServerDictionary = {
     briefFooter: (pm: string) => `\n\n---\nYou are a worker of the project manager "${pm}". Your last message is your report: it goes to them on its own when your turn ends. Say in it what you did, the proof (tests, screenshots, commands run) and what is left. Never write to the project manager yourself (no SendMessage, no other way); a decision you need goes in your final report. Do not merge, push or run any destructive command (deletion, reset, force push, data migration) unless asked to. Stop your background jobs before giving your report.`,
     disabled: 'Project managers are off in the Settings.',
     untrusted: (name: string) => `${name} works in a folder that was not approved, without Open Space's tools: it cannot be a project manager.`,
+    report: (kind: ReportKind, worker: string, item?: string, until?: number) => {
+      const who = `Report from ${worker}${item ? ` (${item})` : ''}: `;
+      const time = until ? new Date(until).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+      const what: Record<ReportKind, string> = {
+        finished: 'finished its turn. Its last reply:',
+        waiting: 'waits for a permission or an answer from the user, which you do not give: tell the user to go and answer it. Its last reply:',
+        quiet: 'has given no sign of life for a while, even after a nudge: look with pm_worker_read.',
+        stopped: 'stopped in the middle of a turn without you asking.',
+        error: 'is in error, or its process stopped: look with pm_worker_read.',
+        paused: `is paused by the usage limit${time ? ` until ${time}` : ''}; it will resume on its own.`,
+        restarted: 'was cut off in the middle of its work by a restart of Open Space: start it again with pm_worker_send if it must finish.',
+      };
+      return who + what[kind];
+    },
+    nudge: 'Where are you at? Say in one line what you are doing and what holds you up, then go on.',
   },
   server: {
     stoppingRetry: 'The server is stopping: try again once it’s back.',

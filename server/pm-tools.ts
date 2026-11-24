@@ -10,7 +10,7 @@ import { st } from './i18n/index.ts';
 import { asArray, asString, type Json } from './json.ts';
 import { failure, type OpenSpaceApi, type PmApi, shownWait, type Tool, text } from './mcp.ts';
 import {
-  addAsk, addItem, addLink, dismissedNotice, type Err, forget, type ItemUpdate, linkWorker, ownWorker, remember, resolveWorker, setInstructions,
+  addAsk, addItem, addLink, dismissedNotice, type Err, forget, type ItemUpdate, linkWorker, nameOf, ownWorker, remember, resolveWorker, setInstructions,
   setMission, settleAsk, unlinkWorker, updateItem,
 } from './pm-ops.ts';
 
@@ -93,8 +93,6 @@ export const isPmTool = (name: string): name is PmToolName => (PM_TOOL_NAMES as 
 const isErr = (value: unknown): value is Err => typeof value === 'object' && value !== null && 'error' in value;
 /** A result followed by the questions the user set aside, as a block of their own. */
 const told = (result: ReturnType<typeof text>, notice: string | undefined): Json => (notice ? { ...result, content: [...result.content, ...text(notice).content] } : result);
-/** A session's name as a result shows it: one line of 80 characters at most (the user or an agent named it). */
-const nameOf = (session: SessionInfo) => session.name.replace(/\s+/g, ' ').trim().slice(0, 80);
 
 /** A task or a question as the PM names it: a tag ("W3", "W4 Q3") or its number; undefined when not given, null when it names none. */
 function numberOf(value: unknown, kind: 'item' | 'ask'): number | undefined | null {

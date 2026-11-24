@@ -4,9 +4,13 @@
 // so a text too long is cut to its limit, while what the parser would drop (an empty text, an address too long) is refused.
 // `now` is a time in ms, above 0: the parser reads 0 as no time at all.
 import { askTag, itemTag, openWaits, PM_LIMITS, type PmAsk, type PmFile, type PmItem, type PmLink, type PmWait, type PmWorker, parseTag, SESSION_ID } from '../shared/pm.ts';
+import type { SessionInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 
 export type Err = { error: string };
+
+/** A session's name as the PM reads it: one line of 80 characters at most (the user or an agent named it). */
+export const nameOf = (session: SessionInfo) => session.name.replace(/\s+/g, ' ').trim().slice(0, 80);
 
 // caps on what the PM may add, so that one file stays small
 const MAX_ITEMS = 500;

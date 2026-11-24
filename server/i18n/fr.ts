@@ -1,3 +1,4 @@
+import type { ReportKind } from '../../shared/pm.ts';
 import type { AsideExchange } from '../../shared/protocol.ts';
 
 /** where an isolated session works (see WorktreeInfo) */
@@ -399,6 +400,23 @@ export const fr = {
     /** refusals of the page's PM requests (server/index.ts) */
     disabled: 'Les chefs de projet sont désactivés dans les Réglages.',
     untrusted: (name: string) => `${name} travaille dans un dossier non approuvé, sans les outils d’Open Space : elle ne peut pas être chef de projet.`,
+    /** a worker's report to its PM (server/pm-watch.ts), one line; its last reply follows for finished and waiting; `until`: the end of a pause */
+    report: (kind: ReportKind, worker: string, item?: string, until?: number) => {
+      const who = `Rapport de ${worker}${item ? ` (${item})` : ''} : `;
+      const time = until ? new Date(until).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const what: Record<ReportKind, string> = {
+        finished: 'a fini son tour. Sa dernière réponse :',
+        waiting: 'attend une autorisation ou une réponse de l’utilisateur, que toi tu ne donnes pas : dis à l’utilisateur d’aller lui répondre. Sa dernière réponse :',
+        quiet: 'ne donne plus signe de vie depuis un moment, même après une relance : regarde avec pm_worker_read.',
+        stopped: 's’est arrêté en plein tour sans que tu le demandes.',
+        error: 'est en erreur, ou son processus s’est arrêté : regarde avec pm_worker_read.',
+        paused: `est en pause (limite d’usage)${time ? ` jusqu’à ${time}` : ''} ; il reprendra tout seul.`,
+        restarted: 'a été coupé en plein travail par un redémarrage d’Open Space : relance-le avec pm_worker_send s’il doit finir.',
+      };
+      return who + what[kind];
+    },
+    /** sent to a worker silent for a while (server/pm-watch.ts) */
+    nudge: 'Où en es-tu ? Dis en une ligne ce que tu fais et ce qui te retient, puis continue.',
   },
   server: {
     stoppingRetry: 'Le serveur s’arrête : réessaie une fois relancé.',
