@@ -2695,7 +2695,9 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-keys__when { white-space: nowrap; color: var(--color-text-muted); }
 .cp-keys__when[data-stale='true'] { color: var(--tone-permission); }
 .cp-keys__actions { text-align: right; white-space: nowrap; }
-.cp-keys__confirm { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); white-space: normal; }
+.cp-keys__table td.cp-keys__confirm { text-align: right; }
+.cp-keys__confirm > span:first-child { margin-right: var(--space-3); }
+.cp-keys__confirm-buttons { display: inline-flex; gap: var(--space-2); vertical-align: middle; }
 .cp-keys__form { display: grid; gap: var(--space-3); padding: var(--space-4); }
 .cp-keys__form-title { margin: 0; font-size: var(--text-sm); }
 .cp-keys__where { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-sm); }
@@ -2715,6 +2717,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
   .cp-keys__used { grid-area: 2 / 1 / 3 / 3; }
   .cp-keys__when { grid-area: 3 / 1; font-size: var(--text-xs); }
   .cp-keys__actions { grid-area: 3 / 2; justify-self: end; }
+  .cp-keys__table td.cp-keys__confirm { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+  .cp-keys__confirm > span:first-child { margin-right: 0; }
 }
 
 /* ── The "terminal" window style (Preferences.windowStyle): the thread read like Claude Code's own, same markup and same controls ── */

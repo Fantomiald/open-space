@@ -71,6 +71,19 @@ function KeyRow({ stored, replace }: { stored: StoredKey; replace: () => void })
     : stored.usedIn.length > MAX_PROJECTS_NAMED ? words.projects(stored.usedIn.length)
     : stored.usedIn.map(folderName).join(', ') || words.unused;
   const now = Date.now();
+  if (removing) {
+    return (
+      <tr>
+        <td className="cp-keys__confirm" colSpan={5}>
+          <span>{words.removeAsk(stored.name)}</span>
+          <span className="cp-keys__confirm-buttons">
+            <button type="button" className="cp-button" data-size="small" data-variant="danger" onClick={() => deleteKey(stored.id)}>{words.remove}</button>
+            <button type="button" className="cp-button" data-size="small" onClick={() => setRemoving(false)}>{words.cancel}</button>
+          </span>
+        </td>
+      </tr>
+    );
+  }
   return (
     <tr>
       <td className="cp-keys__name"><code>{stored.name}</code></td>
@@ -78,18 +91,8 @@ function KeyRow({ stored, replace }: { stored: StoredKey; replace: () => void })
       <td className="cp-keys__used">{usedBy}</td>
       <td className="cp-keys__when" data-stale={isStale(stored, now)} title={stored.lastUsed?.by}>{stored.lastUsed ? formatAgo(now - stored.lastUsed.at) : words.never}</td>
       <td className="cp-keys__actions">
-        {removing ? (
-          <span className="cp-keys__confirm">
-            <span>{words.removeAsk(stored.name)}</span>
-            <button type="button" className="cp-button" data-size="small" data-variant="danger" onClick={() => deleteKey(stored.id)}>{words.remove}</button>
-            <button type="button" className="cp-button" data-size="small" onClick={() => setRemoving(false)}>{words.cancel}</button>
-          </span>
-        ) : (
-          <>
-            <button type="button" className="cp-button" data-size="small" data-variant="quiet" onClick={replace}>{words.replace}</button>
-            <button type="button" className="cp-button" data-size="small" data-variant="quiet" onClick={() => setRemoving(true)}>{words.remove}</button>
-          </>
-        )}
+        <button type="button" className="cp-button" data-size="small" data-variant="quiet" onClick={replace}>{words.replace}</button>
+        <button type="button" className="cp-button" data-size="small" data-variant="quiet" onClick={() => setRemoving(true)}>{words.remove}</button>
       </td>
     </tr>
   );

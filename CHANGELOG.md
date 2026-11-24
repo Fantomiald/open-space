@@ -1,5 +1,9 @@
 # Versions
 
+## 1.37.4
+
+- Réglages, Clés : la question « Supprimer … ? » prend toute la ligne de la clé, au lieu d’élargir la colonne des boutons et d’écraser les noms des clés lettre par lettre.
+
 ## 1.37.3
 
 - Reprendre : la recherche trouve aussi une conversation par ses tags (une clé de ticket mise seulement en tag), en tête de liste. Une session qui quitte Open Space garde ses tags : ils s'affichent dans la liste et reviennent quand on la reprend.
