@@ -190,12 +190,12 @@ export interface LaunchOptions {
 const RUN_TOOLS = ['rename_session', 'finish_run', 'set_pending'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 /** Every session with Open Space's server is asked to say what it leaves pending at the end of a turn: never a permission prompt for that. */
 const SET_PENDING = `mcp__${MCP_SERVER_NAME}__set_pending`;
-/** A PM runs its plan and its workers on its own: the user's choice when they made it a PM (spec 6.4). */
-const PM_TOOLS = PM_TOOL_NAMES.map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
+/** A PM runs its plan and its workers on its own: the user's choice when they made it a PM (spec 6.4); it also renames itself first (its playbook). */
+const PM_TOOLS = [...PM_TOOL_NAMES, 'rename_session'].map((tool) => `mcp__${MCP_SERVER_NAME}__${tool}`);
 
 export function buildClaudeArgs(options: Pick<LaunchOptions, 'sessionId' | 'resume' | 'model' | 'effort' | 'ultracode' | 'fastMode' | 'permissionMode' | 'name' | 'untrusted' | 'user' | 'note' | 'addDirs' | 'settings' | 'forkOf' | 'worktree' | 'mcpConfig' | 'agents' | 'chrome' | 'openSpaceMcp' | 'agent' | 'allowedTools' | 'hidden' | 'run' | 'pm' | 'promptSuggestions' | 'restrict' | 'home'>): string[] {
   // its tools are the open-space server's: a folder without it (not trusted) gets neither them nor the playbook
-  const pm = !!options.pm && !!options.openSpaceMcp;
+  const pm = !!options.pm && !!options.openSpaceMcp && !options.run; // a run is never a PM (its tools would double)
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--forward-subagent-text',
     '--permission-prompt-tool', 'stdio', '--permission-mode', options.permissionMode,

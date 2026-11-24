@@ -65,6 +65,13 @@ describe('buildClaudeArgs', () => {
       const allowed = allowedOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace, pm: true }));
       for (const tool of [...PM_TOOL_NAMES, 'set_pending']) assert.ok(allowed.includes(`mcp__open-space__${tool}`), tool);
       assert.ok(!allowedOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace })).some((tool) => tool.includes('__pm_')), 'an ordinary session has none of them');
+      assert.ok(allowed.includes('mcp__open-space__rename_session'), 'it renames itself first');
+    });
+
+    it('is never one when it is a trigger run', () => {
+      const args = buildClaudeArgs({ ...base, openSpaceMcp: openSpace, pm: true, run: true });
+      assert.deepEqual(allowedOf(args), allowedOf(buildClaudeArgs({ ...base, openSpaceMcp: openSpace, run: true })));
+      assert.ok(!promptOf(args).includes(st.prompt.pm('')));
     });
 
     it('is given its playbook with its identity, and only a PM is', () => {
