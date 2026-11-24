@@ -6,7 +6,7 @@ const item = (no: number, more: Partial<PmItem> = {}): PmItem => ({
   no, title: `Task ${no}`, state: 'moving', now: '', done: '', steps: [], waits: [], links: [], touchedTurn: 0, createdAt: 1, updatedAt: 1, ...more,
 });
 const ask = (no: number, more: Partial<PmAsk> = {}): PmAsk => ({ no, title: `Question ${no}`, detail: '', answers: [], holds: false, state: 'open', createdAt: 1, ...more });
-const worker = (session: string, more: Partial<PmWorker> = {}): PmWorker => ({ session, linkedAt: 1, watch: { round: 0 }, ...more });
+const worker = (session: string, more: Partial<PmWorker> = {}): PmWorker => ({ session, linkedAt: 1, watch: {}, ...more });
 const pm = (more: Partial<PmFile> = {}): PmFile => ({ ...emptyPm(), ...more });
 
 describe('reading a PM file', () => {
@@ -42,7 +42,7 @@ describe('reading a PM file', () => {
         ask(2),
       ],
       workers: [
-        worker('w-1', { item: 1, resolvedAt: 9, lastReport: { kind: 'finished', at: 8, line: 'Done', seq: 4, turns: 3 }, watch: { quietSince: 5, round: 2, stopAsked: 7 } }),
+        worker('w-1', { item: 1, resolvedAt: 9, lastReport: { kind: 'finished', at: 8, line: 'Done', seq: 4, turns: 3 }, watch: { quietSince: 5, stopAsked: 7 } }),
         worker('w-2'),
       ],
       reports: [{ key: 'w-1:4', worker: 'w-1', kind: 'finished', at: 8 }],

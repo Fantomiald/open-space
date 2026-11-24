@@ -30,7 +30,7 @@ import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
 import { storedTags } from '../shared/tags.ts';
-import { parsePmTag, type PmMessageTag } from '../shared/pm.ts';
+import { parsePmTag, type PmMessageTag, SESSION_ID } from '../shared/pm.ts';
 import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
 import { readGitPending } from './pending-git.ts';
 import { pickSessionName } from './names.ts';
@@ -189,7 +189,7 @@ export class SessionManager {
     for (const info of stored.sessions) {
       // saved before the vault: its project is read once, then kept (see create)
       info.project ??= projectOf(info.worktree?.home ?? info.cwd);
-      // the worker of a PM forgotten since is no one's; of a session that is no PM any more, kept for when it is one again
+      // the worker of a PM forgotten since is no one's (a PM made an ordinary session again lets its workers go: setPm)
       if (info.pmOf && !storedIds.has(info.pmOf)) info.pmOf = undefined;
       const log = await this.openLog(info.id);
       const session = this.createSession(info, log);
@@ -1481,7 +1481,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     introducedAs: asString(raw.introducedAs) || undefined,
     forkOf: /^[\w-]{1,100}$/.test(asString(raw.forkOf)) ? asString(raw.forkOf) : undefined,
     pm: raw.pm === true || undefined,
-    pmOf: /^[\w-]{1,100}$/.test(asString(raw.pmOf)) ? asString(raw.pmOf) : undefined,
+    pmOf: SESSION_ID.test(asString(raw.pmOf)) ? asString(raw.pmOf) : undefined,
     quietFrom: typeof raw.quietFrom === 'number' && Number.isInteger(raw.quietFrom) && raw.quietFrom >= 0 ? raw.quietFrom : undefined,
     conversationId: /^[\w-]{1,100}$/.test(asString(raw.conversationId)) ? asString(raw.conversationId) : undefined,
     context: isJson(raw.context) && asNumber(raw.context.max) > 0 ? { used: asNumber(raw.context.used), max: asNumber(raw.context.max) } : undefined,

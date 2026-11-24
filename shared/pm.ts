@@ -22,7 +22,7 @@ export interface PmWorker {
   session: string; item?: number; linkedAt: number; resolvedAt?: number;
   /** `turns`: the worker's finished turns then (SessionInfo.turns), which a compaction does not move */
   lastReport?: { kind: ReportKind; at: number; line: string; seq: number; turns?: number };
-  watch: { quietSince?: number; round: number; stopAsked?: number };
+  watch: { quietSince?: number; stopAsked?: number };
 }
 export interface PmReportRecord { key: string; worker: string; kind: ReportKind; at: number }
 export interface PmFile {
@@ -35,6 +35,9 @@ export interface PmFile {
 export const PM_LIMITS = {
   memory: 60, note: 600, title: 200, detail: 4000, answers: 6, answer: 80, line: 300, steps: 30, reports: 200, mission: 2000, instructions: 4000, url: 2000,
 } as const;
+
+/** How much of a worker's last reply follows its report, and pm_worker_read shows by default, in characters. */
+export const REPORT_WORDS = 3000;
 
 /** The tools of the open-space MCP kept for PM sessions, without their `mcp__open-space__` prefix. */
 export const PM_TOOL_NAMES = [
@@ -164,7 +167,7 @@ const parseWorker = (raw: Raw): PmWorker | undefined => {
   return id === undefined ? undefined : {
     session: id, ...optional('item', number(raw.item)), linkedAt: time(raw.linkedAt), ...optional('resolvedAt', time(raw.resolvedAt)),
     ...optional('lastReport', isRaw(raw.lastReport) ? parseReport(raw.lastReport) : undefined),
-    watch: { ...optional('quietSince', time(watch.quietSince)), round: count(watch.round), ...optional('stopAsked', time(watch.stopAsked)) },
+    watch: { ...optional('quietSince', time(watch.quietSince)), ...optional('stopAsked', time(watch.stopAsked)) },
   };
 };
 
@@ -239,6 +242,8 @@ export function itemStatus(item: PmItem, file: PmFile, live: readonly WorkerLive
 
 export const itemTag = (no: number): string => `W${no}`;
 export const askTag = (no: number): string => `Q${no}`;
+/** A question's tag with its task's before it: "W4 Q3", or "Q3" for a question about no task. */
+export const fullAskTag = (ask: Pick<PmAsk, 'item' | 'no'>): string => `${ask.item ? `${itemTag(ask.item)} ` : ''}${askTag(ask.no)}`;
 
 /** "W4", "Q12" or "W4 Q3" (either order, any case), the whole text and nothing else; null for any other text. */
 export function parseTag(text: string): { item?: number; ask?: number } | null {
@@ -255,5 +260,5 @@ export function parseTag(text: string): { item?: number; ask?: number } | null {
 
 /** The message that carries the user's answer to the PM: "W4 Q3: iPhone only", or "Q3: …" for a question about no task. */
 export function answerMessage(ask: PmAsk, answer: string): string {
-  return `${ask.item ? `${itemTag(ask.item)} ` : ''}${askTag(ask.no)}: ${answer}`;
+  return `${fullAskTag(ask)}: ${answer}`;
 }

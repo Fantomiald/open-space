@@ -459,7 +459,7 @@ describe('the pm_* tools of the open-space MCP server', () => {
 
   it('refuses to make itself its own worker, even from a damaged file', async () => {
     const { api, book, done } = pmFake();
-    await book.change('s1', (file) => { file.workers.push({ session: 's1', linkedAt: 1, watch: { round: 0 } }); });
+    await book.change('s1', (file) => { file.workers.push({ session: 's1', linkedAt: 1, watch: {} }); });
     assert.equal((await tool(api, 'pm_worker_send', { session: 's1', text: 'Go on' }, PM)).isError, true);
     assert.deepEqual(done, []);
   });

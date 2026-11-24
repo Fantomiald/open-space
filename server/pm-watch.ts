@@ -2,16 +2,13 @@
 // a usage-limit pause, a restart. Each one goes to the worker's PM once: its key (worker, kind, the worker's last log seq,
 // which survives restarts) is written in the PM's file before the message leaves, so the listener and the startup check
 // never both send it. Nothing is sent while the setting is off, to a PM closed or gone, nor about a worker resolved.
-import { itemTag, PM_LIMITS, type PmFile, type PmMessageTag, type PmWorker, type ReportKind } from '../shared/pm.ts';
+import { itemTag, PM_LIMITS, type PmFile, type PmMessageTag, type PmWorker, REPORT_WORDS, type ReportKind } from '../shared/pm.ts';
 import type { AttentionKind, SessionInfo } from '../shared/protocol.ts';
 import { fenced } from './fence.ts';
 import { st } from './i18n/index.ts';
 import type { PmBook } from './pm.ts';
 import { nameOf, ownWorker, resolveWorker } from './pm-ops.ts';
 import type { TurnEnd } from './session.ts';
-
-/** How much of a worker's last reply follows its report, in characters. */
-const LAST_WORDS = 3000;
 
 export interface WatchDeps {
   now: () => number;
@@ -136,15 +133,13 @@ export class PmWatch {
         const quiet = session.state === 'work' && session.pausedUntil === undefined && now - last > quietMs;
         // a stop asked while it did not work (no turn to end) must not hide its next interruption
         if (session.state !== 'work' && session.state !== 'starting' && session.state !== 'perm') delete watch.stopAsked;
-        // a sign of life (or no more work) ends the silence: the next one is a new round
+        // a sign of life (or no more work) ends the silence: the next one is a new one
         if (!quiet) {
           delete watch.quietSince;
-          watch.round = 0;
           return [];
         }
         if (watch.quietSince === last) return [];
         watch.quietSince = last;
-        watch.round += 1;
         const sent = this.write(pm, file, worker, session, 'quiet', now);
         return sent ? [sent] : [];
       }));
@@ -243,7 +238,7 @@ export class PmWatch {
     worker.lastReport = { kind, at: now, line: line.slice(0, PM_LIMITS.line), seq: session.lastSeq, turns: session.turns };
     if (silent) return null;
     // the worker's words are data for the PM, never instructions: anything it read (a page, a file) may speak in them
-    const said = kind === 'finished' || kind === 'waiting' ? this.deps.lastWords(session.id).slice(0, LAST_WORDS) : '';
+    const said = kind === 'finished' || kind === 'waiting' ? this.deps.lastWords(session.id).slice(0, REPORT_WORDS) : '';
     return { pm, text: said ? `${line}\n\n${fenced('worker-words', st.pm.workerWords, said)}` : line, tag: { report: { worker: session.id, kind } } };
   }
 

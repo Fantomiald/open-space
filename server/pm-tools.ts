@@ -4,7 +4,7 @@
 // Every change goes through the PM's file (server/pm.ts, server/pm-ops.ts); each result ends with the questions the user
 // set aside since the PM last heard, as a second text block.
 // mcp.ts imports this file's values: what comes from it is only used inside functions, once both are loaded.
-import { askTag, itemStatus, itemTag, type PmFile, type PmItem, PM_TOOL_NAMES, PM_TOOL_USAGE, parseTag, type WorkerLive } from '../shared/pm.ts';
+import { askTag, fullAskTag, itemStatus, itemTag, type PmFile, type PmItem, PM_TOOL_NAMES, PM_TOOL_USAGE, parseTag, REPORT_WORDS, type WorkerLive } from '../shared/pm.ts';
 import { EFFORTS, type SessionInfo } from '../shared/protocol.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asString, type Json } from './json.ts';
@@ -24,8 +24,9 @@ const ITEM = { type: ['string', 'integer'], description: 'The task: its tag, e.g
 /** A worker the PM names: its session id, its name, or the tag of its task. */
 const WORKER = string('The worker: its session id, its name, or the tag of its task ("W3": the one worker on it)');
 const WORKER_ITEM = { ...ITEM, description: 'Instead of session: the tag of the task the worker is on' };
+const ASK = object({ tag: { type: ['string', 'integer'], description: 'The question: its tag, e.g. "Q3"' } }, ['tag']);
 /** The default and the most of a worker's last reply pm_worker_read shows, in characters. */
-const LAST_WORDS = { shown: 3000, max: 20000 };
+const LAST_WORDS = { shown: REPORT_WORDS, max: 20000 };
 
 const tools: Record<PmToolName, Omit<Tool, 'name'>> = {
   pm_status: {
@@ -57,8 +58,8 @@ const tools: Record<PmToolName, Omit<Tool, 'name'>> = {
     }, ['title', 'detail']),
     annotations: write,
   },
-  pm_ask_done: { description: 'Closes a question settled otherwise, or once its answer is acted on.', inputSchema: object({ tag: { type: ['string', 'integer'], description: 'The question: its tag, e.g. "Q3"' } }, ['tag']), annotations: write },
-  pm_ask_withdraw: { description: 'Withdraws a question that no longer stands.', inputSchema: object({ tag: { type: ['string', 'integer'], description: 'The question: its tag, e.g. "Q3"' } }, ['tag']), annotations: write },
+  pm_ask_done: { description: 'Closes a question settled otherwise, or once its answer is acted on.', inputSchema: ASK, annotations: write },
+  pm_ask_withdraw: { description: 'Withdraws a question that no longer stands.', inputSchema: ASK, annotations: write },
   pm_link_add: {
     description: 'Links a PR, an issue or a web address to a task, or to the task of one of your workers.',
     inputSchema: object({ url: { type: 'string' }, item: ITEM, worker: string('One of your workers: its session id or its name') }, ['url']), annotations: write,
@@ -164,7 +165,7 @@ function status(file: PmFile, sessions: SessionInfo[]) {
     items: shown.filter((item) => !over.includes(item)).map((item) => shownItem(item, file, live)),
     ...(over.length ? { itemsOver: over.length } : {}),
     asks: file.asks.filter((ask) => ask.state === 'open' || ask.state === 'answered').map((ask) => ({
-      tag: `${ask.item ? `${itemTag(ask.item)} ` : ''}${askTag(ask.no)}`, title: ask.title, state: ask.state, holds: ask.holds,
+      tag: fullAskTag(ask), title: ask.title, state: ask.state, holds: ask.holds,
       ...(ask.answer ? { answer: ask.answer } : {}),
     })),
     workers: file.workers.filter((worker) => !worker.resolvedAt).map((worker) => {

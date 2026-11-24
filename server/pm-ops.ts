@@ -195,7 +195,7 @@ export function linkWorker(file: PmFile, session: string, now: number, item?: nu
     if (item !== undefined) kept.item = item;
     return kept;
   }
-  const worker: PmWorker = { session, ...(item === undefined ? {} : { item }), linkedAt: now, watch: { round: 0 } };
+  const worker: PmWorker = { session, ...(item === undefined ? {} : { item }), linkedAt: now, watch: {} };
   file.workers.push(worker);
   return worker;
 }

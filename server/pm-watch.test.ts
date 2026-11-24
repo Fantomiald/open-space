@@ -48,7 +48,7 @@ async function office() {
   return { clock, live, delivered, setting, words, lastEvent, stale, book, watch, put, kinds };
 }
 
-const worker = (watch: PmWorker['watch'] = { round: 0 }): PmWorker => ({ session: W, linkedAt: 100, watch });
+const worker = (watch: PmWorker['watch'] = {}): PmWorker => ({ session: W, linkedAt: 100, watch });
 
 describe('what a worker event reports to its PM', () => {
   it('maps each turn end, request and state to its report', () => {
@@ -79,7 +79,7 @@ describe('what a worker event reports to its PM', () => {
   });
 
   it('does not report as a stop the interruption the PM asked for', () => {
-    assert.equal(decideReport(worker({ round: 0, stopAsked: 50 }), info(W), { kind: 'turnEnd', how: 'interrupted' }), null);
+    assert.equal(decideReport(worker({ stopAsked: 50 }), info(W), { kind: 'turnEnd', how: 'interrupted' }), null);
   });
 });
 
