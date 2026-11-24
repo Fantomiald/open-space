@@ -480,6 +480,27 @@ describe('the pm_* tools of the open-space MCP server', () => {
     assert.deepEqual((await book.read('s7')).workers, []);
   });
 
+  it('lets go of a session it cannot adopt after claiming it', async () => {
+    const { api, book, find } = pmFake();
+    assert.equal((await tool(api, 'pm_worker_link', { session: 's2', item: 'W9' }, PM)).isError, true, 'an unknown task');
+    assert.equal(find('s2')!.pmOf, undefined);
+    assert.deepEqual((await book.read('s1')).workers, []);
+  });
+
+  it('lets go of and stops a worker it started but cannot link', async () => {
+    const { api, book, find, done } = pmFake();
+    const start = api.pm!.startWorker;
+    api.pm!.startWorker = async (pm, options) => {
+      const worker = await start(pm, options);
+      worker.id = 'not a valid id';
+      return worker;
+    };
+    assert.equal((await tool(api, 'pm_worker_start', { title: 'Login', brief: 'Fix it.' }, PM)).isError, true);
+    assert.equal(find('not a valid id')!.pmOf, undefined);
+    assert.ok(done.includes('stopWorker not a valid id'));
+    assert.deepEqual((await book.read('s1')).workers, []);
+  });
+
   it('starts a worker in an allowed folder only, and checks its task before starting it', async () => {
     const { api, book, starts } = pmFake();
     await json(api, 'pm_item_add', { title: 'Login' });
