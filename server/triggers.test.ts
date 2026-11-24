@@ -16,6 +16,7 @@ const input = (fields: Partial<TriggerInput> = {}): TriggerInput => ({ ...DEFAUL
 function setup(now = new Date(2026, 10, 9, 8, 0, 5).getTime()) {
   const started: { trigger: Trigger; prompt: string }[] = [];
   const states = new Map<string, SessionInfo['state']>();
+  const answering = new Set<string>();
   let count = 0;
   const triggers = new Triggers({
     file: path.join(mkdtempSync(path.join(base, 'office-')), 'triggers.json'),
@@ -27,12 +28,13 @@ function setup(now = new Date(2026, 10, 9, 8, 0, 5).getTime()) {
       return { id } as SessionInfo;
     },
     sessionState: (id) => states.get(id) ?? null,
+    waitsOnAnswer: (id) => answering.has(id),
     allowedFolder: (cwd) => (cwd.startsWith('/work/') ? cwd : null),
     onChange: () => {},
     log: () => {},
     now: () => now,
   });
-  return { triggers, started, states, setNow: (next: number) => { now = next; } };
+  return { triggers, started, states, answering, setNow: (next: number) => { now = next; } };
 }
 
 describe('the webhooks\' public address', () => {
@@ -146,6 +148,24 @@ describe('the triggers', () => {
     triggers.tick();
     await new Promise((resolve) => setTimeout(resolve, 10));
     assert.equal(started.length, 1);
+  });
+
+  it('lets the next run start while one run only waits for the answer to its question, one such run at a time', async () => {
+    const { triggers, started, states, answering } = setup();
+    const saved = await triggers.save(undefined, input());
+    assert.ok('trigger' in saved);
+    await triggers.fire(saved.trigger.id, 'cron');
+    states.set('session-1', 'perm');
+    answering.add('session-1');
+    assert.equal((await triggers.fire(saved.trigger.id, 'cron')).outcome, 'started', 'a question for the user does not hold the trigger');
+    assert.equal((await triggers.fire(saved.trigger.id, 'cron')).outcome, 'skipped', 'the new run works');
+    states.set('session-2', 'perm');
+    answering.add('session-2');
+    assert.equal((await triggers.fire(saved.trigger.id, 'cron')).outcome, 'skipped', 'two runs waiting on an answer hold it');
+    states.set('session-1', 'wait');
+    answering.delete('session-1');
+    assert.equal((await triggers.fire(saved.trigger.id, 'cron')).outcome, 'started', 'the first one answered: one waits, the next starts');
+    assert.equal(started.length, 3);
   });
 
   it('skips a firing while the previous run still works, and records why a run failed', async () => {

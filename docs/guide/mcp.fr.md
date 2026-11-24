@@ -36,7 +36,7 @@ La clé est gardée dans `mcp-key` sous `OFFICE_DIR`.
 | `list_triggers` | Tous | Liste les déclencheurs et leurs derniers runs, sans leurs tokens. |
 | `create_trigger` | Tous | Crée un déclencheur cron ou webhook. `name`, `prompt` et `kind` sont obligatoires. Le dossier est par défaut celui de l'appelant. |
 | `update_trigger` | Tous | Modifie un déclencheur. Seuls les champs donnés changent. |
-| `run_trigger` | Tous | Lance un déclencheur tout de suite. Un déclencheur webhook qui tourne déjà 3 fois le met en file. Un déclencheur cron dont le run précédent travaille encore l'ignore. |
+| `run_trigger` | Tous | Lance un déclencheur tout de suite. Un déclencheur webhook qui tourne déjà 3 fois le met en file. Un déclencheur cron dont le run précédent travaille encore l'ignore (un run qui attend seulement la réponse à sa question ne compte pas). |
 | `create_session` | Tous | Lance une session avec un premier message. `prompt` est obligatoire. Facultatifs : `cwd`, `name`, `model`, `permissionMode`, `role`, `remote` (par défaut `false`). |
 | `list_roles` | Tous | Liste les rôles Claude Code (`.claude/agents`) qu'un dossier peut utiliser. |
 | `list_crew` | Tous | Liste l'équipe : les noms donnés aux sessions, et leurs métiers. |
