@@ -1,0 +1,187 @@
+// A project manager (PM) session's file: its plan (tasks W, questions Q, memory), its workers and their reports.
+// Pure logic shared by the server and the page: tolerant parsing, the status shown for a task, W/Q tags.
+
+export type ItemState = 'moving' | 'waiting' | 'needs' | 'later' | 'finished' | 'dropped';
+export type AskState = 'open' | 'answered' | 'done' | 'withdrawn' | 'dismissed';
+export type ReportKind = 'finished' | 'waiting' | 'quiet' | 'stopped' | 'error' | 'paused' | 'restarted';
+export interface PmStep { text: string; done: boolean; chore: boolean; at: number }
+export interface PmWait { on: 'item' | 'ask' | 'text'; ref: string; since: number; cleared?: number }
+export interface PmLink { url: string; kind: 'pr' | 'issue' | 'url'; title: string; worker?: string }
+export interface PmItem {
+  no: number; title: string; state: ItemState; now: string; done: string; steps: PmStep[]; waits: PmWait[]; links: PmLink[];
+  touchedTurn: number; createdAt: number; updatedAt: number; archived?: true;
+}
+export interface PmAsk {
+  no: number; item?: number; title: string; detail: string; answers: string[]; recommended?: string; holds: boolean; state: AskState;
+  answer?: string; snoozedUntil?: number; dismissalTold?: true; createdAt: number; settledAt?: number;
+}
+export interface PmWorker {
+  session: string; item?: number; linkedAt: number; resolvedAt?: number;
+  lastReport?: { kind: ReportKind; at: number; line: string; seq: number };
+  watch: { quietSince?: number; nudgedAt?: number; round: number; stopAsked?: number };
+}
+export interface PmReportRecord { key: string; worker: string; kind: ReportKind; at: number }
+export interface PmFile {
+  version: 1; mission: string; instructions: string; nextItem: number; nextAsk: number; turn: number;
+  memory: { text: string; at: number }[]; items: PmItem[]; asks: PmAsk[]; workers: PmWorker[]; reports: PmReportRecord[];
+  // kept as stored until live pages exist
+  pages: unknown[];
+}
+
+export const PM_LIMITS = { memory: 60, note: 600, title: 200, detail: 4000, answers: 6, answer: 80, line: 300, steps: 30, reports: 200 } as const;
+
+/** The tools of the open-space MCP kept for PM sessions, without their `mcp__open-space__` prefix. */
+export const PM_TOOL_NAMES = [
+  'pm_status', 'pm_set_mission', 'pm_set_instructions', 'pm_remember', 'pm_forget', 'pm_item_add', 'pm_item_update', 'pm_item_list',
+  'pm_ask', 'pm_ask_done', 'pm_ask_withdraw', 'pm_link_add', 'pm_worker_start', 'pm_worker_link', 'pm_worker_unlink', 'pm_worker_resolve',
+  'pm_worker_send', 'pm_worker_read', 'pm_worker_stop',
+] as const;
+
+const ITEM_STATES: readonly ItemState[] = ['moving', 'waiting', 'needs', 'later', 'finished', 'dropped'];
+const ASK_STATES: readonly AskState[] = ['open', 'answered', 'done', 'withdrawn', 'dismissed'];
+const REPORT_KINDS: readonly ReportKind[] = ['finished', 'waiting', 'quiet', 'stopped', 'error', 'paused', 'restarted'];
+const SESSION_ID = /^[\w-]{1,100}$/;
+
+export function emptyPm(): PmFile {
+  return { version: 1, mission: '', instructions: '', nextItem: 1, nextAsk: 1, turn: 0, memory: [], items: [], asks: [], workers: [], reports: [], pages: [] };
+}
+
+// One reader per primitive: a wrong type gives the default (or undefined for an optional field), never an error.
+type Raw = Record<string, unknown>;
+const isRaw = (value: unknown): value is Raw => typeof value === 'object' && value !== null && !Array.isArray(value);
+const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '');
+const time = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
+const count = (value: unknown): number => (Number.isInteger(value) && (value as number) >= 0 ? (value as number) : 0);
+const number = (value: unknown): number | undefined => (Number.isInteger(value) && (value as number) > 0 ? (value as number) : undefined);
+const oneOf = <T extends string>(value: unknown, values: readonly T[]): T | undefined => values.find((one) => one === value);
+const session = (value: unknown): string | undefined => (typeof value === 'string' && SESSION_ID.test(value) ? value : undefined);
+/** The valid elements of a list, the invalid ones dropped. */
+const list = <T>(value: unknown, parse: (raw: Raw) => T | undefined): T[] =>
+  (Array.isArray(value) ? value : []).flatMap((raw) => (isRaw(raw) ? (parse(raw) ?? []) : []));
+/** The first element for each key: a damaged file could hold two W3, or the same worker twice. */
+const firstOfEach = <T>(elements: T[], key: (element: T) => unknown): T[] => elements.filter((element, index) => elements.findIndex((other) => key(other) === key(element)) === index);
+/** An optional field, absent rather than undefined, so that a file reads back exactly as written. */
+const optional = <K extends string, V>(key: K, value: V | undefined | false | 0 | ''): { [key in K]?: V } =>
+  (value === undefined || value === false || value === 0 || value === '' ? {} : { [key]: value }) as { [key in K]?: V };
+
+const parseStep = (raw: Raw): PmStep | undefined =>
+  (typeof raw.text === 'string' && raw.text ? { text: text(raw.text, PM_LIMITS.line), done: raw.done === true, chore: raw.chore === true, at: time(raw.at) } : undefined);
+
+const parseWait = (raw: Raw): PmWait | undefined => {
+  const on = oneOf(raw.on, ['item', 'ask', 'text'] as const);
+  return on && { on, ref: text(raw.ref, PM_LIMITS.line), since: time(raw.since), ...optional('cleared', time(raw.cleared)) };
+};
+
+const parseLink = (raw: Raw): PmLink | undefined =>
+  (typeof raw.url === 'string' && raw.url
+    ? { url: raw.url, kind: oneOf(raw.kind, ['pr', 'issue', 'url'] as const) ?? 'url', title: text(raw.title, PM_LIMITS.title), ...optional('worker', session(raw.worker)) }
+    : undefined);
+
+const parseItem = (raw: Raw): PmItem | undefined => {
+  const no = number(raw.no);
+  return no === undefined ? undefined : {
+    no, title: text(raw.title, PM_LIMITS.title), state: oneOf(raw.state, ITEM_STATES) ?? 'moving', now: text(raw.now, PM_LIMITS.line), done: text(raw.done, PM_LIMITS.line),
+    steps: list(raw.steps, parseStep).slice(0, PM_LIMITS.steps), waits: list(raw.waits, parseWait), links: list(raw.links, parseLink),
+    touchedTurn: count(raw.touchedTurn), createdAt: time(raw.createdAt), updatedAt: time(raw.updatedAt), ...optional('archived', raw.archived === true),
+  };
+};
+
+const parseAsk = (raw: Raw): PmAsk | undefined => {
+  const no = number(raw.no);
+  const answers = (Array.isArray(raw.answers) ? raw.answers : []).filter((answer) => typeof answer === 'string' && answer).map((answer) => text(answer, PM_LIMITS.answer));
+  return no === undefined ? undefined : {
+    no, ...optional('item', number(raw.item)), title: text(raw.title, PM_LIMITS.title), detail: text(raw.detail, PM_LIMITS.detail),
+    answers: answers.slice(0, PM_LIMITS.answers), ...optional('recommended', text(raw.recommended, PM_LIMITS.answer)),
+    holds: raw.holds === true, state: oneOf(raw.state, ASK_STATES) ?? 'open',
+    // a free answer typed by the user may be longer than an offered one
+    ...optional('answer', text(raw.answer, PM_LIMITS.detail)), ...optional('snoozedUntil', time(raw.snoozedUntil)),
+    ...optional('dismissalTold', raw.dismissalTold === true), createdAt: time(raw.createdAt), ...optional('settledAt', time(raw.settledAt)),
+  };
+};
+
+const parseReport = (raw: Raw): PmWorker['lastReport'] => {
+  const kind = oneOf(raw.kind, REPORT_KINDS);
+  return kind && { kind, at: time(raw.at), line: text(raw.line, PM_LIMITS.line), seq: count(raw.seq) };
+};
+
+const parseWorker = (raw: Raw): PmWorker | undefined => {
+  const id = session(raw.session);
+  const watch = isRaw(raw.watch) ? raw.watch : {};
+  return id === undefined ? undefined : {
+    session: id, ...optional('item', number(raw.item)), linkedAt: time(raw.linkedAt), ...optional('resolvedAt', time(raw.resolvedAt)),
+    ...optional('lastReport', isRaw(raw.lastReport) ? parseReport(raw.lastReport) : undefined),
+    watch: { ...optional('quietSince', time(watch.quietSince)), ...optional('nudgedAt', time(watch.nudgedAt)), round: count(watch.round), ...optional('stopAsked', time(watch.stopAsked)) },
+  };
+};
+
+const parseReportRecord = (raw: Raw): PmReportRecord | undefined => {
+  const kind = oneOf(raw.kind, REPORT_KINDS);
+  return typeof raw.key === 'string' && raw.key && typeof raw.worker === 'string' && kind ? { key: raw.key, worker: raw.worker, kind, at: time(raw.at) } : undefined;
+};
+
+/** A PM file as stored, whatever its state: what does not fit takes its default, the rest is kept. */
+export function parsePmFile(raw: unknown): PmFile {
+  if (!isRaw(raw)) return emptyPm();
+  const items = firstOfEach(list(raw.items, parseItem), (item) => item.no);
+  const asks = firstOfEach(list(raw.asks, parseAsk), (ask) => ask.no);
+  // a W or Q number is never handed out twice, even when the counter was lost
+  const next = (stored: unknown, taken: { no: number }[]) => Math.max(number(stored) ?? 1, ...taken.map((one) => one.no + 1));
+  return {
+    version: 1, mission: typeof raw.mission === 'string' ? raw.mission : '', instructions: typeof raw.instructions === 'string' ? raw.instructions : '',
+    nextItem: next(raw.nextItem, items), nextAsk: next(raw.nextAsk, asks), turn: count(raw.turn),
+    memory: list(raw.memory, (note) => (typeof note.text === 'string' && note.text ? { text: text(note.text, PM_LIMITS.note), at: time(note.at) } : undefined)).slice(0, PM_LIMITS.memory),
+    items, asks, workers: firstOfEach(list(raw.workers, parseWorker), (worker) => worker.session),
+    reports: list(raw.reports, parseReportRecord).slice(-PM_LIMITS.reports),
+    pages: Array.isArray(raw.pages) ? raw.pages : [],
+  };
+}
+
+export type ShownStatus = 'dropped' | 'done' | 'blocked' | 'needsYou' | 'inProgress' | 'waiting' | 'idle' | 'later';
+/** What a worker session is doing now; `waiting` is a permission or a question waiting for the user. */
+export interface WorkerLive { session: string; working: boolean; waiting: boolean }
+
+/** The waits of a task not lifted yet: a wait on a question ends once it is settled, on a task once it is finished. */
+export function openWaits(item: PmItem, file: PmFile): PmWait[] {
+  return item.waits.filter((wait) => {
+    if (wait.cleared) return false;
+    if (wait.on === 'ask') return file.asks.find((ask) => String(ask.no) === wait.ref)?.state === 'open';
+    if (wait.on === 'item') return file.items.find((other) => String(other.no) === wait.ref)?.state !== 'finished';
+    return true;
+  });
+}
+
+/** The status shown for a task: the first rule that applies, in this order. */
+export function itemStatus(item: PmItem, file: PmFile, live: readonly WorkerLive[]): ShownStatus {
+  if (item.state === 'dropped') return 'dropped';
+  if (item.state === 'finished') return 'done';
+  if (file.asks.some((ask) => ask.item === item.no && ask.holds && ask.state === 'open')) return 'blocked';
+  const workers = file.workers.filter((worker) => worker.item === item.no && !worker.resolvedAt)
+    .flatMap((worker) => live.filter((one) => one.session === worker.session));
+  if (workers.some((one) => one.waiting)) return 'needsYou';
+  if (workers.some((one) => one.working)) return 'inProgress';
+  if (openWaits(item, file).length) return 'waiting';
+  if (item.state === 'later') return 'later';
+  // the PM touched it during its current turn or the one before
+  return item.touchedTurn >= file.turn - 1 ? 'inProgress' : 'idle';
+}
+
+export const itemTag = (no: number): string => `W${no}`;
+export const askTag = (no: number): string => `Q${no}`;
+
+/** "W4", "Q12" or "W4 Q3" (either order, any case), the whole text and nothing else; null for any other text. */
+export function parseTag(text: string): { item?: number; ask?: number } | null {
+  const words = text.trim().split(/\s+/);
+  const tag: { item?: number; ask?: number } = {};
+  for (const word of words) {
+    const match = /^([wq])([1-9]\d{0,8})$/i.exec(word);
+    const key = match?.[1].toLowerCase() === 'w' ? 'item' : 'ask';
+    if (!match || tag[key] !== undefined) return null;
+    tag[key] = Number(match[2]);
+  }
+  return tag;
+}
+
+/** The message that carries the user's answer to the PM: "W4 Q3: iPhone only", or "Q3: …" for a question about no task. */
+export function answerMessage(ask: PmAsk, answer: string): string {
+  return `${ask.item ? `${itemTag(ask.item)} ` : ''}${askTag(ask.no)}: ${answer}`;
+}
