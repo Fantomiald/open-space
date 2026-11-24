@@ -27,7 +27,7 @@ const MAX_QUERY = 200;
 /** Pictures per message, and the size of one in base64 (Claude takes 5 MB a picture; the page shrinks them first). */
 export const MAX_IMAGES = 8;
 const MAX_IMAGE_BASE64 = Math.floor(5 * 1024 * 1024 * 4 / 3);
-const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
+export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._[\]-]{0,79}$/;
 
 const boundedString = (value: unknown, max: number): string | null => (typeof value === 'string' && value.length <= max ? value : null);
 const INSPECT_VIEWS: ReadonlySet<InspectView> = new Set(['mcp', 'context', 'usage']);
@@ -295,6 +295,13 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     case 'claudeLogin': return { t: 'claudeLogin' };
     case 'claudeLogout': return { t: 'claudeLogout' };
     case 'duplicate': return sessionId ? { t: 'duplicate', sessionId } : null;
+    case 'pmCreate': {
+      const cwd = boundedString(raw.cwd, 1000);
+      if (!cwd || (raw.model !== undefined && (typeof raw.model !== 'string' || !MODEL_PATTERN.test(raw.model)))) return null;
+      return { t: 'pmCreate', cwd, ...(typeof raw.model === 'string' ? { model: raw.model } : {}) };
+    }
+    case 'pmConvert': return sessionId ? { t: 'pmConvert', sessionId } : null;
+    case 'pmRevert': return sessionId ? { t: 'pmRevert', sessionId } : null;
     case 'restartOutdated': return { t: 'restartOutdated' };
     case 'restartApp': return { t: 'restartApp' };
     case 'checkApp': return { t: 'checkApp' };

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
 import { defaultFolder } from '../shared/folders.ts';
-import { isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
+import { EFFORTS, isPermissionMode, type AccountsBrowser, type AppUpdate, type ClaudeAccount, type ClaudeInfo, type ClientMessage, type ServerMessage, type SessionOptions } from '../shared/protocol.ts';
 import type { MusicApp } from '../shared/music.ts';
 import { pmSettings } from '../shared/pm.ts';
 import type { PhoneProblem } from '../shared/triggers.ts';
@@ -25,7 +25,7 @@ import { changedSettings } from '../shared/claude-settings.ts';
 import { readClaudeDefaults } from './claude-settings.ts';
 import { buildClaudeEnvironment } from './environment.ts';
 import { createWebServer } from './http.ts';
-import { parseClientMessage } from './messages.ts';
+import { MODEL_PATTERN, parseClientMessage } from './messages.ts';
 import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { findTailscale, readTailscaleName, serveBridge, serveMods, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
@@ -51,7 +51,9 @@ import { Triggers } from './triggers.ts';
 import { KeyFile } from './key-file.ts';
 import { migrateShelf, pruneShelf, readVaultOwners, Vault, VaultShelf, writeVaultOwners, type KeyShelf } from './vault.ts';
 import { projectOf } from './worktrees.ts';
-import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi } from './mcp.ts';
+import { ExternalKey, handleMcp, MCP_SETTINGS, messengerMcpKey, openSpaceMcpConfig, sessionMcpKey, type OpenSpaceApi, type PmApi } from './mcp.ts';
+import { PmBook } from './pm.ts';
+import { resolveWorker } from './pm-ops.ts';
 import { parseTriggerInput, ROLE_NAME, type TriggersState } from '../shared/triggers.ts';
 import { parsePreferences } from './settings.ts';
 import { controlMusic, installedMusicApps, musicLibrary, nowPlaying } from './music.ts';
@@ -265,6 +267,19 @@ async function startSession(options: SessionOptions, started: Parameters<typeof 
   return { session, takenName: asked && taken.has(asked) ? asked : null };
 }
 
+/**
+ * Starts a session the way the page does, for someone who cannot answer the trust question (a trigger's run, a session
+ * an agent starts, a PM and its workers): a folder that runs code of its own must have been approved once from the page.
+ */
+async function startUnasked(options: SessionOptions, started: Parameters<typeof sessions.create>[1] = {}) {
+  try {
+    return (await startSession(options, started)).session;
+  } catch (error) {
+    if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
+    throw error;
+  }
+}
+
 /** The user's chat bots (server/messengers.ts): Open Space's only outgoing connection, to Telegram, once one is added. */
 const messengers = new Messengers({
   file: path.join(config.dataDir, 'messengers.json'),
@@ -303,19 +318,13 @@ const triggers = new Triggers({
   start: async (trigger, prompt) => {
     // its keys are in the app's vault, out of reach: no run without them
     if (vaultElsewhere?.triggers[trigger.id]?.some((name) => !triggerKeys.names(trigger.id).includes(name))) throw new Error(st.triggers.keysElsewhere);
-    try {
-      const { session } = await startSession(
-        { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
-        { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, restrict: trigger.restrict, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes }, ...(trigger.browser ? { accountsBrowser: trigger.browser } : {}) },
-      );
-      const keys = triggerKeys.entries(trigger.id);
-      if (keys.length) { sessions.giveSecrets(session.id, undefined, keys); vault?.touchOwner({ kind: 'trigger', id: trigger.id }, trigger.name); }
-      return session;
-    } catch (error) {
-      // nobody is there to answer the trust question: the folder must be approved once from the page
-      if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
-      throw error;
-    }
+    const session = await startUnasked(
+      { cwd: trigger.cwd, text: prompt, name: trigger.name, ...(trigger.model ? { model: trigger.model } : {}), permissionMode: trigger.permissionMode },
+      { trigger: { id: trigger.id, name: trigger.name, ...(trigger.role ? { role: trigger.role } : {}) }, ...(trigger.role ? { role: trigger.role } : {}), allowedTools: trigger.allowedTools, restrict: trigger.restrict, remote: trigger.remote, caps: { cost: trigger.maxCost, minutes: trigger.maxMinutes }, ...(trigger.browser ? { accountsBrowser: trigger.browser } : {}) },
+    );
+    const keys = triggerKeys.entries(trigger.id);
+    if (keys.length) { sessions.giveSecrets(session.id, undefined, keys); vault?.touchOwner({ kind: 'trigger', id: trigger.id }, trigger.name); }
+    return session;
   },
   sessionState: (sessionId) => sessions.list().find((session) => session.id === sessionId)?.state ?? null,
   waitsOnAnswer: (sessionId) => {
@@ -373,6 +382,43 @@ async function makeMod(request: string) {
   return { mod, sessionId: session.id };
 }
 
+/** The project managers' files (server/pm.ts); a session forgotten takes its own with it, a PM made ordinary keeps it. */
+const pmBook = new PmBook(path.join(config.dataDir, 'pm'));
+sessions.onSessionForgotten((session) => { pmBook.remove(session.id).catch((error: unknown) => log(`cannot remove the PM file of ${session.name}`, error)); });
+const findSession = (sessionId: string) => sessions.list().find((session) => session.id === sessionId);
+/** The page's PM requests are refused while the setting is off. */
+function checkPmOn() {
+  if (!pmSettings(settings.preferences).enabled) throw new Error(st.pm.disabled);
+}
+
+/** What the pm_* tools reach (server/pm-tools.ts). */
+const pmApi: PmApi = {
+  // a session of a folder not trusted has no open-space MCP server (see openSpaceMcp above), so no PM tools
+  isPm: (sessionId) => {
+    const info = findSession(sessionId);
+    return !!info?.pm && !info.trigger && !info.untrusted && pmSettings(settings.preferences).enabled;
+  },
+  book: pmBook,
+  now: Date.now,
+  // a worker takes its PM's permission mode, never another, and the folder's trust rules like a trigger's run
+  startWorker: async (pm, { brief, cwd, model, effort, isolate }) => {
+    const lead = findSession(pm);
+    if (!lead) throw new Error(st.triggers.mcp.noSession(pm));
+    const folder = resolveAllowedDirectory(cwd ?? lead.worktree?.home ?? lead.cwd, config.roots);
+    if (!folder) throw new Error(st.sessions.outsideRoots);
+    if (model && !MODEL_PATTERN.test(model)) throw new Error(st.triggers.errors.model);
+    const chosenModel = model || settings.preferences.model;
+    const chosenEffort = EFFORTS.find((one) => one === effort) ?? (settings.preferences.effort || undefined);
+    return startUnasked({
+      cwd: folder, text: `${brief}${st.pm.briefFooter(lead.name)}`, permissionMode: lead.permissionMode,
+      ...(chosenModel ? { model: chosenModel } : {}), ...(chosenEffort ? { effort: chosenEffort } : {}), ...(isolate ? { isolate: {} } : {}),
+    }, { pmOf: pm });
+  },
+  stopWorker: (worker) => sessions.interrupt(worker),
+  claimWorker: (session, pm) => sessions.claimWorker(session, pm),
+  releaseWorker: (session, pm) => sessions.releaseWorker(session, pm),
+};
+
 const mcpApi: OpenSpaceApi = {
   triggers: () => triggers.list(),
   mods: () => mods.list(),
@@ -416,13 +462,7 @@ const mcpApi: OpenSpaceApi = {
     const mode = permissionMode === undefined ? settings.preferences.permissionMode : isPermissionMode(permissionMode) ? permissionMode : null;
     if (!mode) throw new Error(st.triggers.errors.mode);
     if (role && !ROLE_NAME.test(role)) throw new Error(st.triggers.errors.role);
-    try {
-      const { session } = await startSession({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote, spawned: true });
-      return session;
-    } catch (error) {
-      if (error instanceof TrustNeeded) throw new Error(st.triggers.trustNeeded(error.cwd));
-      throw error;
-    }
+    return startUnasked({ cwd, text: prompt, permissionMode: mode, ...(name ? { name } : {}), ...(model || settings.preferences.model ? { model: model || settings.preferences.model } : {}) }, { ...(role ? { role } : {}), remote, spawned: true });
   },
   addMember: async (name, jobs) => {
     await crew.save(null, name, null, undefined, jobs);
@@ -461,6 +501,7 @@ const mcpApi: OpenSpaceApi = {
     if (!found || HIDDEN_FILES.includes(found) || !statSync(found).isFile()) throw new Error(st.messengers.fileRefused);
     await messengers.sendFile(botId, found, caption);
   },
+  pm: pmApi,
 };
 
 
@@ -660,6 +701,35 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
     case 'accountsBrowser': sessions.setAccountsBrowser(message.sessionId, message.browser); break;
     case 'rest': await sessions.rest(message.sessionId); browsers.stopSession(message.sessionId); break;
     case 'forget': await sessions.forget(message.sessionId, message.branch); await browsers.forget(message.sessionId); break;
+    case 'pmCreate': {
+      checkPmOn();
+      const pm = pmSettings(settings.preferences);
+      const model = message.model || pm.lastModel || settings.preferences.model;
+      const { effort, permissionMode } = settings.preferences;
+      // no trust question here: the page asks it with a plain create, so the folder must have been approved before
+      const session = await startUnasked({ cwd: message.cwd, name: st.pm.newName, permissionMode, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, { pm: true });
+      sessions.send(session.id, st.prompt.pmSetup, [], [], { setup: true });
+      // the model chosen for a PM is the next one's (settings.update replaces `pm` whole)
+      if (message.model && message.model !== pm.lastModel) {
+        await settings.update({ pm: { ...pmSettings(settings.preferences), lastModel: message.model } });
+        broadcast(preferencesMessage());
+      }
+      break;
+    }
+    case 'pmConvert': {
+      checkPmOn();
+      const info = findSession(message.sessionId);
+      if (!info) throw new Error(st.sessions.notFound);
+      if (info.untrusted) throw new Error(st.pm.untrusted(info.name));
+      sessions.setPm(info.id, true);
+      // a worker made a PM is its former PM's no longer: let go, and its job closed in that PM's plan
+      if (info.pmOf) {
+        sessions.releaseWorker(info.id, info.pmOf);
+        await pmBook.change(info.pmOf, (file) => resolveWorker(file, info.id, Date.now()));
+      }
+      break;
+    }
+    case 'pmRevert': checkPmOn(); sessions.setPm(message.sessionId, false); break;
     case 'browser':
       if (sessions.list().some((session) => session.id === message.sessionId)) await browsers.act(browserId(message.sessionId, message.lane), message.action).catch((error: unknown) => log('browser', error));
       break;

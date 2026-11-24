@@ -59,6 +59,9 @@ export const en: ServerDictionary = {
     chromeNote: (user: string) => `(Note from Open Space: the shared browser is gone, you now have ${user ? `${user}'s` : "the user's"} Chrome. ${en.prompt.chrome(user || 'the user')})\n\n`,
     browserSwitched: (browser: 'chrome' | 'shared') => `(Open Space note: your session was relaunched on ${browser === 'chrome' ? 'the user\'s own Chrome (the claude-in-chrome tools)' : 'the shared browser'}, as asked. Go on with your task where you left it.)`,
     secretsNote: (user: string) => `(Note from Open Space: ${en.prompt.secrets(user || 'the user')})\n\n`,
+    pmOn: (user: string) => `(Note from Open Space: you are now a project manager, and the pm_* tools of open-space are yours. Your project manager instructions:\n${en.prompt.pm(user)})\n\n`,
+    pmOff: '(Note from Open Space: you are no longer a project manager. From now on, ignore the project manager instructions and the pm_* tools: you work as an ordinary session.)\n\n',
+    pmSetup: 'You are the project manager of this folder. Call pm_status, then answer in a single line asking for the brief.',
     aside: 'Side question (/btw), asked while you are working: answer briefly, from what is already ' +
       'in the conversation, without using any tool. Your answer does not enter the main conversation.',
     asideReply: (earlier: readonly AsideExchange[], reply: string) =>
@@ -112,6 +115,7 @@ export const en: ServerDictionary = {
       compacted: 'Process released once the conversation was compacted.',
       moved: 'Process released to change folders.',
       forRoom: 'Process released to make room for another session: the next message resumes the conversation.',
+      role: 'Process released: the next message resumes the conversation in its new role (project manager or ordinary session).',
     },
     closing: 'This session is closing, try again in a moment.',
     tooMany: (max: number) => `Too many sessions at work (${max} at most): none is waiting, to make room. Stop one.`,
@@ -357,6 +361,10 @@ export const en: ServerDictionary = {
     otherPm: (name: string) => `${name} is a project manager, not a worker.`,
     othersWorker: (name: string) => `${name} is another project manager’s worker.`,
     otherProject: (name: string) => `${name} works on another project than yours.`,
+    newName: 'New PM',
+    briefFooter: (pm: string) => `\n\n---\nYou are a worker of the project manager "${pm}". Your last message is your report: it goes to them on its own when your turn ends. Say in it what you did, the proof (tests, screenshots, commands run) and what is left. Never write to the project manager yourself (no SendMessage, no other way); a decision you need goes in your final report. Do not merge, push or run any destructive command (deletion, reset, force push, data migration) unless asked to. Stop your background jobs before giving your report.`,
+    disabled: 'Project managers are off in the Settings.',
+    untrusted: (name: string) => `${name} works in a folder that was not approved, without Open Space's tools: it cannot be a project manager.`,
   },
   server: {
     stoppingRetry: 'The server is stopping: try again once it’s back.',

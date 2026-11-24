@@ -131,6 +131,19 @@ const parseWorker = (raw: Raw): PmWorker | undefined => {
   };
 };
 
+/** The tag of a message to a PM as stored (a queued message in sessions.json); undefined when it is not one. */
+export function parsePmTag(raw: unknown): PmMessageTag | undefined {
+  if (!isRaw(raw)) return undefined;
+  if (raw.setup === true) return { setup: true };
+  if (isRaw(raw.report)) {
+    const worker = session(raw.report.worker);
+    const kind = oneOf(raw.report.kind, REPORT_KINDS);
+    return worker && kind ? { report: { worker, kind } } : undefined;
+  }
+  const ask = isRaw(raw.answer) ? number(raw.answer.ask) : undefined;
+  return ask === undefined ? undefined : { answer: { ask } };
+}
+
 const parseReportRecord = (raw: Raw): PmReportRecord | undefined => {
   const kind = oneOf(raw.kind, REPORT_KINDS);
   return typeof raw.key === 'string' && raw.key && typeof raw.worker === 'string' && kind ? { key: raw.key, worker: raw.worker, kind, at: time(raw.at) } : undefined;

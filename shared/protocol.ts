@@ -173,7 +173,11 @@ export type AttentionKind = 'permission' | 'question' | 'finished' | 'error';
 /** What a folder would run of its own with a session: its hooks and MCP servers ("event : command", "name : command"), and whether it has a CLAUDE.md. */
 export interface FolderCode { hooks: string[]; mcpServers: string[]; settings: string[]; instructions: boolean }
 
-export interface QueuedMessage { id: string; text: string; /** how many pictures go with it */ images?: number; /** how many other files */ files?: number }
+export interface QueuedMessage {
+  id: string; text: string; /** how many pictures go with it */ images?: number; /** how many other files */ files?: number;
+  /** a message of Open Space to a PM (a worker's report, its setup): it leaves alone, and its start event carries the tag */
+  pm?: PmMessageTag;
+}
 
 /** A file of any kind the user sent with a message: `id` as uploaded (POST /upload, see server/uploads.ts) */
 export interface UploadedFile { id: string; name: string; size: number }
@@ -417,6 +421,8 @@ export interface SessionInfo {
   toldChrome?: true;
   /** its conversation knows os-secret (server/secrets.ts): in the system prompt of a new one, else told once in a message */
   toldSecrets?: true;
+  /** its conversation was last told it is a PM (the playbook in its system prompt, or Session's PM note); absent: an ordinary session */
+  toldPm?: true;
   /** started by a trigger (shared/triggers.ts): it stands in the server room as a robot, instead of the office */
   trigger?: TriggerTag;
   /** runs as this role of Claude Code (.claude/agents/<role>.md), given with --agent at every launch */
@@ -737,6 +743,11 @@ export type ClientMessage =
   | { t: 'directories' }
   /** a new session that goes on from this one's conversation, which stays as it is */
   | { t: 'duplicate'; sessionId: string }
+  /** a new project manager in this folder, on this model (else the last one a PM had, else the settings') */
+  | { t: 'pmCreate'; cwd: string; model?: string }
+  /** makes the session a project manager, or an ordinary session again (refused while the PM setting is off) */
+  | { t: 'pmConvert'; sessionId: string }
+  | { t: 'pmRevert'; sessionId: string }
   /** runs `claude update`; the answer comes as claudeUpdate */
   | { t: 'updateClaude' }
   /** runs `claude auth login` (it opens the browser) or `claude auth logout`; the answer comes as claudeAccount */

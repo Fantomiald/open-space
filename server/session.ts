@@ -7,7 +7,7 @@ import path from 'node:path';
 import { tail } from '../shared/activity.ts';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
 import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
-import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, GitPending, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, AttentionKind, BackgroundTask, ChromeView, GitPending, ImageUpload, Inspection, InspectView, McpAction, OfficeEvent, PermissionDecision, PermissionPrompt, PmMessageTag, Quota, RemoteControl, ServerMessage, SessionInfo, SlashCommand, SessionState, TuneChange, UsageReport, WorktreeInfo } from '../shared/protocol.ts';
 import { VIDEO_EXTENSIONS } from './attachments.ts';
 import { chromeNote, placeNote, renameNote, secretsNote, sharedBrowserNote, type ProcessFactory, type ProcessHandle } from './claude-process.ts';
 import type { KeysCard } from '../shared/secrets.ts';
@@ -166,6 +166,8 @@ export class Session {
   private socket = '';
   /** the commands run with "!" since the last message, with what they wrote, in Claude Code's own format: they go with the next one */
   private shellNotes: string[] = [];
+  /** its current process was launched as a PM (playbook, pm_* tools allowed): what its conversation is told it is (toldPm) */
+  private launchedAsPm = false;
   /** the "!" commands still running, by their id, to stop them */
   /** the "!" commands still running: how to stop each, and its end */
   private shells = new Map<string, { stop: AbortController; done: Promise<unknown> }>();
@@ -262,14 +264,14 @@ export class Session {
    * A message from the user. During a turn it waits in the queue (the user sees it, can take it back, or interrupt the
    * turn to send it at once with sendNow); it leaves when the turn ends. Otherwise it leaves now, after anything still queued.
    */
-  send(text: string, images: readonly ImageUpload[] = [], files: readonly string[] = []) {
+  send(text: string, images: readonly ImageUpload[] = [], files: readonly string[] = [], pm?: PmMessageTag) {
     const clean = text.trim();
     if (!clean && !images.length && !files.length) return;
     if (this.stopRequest) throw new Error(st.sessions.closing);
     const id = randomUUID();
     if (images.length) this.queuedImages.set(id, images);
     if (files.length) this.queuedFiles.set(id, files);
-    this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}) }];
+    this.info.queued = [...(this.info.queued ?? []), { id, text: clean, ...(images.length ? { images: images.length } : {}), ...(files.length ? { files: files.length } : {}), ...(pm ? { pm } : {}) }];
     if (this.busy || this.preparing || this.paused) { this.publish(); return; }
     this.sendQueued();
   }
@@ -437,23 +439,26 @@ export class Session {
     timer.unref();
   }
 
-  /** Sends the oldest queued messages as one: the plain ones together, a slash command alone (it must come first). */
+  /**
+   * Sends the oldest queued messages as one: the plain ones together; a slash command alone (it must come first), and a
+   * message of Open Space to a PM alone too (its tag says what the whole message is).
+   */
   private sendQueued() {
     const queued = this.info.queued ?? [];
     if (!queued.length || this.paused) return;
-    const isCommand = (message: { text: string }) => message.text.startsWith('/');
-    const firstCommand = queued.findIndex(isCommand);
-    const count = firstCommand === 0 ? 1 : firstCommand === -1 ? queued.length : firstCommand;
+    const alone = (message: { text: string; pm?: PmMessageTag }) => message.text.startsWith('/') || !!message.pm;
+    const firstAlone = queued.findIndex(alone);
+    const count = firstAlone === 0 ? 1 : firstAlone === -1 ? queued.length : firstAlone;
     const batch = queued.slice(0, count);
     // the queue only shrinks once the message has left: a refusal (too many live sessions) keeps it
-    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []), batch.flatMap((message) => this.queuedFiles.get(message.id) ?? []));
+    this.deliver(batch.map((message) => message.text).filter(Boolean).join('\n\n'), batch.flatMap((message) => this.queuedImages.get(message.id) ?? []), batch.flatMap((message) => this.queuedFiles.get(message.id) ?? []), undefined, batch[0].pm);
     for (const message of batch) { this.queuedImages.delete(message.id); this.queuedFiles.delete(message.id); }
     this.info.queued = queued.length > count ? queued.slice(count) : undefined;
     this.publish();
   }
 
-  /** `shown`: what the thread shows instead of the text. */
-  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], shown?: string) {
+  /** `shown`: what the thread shows instead of the text; `pm`: the tag of a message of Open Space to a PM. */
+  private deliver(clean: string, images: readonly ImageUpload[], files: readonly string[] = [], shown?: string, pm?: PmMessageTag) {
     this.clearIdleTimer();
     this.suggestion = undefined;
     this.turnOutput = false;
@@ -506,6 +511,12 @@ export class Session {
       outgoing = secretsNote(this.deps.identity?.().user) + outgoing;
       this.info.toldSecrets = true;
     }
+    // made a PM or an ordinary session again since its conversation started: told once its process runs as one, with the
+    // whole playbook (a resumed conversation keeps the system prompt it started with)
+    if (this.launchedAsPm !== !!this.info.toldPm && !command) {
+      outgoing = (this.launchedAsPm ? st.prompt.pmOn(this.deps.identity?.().user.trim() ?? '') : st.prompt.pmOff) + outgoing;
+      this.info.toldPm = this.launchedAsPm || undefined;
+    }
     if (this.shellNotes.length && !command) {
       outgoing = `${this.shellNotes.join('\n\n')}\n\n${outgoing}`;
       this.shellNotes = [];
@@ -519,7 +530,7 @@ export class Session {
       return file ? [{ id, name: path.basename(file), size: statSync(file).size, file }] : [];
     });
     if (uploaded.length) outgoing = [outgoing, st.prompt.attached(uploaded.map((upload) => upload.file))].filter(Boolean).join('\n\n');
-    this.record({ k: 'start', text: shown ?? clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}) });
+    this.record({ k: 'start', text: shown ?? clean, ...(names.length ? { images: names } : {}), ...(uploaded.length ? { files: uploaded.map(({ id, name, size }) => ({ id, name, size })) } : {}), ...(pm ? { pm } : {}) });
     if (uploaded.length < files.length) this.record({ k: 'note', text: st.sessions.uploadsGone(files.length - uploaded.length) });
     this.apply({ type: spawning ? 'spawn' : 'send' });
     this.process?.send(outgoing, images);
@@ -573,8 +584,11 @@ export class Session {
       agentLaunch: (agentId) => agentLaunch(cwd, this.conversationId, agentId),
       cwd,
     });
+    this.launchedAsPm = !!(this.info.pm && !this.info.trigger && this.deps.pmEnabled?.());
+    // a new conversation has the playbook in its system prompt
+    if (!this.info.resumable && !this.info.forkOf) this.info.toldPm = this.launchedAsPm || undefined;
     const handle: ProcessHandle = this.deps.spawnProcess(
-      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.info.pm && !this.info.trigger && this.deps.pmEnabled?.() ? { pm: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.info.restrict ? { restrict: this.info.restrict } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
+      { cwd, sessionId: this.conversationId, resume: this.info.resumable, model: this.info.model, ...(this.info.effort ? { effort: this.info.effort } : {}), ...(this.info.ultracode ? { ultracode: true } : {}), ...(this.info.fastMode ? { fastMode: true } : {}), permissionMode: this.info.permissionMode, name: this.info.name, ...this.deps.identity?.(), ...(this.info.untrusted ? { untrusted: true } : {}), ...(this.deps.claudeSettings ? { settings: this.deps.claudeSettings() } : {}), ...(this.deps.promptSuggestions?.() && !this.info.trigger ? { promptSuggestions: true } : {}), ...(this.info.forkOf ? { forkOf: this.info.forkOf } : {}), ...(this.info.worktree ? { worktree: this.info.worktree } : {}), ...(this.info.role ? { agent: this.info.role } : {}), ...(this.info.trigger ? { run: true } : {}), ...(this.launchedAsPm ? { pm: true } : {}), ...(this.info.allowedTools?.length ? { allowedTools: this.info.allowedTools } : {}), ...(this.info.restrict ? { restrict: this.info.restrict } : {}), ...(this.deps.hidden?.length ? { hidden: this.deps.hidden } : {}) },
       {
         onMessage: (message) => {
           if (this.process !== handle) return; // a previous process still talking
@@ -1213,6 +1227,18 @@ export class Session {
     };
     void this.process.stop(2000);
     return true;
+  }
+
+  /** Makes it a project manager, or an ordinary session again: its process runs as one from its next launch (SessionManager.setPm). */
+  setPm(on: boolean) {
+    this.info.pm = on || undefined;
+    this.publish();
+  }
+
+  /** Makes it a worker of that PM, or no one's (undefined). */
+  setPmOf(pm: string | undefined) {
+    this.info.pmOf = pm;
+    this.publish();
   }
 
   /** The browser of the user's accounts it uses, whatever the setting; undefined: the setting's (see SessionManager.switchBrowsers). */

@@ -18,6 +18,17 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'openTerminal', sessionId: 5 }), null);
   });
 
+  it('reads the requests to create a project manager, or to make a session one and back', () => {
+    assert.deepEqual(parseClientMessage({ t: 'pmCreate', cwd: '/x' }), { t: 'pmCreate', cwd: '/x' });
+    assert.deepEqual(parseClientMessage({ t: 'pmCreate', cwd: '/x', model: 'opus' }), { t: 'pmCreate', cwd: '/x', model: 'opus' });
+    assert.equal(parseClientMessage({ t: 'pmCreate' }), null);
+    assert.equal(parseClientMessage({ t: 'pmCreate', cwd: '/x', model: '--settings x' }), null);
+    assert.deepEqual(parseClientMessage({ t: 'pmConvert', sessionId: 's1' }), { t: 'pmConvert', sessionId: 's1' });
+    assert.deepEqual(parseClientMessage({ t: 'pmRevert', sessionId: 's1' }), { t: 'pmRevert', sessionId: 's1' });
+    assert.equal(parseClientMessage({ t: 'pmConvert' }), null);
+    assert.equal(parseClientMessage({ t: 'pmRevert', sessionId: '../x' }), null);
+  });
+
   it('reads a request to stop a background task of a session', () => {
     assert.deepEqual(parseClientMessage({ t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' }), { t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' });
     assert.equal(parseClientMessage({ t: 'stopTask', sessionId: 's1' }), null);

@@ -15,6 +15,7 @@ import { saveUpload } from './uploads.ts';
 import { SecretStore } from './secrets.ts';
 import { SessionManager, type SessionManagerDeps } from './sessions.ts';
 import { browserMcpConfig } from './browser.ts';
+import { st } from './i18n/index.ts';
 
 /** A scripted stand-in for the claude process: the tests feed it captured lines and watch what the session writes back. */
 class FakeProcess implements ProcessHandle {
@@ -585,6 +586,114 @@ describe('a project manager\'s launch', () => {
     await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
     await manager.create({ cwd: projectA(), text: 'bonjour' });
     assert.deepEqual(processes.map((process) => !!process.launch.pm), [false, true, false]);
+    await manager.shutdown();
+  });
+});
+
+describe('making a session a project manager, and back', () => {
+  /** a turn of the same conversation */
+  const turn = (process: { handlers: ProcessHandlers }, conversation: string) => {
+    process.handlers.onMessage({ type: 'system', subtype: 'init', model: 'm', slash_commands: [], session_id: conversation });
+    process.handlers.onMessage({ type: 'result', subtype: 'success', is_error: false, result: 'ok', duration_ms: 5 });
+  };
+  const pmOn = { pmEnabled: () => true };
+
+  it('a waiting session is released at once, and its next message resumes it as a PM told its playbook', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    turn(processes[0], id);
+    manager.setPm(id, true);
+    assert.equal(find(id).pm, true);
+    assert.equal(processes[0].stopCalls.length, 1, 'released while it waits');
+    manager.send(id, 'le plan ?');
+    assert.deepEqual([processes[1].launch.pm, processes[1].launch.resume], [true, true]);
+    assert.ok(processes[1].sent.at(-1)!.includes(st.prompt.pm('')), 'the playbook, which a resumed conversation never got');
+    assert.ok(processes[1].sent.at(-1)!.endsWith('le plan ?'));
+    turn(processes[1], id);
+    manager.send(id, 'encore');
+    assert.equal(processes[1].sent.at(-1), 'encore', 'told once');
+    await manager.shutdown();
+  });
+
+  it('a session at work is released once a turn ends on its new role, never telling its old process', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' });
+    manager.setPm(id, true);
+    manager.send(id, 'encore');
+    assert.equal(processes[0].stopCalls.length, 0, 'at work: not yet');
+    turn(processes[0], id);
+    assert.equal(processes[0].sent.at(-1), 'encore', 'the queue leaves first, to the process that has no PM tools');
+    turn(processes[0], id);
+    assert.equal(processes[0].stopCalls.length, 1, 'released at the end of the next turn');
+    manager.send(id, 'le plan ?');
+    assert.ok(processes[1].sent.at(-1)!.includes(st.prompt.pm('')));
+    await manager.shutdown();
+  });
+
+  it('a PM made an ordinary session again is told so, and resumes without the PM tools', async () => {
+    const { manager, processes, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    turn(processes[0], id);
+    manager.setPm(id, false);
+    assert.equal(find(id).pm, undefined);
+    manager.send(id, 'merci');
+    assert.equal(processes[1].launch.pm, undefined);
+    assert.ok(processes[1].sent.at(-1)!.startsWith(st.prompt.pmOff));
+    await manager.shutdown();
+  });
+
+  it('never makes a trigger\'s run a PM', async () => {
+    const { manager, find } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'go' }, { trigger: { id: 't1', name: 'Nightly' } });
+    assert.throws(() => manager.setPm(id, true));
+    assert.equal(find(id).pm, undefined);
+    await manager.shutdown();
+  });
+
+  it('a message of Open Space to a PM leaves alone, its tag on what the thread logs', async () => {
+    const { manager, processes } = setup({}, undefined, undefined, undefined, undefined, pmOn);
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA(), text: 'bonjour' }, { pm: true });
+    manager.send(id, 'une question');
+    manager.send(id, 'Margot a fini', [], [], { report: { worker: 'w1', kind: 'finished' } });
+    turn(processes[0], id);
+    assert.equal(processes[0].sent.at(-1), 'une question', 'not joined to the report');
+    turn(processes[0], id);
+    assert.equal(processes[0].sent.at(-1), 'Margot a fini');
+    const starts = manager.logSince(id, 0).events.flatMap(({ ev }) => (ev.k === 'start' ? [ev] : []));
+    assert.deepEqual(starts.map((ev) => ev.pm), [undefined, undefined, { report: { worker: 'w1', kind: 'finished' } }]);
+    await manager.shutdown();
+  });
+
+  it('a session is the worker of one PM at a time, and only that PM lets it go', async () => {
+    const { manager, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() });
+    assert.equal(manager.claimWorker(id, 'pm-a'), true);
+    assert.equal(manager.claimWorker(id, 'pm-b'), false);
+    assert.equal(manager.claimWorker(id, 'pm-a'), true, 'already its own');
+    manager.releaseWorker(id, 'pm-b');
+    assert.equal(find(id).pmOf, 'pm-a');
+    manager.releaseWorker(id, 'pm-a');
+    assert.equal(find(id).pmOf, undefined);
+    assert.equal(manager.claimWorker('unknown', 'pm-a'), false);
+    await manager.shutdown();
+  });
+
+  it('a PM forgotten lets its workers go at once, and is heard of', async () => {
+    const { manager, find } = setup();
+    await manager.init();
+    const forgotten: string[] = [];
+    manager.onSessionForgotten((session) => forgotten.push(session.id));
+    const lead = await manager.create({ cwd: projectA() }, { pm: true });
+    const worker = await manager.create({ cwd: projectA() }, { pmOf: lead.id });
+    await manager.forget(lead.id);
+    assert.equal(find(worker.id).pmOf, undefined);
+    assert.deepEqual(forgotten, [lead.id]);
     await manager.shutdown();
   });
 });

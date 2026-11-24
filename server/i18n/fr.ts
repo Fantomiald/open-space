@@ -72,6 +72,12 @@ export const fr = {
     browserSwitched: (browser: 'chrome' | 'shared') => `(Note d'Open Space : ta session a été relancée sur ${browser === 'chrome' ? 'Mon Chrome (les outils claude-in-chrome)' : 'le navigateur partagé'}, comme demandé. Reprends ta tâche là où tu en étais.)`,
     /** told once to a conversation started before os-secret */
     secretsNote: (user: string) => `(Note d'Open Space : ${fr.prompt.secrets(user || 'l’utilisateur')})\n\n`,
+    /** told once to a conversation whose process now runs as a PM: a resumed one keeps its first system prompt, without the playbook */
+    pmOn: (user: string) => `(Note d'Open Space : tu es maintenant chef de projet, et les outils pm_* d’open-space sont à toi. Tes consignes de chef de projet :\n${fr.prompt.pm(user)})\n\n`,
+    /** told once to a conversation whose process no longer runs as a PM */
+    pmOff: '(Note d\'Open Space : tu n’es plus chef de projet. Ignore désormais les consignes de chef de projet et les outils pm_* : tu travailles comme une session ordinaire.)\n\n',
+    /** the first message of a PM made from the page (server/index.ts pmCreate) */
+    pmSetup: 'Tu es le chef de projet de ce dossier. Appelle pm_status, puis réponds en une seule ligne pour demander le brief.',
     aside: 'Question à côté (/btw), posée pendant que tu travailles : réponds brièvement, à partir de ce qui est déjà ' +
       'dans la conversation, sans utiliser d’outil. Ta réponse n’entre pas dans la conversation principale.',
     /** a reply to a side question: the exchange so far, then the reply */
@@ -131,6 +137,7 @@ export const fr = {
       compacted: 'Processus relâché après le compactage de la conversation.',
       moved: 'Processus relâché pour changer de dossier.',
       forRoom: 'Processus relâché pour faire de la place à une autre session : le prochain message reprend la conversation.',
+      role: 'Processus relâché : le prochain message reprend la conversation avec son nouveau rôle (chef de projet ou session ordinaire).',
     },
     closing: 'Cette session est en train de se fermer, réessaie dans un instant.',
     tooMany: (max: number) => `Trop de sessions au travail (${max} au maximum) : aucune n’attend, pour lui faire de la place. Arrête-en une.`,
@@ -385,6 +392,13 @@ export const fr = {
     otherPm: (name: string) => `${name} est un chef de projet, pas un worker.`,
     othersWorker: (name: string) => `${name} est le worker d’un autre chef de projet.`,
     otherProject: (name: string) => `${name} travaille sur un autre projet que le tien.`,
+    /** a PM made from the page, until it names itself */
+    newName: 'Nouveau PM',
+    /** after the brief of a worker a PM starts (server/index.ts startWorker) */
+    briefFooter: (pm: string) => `\n\n---\nTu es un worker du chef de projet « ${pm} ». Ton dernier message est ton rapport : il lui part tout seul quand ton tour finit. Dis-y ce que tu as fait, la preuve (tests, captures, commandes lancées) et ce qui reste. N’écris jamais au chef de projet toi-même (ni SendMessage, ni autre moyen) ; une décision dont tu as besoin va dans ton rapport final. Ne fusionne pas, ne pousse pas et ne lance aucune commande destructrice (suppression, reset, push forcé, migration de données) sans qu’on te l’ait demandé. Arrête tes tâches de fond avant de rendre ton rapport.`,
+    /** refusals of the page's PM requests (server/index.ts) */
+    disabled: 'Les chefs de projet sont désactivés dans les Réglages.',
+    untrusted: (name: string) => `${name} travaille dans un dossier non approuvé, sans les outils d’Open Space : elle ne peut pas être chef de projet.`,
   },
   server: {
     stoppingRetry: 'Le serveur s’arrête : réessaie une fois relancé.',

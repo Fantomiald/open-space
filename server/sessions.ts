@@ -30,6 +30,7 @@ import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
 import { MAX_NAME } from './messages.ts';
 import { storedTags } from '../shared/tags.ts';
+import { parsePmTag, type PmMessageTag } from '../shared/pm.ts';
 import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
 import { readGitPending } from './pending-git.ts';
 import { pickSessionName } from './names.ts';
@@ -154,10 +155,13 @@ export class SessionManager {
   private switchingBrowsers = new Set<string>();
   /** the sessions switch_browser switches: they go on by themselves once relaunched (see switchBrowserOnRequest) */
   private browserRequests = new Map<string, AccountsBrowser>();
+  /** sessions made a PM or an ordinary session again whose process waits for the end of a turn to be released (setPm) */
+  private changingRole = new Set<string>();
   /** who else hears of turn ends, attention and pauses (onSessionTurnEnd, onSessionAttention, onSessionPaused) */
   private turnEndListeners: ((session: SessionInfo, how: TurnEnd) => void)[] = [];
   private attentionListeners: ((kind: AttentionKind, session: SessionInfo) => void)[] = [];
   private pausedListeners: ((session: SessionInfo) => void)[] = [];
+  private forgottenListeners: ((session: SessionInfo) => void)[] = [];
   /** the sessions the usage limit pauses: a pause moved later is not a new one (onSessionPaused) */
   private pausedIds = new Set<string>();
 
@@ -234,6 +238,9 @@ export class SessionManager {
 
   /** Hears every session the usage limit pauses, once per pause (not when it is moved later). */
   onSessionPaused(listener: (session: SessionInfo) => void) { this.pausedListeners.push(listener); }
+
+  /** Hears every session forgotten (switched off), once it is gone from the list. */
+  onSessionForgotten(listener: (session: SessionInfo) => void) { this.forgottenListeners.push(listener); }
 
   /** Calls each listener; one that throws or rejects is logged and keeps neither the others nor the session from going on. */
   private tell<L>(listeners: readonly L[], call: (listener: L) => unknown) {
@@ -333,6 +340,44 @@ export class SessionManager {
     const switched = asked ? session.relaunch(st.prompt.browserSwitched(asked), st.sessions.stopped.relaunched) : session.release(st.sessions.stopped.browser);
     if (switched) { this.switchingBrowsers.delete(id); this.browserRequests.delete(id); }
     else this.switchingBrowsers.add(id);
+  }
+
+  /**
+   * Makes the session a project manager, or an ordinary session again. Its process must start again for its system
+   * prompt and its tools: released at once while it waits, else once a turn of it is over (like switchBrowsers); its
+   * next message resumes the conversation, told of its new role (Session's PM note). A trigger's run is never a PM.
+   */
+  setPm(id: string, on: boolean) {
+    const session = this.session(id);
+    const info = session.snapshot();
+    if (on && info.trigger) throw new Error(st.pm.triggerRun(info.name));
+    if (!!info.pm === on) return;
+    session.setPm(on);
+    this.releaseForRole(id);
+  }
+
+  private releaseForRole(id: string) {
+    const session = this.sessions.get(id);
+    if (!session?.alive || session.release(st.sessions.stopped.role)) this.changingRole.delete(id);
+    else this.changingRole.add(id);
+  }
+
+  /**
+   * Makes the session a worker of `pm` unless it is another PM's (false then, and for a session unknown). Synchronous,
+   * so that of two PMs adopting the same session at once only one gets it.
+   */
+  claimWorker(id: string, pm: string): boolean {
+    const session = this.sessions.get(id);
+    const owner = session?.snapshot().pmOf;
+    if (!session || (owner && owner !== pm)) return false;
+    if (owner !== pm) session.setPmOf(pm);
+    return true;
+  }
+
+  /** The session is no longer a worker of `pm`; nothing when it is someone else's. */
+  releaseWorker(id: string, pm: string) {
+    const session = this.sessions.get(id);
+    if (session?.snapshot().pmOf === pm) session.setPmOf(undefined);
   }
 
   /** The browser of the user's accounts this session uses; the setting's own: it follows the setting again. */
@@ -955,6 +1000,7 @@ export class SessionManager {
   private onTurnEnd(id: string, how: TurnEnd) {
     if (how === 'done') this.idleCompactPaused = false;
     if (this.switchingBrowsers.has(id)) this.switchBrowsers(id);
+    if (this.changingRole.has(id)) this.releaseForRole(id);
     void this.refreshGit(id);
     const session = this.sessions.get(id);
     const worktree = session?.snapshot().worktree;
@@ -1181,7 +1227,7 @@ export class SessionManager {
     const taken = new Set([...this.sessions.values()].map((session) => session.snapshot().name));
     const info = newSessionInfo({ id: randomUUID(), name: name && !taken.has(name) ? name : pickSessionName(taken), cwd: source.cwd, model: source.model, permissionMode: source.permissionMode }, this.now());
     Object.assign(info, {
-      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}),
+      forkOf: conversation, introducedAs: source.introducedAs ?? source.name, context: source.context, ...(source.toldSharedBrowser ? { toldSharedBrowser: true as const } : {}), ...(source.toldChrome ? { toldChrome: true as const } : {}), ...(source.toldSecrets ? { toldSecrets: true as const } : {}), ...(source.toldPm ? { toldPm: true as const } : {}),
       ...(source.effort ? { effort: source.effort } : {}), ...(source.ultracode ? { ultracode: true } : {}), ...(source.fastMode ? { fastMode: true } : {}), ...(source.untrusted ? { untrusted: true } : {}), ...(source.project ? { project: source.project } : {}), ...(source.spawned ? { spawned: true as const } : {}), ...(source.tags ? { tags: [...source.tags] } : {}), ...(source.role ? { role: source.role } : {}), ...(source.allowedTools ? { allowedTools: [...source.allowedTools] } : {}), ...(source.restrict ? { restrict: source.restrict } : {}),
     });
     const log = await this.openLog(info.id);
@@ -1195,13 +1241,14 @@ export class SessionManager {
     return session.snapshot();
   }
 
-  send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[]) {
+  /** `pm`: a message of Open Space to a PM (a worker's report, its setup), never the one that gives its tag. */
+  send(id: string, text: string, images?: readonly ImageUpload[], files?: readonly string[], pm?: PmMessageTag) {
     const session = this.session(id);
     // writing to the session again moves on from a failed merge: its card would stay over the new work
     const worktree = session.snapshot().worktree;
     if (worktree?.merge?.step === 'failed') session.setWorktree({ ...worktree, merge: undefined });
-    session.send(text, images, files);
-    this.tagFromFirstMessage(session, text);
+    session.send(text, images, files, pm);
+    if (!pm) this.tagFromFirstMessage(session, text);
   }
 
   /** A new conversation without tags gets one from its first message, a little later, unless the user put some meanwhile. */
@@ -1301,6 +1348,9 @@ export class SessionManager {
     this.launchedBrowsers.delete(id);
     this.switchingBrowsers.delete(id);
     this.browserRequests.delete(id);
+    this.changingRole.delete(id);
+    // the workers of a PM forgotten are no one's (as when sessions.json is read again)
+    for (const other of this.sessions.values()) if (other.snapshot().pmOf === id) other.setPmOf(undefined);
     const log = this.logs.get(id);
     this.logs.delete(id);
     await log?.close();
@@ -1313,6 +1363,8 @@ export class SessionManager {
     this.deps.broadcast({ t: 'forgotten', sessionId: id });
     this.save();
     this.sweep();
+    const gone = session.snapshot();
+    this.tell(this.forgottenListeners, (listener) => listener(gone));
   }
 
   /**
@@ -1430,6 +1482,7 @@ function parseStoredSession(raw: unknown): StoredInfo | null {
     toldChrome: raw.toldChrome === true || undefined,
     accountsBrowser: raw.accountsBrowser === 'chrome' || raw.accountsBrowser === 'shared' ? raw.accountsBrowser : undefined,
     toldSecrets: raw.toldSecrets === true || undefined,
+    toldPm: raw.toldPm === true || undefined,
     trigger: parseTriggerTag(raw.trigger),
     role: ROLE_NAME.test(asString(raw.role)) ? asString(raw.role) : undefined,
     allowedTools: parseAllowRules(raw.allowedTools)?.length ? parseAllowRules(raw.allowedTools)! : undefined,
@@ -1489,6 +1542,10 @@ function parseWorktree(raw: unknown): WorktreeInfo | undefined {
 
 function parseQueue(raw: unknown): SessionInfo['queued'] {
   if (!Array.isArray(raw)) return undefined;
-  const queued = raw.flatMap((item) => (isJson(item) && asString(item.id) && asString(item.text) ? [{ id: asString(item.id), text: asString(item.text) }] : []));
+  const queued = raw.flatMap((item) => {
+    if (!isJson(item) || !asString(item.id) || !asString(item.text)) return [];
+    const pm = parsePmTag(item.pm);
+    return [{ id: asString(item.id), text: asString(item.text), ...(pm ? { pm } : {}) }];
+  });
   return queued.length ? queued : undefined;
 }
