@@ -32,3 +32,17 @@ describe('the windows a reload brings back', () => {
     assert.deepEqual(asked.sort(), ['alice', 'ines']);
   });
 });
+
+describe('a new session asked for', () => {
+  it('stops being waited for when the server refuses this page\'s request', () => {
+    useSessions.setState({ awaitingNew: true });
+    useSessions.getState().receive({ t: 'toast', kind: 'error', text: 'refused', refused: 'new' });
+    assert.equal(useSessions.getState().awaitingNew, false);
+  });
+
+  it('is still waited for after an error that is not its refusal', () => {
+    useSessions.setState({ awaitingNew: true });
+    useSessions.getState().receive({ t: 'toast', kind: 'error', text: 'a log cannot be written' });
+    assert.equal(useSessions.getState().awaitingNew, true);
+  });
+});

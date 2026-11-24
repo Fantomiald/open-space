@@ -734,8 +734,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       case 'modCreated': get().openMod(message.id); break;
       case 'modEnv': heardModEnv(message.id, message.env); break;
       case 'modStore': heardModStore(message.id, message.name, message.value); break;
-      // a session asked for and refused (folder not approved, PM setting off): the next new one does not open as if it were it
-      case 'toast': if (message.kind === 'error') set({ awaitingNew: false }); s.toast(message.kind, message.text); break;
+      // this page's request for a new session refused (folder not approved, PM setting off): the next new one does not open
+      // as if it were it; any other error (another tab's, a log that cannot be written) leaves the wait as it is
+      case 'toast': if (message.refused === 'new') set({ awaitingNew: false }); s.toast(message.kind, message.text); break;
     }
   },
 

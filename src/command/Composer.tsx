@@ -1,5 +1,6 @@
 import { use, useState } from 'react';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { fromOpenSpace } from '../../shared/pm.ts';
 import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
 import { asideQuestion, nativeView, ownCommand, tuning } from '../state/commands.ts';
@@ -133,8 +134,8 @@ export function Composer({ session, attachments }: { session: SessionInfo; attac
                 <span className="cp-queue__text">{message.text}</span>
                 {message.images ? <span className="cp-queue__images" title={words.images(message.images)}><ImageIcon />{message.images}</span> : null}
                 {message.files ? <span className="cp-queue__images" title={words.files(message.files)}><FileIcon />{message.files}</span> : null}
-                {/* a message of Open Space to a PM (a worker's report, told once) is not the user's to edit or take back */}
-                {!message.pm && (
+                {/* a message of Open Space to a PM (its setup, a worker's report, told once) is not the user's to edit or take back */}
+                {!fromOpenSpace(message.pm) && (
                   <>
                     <Tooltip text={words.edit}>
                       <button type="button" className="cp-icon-button" aria-label={words.editLabel} onClick={() => edit(message.id, message.text)}><PencilIcon /></button>

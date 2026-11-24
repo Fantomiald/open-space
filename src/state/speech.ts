@@ -6,7 +6,7 @@ import { t } from '../i18n/index.ts';
 import { earlyBubbleText } from '../room/bubbles.ts';
 import { pauseLabel } from './labels.ts';
 import { writingStops } from './partials.ts';
-import { fromOpenSpace } from './pm.ts';
+import { fromOpenSpace } from '../../shared/pm.ts';
 
 /** The speaker of the user's own messages and answers. */
 export const USER_SPEAKER = 'user';

@@ -73,8 +73,8 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
           {session.resumable && (
             <button type="button" role="menuitem" title={words.duplicateTitle} onClick={pick(() => useSessions.getState().duplicateSession(session.id))}><DuplicateIcon />{words.duplicate}</button>
           )}
-          {/* a trigger's run is never a project manager (the server refuses it too) */}
-          {pmOn && !session.pm && !session.trigger && (
+          {/* a trigger's run, or a session of a folder not approved, is never a project manager (the server refuses them too) */}
+          {pmOn && !session.pm && !session.trigger && !session.untrusted && (
             <button type="button" role="menuitem" title={words.makePmTitle} onClick={pick(() => useSessions.getState().convertPm(session.id))}><PmIcon />{words.makePm}</button>
           )}
           {pmOn && session.pm && (

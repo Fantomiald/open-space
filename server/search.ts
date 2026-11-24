@@ -2,6 +2,7 @@
 // contain the words typed, newest first, for the page's search over all sessions.
 import type { LoggedEvent, SearchHit } from '../shared/protocol.ts';
 import { foldQuery, matchesAll, snippetOf } from '../shared/search.ts';
+import { pmMessageKind } from '../shared/pm.ts';
 
 const MIN_QUERY = 2;
 const MAX_PER_SESSION = 4;
@@ -10,7 +11,10 @@ const MAX_PER_SESSION = 4;
 function wording(event: LoggedEvent['ev']): { who: SearchHit['who']; text: string } | null {
   switch (event.k) {
     // what Open Space writes to a PM is not the user's: its setup is nobody's, a worker's report comes from another session
-    case 'start': return event.pm && 'setup' in event.pm ? null : { who: event.pm && 'report' in event.pm ? 'peer' : 'user', text: event.text };
+    case 'start': {
+      const kind = pmMessageKind(event.pm);
+      return kind === 'setup' ? null : { who: kind === 'report' ? 'peer' : 'user', text: event.text };
+    }
     case 'say': case 'report': case 'end': return { who: 'agent', text: event.text };
     case 'peer': return { who: 'peer', text: event.text };
     default: return null;

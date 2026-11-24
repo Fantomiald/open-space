@@ -940,7 +940,8 @@ export type ServerMessage =
   | { t: 'modEnv'; id: string; env: Record<string, string> }
   /** a value a mod's page saved (null: none) */
   | { t: 'modStore'; id: string; name: string; value: unknown }
-  | { t: 'toast'; kind: 'info' | 'error'; text: string }
+  /** `refused: 'new'`: the refusal of this page's own request for a new session (create, duplicate, pmCreate, createMod), sent to it alone */
+  | { t: 'toast'; kind: 'info' | 'error'; text: string; refused?: 'new' }
   /** a session's browser changed tabs or address; null once it is closed */
   | { t: 'browser'; sessionId: string; lane: number; browser: BrowserState | null };
 

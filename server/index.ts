@@ -656,7 +656,9 @@ function onConnection(socket: WebSocket) {
     try { message = parseClientMessage(JSON.parse(String(data))); } catch { /* not JSON */ }
     if (!message) return;
     if (message.t === 'presence') { presence.set(socket, message.active); return; }
-    handle(message, send).catch((error: unknown) => send({ t: 'toast', kind: 'error', text: error instanceof Error ? error.message : String(error) }));
+    // a request for a new session that fails says so to its page, which then stops waiting for that session to open it
+    const refused = NEW_SESSION_REQUESTS.has(message.t) ? { refused: 'new' as const } : {};
+    handle(message, send).catch((error: unknown) => send({ t: 'toast', kind: 'error', text: error instanceof Error ? error.message : String(error), ...refused }));
   });
 }
 
@@ -680,6 +682,9 @@ function filesRoot(sessionId: string): string {
   if (!root) throw new Error(st.files.outside);
   return root;
 }
+
+/** The page's requests that end with a new session, which the page waits for to open it (awaitingNew). */
+const NEW_SESSION_REQUESTS: ReadonlySet<ClientMessage['t']> = new Set(['create', 'duplicate', 'pmCreate', 'createMod']);
 
 async function handle(message: ClientMessage, send: (message: ServerMessage) => void) {
   switch (message.t) {

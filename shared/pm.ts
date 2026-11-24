@@ -46,6 +46,15 @@ export const PM_TOOL_NAMES = [
 /** What a message sent to a PM by Open Space is: a worker's report, the user's answer to a question, or the PM's setup. */
 export type PmMessageTag = { report: { worker: string; kind: ReportKind } } | { answer: { ask: number } } | { setup: true };
 
+/** What a message to a PM is by its tag; null for an ordinary message. */
+export function pmMessageKind(tag: PmMessageTag | undefined): 'report' | 'answer' | 'setup' | null {
+  if (!tag) return null;
+  return 'report' in tag ? 'report' : 'answer' in tag ? 'answer' : 'setup';
+}
+
+/** Written by Open Space (a PM's setup, a worker's report), not by the user: an answer is the user's own words. */
+export const fromOpenSpace = (tag: PmMessageTag | undefined): boolean => { const kind = pmMessageKind(tag); return kind === 'setup' || kind === 'report'; };
+
 /** The PM settings (Preferences.pm): off, no PM tools nor reports; `quietMinutes` of silence before a worker is nudged. */
 export interface PmSettings { enabled: boolean; quietMinutes: number; lastModel?: string }
 export const PM_QUIET_MINUTES = { min: 2, max: 60 } as const;
