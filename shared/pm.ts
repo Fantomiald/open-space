@@ -22,7 +22,7 @@ export interface PmWorker {
   session: string; item?: number; linkedAt: number; resolvedAt?: number;
   /** `turns`: the worker's finished turns then (SessionInfo.turns), which a compaction does not move */
   lastReport?: { kind: ReportKind; at: number; line: string; seq: number; turns?: number };
-  watch: { quietSince?: number; nudgedAt?: number; round: number; stopAsked?: number };
+  watch: { quietSince?: number; round: number; stopAsked?: number };
 }
 export interface PmReportRecord { key: string; worker: string; kind: ReportKind; at: number }
 export interface PmFile {
@@ -128,7 +128,7 @@ const parseWorker = (raw: Raw): PmWorker | undefined => {
   return id === undefined ? undefined : {
     session: id, ...optional('item', number(raw.item)), linkedAt: time(raw.linkedAt), ...optional('resolvedAt', time(raw.resolvedAt)),
     ...optional('lastReport', isRaw(raw.lastReport) ? parseReport(raw.lastReport) : undefined),
-    watch: { ...optional('quietSince', time(watch.quietSince)), ...optional('nudgedAt', time(watch.nudgedAt)), round: count(watch.round), ...optional('stopAsked', time(watch.stopAsked)) },
+    watch: { ...optional('quietSince', time(watch.quietSince)), round: count(watch.round), ...optional('stopAsked', time(watch.stopAsked)) },
   };
 };
 

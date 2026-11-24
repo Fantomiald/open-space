@@ -42,7 +42,7 @@ describe('reading a PM file', () => {
         ask(2),
       ],
       workers: [
-        worker('w-1', { item: 1, resolvedAt: 9, lastReport: { kind: 'finished', at: 8, line: 'Done', seq: 4, turns: 3 }, watch: { quietSince: 5, nudgedAt: 6, round: 2, stopAsked: 7 } }),
+        worker('w-1', { item: 1, resolvedAt: 9, lastReport: { kind: 'finished', at: 8, line: 'Done', seq: 4, turns: 3 }, watch: { quietSince: 5, round: 2, stopAsked: 7 } }),
         worker('w-2'),
       ],
       reports: [{ key: 'w-1:4', worker: 'w-1', kind: 'finished', at: 8 }],

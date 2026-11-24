@@ -128,7 +128,6 @@ export class PmWatch {
         if (session.state !== 'work' && session.state !== 'starting' && session.state !== 'perm') delete watch.stopAsked;
         // a sign of life (or no more work) ends the silence: the next one is a new round
         if (!quiet) {
-          delete watch.nudgedAt;
           delete watch.quietSince;
           watch.round = 0;
           return [];
