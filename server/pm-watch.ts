@@ -4,6 +4,7 @@
 // never both send it. Nothing is sent while the setting is off, to a PM closed or gone, nor about a worker resolved.
 import { itemTag, PM_LIMITS, type PmFile, type PmMessageTag, type PmWorker, type ReportKind } from '../shared/pm.ts';
 import type { AttentionKind, SessionInfo } from '../shared/protocol.ts';
+import { fenced } from './fence.ts';
 import { st } from './i18n/index.ts';
 import type { PmBook } from './pm.ts';
 import { nameOf, ownWorker, resolveWorker } from './pm-ops.ts';
@@ -24,7 +25,6 @@ export interface WatchDeps {
   lastEventAt: (sessionId: string) => number;
   /** sends a message to the PM: sessions.send(pm, text, [], [], tag) */
   deliver: (pm: string, text: string, tag: PmMessageTag) => void;
-  nudge: (worker: string, text: string) => void;
   log?: (message: string, error: unknown) => void;
 }
 
@@ -50,7 +50,9 @@ export function decideReport(worker: PmWorker, session: SessionInfo, event: Watc
       // nothing changed since its last report (or since it was linked): its log may have grown meanwhile (a shell
       // command, a note), its state did not
       if (session.stateSince <= (worker.lastReport?.at ?? worker.linkedAt)) return null;
-      if (session.state === 'wait') return session.pausedUntil !== undefined ? 'paused' : 'finished';
+      if (session.state === 'wait' && session.pausedUntil !== undefined) return 'paused';
+      // a turn finished since the last report: a compaction by Open Space moves its state, not its turns
+      if (session.state === 'wait') return worker.lastReport?.turns !== undefined && session.turns <= worker.lastReport.turns ? null : 'finished';
       // put to rest by the user, it is not cut off
       if (session.state === 'closed') return session.resting ? null : 'restarted';
       return session.state === 'error' ? 'error' : null;
@@ -64,6 +66,8 @@ export class PmWatch {
   private readonly deps: WatchDeps;
   /** the setting as last seen: once it is back on, the next sweep catches up with what was missed */
   private wasOn = false;
+  /** the PMs that took reports at the last sweep: one open again (closed by the user before) is caught up with */
+  private livePms = new Set<string>();
 
   constructor(deps: WatchDeps) {
     this.deps = deps;
@@ -98,14 +102,22 @@ export class PmWatch {
     if (pm) await this.resolve(pm, sessionId);
   }
 
-  /** Every 30 s: a worker silent for too long is nudged, then reported if it stays silent; and the catch-up once the setting is back on. */
+  /**
+   * Every 30 s: a worker at work with nothing new for the quiet delay is reported, once for that silence (a message to
+   * it would only wait in its queue); and the catch-up once the setting is back on, or for a PM open again.
+   */
   async sweep(): Promise<void> {
     if (!this.on()) return;
     if (!this.wasOn) await this.reconcile();
+    else {
+      const live = this.livePmIds();
+      const back = new Set([...live].filter((id) => !this.livePms.has(id)));
+      this.livePms = live;
+      if (back.size) await this.reconcile(back);
+    }
     const now = this.deps.now();
     const quietMs = this.deps.quietMs();
     for (const [pm, workers] of this.workersByPm()) {
-      const nudges: string[] = [];
       const outgoing = await this.deps.book.change(pm, (file) => workers.flatMap((session) => {
         const worker = ownWorker(file, session.id);
         if (!worker) return [];
@@ -114,38 +126,36 @@ export class PmWatch {
         const quiet = session.state === 'work' && session.pausedUntil === undefined && now - last > quietMs;
         // a stop asked while it did not work (no turn to end) must not hide its next interruption
         if (session.state !== 'work' && session.state !== 'starting' && session.state !== 'perm') delete watch.stopAsked;
+        // a sign of life (or no more work) ends the silence: the next one is a new round
         if (!quiet) {
           delete watch.nudgedAt;
           delete watch.quietSince;
+          watch.round = 0;
           return [];
         }
-        // nudged once for this silence: a sign of life since starts it over
-        if (watch.nudgedAt === undefined || last > (watch.quietSince ?? 0)) {
-          watch.nudgedAt = now;
-          watch.quietSince = last;
-          nudges.push(session.id);
-          return [];
-        }
-        if (now - watch.nudgedAt < quietMs) return [];
+        if (watch.quietSince === last) return [];
+        watch.quietSince = last;
+        watch.round += 1;
         const sent = this.write(pm, file, worker, session, 'quiet', now);
-        if (sent) watch.round += 1;
         return sent ? [sent] : [];
       }));
-      for (const worker of nudges) this.send(() => this.deps.nudge(worker, st.pm.nudge));
       for (const one of outgoing) this.send(() => this.deps.deliver(one.pm, one.text, one.tag));
     }
   }
 
   /**
    * At startup and when the setting is back on: each worker's state against its last report, for what happened while
-   * nobody listened (a turn ended, a restart cut it off). A worker gone meanwhile is resolved.
+   * nobody listened (a turn ended, a restart cut it off). A worker gone meanwhile is resolved. `only`: these PMs alone.
    */
-  async reconcile(): Promise<void> {
+  async reconcile(only?: ReadonlySet<string>): Promise<void> {
     if (!this.on()) return;
-    this.wasOn = true;
+    if (!only) {
+      this.wasOn = true;
+      this.livePms = this.livePmIds();
+    }
     const now = this.deps.now();
     const sessions = this.deps.sessions();
-    for (const lead of sessions.filter((one) => this.isLivePm(one))) {
+    for (const lead of sessions.filter((one) => this.isLivePm(one) && (!only || only.has(one.id)))) {
       const outgoing = await this.deps.book.change(lead.id, (file) => file.workers.filter((worker) => !worker.resolvedAt).flatMap((worker) => {
         const session = sessions.find((one) => one.id === worker.session);
         if (!session) { resolveWorker(file, worker.session, now); return []; }
@@ -169,6 +179,10 @@ export class PmWatch {
   /** A PM that takes reports: there, still a PM, not a trigger's run, not closed by the user (one at rest is woken up). */
   private isLivePm(session: SessionInfo | undefined): session is SessionInfo {
     return !!session?.pm && !session.trigger && (session.state !== 'closed' || !!session.resting);
+  }
+
+  private livePmIds(): Set<string> {
+    return new Set(this.deps.sessions().filter((one) => this.isLivePm(one)).map((one) => one.id));
   }
 
   /** The live workers of each PM that takes reports. */
@@ -198,7 +212,7 @@ export class PmWatch {
       // asked for, and the end of the turn the usage limit stopped (its pause is reported).
       if (stopAsked && (event.how === 'interrupted' || event.how === 'failed')) this.write(pm, file, worker, session, 'stopped', now, true);
       if (event.kind === 'turnEnd' && session.pausedUntil !== undefined && worker.lastReport?.kind === 'paused') {
-        worker.lastReport = { ...worker.lastReport, at: now, seq: session.lastSeq };
+        worker.lastReport = { ...worker.lastReport, at: now, seq: session.lastSeq, turns: session.turns };
       }
       return null;
     });
@@ -214,22 +228,23 @@ export class PmWatch {
     if (file.reports.some((one) => one.key === key)) return null;
     const line = silent ? '' : st.pm.report(kind, nameOf(session), worker.item ? itemTag(worker.item) : undefined, session.pausedUntil);
     file.reports = [...file.reports, { key, worker: session.id, kind, at: now }].slice(-PM_LIMITS.reports);
-    worker.lastReport = { kind, at: now, line: line.slice(0, PM_LIMITS.line), seq: session.lastSeq };
+    worker.lastReport = { kind, at: now, line: line.slice(0, PM_LIMITS.line), seq: session.lastSeq, turns: session.turns };
     if (silent) return null;
+    // the worker's words are data for the PM, never instructions: anything it read (a page, a file) may speak in them
     const said = kind === 'finished' || kind === 'waiting' ? this.deps.lastWords(session.id).slice(0, LAST_WORDS) : '';
-    return { pm, text: said ? `${line}\n\n${said}` : line, tag: { report: { worker: session.id, kind } } };
+    return { pm, text: said ? `${line}\n\n${fenced('worker-words', st.pm.workerWords, said)}` : line, tag: { report: { worker: session.id, kind } } };
   }
 
   private async resolve(pm: string, worker: string): Promise<void> {
     await this.deps.book.change(pm, (file) => { resolveWorker(file, worker, this.deps.now()); });
   }
 
-  /** A message that cannot leave (the session closing meanwhile) is logged: its report stays written, it is not sent again. */
+  /** A message the PM cannot take (closing or switched off meanwhile) is dropped: its report stays written, it is not sent again. */
   private send(deliver: () => void) {
     try {
       deliver();
     } catch (error) {
-      this.deps.log?.('cannot deliver a PM report', error);
+      this.deps.log?.('a worker report was dropped: its PM could not take it (closing or gone), it is not sent again', error);
     }
   }
 }

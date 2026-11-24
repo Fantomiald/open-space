@@ -2045,6 +2045,19 @@ describe('session listeners', () => {
     await manager.shutdown();
   });
 
+  it('tells the listeners of a turn that ends with messages queued behind it', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const told: [string, number][] = [];
+    manager.onSessionTurnEnd((session, how) => told.push([how, session.turns]));
+    const { id } = await manager.create({ cwd: projectA(), text: 'ping' });
+    manager.send(id, 'and then this');
+    processes[0].feed('simple-turn');
+    assert.deepEqual(told, [['done', 1]]);
+    assert.equal(find(id).state, 'work', 'the queued message left');
+    await manager.shutdown();
+  });
+
   it('tells of a usage-limit pause once, even when the limit is hit again during it', async () => {
     const RESET = 1794002400_000;
     const { manager, processes } = setup({}, undefined, () => RESET - 3_600_000);

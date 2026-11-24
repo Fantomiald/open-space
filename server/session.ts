@@ -87,6 +87,8 @@ export interface SessionDeps {
    * what a merge under way waits for
    */
   onTurnEnd?: (session: SessionInfo, how: TurnEnd) => void;
+  /** a turn ended with messages queued behind it, which leave at once (onTurnEnd is not called then) */
+  onTurnEndQueued?: (session: SessionInfo, how: TurnEnd) => void;
   /** a compaction asked by autoCompact ended without compacting (the session limit reached, most often) */
   onAutoCompactFailed?: () => void;
   /** /clear started a new conversation: its tags are gone, its first plain message may name new ones */
@@ -1070,7 +1072,11 @@ export class Session {
       return;
     }
     // queued messages leave at once: the session works again, nothing to tell the user
-    if (this.info.queued?.length && !this.paused) { this.sendQueued(); return; }
+    if (this.info.queued?.length && !this.paused) {
+      this.deps.onTurnEndQueued?.(this.snapshot(), how);
+      this.sendQueued();
+      return;
+    }
     this.armIdleTimer();
     // a turn the user stopped themselves needs no telling either, nor one the usage limit paused
     if (tell && !this.paused) this.deps.onAttention?.('finished', this.snapshot());

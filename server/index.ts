@@ -524,7 +524,6 @@ const pmWatch = new PmWatch({
     return (info && sessions.logSince(sessionId, info.lastSeq - 1).events.at(-1)?.at) || info?.stateSince || 0;
   },
   deliver: (pm, text, tag) => sessions.send(pm, text, [], [], tag),
-  nudge: (worker, text) => sessions.send(worker, text),
   log,
 });
 sessions.onSessionTurnEnd((session, how) => pmWatch.turnEnded(session, how));

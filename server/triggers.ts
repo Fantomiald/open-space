@@ -14,6 +14,7 @@ import {
   KEPT_RUNS, MAX_HOOK_BODY, MAX_QUEUED, MAX_TRIGGERS, PARALLEL_HOOK_RUNS, parseTriggerInput, RUN_OUTCOMES, RUN_SOURCES, TRIGGER_ID,
   type Trigger, type TriggerError, type TriggerInput, type TriggerRun, type TriggerRunSource,
 } from '../shared/triggers.ts';
+import { fenced } from './fence.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asNumber, asString, isJson } from './json.ts';
 import { secretsMatch } from './security.ts';
@@ -37,8 +38,7 @@ export function runPrompt(prompt: string, payload: string | null, fence = random
   if (payload === null) return prompt;
   let body = payload.slice(0, MAX_HOOK_BODY);
   try { body = JSON.stringify(JSON.parse(body), null, 2); } catch { /* sent as text */ }
-  const tag = `webhook-data-${fence}`;
-  return `${prompt}\n\n${st.prompt.webhookData(tag)}\n<${tag}>\n${body}\n</${tag}>`;
+  return `${prompt}\n\n${fenced('webhook-data', st.prompt.webhookData, body, fence)}`;
 }
 
 /** Whether a session of a previous run is still busy (`state`: its state, or null when it is gone). */

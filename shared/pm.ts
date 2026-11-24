@@ -20,7 +20,8 @@ export interface PmAsk {
 }
 export interface PmWorker {
   session: string; item?: number; linkedAt: number; resolvedAt?: number;
-  lastReport?: { kind: ReportKind; at: number; line: string; seq: number };
+  /** `turns`: the worker's finished turns then (SessionInfo.turns), which a compaction does not move */
+  lastReport?: { kind: ReportKind; at: number; line: string; seq: number; turns?: number };
   watch: { quietSince?: number; nudgedAt?: number; round: number; stopAsked?: number };
 }
 export interface PmReportRecord { key: string; worker: string; kind: ReportKind; at: number }
@@ -118,7 +119,7 @@ const parseAsk = (raw: Raw): PmAsk | undefined => {
 
 const parseReport = (raw: Raw): PmWorker['lastReport'] => {
   const kind = oneOf(raw.kind, REPORT_KINDS);
-  return kind && { kind, at: time(raw.at), line: text(raw.line, PM_LIMITS.line), seq: count(raw.seq) };
+  return kind && { kind, at: time(raw.at), line: text(raw.line, PM_LIMITS.line), seq: count(raw.seq), ...optional('turns', count(raw.turns)) };
 };
 
 const parseWorker = (raw: Raw): PmWorker | undefined => {

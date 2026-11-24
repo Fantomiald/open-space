@@ -538,6 +538,8 @@ export class SessionManager {
         this.onTurnEnd(session.id, how);
         this.tell(this.turnEndListeners, (listener) => listener(session, how));
       },
+      // the listeners hear it, the manager's own turn-end work (merges) waits for the end of what is queued
+      onTurnEndQueued: (session, how) => this.tell(this.turnEndListeners, (listener) => listener(session, how)),
       onAutoCompactFailed: () => { this.idleCompactPaused = true; },
     });
   }
