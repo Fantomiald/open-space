@@ -234,7 +234,9 @@ describe('the PM book', () => {
     const file = path.join(folder, 'p.json');
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).mission, 'Ship');
     if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
+    writeFileSync(`${file}.bad`, '{');
     await book.remove('p');
+    assert.deepEqual(readdirSync(folder), []);
     assert.deepEqual(await book.read('p'), emptyPm());
   });
 

@@ -53,7 +53,7 @@ export const DEFAULT_PM_SETTINGS: PmSettings = { enabled: true, quietMinutes: 8 
 /** The PM settings of the user's preferences, the defaults when there are none (settings.json of an older version). */
 export const pmSettings = (preferences: { pm?: PmSettings }): PmSettings => ({ ...DEFAULT_PM_SETTINGS, ...preferences.pm });
 
-const SESSION_ID = /^[\w-]{1,100}$/;
+export const SESSION_ID = /^[\w-]{1,100}$/;
 
 export function emptyPm(): PmFile {
   return { version: 1, mission: '', instructions: '', nextItem: 1, nextAsk: 1, turn: 0, memory: [], items: [], asks: [], workers: [], reports: [], pages: [] };

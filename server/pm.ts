@@ -4,12 +4,9 @@
 import { constants, mkdirSync } from 'node:fs';
 import { copyFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { emptyPm, type PmFile, parsePmFile } from '../shared/pm.ts';
+import { emptyPm, type PmFile, parsePmFile, SESSION_ID } from '../shared/pm.ts';
 import { writeFileAtomic } from './atomic-write.ts';
 import { st } from './i18n/index.ts';
-
-/** A session id, as sessions.ts reads it from sessions.json: a PM's id names its file. */
-export const SESSION_ID = /^[\w-]{1,100}$/;
 
 /** An edit of a PM file: synchronous, since what it changes after an await would be compared too early and never written. */
 type Edit<T> = (file: PmFile) => T extends PromiseLike<unknown> ? never : T;
@@ -47,7 +44,8 @@ export class PmBook {
 
   /** Deletes the PM's file, once the changes before are done. */
   remove(pm: string): Promise<void> {
-    return this.queue(pm, (file) => rm(file, { force: true }));
+    // the copy kept of a damaged file goes with it
+    return this.queue(pm, async (file) => { await rm(file, { force: true }); await rm(`${file}.bad`, { force: true }); });
   }
 
   private queue<T>(pm: string, task: (file: string) => Promise<T>): Promise<T> {
