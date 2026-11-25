@@ -48,6 +48,8 @@ export interface MessengersDeps {
   sessions: () => SessionInfo[];
   events: (sessionId: string, after: number) => LoggedEvent[];
   lastWords: (sessionId: string) => string;
+  /** the run said its turn has nothing for the user (finish_run with quiet): its end is not told, its files and an error still are */
+  quiet?: (sessionId: string) => boolean;
   triggers: () => Trigger[];
   answer: (sessionId: string, requestId: string, decision: PermissionDecision) => void;
   reply: (sessionId: string, requestId: string, answers: Record<string, string>) => void;
@@ -599,7 +601,7 @@ export class Messengers {
       }
     }
     if (session.state === 'error' && before.state !== 'error') await this.tell(bot, session, st.messengers.failed(session.name));
-    else if (tellDone && before.busy && session.state === 'wait') await this.tell(bot, session, st.messengers.done(session.name, this.deps.lastWords(session.id)));
+    else if (tellDone && before.busy && session.state === 'wait' && !this.deps.quiet?.(session.id)) await this.tell(bot, session, st.messengers.done(session.name, this.deps.lastWords(session.id)));
   }
 
   private async tell(bot: Stored, session: SessionInfo, text: string) {

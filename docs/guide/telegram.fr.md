@@ -27,7 +27,7 @@ Open Space regarde les sessions toutes les 2 secondes et prévient chaque bot re
 - une demande de clés : un simple avis. Les clés se donnent dans Open Space, jamais dans Telegram ;
 - les fichiers qu'une session envoie ;
 - une session qui s'arrête sur une erreur ;
-- une session qui finit son tour, avec ses derniers mots.
+- une session qui finit son tour, avec ses derniers mots. Pas un run qui s'est fini par `finish_run` avec `quiet` : il n'a rien pour toi.
 
 Quand tu réponds dans Open Space, les boutons disparaissent de Telegram.
 

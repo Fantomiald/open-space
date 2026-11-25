@@ -249,6 +249,7 @@ export const en: ServerDictionary = {
       noName: 'Give a name.',
       noItems: 'Give `items`, an array of short lines (an empty array clears the list).',
       finishing: 'The session will close at the end of this turn.',
+      finishingQuietly: 'The session will close at the end of this turn, and the bots will not be told it finished.',
       unknownBrowser: 'Unknown browser: "chrome" or "shared".',
       sameBrowser: 'Your session already has this browser: go on.',
       switchingBrowser: 'Done. End your turn now, without doing anything else: Open Space relaunches your session with that browser and sends you a message to go on.',

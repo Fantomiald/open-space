@@ -84,7 +84,7 @@ Les clés d'un déclencheur sont données au `os-secret` de chaque run à son la
 
 ## Finir un run
 
-La session d'un run peut appeler l'outil MCP `finish_run` une fois sa tâche faite, quand rien ne t'attend. Elle se ferme 5 secondes après la fin de ce tour, et sa conversation reste dans Reprendre. Un run qui ne l'appelle jamais se ferme au bout d'une heure laissé seul en `wait`. Un nouveau tour annule la fermeture.
+La session d'un run peut appeler l'outil MCP `finish_run` une fois sa tâche faite, quand rien ne t'attend. Elle se ferme 5 secondes après la fin de ce tour, et sa conversation reste dans Reprendre. Avec `quiet: true`, le run dit qu'il n'a rien pour toi : les bots Telegram ne sont pas prévenus qu'il a fini, même avec **Prévenir à la fin** activé (les fichiers qu'il a envoyés et une erreur le sont quand même). Ce choix vaut pour ce run seulement : le **Prévenir à la fin** du déclencheur reste tel quel pour les autres. Un run qui ne l'appelle jamais se ferme au bout d'une heure laissé seul en `wait`. Un nouveau tour annule la fermeture.
 
 ## Depuis un agent
 

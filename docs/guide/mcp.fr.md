@@ -59,7 +59,7 @@ La clé est gardée dans `mcp-key` sous `OFFICE_DIR`.
 | `send_file` | Session, bot | Envoie un fichier dans ta conversation Telegram par son chemin absolu, avec une légende facultative. Le bot est facultatif quand tu n'en as qu'un. |
 | `rename_session` | Session | Renomme la session qui appelle. |
 | `set_pending` | Session | Dit ce que la session qui appelle laisse en suspens, une ligne courte par point (8 au plus), à la place de la liste d'avant : une PR à ouvrir, une clé à fournir. Une liste vide l'efface. Les lignes s'affichent dans le panneau État, sous « En suspens ». |
-| `finish_run` | Session | Pour le run d'un déclencheur seulement : dit que la tâche est faite. La session se ferme à la fin du tour, et sa conversation reste dans Reprendre. Ailleurs, il renvoie une erreur. |
+| `finish_run` | Session | Pour le run d'un déclencheur seulement : dit que la tâche est faite. La session se ferme à la fin du tour, et sa conversation reste dans Reprendre. Facultatif, `quiet: true` : rien pour l'utilisateur, les bots ne sont pas prévenus que ce run a fini (ses fichiers et une erreur le sont quand même). Ailleurs, il renvoie une erreur. |
 | `switch_browser` | Session | Passe la session sur « Mon Chrome » (ton vrai Chrome, par défaut) ou sur le navigateur partagé, seulement si tu le lui as demandé. Claude Code te demande toujours ton accord, quel que soit le mode : dans Open Space, sur Telegram ou dans l'app Claude avec Remote Control. Une fois validé, la session est relancée avec ce navigateur à la fin de son tour et reprend seule. |
 
 Aucun outil n'éteint une session : ça se fait depuis l'interface. Voir [Sessions](sessions.fr.md).

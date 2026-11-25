@@ -273,6 +273,7 @@ export const fr = {
       noName: 'Donne un nom.',
       noItems: 'Donne `items`, un tableau de lignes courtes (un tableau vide vide la liste).',
       finishing: 'La session se fermera à la fin de ce tour.',
+      finishingQuietly: 'La session se fermera à la fin de ce tour, et les bots ne seront pas prévenus qu’elle a fini.',
       unknownBrowser: 'Navigateur inconnu : "chrome" ou "shared".',
       sameBrowser: 'Ta session a déjà ce navigateur : continue.',
       switchingBrowser: 'Validé. Termine ton tour maintenant, sans rien faire d’autre : Open Space relance ta session avec ce navigateur et t’envoie un message pour reprendre.',

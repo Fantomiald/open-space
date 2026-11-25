@@ -27,7 +27,7 @@ Open Space looks at the sessions every 2 seconds and tells each linked bot about
 - a request for keys: only a notice. Keys are given in Open Space, never in Telegram;
 - the files a session sends;
 - a session that stops on an error;
-- a session that finishes its turn, with its last words.
+- a session that finishes its turn, with its last words. Not a run that ended with `finish_run` and `quiet`: it has nothing for you.
 
 When you answer in Open Space, the buttons in Telegram are taken off.
 

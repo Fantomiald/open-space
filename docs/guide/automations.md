@@ -84,7 +84,7 @@ The keys of a trigger are given to each run's `os-secret` when it starts. The se
 
 ## Ending a run
 
-A run's session can call the MCP tool `finish_run` once its task is done and nothing waits for you. It closes 5 seconds after the end of that turn, and its conversation stays in Resume. A run that never calls it closes after one hour left alone in `wait`. A new turn cancels the close.
+A run's session can call the MCP tool `finish_run` once its task is done and nothing waits for you. It closes 5 seconds after the end of that turn, and its conversation stays in Resume. With `quiet: true`, the run says it has nothing for you: the Telegram bots are not told it finished, even with **Tell when done** on (the files it sent and an error still are). That choice is per run: the trigger's **Tell when done** stays as it is for the others. A run that never calls it closes after one hour left alone in `wait`. A new turn cancels the close.
 
 ## From an agent
 

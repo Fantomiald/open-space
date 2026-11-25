@@ -161,6 +161,25 @@ describe('a trigger\'s caps', () => {
   });
 });
 
+describe('a run that finishes quietly', () => {
+  it('keeps the quiet of finish_run for the turn it ends, until the next message', async () => {
+    const { manager, processes, find } = setup();
+    await manager.init();
+    const { id } = await manager.create({ cwd: projectA() }, { trigger: { id: 'abcdef1234', name: 'Nightly' } });
+    manager.send(id, 'go');
+    manager.finishAfterTurn(id, true);
+    processes[0].feed('simple-turn');
+    assert.equal(find(id).state, 'wait');
+    assert.equal(manager.finishesQuietly(id), true, 'its end has nothing for the user');
+    manager.send(id, 'one more thing');
+    assert.equal(manager.finishesQuietly(id), false, 'a new message: what it ends with may be for the user again');
+    manager.finishAfterTurn(id);
+    assert.equal(manager.finishesQuietly(id), false, 'finish_run without quiet');
+    assert.equal(manager.finishesQuietly('nobody'), false);
+    await manager.shutdown();
+  });
+});
+
 describe('creating sessions', () => {
   it('creates a waiting session with a first name, inside an allowed folder', async () => {
     const { manager } = setup();

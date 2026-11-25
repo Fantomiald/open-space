@@ -109,8 +109,8 @@ export interface OpenSpaceApi {
   rename: (sessionId: string, name: string) => void;
   /** replaces what the session leaves pending with these lines, untrusted (shared/pending.ts tidies them); returns those the user removed before, left out */
   setPending: (sessionId: string, items: unknown[]) => string[];
-  /** closes the session once its turn ends */
-  finish: (sessionId: string) => void;
+  /** closes the session once its turn ends (`quiet`: nothing in it for the user, the bots are not told it finished) */
+  finish: (sessionId: string, quiet: boolean) => void;
   /** switch_browser, the user's yes given: the session goes on with that browser once its turn ends ('same': it has it) */
   switchBrowser: (sessionId: string, browser: AccountsBrowser) => 'switching' | 'same';
   /** the user's bots, to name in a trigger's `messengers` */
@@ -214,7 +214,12 @@ export const TOOLS: Tool[] = [
     inputSchema: { type: 'object', properties: { browser: { type: 'string', enum: [...ACCOUNTS_BROWSERS] }, reason: { type: 'string', description: 'What the user asked for, in a few words (shown to them with the confirmation)' } }, },
     annotations: write,
   },
-  { name: 'finish_run', for: ['session'], description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).', inputSchema: { type: 'object', properties: {} }, annotations: read },
+  {
+    name: 'finish_run', for: ['session'],
+    description: 'For an automaton\'s run only: says your task is done and nothing waits for the user; your session closes at the end of this turn (its conversation stays in Resume).',
+    inputSchema: { type: 'object', properties: { quiet: { type: 'boolean', description: 'Nothing for the user: the bots are not told this run finished (the files you sent and an error still are). Default false' } } },
+    annotations: read,
+  },
   {
     name: 'send_file', for: ['session', 'messenger'],
     description: 'Sends a file to the user\'s chat (a screenshot, a video, a PDF) right now: its absolute path, inside the folders Open Space allows or a file a session sent. For a one-off "send me this on Telegram"; never make a trigger for it.',
@@ -353,8 +358,9 @@ export async function callTool(api: OpenSpaceApi, caller: Caller, name: string, 
         return text('renamed');
       }
       if (!api.sessions().find((each) => each.id === caller.session)?.trigger) return failure(st.triggers.mcp.notARun);
-      api.finish(caller.session);
-      return text(st.triggers.mcp.finishing);
+      const quiet = args.quiet === true;
+      api.finish(caller.session, quiet);
+      return text(quiet ? st.triggers.mcp.finishingQuietly : st.triggers.mcp.finishing);
     }
     case SWITCH_BROWSER: {
       if (!('session' in caller)) return failure(st.triggers.mcp.unknownTool(name));

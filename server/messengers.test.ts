@@ -228,6 +228,53 @@ describe('the chat bots', () => {
     }
   });
 
+  it('keeps the end of a run that finished quietly to itself, and still sends its files and its error', async () => {
+    const fake = fakeTelegram();
+    const session = { id: 's1', name: 'JD', cwd: '/work/pilou', state: 'work', stateSince: 0, permissions: [], trigger: { id: 't1', name: 'Manager' } } as unknown as SessionInfo;
+    const trigger = { id: 't1', name: 'Manager', messengers: [] as string[], notifyDone: true } as unknown as Trigger;
+    const events: LoggedEvent[] = [];
+    const quiet = new Set<string>();
+    const messengers = new Messengers({
+      file: path.join(base, 'messengers-quiet.json'), api: fake.api,
+      sessions: () => [session], events: (_id, after) => events.filter((each) => each.seq > after), lastWords: () => 'Nothing new.',
+      quiet: (id) => quiet.has(id), triggers: () => [trigger],
+      answer: () => {}, reply: () => {}, send: () => {}, interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
+      startSession: async () => session, folders: () => ['/work/pilou'], saveUpload: (name) => name, attachment: (stored) => `/uploads/${stored}`,
+      agent: async () => ({ text: '', conversation: null }), giveSecrets: () => [], onChange: () => {}, log: () => {},
+    });
+    const told = () => fake.sent('sendMessage').filter((each) => String(each.body.text).includes('Nothing new.')).length;
+    const turn = async () => {
+      session.state = 'work';
+      await messengers.tick();
+      session.state = 'wait';
+      await messengers.tick();
+    };
+    try {
+      messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: false, model: '' });
+      trigger.messengers.push(messengers.list()[0]!.id);
+      fake.message(`/start ${messengers.list()[0]!.linkCode}`);
+      await until(() => messengers.list()[0]!.linked);
+      await messengers.tick();
+
+      // finish_run with quiet: no end told, the file it sent goes all the same
+      quiet.add('s1');
+      events.push({ seq: 1, ev: { k: 'files', files: [{ title: 'report.pdf', stored: 'report.pdf' }] } } as unknown as LoggedEvent);
+      await turn();
+      assert.equal(told(), 0, 'nothing for the user: its end is not told');
+      assert.deepEqual(fake.sent('sendFile').map((each) => each.body.file), ['/uploads/report.pdf']);
+      session.state = 'error';
+      await messengers.tick();
+      assert.ok(fake.sent('sendMessage').some((each) => each.body.text === st.messengers.failed('JD')), 'an error is still told');
+
+      // finish_run without quiet: its end is told as before
+      quiet.delete('s1');
+      await turn();
+      assert.equal(told(), 1);
+    } finally {
+      messengers.stop();
+    }
+  });
+
   it('matches what is typed on a phone to a name', () => {
     const triggers = [{ name: 'Ticket Jira assigné' }, { name: 'Récap du matin' }];
     assert.deepEqual(matchByName(triggers, (each) => each.name, 'ticket jira assigne PROJ-12'), { item: triggers[0], rest: 'PROJ-12' });
