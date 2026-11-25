@@ -47,7 +47,7 @@ Réponds à un des messages du bot pour écrire à sa session. Les fichiers join
 | Commande | Ce qu'elle fait |
 |---|---|
 | `/sessions` | Qui fait quoi : nom, état, dossier, déclencheur, `RC` quand Remote Control est activé. |
-| `/run <déclencheur> [texte]` | Lance un déclencheur. Le texte, s'il y en a un, est passé comme le corps d'un webhook. |
+| `/run <déclencheur> [texte]` | Lance un déclencheur. Le texte, s'il y en a un, est passé comme le corps d'un webhook. Un déclencheur cron part même si son run précédent travaille encore. |
 | `/new <dossier> <tâche>` | Lance une session dans un de tes dossiers, avec Remote Control. |
 | `/stop <nom>` | Interrompt ce que fait une session. Elle reste ouverte. |
 | `/remote <nom>` | Active Remote Control pour une session. |

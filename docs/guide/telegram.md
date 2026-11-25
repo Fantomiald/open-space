@@ -47,7 +47,7 @@ Reply to one of the bot's messages to write to its session. Files you attach go 
 | Command | What it does |
 |---|---|
 | `/sessions` | Who does what: name, state, folder, trigger, `RC` when Remote Control is on. |
-| `/run <trigger> [text]` | Starts a trigger. The text, if any, is passed like a webhook body. |
+| `/run <trigger> [text]` | Starts a trigger. The text, if any, is passed like a webhook body. A cron trigger starts even while its previous run still works. |
 | `/new <folder> <task>` | Starts a session in one of your folders, with Remote Control. |
 | `/stop <name>` | Interrupts what a session is doing. It stays open. |
 | `/remote <name>` | Turns Remote Control on for a session. |

@@ -36,7 +36,7 @@ The key is kept in `mcp-key` under `OFFICE_DIR`.
 | `list_triggers` | All | Lists the triggers and their latest runs, without their tokens. |
 | `create_trigger` | All | Creates a cron or webhook trigger. `name`, `prompt` and `kind` are required. The folder defaults to the caller's. |
 | `update_trigger` | All | Changes a trigger. Only the fields given change. |
-| `run_trigger` | All | Starts a trigger now. A webhook trigger that already runs 3 times queues it. A cron trigger whose previous run still works skips it (a run that only waits for the answer to its question does not count). |
+| `run_trigger` | All | Starts a trigger now. A webhook trigger that already runs 3 times queues it. A cron trigger whose previous run still works skips it (a run that only waits for the answer to its question does not count); only **Run now** and `/run` on Telegram start beside it. |
 | `create_session` | All | Starts a session with a first message. `prompt` is required. Optional: `cwd`, `name`, `model`, `permissionMode`, `role`, `remote` (default `false`). |
 | `list_roles` | All | Lists the Claude Code roles (`.claude/agents`) a folder can use. |
 | `list_crew` | All | Lists the crew: the names sessions are given, and their jobs. |

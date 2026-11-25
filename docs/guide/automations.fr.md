@@ -45,7 +45,7 @@ Si les réglages du dossier font tourner du code (hooks, serveurs MCP), le dossi
 
 ## Déclencheurs à heure fixe
 
-Open Space regarde les horaires toutes les 20 secondes et lance chaque déclencheur qui correspond une fois par minute. Un run à la fois : tant que le précédent travaille ou attend ton accord, le lancement suivant est ignoré. Un run qui attend seulement ta réponse à sa question ne bloque pas le déclencheur : le suivant part, et ta réponse arrive quand même au run qui l'a posée (un seul run de ce genre à la fois).
+Open Space regarde les horaires toutes les 20 secondes et lance chaque déclencheur qui correspond une fois par minute. Un run à la fois : tant que le précédent travaille ou attend ton accord, le lancement suivant est ignoré. Un run que tu lances toi-même (**Lancer maintenant**, `/run` sur Telegram) part toujours, à côté de celui qui travaille encore ; l'horaire attend alors que les deux aient fini. Un run qui attend seulement ta réponse à sa question ne bloque pas le déclencheur : le suivant part, et ta réponse arrive quand même au run qui l'a posée (un seul run de ce genre à la fois).
 
 ## Déclencheurs par webhook
 
