@@ -21,7 +21,7 @@ A trigger starts a session on its own, at a set time (cron) or when another prog
 | Remote Control | Follow the run and approve from the Claude app on your phone. | on |
 | Browser for your accounts | As in the settings, the shared browser, or "My Chrome" (your real Chrome through Claude in Chrome). Open Space opens Chrome in the background when it is closed (macOS). Set in Open Space only, never from a session. | as in the settings |
 | Tell | The Telegram bots that get what its runs wait for and the files they send. | none |
-| Tell when done | Also sends the last answer of each run to those bots. | on |
+| Tell when done | Also sends the last answer of each run to those bots. Off, a run you replied to or answered from Telegram still sends its next answer, unless Remote Control is on for it. | on |
 | Cost cap ($) | The run stops once it has spent this much, estimated at list prices. 1,000 at most. | no cap |
 | Time cap (min) | The run stops after this many minutes. 1,440 at most. | no cap |
 | On | Off, the trigger no longer starts on its own. | on |

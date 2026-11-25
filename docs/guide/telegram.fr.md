@@ -34,13 +34,13 @@ Quand tu réponds dans Open Space, les boutons disparaissent de Telegram.
 Un bot suit :
 
 - les runs des déclencheurs qui le nomment (**Prévenir sur** dans le déclencheur). Il dit quand ils ont fini si le déclencheur a **Prévenir à la fin** activé ;
-- les sessions qu'il a lancées, sauf si Remote Control est activé pour elles (l'app Claude les montre déjà) ;
+- les sessions qu'il a lancées, et celles à qui tu as répondu ou dont tu as répondu à la question depuis le chat, sauf si Remote Control est activé pour elles (l'app Claude les montre déjà). Il dit quand elles ont fini, même si leur déclencheur a **Prévenir à la fin** désactivé ;
 - toutes les sessions, quand **Toutes les sessions** est activé dans les réglages du bot ;
 - une session choisie avec `/follow`, et pas une retirée avec `/unfollow`.
 
 ## Écrire à une session
 
-Réponds à un des messages du bot pour écrire à sa session. Les fichiers joints partent avec, 20 Mo au plus chacun.
+Réponds à un des messages du bot pour écrire à sa session. Les fichiers joints partent avec, 20 Mo au plus chacun. Le bot te donne ensuite la réponse suivante de la session à la fin de son tour, sauf si Remote Control est activé pour elle.
 
 ## Les commandes
 

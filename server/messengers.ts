@@ -2,11 +2,12 @@
 // user's account only: it holds their tokens, never sent to the page nor readable by a session's file tools).
 //
 // Each linked bot is told, every couple of seconds, about the sessions it follows (a trigger's runs that name it, the
-// sessions it started, or every session when `allSessions`; not a session it started while Remote Control is on, since
-// the Claude app already shows it, unless /follow asks for it, and never one /unfollow dropped): what they wait for, with buttons to answer (a permission,
-// a question), when they finish or stop on an error, and the files they send. An answer given in Open Space removes the
-// buttons. Keys are given by replying to their request with the values: the reply is deleted from the chat at once and
-// its text only goes to the session's key store, like the box in Open Space (never to its conversation, the agent nor
+// sessions it started or passed a reply or an answer to, or every session when `allSessions`; not one of those it
+// started or answered while Remote Control is on, since the Claude app already shows it, unless /follow asks for it,
+// and never one /unfollow dropped): what they wait for, with buttons to answer (a permission, a question), when they
+// finish or stop on an error, and the files they send. An answer given in Open Space removes the buttons.
+// Keys are given by replying to their request with the values: the reply is deleted from the chat at once and its
+// text only goes to the session's key store, like the box in Open Space (never to its conversation, the agent nor
 // the log). Any other reply to one of these messages goes to its session, files included;
 // commands start, stop and list sessions and triggers; plain words go to a small agent driving Open Space through its
 // MCP server (server/messenger-agent.ts), which never answers a permission.
@@ -141,6 +142,8 @@ export class Messengers {
   private readonly seen = new Map<string, { seq: number; busy: boolean; state: SessionInfo['state'] }>();
   /** the sessions a bot started (by `/new` or its agent): it hears of them */
   private readonly started = new Set<string>();
+  /** the sessions a bot passed a reply or an answer to a question: it hears of them like those it started, their next answer included */
+  private readonly replied = new Set<string>();
   /** the sessions a bot was told to follow (`/follow`) or to leave alone (`/unfollow`), whatever else says: never both for one session */
   private readonly forced = new Map<string, boolean>();
   private timer: NodeJS.Timeout | null = null;
@@ -313,6 +316,7 @@ export class Messengers {
       const session = this.deps.sessions().find((each) => each.id === replyTo);
       if (!session) return void await this.say(bot, st.messengers.sessionGone);
       this.deps.send(session.id, text, files);
+      this.replied.add(`${bot.id}|${session.id}`);
       return void await this.say(bot, st.messengers.passed(session.name), message.message_id);
     }
     if (command) return this.onCommand(bot, command[0], command[1], message);
@@ -498,6 +502,7 @@ export class Messengers {
       return false;
     }
     this.deps.reply(choice.sessionId, choice.requestId, choice.answers);
+    this.replied.add(`${bot.id}|${choice.sessionId}`);
     this.choices.delete(number);
     await this.settle(bot, key, st.messengers.answered(Object.values(choice.answers).join(' · ')));
     return true;
@@ -524,9 +529,10 @@ export class Messengers {
     const forced = this.forced.get(key);
     if (forced === false) return null;
     if (forced || bot.allSessions) return { done: true };
-    // with Remote Control on, the user already follows a session it started in the Claude app
+    // with Remote Control on, the user already follows a session it started or answered in the Claude app
     const remoteOn = session.remote ? session.remote.state !== 'failed' : !!session.remoteSession;
-    if (this.started.has(key) && !remoteOn) return { done: true };
+    // one it started, or wrote to from the chat: its end is told, whatever its trigger's notifyDone says
+    if ((this.started.has(key) || this.replied.has(key)) && !remoteOn) return { done: true };
     const trigger = session.trigger && triggers.find((each) => each.id === session.trigger!.id);
     return trigger?.messengers.includes(bot.id) ? { done: trigger.notifyDone } : null;
   }

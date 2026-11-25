@@ -21,7 +21,7 @@ Un déclencheur lance une session tout seul, à heure fixe (cron) ou quand un au
 | Remote Control | Suivre le run et valider depuis l'app Claude du téléphone. | activé |
 | Navigateur pour tes comptes | Comme les réglages, le navigateur partagé, ou « Mon Chrome » (ton vrai Chrome via Claude in Chrome). Open Space ouvre Chrome en arrière-plan s'il est fermé (macOS). Se règle dans Open Space seulement, jamais depuis une session. | comme les réglages |
 | Prévenir sur | Les bots Telegram qui reçoivent ce que ses runs attendent et les fichiers qu'ils envoient. | aucun |
-| Prévenir à la fin | Envoie aussi la dernière réponse de chaque run à ces bots. | activé |
+| Prévenir à la fin | Envoie aussi la dernière réponse de chaque run à ces bots. Désactivé, un run à qui tu as répondu depuis Telegram (message ou question) envoie quand même sa réponse suivante, sauf si Remote Control est activé pour lui. | activé |
 | Plafond de coût ($) | Le run s'arrête une fois cette somme dépensée, estimée au prix public. 1 000 au plus. | pas de plafond |
 | Plafond de temps (min) | Le run s'arrête au bout de ces minutes. 1 440 au plus. | pas de plafond |
 | Actif | Éteint, il ne part plus tout seul. | activé |

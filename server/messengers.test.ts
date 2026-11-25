@@ -171,6 +171,63 @@ describe('the chat bots', () => {
     }
   });
 
+  it('tells the end of a run it wrote to or answered from the chat, though its trigger keeps its ends quiet', async () => {
+    const fake = fakeTelegram();
+    const done: string[] = [];
+    const run = (id: string, name: string) => ({ id, name, cwd: '/work/pilou', state: 'work', stateSince: 0, permissions: [], trigger: { id: 't1', name: 'Manager' } }) as unknown as SessionInfo;
+    const asking = run('s1', 'JD');
+    const failing = run('s2', 'Ana');
+    const trigger = { id: 't1', name: 'Manager', messengers: [] as string[], notifyDone: false } as unknown as Trigger;
+    const messengers = new Messengers({
+      file: path.join(base, 'messengers-replied.json'), api: fake.api,
+      sessions: () => [asking, failing], events: () => [], lastWords: (id) => `last words of ${id}`, triggers: () => [trigger],
+      answer: () => {}, reply: (id, requestId, answers) => done.push(`reply ${id} ${requestId} ${JSON.stringify(answers)}`),
+      send: (id, text) => done.push(`send ${id} ${text}`), interrupt: () => {}, remote: () => {}, fire: async () => { throw new Error('unused'); },
+      startSession: async () => asking, folders: () => ['/work/pilou'], saveUpload: (name) => name, attachment: () => null,
+      agent: async () => ({ text: '', conversation: null }), giveSecrets: () => [], onChange: () => {}, log: () => {},
+    });
+    const told = (id: string) => fake.sent('sendMessage').filter((each) => String(each.body.text).includes(`last words of ${id}`)).length;
+    const turn = async (session: SessionInfo) => {
+      session.state = 'work';
+      await messengers.tick();
+      session.state = 'wait';
+      await messengers.tick();
+    };
+    try {
+      messengers.save(undefined, { name: 'Phone', token: TOKEN, allSessions: false, model: '' });
+      trigger.messengers.push(messengers.list()[0]!.id);
+      fake.message(`/start ${messengers.list()[0]!.linkCode}`);
+      await until(() => messengers.list()[0]!.linked);
+      await messengers.tick();
+      await turn(asking);
+      await turn(failing);
+      assert.deepEqual([told('s1'), told('s2')], [0, 0], 'Tell when done off: no end told');
+
+      // a question answered with its button: the run's next answer is told
+      asking.state = 'perm';
+      asking.permissions = [{ requestId: 'q1', who: 'JD', tool: 'AskUserQuestion', detail: '', canAlways: false, questions: [{ question: 'Which ticket?', header: '', multiSelect: false, options: [{ label: 'PROJ-1', description: '' }, { label: 'PROJ-2', description: '' }] }] }];
+      await messengers.tick();
+      const question = fake.sent('sendMessage').find((each) => String(each.body.text).includes('Which ticket?'))!;
+      const button = (question.body.reply_markup as { inline_keyboard: telegram.Button[][] }).inline_keyboard[0]![0]!;
+      fake.push({ callback_query: { id: 'cb1', data: button.callback_data, message: { message_id: question.id!, chat: { id: 42 } } } });
+      await until(() => done.includes('reply s1 q1 {"Which ticket?":"PROJ-1"}'));
+      asking.permissions = [];
+      await turn(asking);
+      assert.equal(told('s1'), 1, 'answered from the chat: its end is told');
+
+      // a reply to the notice of its error: the run's next answer is told
+      failing.state = 'error';
+      await messengers.tick();
+      const failed = fake.sent('sendMessage').find((each) => each.body.text === st.messengers.failed('Ana'))!;
+      fake.message('try again', { reply_to_message: { message_id: failed.id! } });
+      await until(() => done.includes('send s2 try again'));
+      await turn(failing);
+      assert.equal(told('s2'), 1, 'written to from the chat: its end is told');
+    } finally {
+      messengers.stop();
+    }
+  });
+
   it('matches what is typed on a phone to a name', () => {
     const triggers = [{ name: 'Ticket Jira assigné' }, { name: 'Récap du matin' }];
     assert.deepEqual(matchByName(triggers, (each) => each.name, 'ticket jira assigne PROJ-12'), { item: triggers[0], rest: 'PROJ-12' });

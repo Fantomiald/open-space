@@ -34,13 +34,13 @@ When you answer in Open Space, the buttons in Telegram are taken off.
 A bot follows:
 
 - the runs of the triggers that name it (**Tell** in the trigger). It says when they are done if the trigger has **Tell when done** on;
-- the sessions it started, unless Remote Control is on for them (the Claude app already shows those);
+- the sessions it started, and those you replied to or whose question you answered from the chat, unless Remote Control is on for them (the Claude app already shows those). It says when they are done, even when their trigger has **Tell when done** off;
 - every session, when **Every session** is on in the bot's settings;
 - a session you chose with `/follow`, and not one you dropped with `/unfollow`.
 
 ## Writing to a session
 
-Reply to one of the bot's messages to write to its session. Files you attach go with it, 20 MB at most each.
+Reply to one of the bot's messages to write to its session. Files you attach go with it, 20 MB at most each. The bot then tells you the session's next answer when its turn ends, unless Remote Control is on for it.
 
 ## Commands
 
