@@ -1,5 +1,11 @@
 # Versions
 
+## 1.37.6
+
+- Automates : ton propre lancement (« Lancer maintenant », /run sur Telegram, bouton ↻ d’un mod) part toujours, même si le run d’avant travaille encore ; l’horloge attend que les deux aient fini.
+- Telegram : un run auquel tu as répondu ou dont tu as répondu à la question depuis le chat te prévient quand il a fini, même si son automate ne prévient pas d’habitude.
+- `finish_run` prend `quiet` : un run sans rien pour toi ne t’envoie pas « terminé » (ses fichiers et ses erreurs arrivent toujours). (PR #65 de JbPons)
+
 ## 1.37.5
 
 - Automates : un run qui attend seulement ta réponse à sa question (AskUserQuestion) ne bloque plus son automate, le suivant part, et ta réponse arrive quand même au run qui l’a posée. Un seul run de ce genre à la fois par automate ; une demande d’accord, de clé ou d’un serveur MCP bloque toujours. (PR #63 de JbPons)
