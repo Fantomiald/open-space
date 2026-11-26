@@ -21,7 +21,7 @@ A trigger starts a session on its own, at a set time (cron) or when another prog
 | Remote Control | Follow the run and approve from the Claude app on your phone. | on |
 | Browser for your accounts | As in the settings, the shared browser, or "My Chrome" (your real Chrome through Claude in Chrome). Open Space opens Chrome in the background when it is closed (macOS). Set in Open Space only, never from a session. | as in the settings |
 | Tell | The Telegram bots that get what its runs wait for and the files they send. | none |
-| Tell when done | Also sends the last answer of each run to those bots. | on |
+| Tell when done | Also sends the last answer of each run to those bots. Off, a run you replied to or answered from Telegram still sends its next answer, unless Remote Control is on for it. | on |
 | Cost cap ($) | The run stops once it has spent this much, estimated at list prices. 1,000 at most. | no cap |
 | Time cap (min) | The run stops after this many minutes. 1,440 at most. | no cap |
 | On | Off, the trigger no longer starts on its own. | on |
@@ -45,7 +45,7 @@ The folder must have been approved once if its settings run code (hooks, MCP ser
 
 ## Cron triggers
 
-Open Space checks the schedules every 20 seconds and starts each matching trigger once per minute. One run at a time: while the previous run works or waits for your go, the next start is skipped. A run that only waits for your answer to its question does not hold the trigger: the next one starts, and your answer still reaches the run that asked (one such run at a time).
+Open Space checks the schedules every 20 seconds and starts each matching trigger once per minute. One run at a time: while the previous run works or waits for your go, the next start is skipped. A run you start yourself (**Run now**, `/run` on Telegram) always starts, beside the one still at work; the schedule then waits until both are done. A run that only waits for your answer to its question does not hold the trigger: the next one starts, and your answer still reaches the run that asked (one such run at a time).
 
 ## Webhook triggers
 
@@ -84,7 +84,7 @@ The keys of a trigger are given to each run's `os-secret` when it starts. The se
 
 ## Ending a run
 
-A run's session can call the MCP tool `finish_run` once its task is done and nothing waits for you. It closes 5 seconds after the end of that turn, and its conversation stays in Resume. A run that never calls it closes after one hour left alone in `wait`. A new turn cancels the close.
+A run's session can call the MCP tool `finish_run` once its task is done and nothing waits for you. It closes 5 seconds after the end of that turn, and its conversation stays in Resume. With `quiet: true`, the run says it has nothing for you: the Telegram bots are not told it finished, even with **Tell when done** on (the files it sent and an error still are). That choice is per run: the trigger's **Tell when done** stays as it is for the others. A run that never calls it closes after one hour left alone in `wait`. A new turn cancels the close.
 
 ## From an agent
 

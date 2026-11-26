@@ -27,27 +27,27 @@ Open Space regarde les sessions toutes les 2 secondes et prévient chaque bot re
 - une demande de clés : un simple avis. Les clés se donnent dans Open Space, jamais dans Telegram ;
 - les fichiers qu'une session envoie ;
 - une session qui s'arrête sur une erreur ;
-- une session qui finit son tour, avec ses derniers mots.
+- une session qui finit son tour, avec ses derniers mots. Pas un run qui s'est fini par `finish_run` avec `quiet` : il n'a rien pour toi.
 
 Quand tu réponds dans Open Space, les boutons disparaissent de Telegram.
 
 Un bot suit :
 
 - les runs des déclencheurs qui le nomment (**Prévenir sur** dans le déclencheur). Il dit quand ils ont fini si le déclencheur a **Prévenir à la fin** activé ;
-- les sessions qu'il a lancées, sauf si Remote Control est activé pour elles (l'app Claude les montre déjà) ;
+- les sessions qu'il a lancées, et celles à qui tu as répondu ou dont tu as répondu à la question depuis le chat, sauf si Remote Control est activé pour elles (l'app Claude les montre déjà). Il dit quand elles ont fini, même si leur déclencheur a **Prévenir à la fin** désactivé ;
 - toutes les sessions, quand **Toutes les sessions** est activé dans les réglages du bot ;
 - une session choisie avec `/follow`, et pas une retirée avec `/unfollow`.
 
 ## Écrire à une session
 
-Réponds à un des messages du bot pour écrire à sa session. Les fichiers joints partent avec, 20 Mo au plus chacun.
+Réponds à un des messages du bot pour écrire à sa session. Les fichiers joints partent avec, 20 Mo au plus chacun. Le bot te donne ensuite la réponse suivante de la session à la fin de son tour, sauf si Remote Control est activé pour elle.
 
 ## Les commandes
 
 | Commande | Ce qu'elle fait |
 |---|---|
 | `/sessions` | Qui fait quoi : nom, état, dossier, déclencheur, `RC` quand Remote Control est activé. |
-| `/run <déclencheur> [texte]` | Lance un déclencheur. Le texte, s'il y en a un, est passé comme le corps d'un webhook. |
+| `/run <déclencheur> [texte]` | Lance un déclencheur. Le texte, s'il y en a un, est passé comme le corps d'un webhook. Un déclencheur cron part même si son run précédent travaille encore. |
 | `/new <dossier> <tâche>` | Lance une session dans un de tes dossiers, avec Remote Control. |
 | `/stop <nom>` | Interrompt ce que fait une session. Elle reste ouverte. |
 | `/remote <nom>` | Active Remote Control pour une session. |

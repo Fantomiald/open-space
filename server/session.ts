@@ -142,6 +142,8 @@ export class Session {
   private interrupted = false;
   /** the pictures of the queued messages, by queue id: kept in memory only (a restart keeps the texts, not them) */
   private finishing = false;
+  /** finish_run said this turn has nothing for the user: the bots are not told it ended; the next message lifts it */
+  private quietFinish = false;
   /** a trigger's caps (0: none), and what the run spent so far at list prices */
   private caps = { cost: 0, minutes: 0 };
   private spent = 0;
@@ -456,6 +458,8 @@ export class Session {
     this.suggestion = undefined;
     this.turnOutput = false;
     this.interrupted = false;
+    // a new turn: what it ends with may be for the user again
+    this.quietFinish = false;
     // a message calls a resting session back from the break room, and is news to read again
     this.info.resting = undefined;
     this.info.quietFrom = undefined;
@@ -996,8 +1000,14 @@ export class Session {
   }
 
   /** The turn is over: the queue leaves, or the session waits (`tell`: and the user hears it finished; `how`: how it ended). */
-  /** A trigger's run that said it is done (finish_run): it closes once its turn ends. */
-  finishAfterTurn() { this.finishing = true; }
+  /** A trigger's run that said it is done (finish_run): it closes once its turn ends; `quiet`: and nothing in it is for the user. */
+  finishAfterTurn(quiet = false) {
+    this.finishing = true;
+    this.quietFinish = quiet;
+  }
+
+  /** Whether the turn that ends, or just ended, is one finish_run said had nothing for the user (Messengers keep its end quiet). */
+  get finishesQuietly() { return this.quietFinish; }
 
   /** A trigger's run caps: past either, it is stopped and closed (its conversation stays in Resume). */
   limit(caps: { cost: number; minutes: number }) {

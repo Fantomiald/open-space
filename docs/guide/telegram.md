@@ -27,27 +27,27 @@ Open Space looks at the sessions every 2 seconds and tells each linked bot about
 - a request for keys: only a notice. Keys are given in Open Space, never in Telegram;
 - the files a session sends;
 - a session that stops on an error;
-- a session that finishes its turn, with its last words.
+- a session that finishes its turn, with its last words. Not a run that ended with `finish_run` and `quiet`: it has nothing for you.
 
 When you answer in Open Space, the buttons in Telegram are taken off.
 
 A bot follows:
 
 - the runs of the triggers that name it (**Tell** in the trigger). It says when they are done if the trigger has **Tell when done** on;
-- the sessions it started, unless Remote Control is on for them (the Claude app already shows those);
+- the sessions it started, and those you replied to or whose question you answered from the chat, unless Remote Control is on for them (the Claude app already shows those). It says when they are done, even when their trigger has **Tell when done** off;
 - every session, when **Every session** is on in the bot's settings;
 - a session you chose with `/follow`, and not one you dropped with `/unfollow`.
 
 ## Writing to a session
 
-Reply to one of the bot's messages to write to its session. Files you attach go with it, 20 MB at most each.
+Reply to one of the bot's messages to write to its session. Files you attach go with it, 20 MB at most each. The bot then tells you the session's next answer when its turn ends, unless Remote Control is on for it.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `/sessions` | Who does what: name, state, folder, trigger, `RC` when Remote Control is on. |
-| `/run <trigger> [text]` | Starts a trigger. The text, if any, is passed like a webhook body. |
+| `/run <trigger> [text]` | Starts a trigger. The text, if any, is passed like a webhook body. A cron trigger starts even while its previous run still works. |
 | `/new <folder> <task>` | Starts a session in one of your folders, with Remote Control. |
 | `/stop <name>` | Interrupts what a session is doing. It stays open. |
 | `/remote <name>` | Turns Remote Control on for a session. |

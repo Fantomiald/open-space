@@ -1196,7 +1196,9 @@ export class SessionManager {
   unqueue(id: string, queueId: string) { this.session(id).unqueue(queueId); }
   sendNow(id: string) { this.session(id).sendNow(); }
   close(id: string) { return this.session(id).close(); }
-  finishAfterTurn(id: string) { this.session(id).finishAfterTurn(); }
+  finishAfterTurn(id: string, quiet = false) { this.session(id).finishAfterTurn(quiet); }
+  /** finish_run said the session's last turn had nothing for the user (false for an unknown session) */
+  finishesQuietly(id: string) { return this.sessions.get(id)?.finishesQuietly ?? false; }
   tune(id: string, change: TuneChange) { return this.session(id).tune(change); }
 
   rename(id: string, name: string) {

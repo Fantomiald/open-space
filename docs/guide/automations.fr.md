@@ -21,7 +21,7 @@ Un déclencheur lance une session tout seul, à heure fixe (cron) ou quand un au
 | Remote Control | Suivre le run et valider depuis l'app Claude du téléphone. | activé |
 | Navigateur pour tes comptes | Comme les réglages, le navigateur partagé, ou « Mon Chrome » (ton vrai Chrome via Claude in Chrome). Open Space ouvre Chrome en arrière-plan s'il est fermé (macOS). Se règle dans Open Space seulement, jamais depuis une session. | comme les réglages |
 | Prévenir sur | Les bots Telegram qui reçoivent ce que ses runs attendent et les fichiers qu'ils envoient. | aucun |
-| Prévenir à la fin | Envoie aussi la dernière réponse de chaque run à ces bots. | activé |
+| Prévenir à la fin | Envoie aussi la dernière réponse de chaque run à ces bots. Désactivé, un run à qui tu as répondu depuis Telegram (message ou question) envoie quand même sa réponse suivante, sauf si Remote Control est activé pour lui. | activé |
 | Plafond de coût ($) | Le run s'arrête une fois cette somme dépensée, estimée au prix public. 1 000 au plus. | pas de plafond |
 | Plafond de temps (min) | Le run s'arrête au bout de ces minutes. 1 440 au plus. | pas de plafond |
 | Actif | Éteint, il ne part plus tout seul. | activé |
@@ -45,7 +45,7 @@ Si les réglages du dossier font tourner du code (hooks, serveurs MCP), le dossi
 
 ## Déclencheurs à heure fixe
 
-Open Space regarde les horaires toutes les 20 secondes et lance chaque déclencheur qui correspond une fois par minute. Un run à la fois : tant que le précédent travaille ou attend ton accord, le lancement suivant est ignoré. Un run qui attend seulement ta réponse à sa question ne bloque pas le déclencheur : le suivant part, et ta réponse arrive quand même au run qui l'a posée (un seul run de ce genre à la fois).
+Open Space regarde les horaires toutes les 20 secondes et lance chaque déclencheur qui correspond une fois par minute. Un run à la fois : tant que le précédent travaille ou attend ton accord, le lancement suivant est ignoré. Un run que tu lances toi-même (**Lancer maintenant**, `/run` sur Telegram) part toujours, à côté de celui qui travaille encore ; l'horaire attend alors que les deux aient fini. Un run qui attend seulement ta réponse à sa question ne bloque pas le déclencheur : le suivant part, et ta réponse arrive quand même au run qui l'a posée (un seul run de ce genre à la fois).
 
 ## Déclencheurs par webhook
 
@@ -84,7 +84,7 @@ Les clés d'un déclencheur sont données au `os-secret` de chaque run à son la
 
 ## Finir un run
 
-La session d'un run peut appeler l'outil MCP `finish_run` une fois sa tâche faite, quand rien ne t'attend. Elle se ferme 5 secondes après la fin de ce tour, et sa conversation reste dans Reprendre. Un run qui ne l'appelle jamais se ferme au bout d'une heure laissé seul en `wait`. Un nouveau tour annule la fermeture.
+La session d'un run peut appeler l'outil MCP `finish_run` une fois sa tâche faite, quand rien ne t'attend. Elle se ferme 5 secondes après la fin de ce tour, et sa conversation reste dans Reprendre. Avec `quiet: true`, le run dit qu'il n'a rien pour toi : les bots Telegram ne sont pas prévenus qu'il a fini, même avec **Prévenir à la fin** activé (les fichiers qu'il a envoyés et une erreur le sont quand même). Ce choix vaut pour ce run seulement : le **Prévenir à la fin** du déclencheur reste tel quel pour les autres. Un run qui ne l'appelle jamais se ferme au bout d'une heure laissé seul en `wait`. Un nouveau tour annule la fermeture.
 
 ## Depuis un agent
 

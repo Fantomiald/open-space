@@ -6,6 +6,7 @@ import { after, describe, it } from 'node:test';
 import type { ModInfo } from '../shared/mods.ts';
 import type { Preferences, SessionInfo } from '../shared/protocol.ts';
 import { parseTriggerInput, type Trigger } from '../shared/triggers.ts';
+import { st } from './i18n/index.ts';
 import { ExternalKey, handleMcp, MCP_SETTINGS, openSpaceMcpConfig, sessionMcpKey, TOOLS, toolsFor, type Caller, type OpenSpaceApi } from './mcp.ts';
 import { DEFAULT_PREFERENCES, parsePreferences } from './settings.ts';
 
@@ -62,7 +63,7 @@ function fakeApi() {
     remote: (id, enabled) => { done.push(`remote ${id} ${enabled}`); },
     rename: (id, name) => { done.push(`rename ${id} ${name}`); },
     setPending: (id, items) => { done.push(`pending ${id} ${JSON.stringify(items)}`); return []; },
-    finish: (id) => { done.push(`finish ${id}`); },
+    finish: (id, quiet) => { done.push(`finish ${id}${quiet ? ' quiet' : ''}`); },
     switchBrowser: (id, browser) => { done.push(`browser ${id} ${browser}`); return browser === 'shared' ? 'same' : 'switching'; },
     sendFile: async (bot, file) => { done.push(`file ${bot} ${file}`); },
     bots: () => [{ id: 'bot00001', name: 'iMD', username: 'imd_juyin_bot' }],
@@ -204,6 +205,20 @@ describe('the open-space MCP server', () => {
     assert.equal((await tool(api, 'finish_run', {}, S1)).isError, true, 'not a run');
     assert.equal((await tool(api, 'finish_run', {}, RUN)).isError, false);
     assert.deepEqual(done, ['rename s5 PROJ-1549', 'finish s5']);
+  });
+
+  it('lets a run finish quietly, with nothing for the user, only when it says so', async () => {
+    const { api, done } = fakeApi();
+    const RUN: Caller = { session: 's5' };
+    const schema = toolsFor(RUN).find((each) => each.name === 'finish_run')!.inputSchema as { properties: Record<string, { type: string }> };
+    assert.equal(schema.properties.quiet?.type, 'boolean');
+    const quiet = await tool(api, 'finish_run', { quiet: true }, RUN);
+    assert.equal(quiet.isError, false);
+    assert.equal(quiet.text, st.triggers.mcp.finishingQuietly, 'it hears its end stays quiet');
+    await tool(api, 'finish_run', { quiet: false }, RUN);
+    await tool(api, 'finish_run', { quiet: 'yes' }, RUN);
+    await tool(api, 'finish_run', {}, RUN);
+    assert.deepEqual(done, ['finish s5 quiet', 'finish s5', 'finish s5', 'finish s5'], 'only quiet: true keeps it quiet');
   });
 
   it('lets a session say what it leaves pending, and nobody else', async () => {

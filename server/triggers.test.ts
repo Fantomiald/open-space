@@ -173,7 +173,7 @@ describe('the triggers', () => {
     const saved = await triggers.save(undefined, input());
     assert.ok('trigger' in saved);
     assert.equal((await triggers.fire(saved.trigger.id, 'manual')).outcome, 'started');
-    assert.equal((await triggers.fire(saved.trigger.id, 'manual')).outcome, 'skipped');
+    assert.equal((await triggers.fire(saved.trigger.id, 'agent')).outcome, 'skipped', 'an agent\'s firing waits its turn');
     states.set('session-1', 'perm');
     assert.equal((await triggers.fire(saved.trigger.id, 'cron')).outcome, 'skipped', 'waiting for the user is still busy');
     states.set('session-1', 'wait');
@@ -191,6 +191,25 @@ describe('the triggers', () => {
     assert.equal(failed.error, 'not trusted');
     assert.deepEqual(triggers.recentRuns().map((run) => run.outcome), ['failed', 'started', 'started', 'skipped', 'skipped', 'started']);
     assert.ok(stillBusy('starting') && stillBusy('work') && stillBusy('perm') && !stillBusy('wait') && !stillBusy(null));
+  });
+
+  it('starts the user\'s own run of a cron trigger beside the one still at work, while the clock keeps waiting', async () => {
+    const { triggers, started, states } = setup();
+    const saved = await triggers.save(undefined, input());
+    assert.ok('trigger' in saved);
+    const id = saved.trigger.id;
+    assert.equal((await triggers.fire(id, 'cron')).outcome, 'started');
+    assert.equal((await triggers.fire(id, 'cron')).outcome, 'skipped', 'the clock waits for the run at work');
+    const mine = await triggers.fire(id, 'manual', 'PROJ-7');
+    assert.deepEqual([mine.outcome, mine.sessionId], ['started', 'session-2'], 'the user\'s run starts all the same');
+    assert.ok(started[1].prompt.includes('PROJ-7'), 'with the text given');
+    assert.equal((await triggers.fire(id, 'cron')).outcome, 'skipped', 'two at work: the clock still waits');
+    assert.equal((await triggers.fire(id, 'agent')).outcome, 'skipped', 'and so does an agent');
+    states.set('session-1', 'wait');
+    assert.equal((await triggers.fire(id, 'cron')).outcome, 'skipped', 'the user\'s run still works');
+    states.set('session-2', 'wait');
+    assert.equal((await triggers.fire(id, 'cron')).outcome, 'started', 'both done: the clock starts again');
+    assert.equal(started.length, 3);
   });
 
   it('runs a webhook trigger\'s calls side by side up to its limit, queues the rest in order, and lets one be cancelled', async () => {

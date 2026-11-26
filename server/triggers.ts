@@ -4,8 +4,10 @@
 // through the same path as the page (index.ts startSession: crew name, trust rules, Remote Control), marked with the
 // trigger. A webhook trigger runs up to PARALLEL_HOOK_RUNS sessions at once (one per call); the calls beyond wait in a
 // queue, kept in memory, and start as runs end (starting, at work, or waiting for a permission counts as working). A
-// cron trigger runs one at a time: a firing while its previous run works is skipped, the next minute will come. A
-// minute missed while Open Space was stopped is not caught up, nor is a call still queued when it stopped.
+// cron trigger runs one at a time: a clock or agent firing while a run of it works is skipped, the next minute will
+// come; the user's own (`manual`: "Lancer maintenant", /run on Telegram) always starts, beside the run still at work,
+// which then holds the clock until both are done. A minute missed while Open Space was stopped is not caught up, nor
+// is a call still queued when it stopped.
 import { randomBytes } from 'node:crypto';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { cronMatches, minuteOf, parseCron } from '../shared/cron.ts';
@@ -185,8 +187,9 @@ export class Triggers {
   }
 
   /**
-   * Starts a run, or queues it when a webhook trigger already works at its limit (a cron trigger's is skipped instead).
-   * `payload`: what a webhook sent. A test run is in plan mode: the session says what it would do and changes nothing.
+   * Starts a run, or queues it when a webhook trigger already works at its limit (a cron trigger's is skipped instead,
+   * unless the user asked for it). `payload`: what a webhook sent. A test run is in plan mode: the session says what it
+   * would do and changes nothing.
    */
   async fire(id: string, source: TriggerRunSource, payload: string | null = null): Promise<TriggerRun> {
     const run: TriggerRun = { id: newRunId(), triggerId: id, at: this.now(), source, outcome: 'queued' };
@@ -194,7 +197,11 @@ export class Triggers {
     if (!trigger) return { ...run, outcome: 'failed', error: st.triggers.unknown };
     const queue = this.queues.get(id) ?? [];
     if (!queue.length && this.room(trigger) > 0) return this.launch(trigger, run, payload);
-    if (trigger.kind !== 'webhook') return this.record({ ...run, outcome: 'skipped', error: st.triggers.stillBusy });
+    if (trigger.kind !== 'webhook') {
+      // the user's own run of a cron trigger is never turned away: it starts beside the one still at work, and counts
+      // like it in room(), so the clock waits for both
+      return source === 'manual' ? this.launch(trigger, run, payload) : this.record({ ...run, outcome: 'skipped', error: st.triggers.stillBusy });
+    }
     if (queue.length >= MAX_QUEUED) return this.record({ ...run, outcome: 'skipped', error: st.triggers.queueFull });
     queue.push({ run, payload });
     this.queues.set(id, queue);
