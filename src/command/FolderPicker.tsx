@@ -1,6 +1,6 @@
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n/index.ts';
-import { folderName, homeRelative, splitPath } from '../lib/format.ts';
+import { folderName, homeRelative, splitPath, withoutTrailingSeparator } from '../lib/format.ts';
 import { matchFolders } from '../state/folders.ts';
 import { useDismiss } from './useDismiss.ts';
 
@@ -68,7 +68,7 @@ export function FolderPicker({ directories, value, placeholder, onChange, field 
                 onPointerDown={(e) => e.preventDefault()} onClick={() => pick(directory)} onPointerEnter={() => setActive(index)}
               >
                 <span className="cp-folder__name">{name}</span>
-                <span className="cp-folder__parent">{folder}</span>
+                <span className="cp-folder__parent">{withoutTrailingSeparator(folder)}</span>
               </li>
             );
           })}

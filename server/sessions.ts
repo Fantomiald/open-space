@@ -35,6 +35,7 @@ import { readGitPending } from './pending-git.ts';
 import { pickSessionName } from './names.ts';
 import { sessionChanges } from './changes.ts';
 import { listProjectDirectories, resolveAllowedDirectory } from './paths.ts';
+import { lastConversationTimes, mostRecentFirst } from './recent-folders.ts';
 import { Session, newSessionInfo, type SessionDeps, type StoredInfo, type TurnEnd } from './session.ts';
 import { SessionLog, switchedOffFolder } from './session-log.ts';
 import { searchSessions } from './search.ts';
@@ -533,7 +534,11 @@ export class SessionManager {
   }
   /** The folder a session works in, or null when there is no such session. */
   folderOf(id: string): string | null { return this.sessions.get(id)?.snapshot().cwd ?? null; }
-  directories(): string[] { return listProjectDirectories(this.deps.config.roots); }
+  async directories(): Promise<string[]> {
+    const directories = listProjectDirectories(this.deps.config.roots);
+    const times = await lastConversationTimes(directories, this.deps.home);
+    return mostRecentFirst(directories, (directory) => times.get(directory));
+  }
 
   /** What a session changed in its files (see changes.ts). */
   changes(id: string): Promise<SessionChanges> {

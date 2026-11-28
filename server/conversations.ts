@@ -21,7 +21,10 @@ const TAIL_BYTES = 768 * 1024;
 const LIST_LIMIT = 40;
 const TEXT_MAX = 2000;
 
-export const projectFolder = (cwd: string, home = os.homedir()) => path.join(home, '.claude', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'));
+/** A folder's key in ~/.claude/projects: its path with every character but letters and digits turned into "-". */
+export const projectKey = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, '-');
+
+export const projectFolder = (cwd: string, home = os.homedir()) => path.join(home, '.claude', 'projects', projectKey(cwd));
 
 /** The keys of the folder's worktrees in .claude/worktrees (Claude Desktop's sessions, `claude --worktree`'s). */
 async function worktreeFolders(cwd: string, home: string): Promise<string[]> {

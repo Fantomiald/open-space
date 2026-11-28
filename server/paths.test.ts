@@ -130,4 +130,42 @@ describe('listProjectDirectories', () => {
     const listed = listProjectDirectories([lists]);
     assert.deepEqual(listed.sort(), [path.join(lists, 'app'), path.join(lists, 'group'), path.join(lists, 'group', 'vendored'), path.join(lists, 'group', 'web')]);
   });
+
+  it('recognizes .NET, compose and CMake projects without listing their build folders', () => {
+    const lists = path.join(base, 'markers');
+    for (const [folder, marker] of [['dotnet', 'App.csproj'], ['stack', 'compose.yaml'], ['native', 'CMakeLists.txt']]) {
+      mkdirSync(path.join(lists, folder, 'src'), { recursive: true });
+      writeFileSync(path.join(lists, folder, marker), '');
+    }
+    mkdirSync(path.join(lists, 'dotnet', 'bin'));
+    mkdirSync(path.join(lists, 'dotnet', 'obj'));
+    assert.deepEqual(listProjectDirectories([lists]).sort(), ['dotnet', 'native', 'stack'].map((folder) => path.join(lists, folder)));
+  });
+
+  it('keeps the sub-projects of a solution, but not its build folders', () => {
+    const lists = path.join(base, 'solution');
+    mkdirSync(path.join(lists, 'Mod', 'QuickMend'), { recursive: true });
+    mkdirSync(path.join(lists, 'Mod', 'TalentTree'), { recursive: true });
+    mkdirSync(path.join(lists, 'Mod', 'docs'), { recursive: true });
+    mkdirSync(path.join(lists, 'Mod', 'dist'), { recursive: true });
+    writeFileSync(path.join(lists, 'Mod', 'Mod.sln'), '');
+    writeFileSync(path.join(lists, 'Mod', 'QuickMend', 'QuickMend.csproj'), '');
+    writeFileSync(path.join(lists, 'Mod', 'TalentTree', 'TalentTree.csproj'), '');
+    assert.deepEqual(listProjectDirectories([lists]), ['Mod', path.join('Mod', 'QuickMend'), path.join('Mod', 'TalentTree')].map((folder) => path.join(lists, folder)));
+  });
+
+  it('never offers build or dependency folders', () => {
+    const lists = path.join(base, 'builds');
+    for (const name of ['bin', 'obj', 'dist', 'build', 'out', 'target', 'packages', 'venv', '__pycache__']) mkdirSync(path.join(lists, 'group', name), { recursive: true });
+    mkdirSync(path.join(lists, 'group', 'api'));
+    assert.deepEqual(listProjectDirectories([lists]), [path.join(lists, 'group'), path.join(lists, 'group', 'api')]);
+  });
+
+  it('offers a build-named folder that is a project, but not one without markers', () => {
+    const lists = path.join(base, 'named');
+    mkdirSync(path.join(lists, 'build'), { recursive: true });
+    writeFileSync(path.join(lists, 'build', 'package.json'), '{}');
+    mkdirSync(path.join(lists, 'bin'));
+    assert.deepEqual(listProjectDirectories([lists]), [path.join(lists, 'build')]);
+  });
 });
