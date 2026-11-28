@@ -2,7 +2,7 @@
 // floating (a box of its own over the rest, see windows.ts). The grid holds the sessions' ids and `mod:<id>` for the
 // mods docked in it; the floating sessions are the boxes of the arrangement's FreeLayout. Pure functions.
 import type { Box } from './room-frame.ts';
-import { addTo, dropAt, moveIn, removeFrom, retile, type Columns, type DropSlot, type Tiling } from './stack.ts';
+import { addTo, dropAt, moveIn, removeFrom, replaceIn, retile, type Columns, type DropSlot, type Tiling } from './stack.ts';
 import type { FreeLayout } from './windows.ts';
 
 const MOD_SLOT = 'mod:';
@@ -22,6 +22,38 @@ const floatingIds = (free: FreeLayout) => [...free.order.filter((id) => free.box
 export function openSessions(columns: Columns, free: FreeLayout): string[] {
   const docked = sessionsIn(columns);
   return [...docked, ...floatingIds(free).filter((id) => !docked.includes(id))];
+}
+
+/**
+ * The open sessions, the one opened longest ago first. Those of `previous` still open keep its order; the others join
+ * at the end, the docked ones in the order they were opened (the grid's over the room, the other way round in focus
+ * mode, where the newest opens first), then the floating ones. A layout saved before this order was kept finds it so.
+ * The ids of `elsewhere` (open in the other arrangement) keep their place in it, though they are not open here.
+ */
+export function openOrder(previous: readonly string[], columns: Columns, free: FreeLayout, tiling: Tiling, elsewhere: readonly string[] = []): string[] {
+  const open = openSessions(columns, free), docked = sessionsIn(columns);
+  const kept = previous.filter((id, index) => (open.includes(id) || elsewhere.includes(id)) && previous.indexOf(id) === index);
+  const arriving = [...(tiling.spread ? [...docked].reverse() : docked), ...open.filter((id) => !docked.includes(id))];
+  return [...kept, ...arriving.filter((id) => !kept.includes(id))];
+}
+
+/** The one opened longest ago (`opened`, oldest first) among those `open` here; the first open when none is in `opened`. */
+export const oldestOpen = (opened: readonly string[], open: readonly string[]): string | undefined => opened.find((each) => open.includes(each)) ?? open[0];
+
+/**
+ * `id`, not open yet, opened: beside the others while fewer than `cap` sessions are open (docked or floating) and the
+ * grid has room, else in the place of the one opened longest ago (`opened`, oldest first): its place in the grid, or
+ * its box when it floats. `closed` says which one gave its place; null when none is open to give it (a grid full of mods).
+ */
+export function openIn(columns: Columns, free: FreeLayout, opened: readonly string[], id: string, max: number, cap: number, tiling: Tiling): { columns: string[][]; free: FreeLayout; closed: string | null } | null {
+  const open = openSessions(columns, free);
+  const beside = open.length < cap ? addTo(columns, id, max, tiling) : null;
+  if (beside) return { columns: beside, free, closed: null };
+  const oldest = oldestOpen(opened, open);
+  if (!oldest) return null;
+  if (sessionsIn(columns).includes(oldest)) return { columns: replaceIn(columns, oldest, id), free, closed: oldest };
+  const { [oldest]: box, ...boxes } = free.boxes;
+  return { columns: copy(columns), free: { boxes: { ...boxes, [id]: box }, order: free.order.map((each) => (each === oldest ? id : each)) }, closed: oldest };
 }
 
 /**

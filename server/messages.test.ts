@@ -18,6 +18,11 @@ describe('parseClientMessage', () => {
     assert.equal(parseClientMessage({ t: 'openTerminal', sessionId: 5 }), null);
   });
 
+  it('reads openFolder with a path only (the server then keeps it to the allowed folders)', () => {
+    assert.deepEqual(parseClientMessage({ t: 'openFolder', path: '~/work/app', sessionId: 's1' }), { t: 'openFolder', path: '~/work/app' });
+    for (const path of [undefined, '', 7, ['/etc'], 'x'.repeat(4097)]) assert.equal(parseClientMessage({ t: 'openFolder', path }), null);
+  });
+
   it('reads a request to stop a background task of a session', () => {
     assert.deepEqual(parseClientMessage({ t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' }), { t: 'stopTask', sessionId: 's1', taskId: 'bgj07aynt' });
     assert.equal(parseClientMessage({ t: 'stopTask', sessionId: 's1' }), null);

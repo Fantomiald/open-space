@@ -3,11 +3,11 @@
 // names) and is resolved there on real paths (paths.ts): a symlink never leads outside it, and the folder itself is
 // never renamed or deleted. A save carries the version it was made from, as a note does (journal.ts), so a file the
 // session changed meanwhile is not overwritten without the user knowing.
-import { execFile } from 'node:child_process';
 import { lstatSync, statSync } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { type FileAction, type FileEntry, MAX_SESSION_FILE, type SessionFile } from '../shared/protocol.ts';
+import { revealWithSystem } from './desktop.ts';
 import { st } from './i18n/index.ts';
 import { versionOf } from './journal.ts';
 import { isWithin, resolveInside } from './paths.ts';
@@ -105,9 +105,7 @@ export async function writeSessionFile(root: string, relative: string, text: str
 export function revealFile(root: string, relative: string) {
   const file = fileAt(root, relative);
   if (!file) throw new Error(st.files.missing(relative));
-  if (process.platform === 'darwin') execFile('open', ['-R', file]);
-  else if (process.platform === 'win32') execFile('explorer.exe', [`/select,${file}`]);
-  else execFile('xdg-open', [path.dirname(file)]);
+  revealWithSystem(file);
 }
 
 /** Makes, renames or deletes a file or a folder; returns the folders whose list changed. A new file is opened by the page: see index.ts. */

@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { canArrange } from '../lib/drag.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
-import { dock, dockAt, FLOAT_AWAY, modOfSlot, modSlot, within } from '../state/docking.ts';
+import { dock, dockAt, FLOAT_AWAY, modOfSlot, modSlot, oldestOpen, within } from '../state/docking.ts';
 import { MOD_HEAD, modPlacementKey, NOT_PLACED, type ModPlacement } from '../state/mods.ts';
 import { outKey } from '../state/out.ts';
 import type { Box } from '../state/room-frame.ts';
-import { arrangementOf, maxColumnsIn, tilingOf, useSessions } from '../state/sessions.ts';
+import { arrangementOf, maxColumnsIn, panelWidth, tilingOf, useSessions, windowCapIn } from '../state/sessions.ts';
 import { addTo, dropAt, moveIn, placement, type Columns, type DropSlot } from '../state/stack.ts';
 import { clampBox, GAP, gridBoxes, resizeBox, snapMove, snapResize, zoneAt, zoneBox, type Edge, type Guide } from '../state/windows.ts';
 import { Detail } from './Detail.tsx';
@@ -89,20 +89,25 @@ export function Stack() {
   const free = useSessions((s) => s.free[arrangementOf(s.view)]);
   const placeWindow = useSessions((s) => s.placeWindow);
   const raiseWindow = useSessions((s) => s.raiseWindow);
-  const active = useSessions((s) => (s.selectedId ? s.sessions[s.selectedId]?.name : undefined));
+  // the one the launcher's session will replace when no other fits: the one opened longest ago
+  const oldest = useSessions((s) => { const id = oldestOpen(s.opened, s.openIds); return id ? s.sessions[id]?.name : undefined; });
+  // the width the sessions' panel leaves the windows, which changes as it folds
+  const panel = useSessions((s) => panelWidth(s, s.view));
+  const cap = useSessions((s) => windowCapIn(s.view));
   // the mods floating, which the stack's drag carries too (it may dock them)
   const floatingMods = useSessions((s) => s.openMods.filter((id) => !s.columns.some((column) => column.includes(modSlot(id))) && !s.outKeys.includes(outKey({ kind: 'mod', modId: id }))).map(modSlot).join(' '));
   const tiling = tilingOf(view);
   const [element, area] = useArea(view);
   const placed = area !== null;
   const max = maxColumnsIn(view);
-  const withLauncherOf = (grid: Columns) => (launcherOpen ? addTo(grid, LAUNCHER, max, tiling) : null);
+  // past the cap the launcher covers the windows, like a grid with no room left
+  const withLauncherOf = (grid: Columns) => (launcherOpen && openIds.length < cap ? addTo(grid, LAUNCHER, max, tiling) : null);
   const docked = columns.flat();
   const floatingSessions = openIds.filter((id) => free.boxes[id] && !docked.includes(id));
   const isFloating = (id: string) => (modOfSlot(id) !== null ? !docked.includes(id) : floatingSessions.includes(id));
 
   // over the room the grid keeps to the right, as wide as its columns or as pulled by hand, clear of the status card
-  const widthRange = (count: number) => ({ min: count * tiling.minColumn + (count - 1) * GAP, max: window.innerWidth - 20 * 16 - 3 * GAP });
+  const widthRange = (count: number) => ({ min: count * tiling.minColumn + (count - 1) * GAP, max: window.innerWidth - panel - 20 * 16 - 3 * GAP });
   const gridArea = (count: number): Box | null => {
     if (!area) return null;
     if (view === 'focus') return { left: 0, top: 0, width: area.width, height: area.height };
@@ -135,10 +140,14 @@ export function Stack() {
     return { dock: true, to: columns.length ? dropAt(slots, drag.pointer, columns, tiling) : { column: 0, row: 0 } };
   };
 
+  // a window placed by hand stays on the page, clear of the docked sessions' panel on its left: moved, it is pushed
+  // back; pulled by its left side, that side stops there
+  const fit = (box: Box) => { const kept = clampBox(box, area!); return panel ? { ...kept, left: Math.max(kept.left, 0) } : kept; };
+  const fitPulled = (box: Box) => { const kept = clampBox(box, area!); return panel && kept.left < 0 ? { ...kept, left: 0, width: kept.width + kept.left } : kept; };
   // the sessions floating, in pixels
   const floatingAt = () => {
     if (!area) return {};
-    return Object.fromEntries(floatingSessions.map((id) => [id, clampBox(toPixels(free.boxes[id], area), area)]));
+    return Object.fromEntries(floatingSessions.map((id) => [id, fit(toPixels(free.boxes[id], area))]));
   };
   // the status card is something to stick to as well
   const obstacles = (): Box[] => {
@@ -153,7 +162,7 @@ export function Stack() {
   const carriedBox = (drag: WindowDrag, start: Box, boxes: Record<string, Box>) => {
     const spot = { left: drag.pointer.x - drag.grab.x, top: drag.pointer.y - drag.grab.y };
     const mod = modOfSlot(drag.id) !== null;
-    const moved = mod ? { ...start, ...spot } : clampBox({ ...start, ...spot }, area!);
+    const moved = mod ? { ...start, ...spot } : fit({ ...start, ...spot });
     const zone = mod ? null : zoneAt(drag.pointer, area!);
     if (zone) return { box: moved, zone: zoneBox(zone, area!), guides: [] as Guide[] };
     if (drag.loose) return { box: moved, zone: null, guides: [] as Guide[] };
@@ -225,7 +234,7 @@ export function Stack() {
     handle.setPointerCapture(event.pointerId);
     let latest = startBox;
     const move = (pointer: PointerEvent) => {
-      const pulled = clampBox(resizeBox(startBox, edge, pointer.clientX - from.x, pointer.clientY - from.y), area);
+      const pulled = fitPulled(resizeBox(startBox, edge, pointer.clientX - from.x, pointer.clientY - from.y));
       const result = pointer.metaKey || pointer.ctrlKey ? { box: pulled, guides: [] } : snapResize(pulled, edge, others(boxes, id), area);
       latest = result.box;
       setResizing({ id, ...result });
@@ -345,7 +354,7 @@ export function Stack() {
           />
         ))}
         {zoomed === LAUNCHER && !withLauncher && (
-          <div key={LAUNCHER} className="cp-stack__slot" data-zoomed="true" style={whole ? boxVariables(whole) : undefined}><Launcher onClose={closeLauncher} replacing={active} /></div>
+          <div key={LAUNCHER} className="cp-stack__slot" data-zoomed="true" style={whole ? boxVariables(whole) : undefined}><Launcher onClose={closeLauncher} replacing={oldest} /></div>
         )}
       </div>
     </WindowDragContext>

@@ -26,6 +26,14 @@ The session menu offers three ways to stop.
 
 If the session started background work (sub-agents, background tasks, scheduled wake-ups), Rest asks first: what they started stops with them.
 
+## Windows and the sessions panel
+
+The panel on the left lists the sessions by project, in the room as in focus mode. A click on a row, or on the character in the room, opens its window. Already open, it comes to the front. The one you are in closes.
+
+At the bottom of the panel, **Windows 1 to 6** sets how many session windows stay open at once (6 by default, fewer on a narrow screen). Floating windows count, mods do not. Once the number is reached, the session you open takes the place of the one open the longest. Lowering the number closes the oldest first.
+
+On hover, a row offers **Switch off**, as the session's menu does. A project's title offers its folder icon, which opens the folder in Finder (Explorer on Windows, the file manager elsewhere), and its **+**, a new session in it. **Switched off** opens **Resume** on the project in sight. The button at the top, or ⌘ B (Ctrl B), folds the panel down to the faces. **Settings › Appearance › Sessions panel** turns it off: the room comes back without it, focus mode with its own list.
+
 ## The limit on active sessions
 
 `OFFICE_MAX_LIVE` (default `12`) caps the number of live `claude` processes. Every live process counts, including a session in `wait` that is only waiting for your next message.

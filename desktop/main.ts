@@ -7,11 +7,14 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, watch, writeFileSy
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, utilityProcess, type NativeImage, type UtilityProcess } from 'electron';
+import { BrowserWindow, Menu, Notification, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, safeStorage, screen, shell, utilityProcess, type IpcMainInvokeEvent, type NativeImage, type UtilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { AppMessage, AppNews } from '../server/app-port.ts';
 import type { AppUpdate } from '../shared/protocol.ts';
-import { loadConfig } from '../server/config.ts';
+import { loadConfig, sessionRoots } from '../server/config.ts';
+import { modsFolder } from '../server/mods.ts';
+import { resolveAllowedDirectory } from '../server/paths.ts';
+import { Settings } from '../server/settings.ts';
 import { ROOM_PALETTE } from '../src/design/room-palette.ts';
 import { attentionBadge } from './badge.ts';
 
@@ -476,17 +479,30 @@ function watchForUpdates() {
 
 async function start() {
   if (process.platform === 'win32') app.setAppUserModelId('io.github.fantomiald.open-space');
+  // Only the main app page asks, never attachments, subframes or other origins.
+  const fromAppPage = (event: IpcMainInvokeEvent) => {
+    const owner = window;
+    return owner !== null && event.sender === owner.webContents && event.senderFrame === owner.webContents.mainFrame && !!event.senderFrame?.url.startsWith(`${address}/`);
+  };
   let pickingFolder = false;
   ipcMain.handle('open-space:pick-folder', async (event) => {
     const owner = window;
-    // Only the main app page can open a native dialog, never attachments, subframes or other origins.
-    if (process.platform !== 'win32' || config.rootsLocked || !owner || event.sender !== owner.webContents
-      || event.senderFrame !== owner.webContents.mainFrame || !event.senderFrame.url.startsWith(`${address}/`) || pickingFolder) return null;
+    if (process.platform !== 'win32' || config.rootsLocked || !owner || !fromAppPage(event) || pickingFolder) return null;
     pickingFolder = true;
     try {
       const result = await dialog.showOpenDialog(owner, { properties: ['openDirectory'] });
       return result.canceled ? null : result.filePaths[0] ?? null;
     } finally { pickingFolder = false; }
+  });
+  // A project's folder in the Finder or the Explorer, from here, where the app may bring it to the front (the server may
+  // not on Windows). The path comes from the page: only a real, existing folder among those sessions may run in (the
+  // settings' read now, as the server takes them, and the mods'); never a file, which openPath would run.
+  ipcMain.handle('open-space:open-folder', async (event, asked: unknown) => {
+    if (!fromAppPage(event) || typeof asked !== 'string' || asked.length > 4096) return false;
+    const settings = new Settings(path.join(config.dataDir, 'settings.json'));
+    await settings.load();
+    const folder = resolveAllowedDirectory(asked, [...sessionRoots(config, settings.preferences.roots), modsFolder(config.dataDir)]);
+    return folder !== null && (await shell.openPath(folder)) === '';
   });
   // a window taken out goes back into Open Space's window (its key gives the link, see openLink)
   ipcMain.handle('open-space:out-back', (event) => {

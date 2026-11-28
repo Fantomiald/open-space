@@ -24,7 +24,7 @@ import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
 import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
 import { desktopArchived, desktopSourceBranch } from './claude-desktop.ts';
-import type { Config } from './config.ts';
+import { allowedRoots, type Config } from './config.ts';
 import { importConversation, lastContextUse, lastExchanges, lastName, listConversations, searchConversations, worktreeTranscript } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
@@ -670,7 +670,7 @@ export class SessionManager {
 
   /** The folders a session may run in: the user's, and Open Space's own. */
   private roots(): string[] {
-    return [...this.deps.config.roots, ...(this.deps.config.ownRoots ?? [])];
+    return allowedRoots(this.deps.config);
   }
 
   // ── commands from clients ──

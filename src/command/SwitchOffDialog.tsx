@@ -2,9 +2,32 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { backgroundWork } from '../state/labels.ts';
 import { useSessions } from '../state/sessions.ts';
+import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
 import { BranchName } from './BranchCard.tsx';
 import { KeepIcon, MergeIcon, RemoveIcon } from './Icons.tsx';
 import { Modal } from './Modal.tsx';
+
+/**
+ * Switching off a session, from its window's menu or the sessions' panel: the three ways out of its branch when it has
+ * work on it, else a confirmation (what stops with it). `onDone`: once switched off that way (its window closes).
+ */
+export function SwitchOff({ session, onClose, onDone }: { session: SessionInfo; onClose: () => void; onDone: () => void }) {
+  const send = useSessions((s) => s.send);
+  if (asksBeforeSwitchingOff(session)) return <SwitchOffDialog session={session} onClose={onClose} />;
+  const words = t.session.detail;
+  const busy = backgroundWork(session);
+  return (
+    <Modal title={words.switchOffQuestion(session.name)} onClose={onClose}>
+      <p className="cp-muted">{words.switchOffText}</p>
+      {busy.length > 0 && <p className="cp-muted">{words.stopsWith(busy.join(', '))}</p>}
+      {session.worktree?.borrowed && <p className="cp-muted">{t.branches.switchOff.desktop}</p>}
+      <div className="cp-form__actions">
+        <button type="button" className="cp-button" onClick={onClose}>{words.cancel}</button>
+        <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); onClose(); onDone(); }}>{words.switchOff}</button>
+      </div>
+    </Modal>
+  );
+}
 
 /**
  * Switching off a session whose branch has work on it: what is there, and three ways out. Merge then switch off (the
@@ -22,7 +45,7 @@ export function SwitchOffDialog({ session, onClose }: { session: SessionInfo; on
     send({ t: 'forget', sessionId: session.id, branch });
     onClose();
     // merging first: the session stays open until it is merged, to follow it
-    if (branch !== 'merge') closeOpen(session.id);
+    if (branch !== 'merge' && useSessions.getState().openIds.includes(session.id)) closeOpen(session.id);
   };
   const busy = backgroundWork(session);
   return (

@@ -343,6 +343,10 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     }
     case 'remoteControl': return sessionId && typeof raw.enabled === 'boolean' ? { t: 'remoteControl', sessionId, enabled: raw.enabled } : null;
     case 'openTerminal': return raw.sessionId === undefined ? { t: 'openTerminal' } : sessionId ? { t: 'openTerminal', sessionId } : null;
+    case 'openFolder': {
+      const at = boundedString(raw.path, 4096);
+      return at ? { t: 'openFolder', path: at } : null;
+    }
     case 'shell': {
       const command = boundedString(raw.command, 10_000)?.trim();
       return sessionId && command ? { t: 'shell', sessionId, command } : null;

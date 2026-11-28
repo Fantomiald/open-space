@@ -33,6 +33,17 @@ const positiveInteger = (raw: string | undefined, fallback: number) => {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 };
 
+/**
+ * The folders sessions may run in: OFFICE_ROOTS when set, else the user's choice (`chosen`, from the settings) among those
+ * still there. The server runs sessions in them; the desktop app opens a project's folder only inside one of them.
+ */
+export function sessionRoots(config: Pick<Config, 'roots' | 'rootsLocked'>, chosen: readonly string[], exists: (folder: string) => boolean = existsSync): string[] {
+  return config.rootsLocked ? config.roots : chosen.filter((root) => exists(root));
+}
+
+/** Every folder sessions may run in, and so the ones their files, folders and pictures are read from: the user's, and Open Space's own. */
+export const allowedRoots = (config: Pick<Config, 'roots' | 'ownRoots'>): string[] => [...config.roots, ...(config.ownRoots ?? [])];
+
 export function loadConfig(env: NodeJS.ProcessEnv, home: string, exists: (folder: string) => boolean = existsSync): Config {
   const roots = (env.OFFICE_ROOTS ?? '').split(path.delimiter).map((root) => root.trim()).filter(Boolean).map((root) => path.resolve(expandHomePath(root, home))).filter(exists);
   const port = positiveInteger(env.PORT, 4848);

@@ -1,12 +1,16 @@
-// Focus mode's list of every session, in place of the room: who works, what waits for the user, who left something
-// to finish, who is done, who rests (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's
-// look, as in the room), its state as a sign on the face, how long it has been so, and its tags (else its last words). A click opens it beside the open ones (or goes to it when open); a
-// group folds away, and the whole list down to the faces (remembered in this browser). A project's + (on hover, or
-// Alt+its digit, App.tsx) opens a new session in its folder.
+// The list of every session: who works, what waits for the user, who left something to finish, who is done, who rests
+// (or the same by project, src/state/list-groups.ts). Each with its face (the crew member's look, as in the room), its
+// state as a sign on the face, how long it has been so, and its tags (else its last words). A group folds away, and the
+// whole list down to the faces (remembered in this browser). A project's + (on hover, or Alt+its digit, App.tsx) opens
+// a new session in its folder, and to open that folder in the Finder (the Explorer on Windows).
+// Two places: focus mode's list in place of the room (a click opens a session beside the open ones, or goes to it), and
+// with `panel` the sessions' panel down the left of the rooms and focus mode (Preferences.sessionPanel): by project at
+// first, a click opens a session or closes the one in use (toggleWindow), a row switches its session off on hover, and
+// its foot reopens a switched-off conversation and sets how many windows open at most.
 import { useCallback, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
 import { t } from '../i18n/index.ts';
-import { formatAge, formatAgo } from '../lib/format.ts';
-import { OPTION } from '../lib/platform.ts';
+import { defaultFolder, formatAge, formatAgo } from '../lib/format.ts';
+import { IS_WINDOWS, MODIFIER, OPTION } from '../lib/platform.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { sessionStatus } from '../room/cast.ts';
@@ -17,20 +21,21 @@ import { usePendingLater } from '../state/pending-later.ts';
 import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
-import type { SessionInfo } from '../../shared/protocol.ts';
+import { MAX_WINDOWS, type SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
-import { CheckIcon, ChevronDownIcon, FilterIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, FolderOpenIcon, FoldListIcon, PlusIcon, PowerIcon, UnfoldListIcon } from './Icons.tsx';
+import { SwitchOff } from './SwitchOffDialog.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
 import { SessionFace } from './SessionFace.tsx';
 import { TagChips } from './TagChips.tsx';
 
-export function SessionList() {
+export function SessionList({ panel = false }: { panel?: boolean }) {
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
   const openIds = useSessions((s) => s.openIds);
   const selectedId = useSessions((s) => s.selectedId);
-  const show = useSessions((s) => s.show);
+  const show = useSessions((s) => s.toggleWindow);
   const openNewSession = useSessions((s) => s.openNewSession);
   const [folded, setFolded] = useState(() => readPreference<string[]>('listFolded', []));
   const fold = (group: string) => {
@@ -38,17 +43,19 @@ export function SessionList() {
     writePreference('listFolded', next);
     setFolded(next);
   };
-  const [narrow, setNarrow] = useState(() => readPreference('listNarrow', false));
-  const toggleNarrow = () => {
-    writePreference('listNarrow', !narrow);
-    setNarrow(!narrow);
-  };
+  const narrow = useSessions((s) => s.panelNarrow);
+  const foldPanel = useSessions((s) => s.foldPanel);
+  const toggleNarrow = () => foldPanel(!narrow);
   const { project } = useProjects();
+  // the panel starts by project, focus mode's list by state; each keeps its own choice
+  const groupingKey = panel ? 'panelGrouping' : 'listGrouping', firstGrouping: ListGrouping = panel ? 'project' : 'state';
   const [grouping, setGrouping] = useState<ListGrouping>(() => {
-    const stored = readPreference<string>('listGrouping', 'state');
-    return LIST_GROUPINGS.find((each) => each === stored) ?? 'state';
+    const stored = readPreference<string>(groupingKey, firstGrouping);
+    return LIST_GROUPINGS.find((each) => each === stored) ?? firstGrouping;
   });
-  const groupBy = (next: ListGrouping) => { writePreference('listGrouping', next); setGrouping(next); };
+  const groupBy = (next: ListGrouping) => { writePreference(groupingKey, next); setGrouping(next); };
+  const [switchingOff, setSwitchingOff] = useState<string | null>(null);
+  const switchedOff = switchingOff ? sessions[switchingOff] : undefined;
   // the one opened from the waiting group stays there while it is the one in front
   const [kept, setKept] = useState<Kept | null>(null);
   const keptNow = kept?.id === selectedId ? kept : null;
@@ -82,12 +89,14 @@ export function SessionList() {
   };
   const peeked = narrow && peek ? sessions[peek.id] : undefined;
 
+  const foldTitle = `${narrow ? words.unfold : words.fold}${panel ? ` (${MODIFIER}B)` : ''}`;
+
   return (
-    <nav className="cp-list" aria-label={words.title} data-narrow={narrow}>
+    <nav className="cp-list" aria-label={words.title} data-narrow={narrow} data-panel={panel || undefined}>
       <div className="cp-list__head">
         <h2 className="cp-list__heading">{words.title}</h2>
         <GroupingMenu grouping={grouping} onPick={groupBy} />
-        <button type="button" className="cp-icon-button" aria-expanded={!narrow} aria-label={narrow ? words.unfold : words.fold} title={narrow ? words.unfold : words.fold} onClick={toggleNarrow}>
+        <button type="button" className="cp-icon-button" aria-expanded={!narrow} aria-label={narrow ? words.unfold : words.fold} title={foldTitle} onClick={toggleNarrow}>
           {narrow ? <UnfoldListIcon /> : <FoldListIcon />}
         </button>
       </div>
@@ -100,7 +109,12 @@ export function SessionList() {
                 <span className="cp-list__hint">{hintOf(group)}</span>
                 {!group.state && group.waiting > 0 && <span className="cp-list__waiting" title={words.waitingCount(group.waiting)}>{group.waiting}</span>}
               </button>
-              {group.folder && <NewInProject folder={group.folder} label={titleOf(group)} digit={projectDigit(projects, group.folder)} onOpen={openNewSession} />}
+              {group.folder && (
+                <span className="cp-list__actions">
+                  <OpenProjectFolder folder={group.folder} label={titleOf(group)} />
+                  <NewInProject folder={group.folder} label={titleOf(group)} digit={projectDigit(projects, group.folder)} onOpen={openNewSession} />
+                </span>
+              )}
             </h2>
             <ul className="cp-list__items" id={`list-${group.key}`} hidden={folded.includes(group.key)}>
               {group.sessions.map((session) => {
@@ -112,7 +126,7 @@ export function SessionList() {
                   <li key={session.id}>
                     <button
                       type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)}
-                      title={narrow ? undefined : words.open} aria-label={narrow ? session.name : undefined}
+                      title={narrow ? undefined : panel ? words.toggle : words.open} aria-label={narrow ? session.name : undefined}
                       onClick={() => open(session.id)}
                       onMouseEnter={peekAt(session.id)} onFocus={peekAt(session.id)} onMouseLeave={() => setPeek(null)} onBlur={() => setPeek(null)}
                     >
@@ -131,6 +145,11 @@ export function SessionList() {
                         </span>
                       </span>
                     </button>
+                    {panel && !narrow && (
+                      <button type="button" className="cp-list__off" aria-label={words.switchOff(session.name)} title={words.switchOff(session.name)} onClick={() => setSwitchingOff(session.id)}>
+                        <PowerIcon />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -146,7 +165,61 @@ export function SessionList() {
       >
         <PlusIcon /> <span className="cp-list__new-label">{words.new}</span> <kbd className="cp-kbd">N</kbd>
       </button>
+      {panel && !narrow && <PanelFoot />}
+      {switchedOff && <SwitchOff session={switchedOff} onClose={() => setSwitchingOff(null)} onDone={() => closeIfOpen(switchedOff.id)} />}
     </nav>
+  );
+}
+
+const closeIfOpen = (sessionId: string) => {
+  const state = useSessions.getState();
+  if (state.openIds.includes(sessionId)) state.closeOpen(sessionId);
+};
+
+/**
+ * The panel's foot: the switched-off conversations of the project in sight (else the default folder), to take one up
+ * again in the launcher (Reprendre), and how many sessions' windows open at most before one gives its place.
+ */
+function PanelFoot() {
+  const words = t.session.list;
+  const { project } = useProjects();
+  const roots = useSessions((s) => s.roots);
+  const fallback = useSessions((s) => s.preferences.defaultFolder);
+  const setting = useSessions((s) => s.preferences.maxWindows ?? MAX_WINDOWS);
+  const setPreferences = useSessions((s) => s.setPreferences);
+  const openNewSession = useSessions((s) => s.openNewSession);
+  const folder = defaultFolder(roots, project || fallback);
+  return (
+    <div className="cp-list__foot">
+      <button type="button" className="cp-list__settled" title={words.switchedOffTitle} onClick={() => openNewSession({ resumeIn: folder })}>
+        <span>{words.switchedOff}</span><ChevronRightIcon />
+      </button>
+      <div className="cp-list__windows">
+        <span id="panel-windows">{words.windows}</span>
+        <div className="cp-segmented" role="radiogroup" aria-labelledby="panel-windows">
+          {Array.from({ length: MAX_WINDOWS }, (_, index) => index + 1).map((count) => (
+            <button key={count} type="button" role="radio" aria-checked={count === setting} title={words.windowsTitle(count)} onClick={() => setPreferences({ maxWindows: count })}>{count}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A project's folder in the Finder: by the desktop app, which brings it to the front, else by the server (in a browser). */
+const openFolder = (folder: string) => {
+  if (window.openSpaceDesktop?.openFolder) void window.openSpaceDesktop.openFolder(folder);
+  else useSessions.getState().send({ t: 'openFolder', path: folder });
+};
+
+/** A project's folder opened in the Finder (the Explorer on Windows, the file manager elsewhere), beside its +. */
+function OpenProjectFolder({ folder, label }: { folder: string; label: string }) {
+  const words = t.session.list;
+  const title = IS_WINDOWS ? words.openFolderWindows(label) : words.openFolder(label);
+  return (
+    <button type="button" aria-label={title} title={title} onClick={() => openFolder(folder)}>
+      <FolderOpenIcon />
+    </button>
   );
 }
 
@@ -155,7 +228,7 @@ function NewInProject({ folder, label, digit, onOpen }: { folder: string; label:
   const words = t.session.list;
   const keys = digit ? `${OPTION}+${digit}` : '';
   return (
-    <button type="button" className="cp-list__add" aria-label={words.newIn(label)} title={keys ? `${words.newIn(label)} (${keys})` : words.newIn(label)} onClick={() => onOpen({ folder })}>
+    <button type="button" aria-label={words.newIn(label)} title={keys ? `${words.newIn(label)} (${keys})` : words.newIn(label)} onClick={() => onOpen({ folder })}>
       {keys && <kbd className="cp-kbd">{keys}</kbd>}<PlusIcon />
     </button>
   );

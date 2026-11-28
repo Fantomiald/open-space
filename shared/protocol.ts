@@ -599,7 +599,14 @@ export interface Preferences {
   accountsBrowser: AccountsBrowser;
   /** the dashboards of mods (shared/dashboards.ts); absent until the first one is made */
   dashboards?: Dashboard[];
+  /** the sessions' panel down the left of the rooms and focus mode (src/command/SessionList.tsx); absent in older settings means shown */
+  sessionPanel?: boolean;
+  /** how many sessions' windows are open at most (1 to MAX_WINDOWS); absent in older settings means MAX_WINDOWS */
+  maxWindows?: number;
 }
+
+/** The most sessions' windows open at once (Preferences.maxWindows): past six, whoever needs more is better off in a terminal. */
+export const MAX_WINDOWS = 6;
 
 /**
  * The page a session's agent last had in the user's own Chrome (Preferences.accountsBrowser), read from its
@@ -760,6 +767,8 @@ export type ClientMessage =
   | { t: 'remoteControl'; sessionId: string; enabled: boolean }
   /** opens a terminal window on the user's computer, in the folder of the session given (the server finds it), else the default folder */
   | { t: 'openTerminal'; sessionId?: string }
+  /** opens a project's folder in the Finder, the Explorer or the file manager: refused unless among the allowed folders */
+  | { t: 'openFolder'; path: string }
   /** runs a command typed with "!" in the session's folder, without Claude; Claude learns of it with the next message */
   | { t: 'shell'; sessionId: string; command: string }
   | { t: 'stopShell'; sessionId: string; shellId: string }

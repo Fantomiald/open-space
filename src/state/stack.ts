@@ -36,6 +36,15 @@ export function maxColumns(width: number, tiling: Tiling = ROOM_TILING): number 
   return Math.min(Math.max(fit, 1), tiling.maxColumns);
 }
 
+/**
+ * How many sessions' windows may be open: the user's setting (Preferences.maxWindows, `max` without one), no more than
+ * the grid holds in `columns` columns. The floating ones count too, the mods and the launcher never.
+ */
+export function windowCap(setting: number | undefined, columns: number, tiling: Tiling, max: number): number {
+  const chosen = Number.isInteger(setting) ? Math.min(Math.max(setting as number, 1), max) : max;
+  return Math.min(chosen, columns * tiling.perColumn);
+}
+
 const copy = (columns: Columns) => columns.map((column) => [...column]);
 
 export const isFull = (columns: Columns, max: number, tiling: Tiling = ROOM_TILING) =>

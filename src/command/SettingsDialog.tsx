@@ -18,7 +18,7 @@ import { CONFIG_LABELS, settingEntries, type SettingRow } from '../state/setting
 import {
   ActivityIcon, AgentIcon, AutomatonIcon, TagIcon, BellIcon, DiffIcon, BranchIcon, PipIcon, CursorIcon, DownloadIcon, CalendarIcon, ChangelogIcon, ChartIcon, ClockIcon, CloseIcon, CoffeeIcon, CopyIcon, RadioIcon, CrewIcon, DeskIcon, ExternalLinkIcon, FestivalIcon, FolderIcon,
   CompactIcon, FreeWindowsIcon, GaugeIcon, GlobeIcon, InboxIcon, InfoIcon, ItsMeIcon, KeyIcon, KeyboardIcon, LanguageIcon, MessageIcon, NotesIcon, PlanIcon, RefreshIcon, SearchIcon, SettingsIcon, SoundIcon,
-  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, WebhookIcon, WorkflowIcon,
+  OpacityIcon, PaletteIcon, PhoneIcon, SparklesIcon, TerminalIcon, ThinkingIcon, TimerIcon, TuneIcon, UltracodeIcon, UnfoldListIcon, WebhookIcon, WorkflowIcon,
 } from './Icons.tsx';
 import { Copyable } from './Copyable.tsx';
 import { AccountAction } from './AccountAction.tsx';
@@ -54,7 +54,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   ],
   folders: [['places', ['roots', 'defaultFolder']], ['files', ['journalFolder']]],
   // what Open Space looks like: the windows, then the room and its people
-  office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
+  office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'sessionPanel', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   // what starts sessions without the user at the keyboard, and the chat bots and programs that reach Open Space (body())
   connections: [['automata', ['automata', 'hooksAddress', 'automataFolder']], ['phone', ['phoneAccess']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
@@ -224,6 +224,11 @@ function SettingsEditor() {
           <select aria-labelledby={`setting-${id}-title`} value={draft.windowStyle} onChange={(e) => change({ windowStyle: e.target.value as Preferences['windowStyle'] })}>
             {WINDOW_STYLES.map((style) => <option key={style} value={style}>{rows.windowStyle.options[style]}</option>)}
           </select>
+        </Row>
+      );
+      case 'sessionPanel': return (
+        <Row key={id} id={id} flash={flash} icon={<UnfoldListIcon />} title={rows.sessionPanel.title} hint={rows.sessionPanel.hint}>
+          <Switch checked={draft.sessionPanel !== false} onChange={(sessionPanel) => change({ sessionPanel })} label={rows.sessionPanel.title} />
         </Row>
       );
       case 'tagColors': return (

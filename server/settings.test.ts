@@ -35,6 +35,10 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ remoteByDefault: true }), { remoteByDefault: true });
     assert.deepEqual(parsePreferences({ remoteByDefault: 'yes' }), {});
     assert.deepEqual(parsePreferences({ tagColors: true }), { tagColors: true });
+    assert.deepEqual(parsePreferences({ sessionPanel: false, maxWindows: 3 }), { sessionPanel: false, maxWindows: 3 });
+    assert.deepEqual(parsePreferences({ sessionPanel: 'no', maxWindows: 7 }), {}, 'more windows than fit is left out');
+    assert.deepEqual(parsePreferences({ maxWindows: 0 }), {});
+    assert.deepEqual(parsePreferences({ maxWindows: 2.5 }), {});
     assert.deepEqual(parsePreferences({ detailedActions: true }), { detailedActions: true });
     assert.deepEqual(parsePreferences({ detailedActions: 'yes' }), {});
     assert.deepEqual(parsePreferences({ promptSuggestions: false }), { promptSuggestions: false });

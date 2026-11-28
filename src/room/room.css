@@ -55,7 +55,7 @@
 /* the Alt tip (ArrangeHint.tsx), until it was used once: at the bottom of the page beside the status card (fixed, so it
    stays put while the room moves), in the same dark glass as the rest; wide screens only */
 .cp-room__arrange {
-  position: fixed; left: calc(20rem + 2 * var(--gutter)); bottom: var(--gutter); z-index: 3; max-width: 19rem; display: flex; align-items: flex-start; gap: var(--space-2);
+  position: fixed; left: calc(var(--panel-offset, 0px) + 20rem + 2 * var(--gutter)); bottom: var(--gutter); z-index: 3; max-width: 19rem; display: flex; align-items: flex-start; gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); border-radius: var(--radius-lg); background: var(--glass-surface); border: var(--border-width) solid var(--glass-edge);
   box-shadow: var(--glass-shadow); color: var(--color-text); font: var(--weight-medium) var(--text-sm) / 1.4 var(--font-ui);
 }

@@ -5,7 +5,7 @@ import { t } from '../i18n/index.ts';
 export function Shortcuts() {
   const words = t.settings.prefs.shortcuts;
   const groups: readonly (readonly [string, readonly (readonly [string, readonly string[]])[]])[] = [
-    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.terminal, IS_MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
+    [words.groups.everywhere, [[words.search, [MODIFIER, 'K']], [words.settings, [MODIFIER, ',']], [words.focus, [MODIFIER, '.']], [words.panel, [MODIFIER, 'B']], [words.terminal, IS_MAC ? [OPTION, MODIFIER, 'T'] : [MODIFIER, OPTION, 'T']]]],
     [words.groups.sessions, [
       [words.newSession, ['N']], [words.quickSession, ['⇧', 'N']], [words.projectSession, [OPTION, '1…9']], [words.command, ['/']], [words.threadSearch, [MODIFIER, 'F']],
       [words.interrupt, ['esc']], [words.hide, ['tab']],

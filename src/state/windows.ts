@@ -224,6 +224,8 @@ export interface WindowsPreference {
   grids: Record<Arrangement, Columns>;
   /** the width of the windows over the room, in fractions of the page's */
   stackWidth: number | null;
+  /** the open sessions, the one opened longest ago first (docking.ts openOrder); absent before it was kept: found again from the grid */
+  opened?: string[];
 }
 
 const ARRANGEMENTS = ['room', 'focus'] as const;
@@ -243,6 +245,8 @@ function readFree(raw: unknown): FreeLayout {
   const order = field(raw, 'order');
   return { boxes, order: Array.isArray(order) ? order.filter((id): id is string => typeof id === 'string' && id in boxes) : [] };
 }
+
+const readIds = (raw: unknown): string[] => (Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : []);
 
 const readGrid = (raw: unknown): string[][] =>
   Array.isArray(raw) ? raw.map((column) => (Array.isArray(column) ? column.filter((id): id is string => typeof id === 'string') : [])).filter((column) => column.length > 0) : [];
@@ -275,6 +279,7 @@ export function sanitizeWindows(raw: unknown, open: readonly string[] = []): Win
     sizes: per('sizes', readSizes),
     grids: per('grids', readGrid),
     stackWidth: isFraction(stackWidth) ? stackWidth : null,
+    opened: readIds(field(raw, 'opened')),
   };
 }
 

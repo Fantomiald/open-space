@@ -355,6 +355,8 @@ export const session = {
     title: 'Sessions',
     new: 'Nouvelle session',
     newIn: (project: string) => `Nouvelle session dans ${project}`,
+    openFolder: (project: string) => `Ouvrir ${project} dans le Finder`,
+    openFolderWindows: (project: string) => `Ouvrir ${project} dans l’Explorateur`,
     groups: { working: 'Au travail', waiting: 'À toi', finish: 'À finir', ready: 'Terminées', resting: 'Au repos', automata: 'Automates' },
     hints: { working: '', waiting: '', finish: '', ready: '', resting: '', automata: '' },
     groupBy: 'Grouper la liste',
@@ -366,6 +368,12 @@ export const session = {
     fold: 'Replier la liste',
     unfold: 'Déplier la liste',
     empty: 'Aucune session pour l’instant : lance la première à droite.',
+    toggle: 'Clic : l’ouvrir, y aller si elle est ouverte, la fermer si tu y es déjà',
+    switchOff: (name: string) => `Éteindre ${name}`,
+    switchedOff: 'Éteintes',
+    switchedOffTitle: 'Reprendre une conversation éteinte de ce projet',
+    windows: 'Fenêtres',
+    windowsTitle: (count: number) => (count === 1 ? 'Une fenêtre à la fois' : `${count} fenêtres au plus : au-delà, la plus ancienne laisse sa place`),
   },
   /** where the sessions are at, in the corner of the screen */
   status: {

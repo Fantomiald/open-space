@@ -30,8 +30,7 @@ import { PublishedPages } from './PublishedPages.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
 import { SecretPrompt, SecretsDialog } from './SecretPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
-import { SwitchOffDialog } from './SwitchOffDialog.tsx';
-import { asksBeforeSwitchingOff } from '../state/worktrees.ts';
+import { SwitchOff } from './SwitchOffDialog.tsx';
 import { useAttachments } from './useAttachments.ts';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
@@ -252,18 +251,7 @@ export const Detail = memo(function Detail({ sessionId, detached = false }: { se
           {pages.length > 0 && <PublishedPages pages={pages} />}
         </div>
         {session.untrusted && <p className="cp-detail__meta cp-detail__untrusted" title={t.session.detail.untrustedTitle}>{t.session.detail.untrusted}</p>}
-        {switchingOff && asksBeforeSwitchingOff(session) && <SwitchOffDialog session={session} onClose={() => setSwitchingOff(false)} />}
-        {switchingOff && !asksBeforeSwitchingOff(session) && (
-          <Modal title={t.session.detail.switchOffQuestion(session.name)} onClose={() => setSwitchingOff(false)}>
-            <p className="cp-muted">{t.session.detail.switchOffText}</p>
-            {backgroundWork(session).length > 0 && <p className="cp-muted">{t.session.detail.stopsWith(backgroundWork(session).join(', '))}</p>}
-            {session.worktree?.borrowed && <p className="cp-muted">{t.branches.switchOff.desktop}</p>}
-            <div className="cp-form__actions">
-              <button type="button" className="cp-button" onClick={() => setSwitchingOff(false)}>{t.session.detail.cancel}</button>
-              <button type="button" className="cp-button" data-variant="danger" data-autofocus onClick={() => { send({ t: 'forget', sessionId: session.id }); setSwitchingOff(false); hide(); }}>{t.session.detail.switchOff}</button>
-            </div>
-          </Modal>
-        )}
+        {switchingOff && <SwitchOff session={session} onClose={() => setSwitchingOff(false)} onDone={hide} />}
         {secretsOpen && <SecretsDialog session={session} name={secretsOpen.name} onClose={() => openSecrets(null)} />}
         {restAsked && (
           <Modal title={t.session.detail.restQuestion(session.name)} onClose={() => setRestAsked(false)}>

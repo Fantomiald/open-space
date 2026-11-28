@@ -18,7 +18,7 @@ import type { PhoneProblem } from '../shared/triggers.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
-import { loadConfig } from './config.ts';
+import { allowedRoots, loadConfig, sessionRoots } from './config.ts';
 import { Crew } from './crew.ts';
 import { changedSettings } from '../shared/claude-settings.ts';
 import { readClaudeDefaults } from './claude-settings.ts';
@@ -41,7 +41,7 @@ import { createMessengerAgent } from './messenger-agent.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
-import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
+import { findTerminals, openTerminal, openWebPage, openWithSystem } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { AutomataWatch } from './automata-watch.ts';
@@ -95,7 +95,7 @@ const settings = new Settings(path.join(config.dataDir, 'settings.json'));
 await settings.load();
 setServerLanguage(settings.preferences.language ?? 'fr');
 // the folders sessions may run in: OFFICE_ROOTS when set, else the user's choice (the session manager reads config.roots)
-const applyRoots = () => { if (!config.rootsLocked) config.roots = settings.preferences.roots.filter((root) => existsSync(root)); };
+const applyRoots = () => { config.roots = sessionRoots(config, settings.preferences.roots); };
 applyRoots();
 // the mods' folder, where sessions run too (server/mods.ts), by its real path: what a session running there has as its own
 mkdirSync(modsFolder(config.dataDir), { recursive: true, mode: 0o700 });
@@ -605,7 +605,7 @@ function mentionRoot(message: { sessionId: string } | { cwd: string }): string |
 function filesRoot(sessionId: string): string {
   const cwd = sessions.folderOf(sessionId);
   if (!cwd) throw new Error(st.sessions.notFound);
-  const root = resolveAllowedDirectory(cwd, [...config.roots, ...(config.ownRoots ?? [])]);
+  const root = resolveAllowedDirectory(cwd, allowedRoots(config));
   if (!root) throw new Error(st.files.outside);
   return root;
 }
@@ -873,6 +873,13 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await openTerminal(folder, settings.preferences.terminal);
       break;
     }
+    case 'openFolder': {
+      // a path from the page: only a real folder among those sessions may run in
+      const folder = resolveAllowedDirectory(message.path, allowedRoots(config));
+      if (!folder) throw new Error(st.sessions.outsideRoots);
+      openWithSystem(folder);
+      break;
+    }
   }
 }
 
@@ -953,10 +960,7 @@ server.listen(config.port, HOST, () => {
  * macOS asks once to let the server control Arc); otherwise, or if that fails, in the default browser.
  */
 function openPage(link: string) {
-  const inBrowser = () => {
-    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-    execFile(opener, [link], () => {});
-  };
+  const inBrowser = () => openWithSystem(link);
   if (process.platform !== 'darwin' || !existsSync(ARC)) { inBrowser(); return; }
   execFile('/usr/bin/osascript', [path.join(ROOT, 'scripts', 'open-in-arc.applescript'), link, `http://127.0.0.1:${config.port}`], (error) => { if (error) inBrowser(); });
 }

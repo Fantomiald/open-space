@@ -30,13 +30,14 @@ import { BareHint } from './command/BareHint.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { WhatsNew } from './command/WhatsNewDialog.tsx';
-import { useAltKey } from './lib/drag.ts';
+import { useAltKey, WIDE_SCREEN } from './lib/drag.ts';
 import { defaultFolder } from './lib/format.ts';
 import { runningShells } from './state/feed.ts';
 import { isRunning } from './state/labels.ts';
-import { selectAttentionCount, useSessions } from './state/sessions.ts';
+import { panelShown, selectAttentionCount, useSessions } from './state/sessions.ts';
 import { tabTitle } from './state/queue.ts';
-import { usePhone } from './lib/phone.ts';
+import { useMediaQuery, usePhone } from './lib/phone.ts';
+import { IS_MAC } from './lib/platform.ts';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -64,6 +65,9 @@ export function App() {
   const known = useSessions((s) => s.claude !== null);
   const onboarded = useSessions((s) => s.onboarded);
   const bare = useSessions((s) => s.uiHidden && s.view !== 'focus' && s.view !== 'dashboards');
+  // the sessions' panel down the left of the rooms and focus mode (focus mode's own list where it is turned off, or on a narrow screen)
+  const wide = useMediaQuery(WIDE_SCREEN);
+  const panel = useSessions((s) => panelShown(s, view, wide));
   usePageStyle();
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
@@ -135,6 +139,12 @@ export function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); state.openPalette(!state.paletteOpen); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); state.openSettings(!state.settingsOpen); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return; }
+      // Cmd+B, as the sidebars of editors: the sessions' panel folds down to the faces, or unfolds
+      if ((IS_MAC ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === 'KeyB' && panelShown(state, state.view) && !document.querySelector('dialog[open]')) {
+        e.preventDefault();
+        state.foldPanel(!state.panelNarrow);
+        return;
+      }
       // Cmd+F with a session open searches its thread (the browser's own search does not see folded actions)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && state.selectedId && !document.querySelector('dialog[open]')) {
         e.preventDefault();
@@ -225,14 +235,15 @@ export function App() {
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
   return (
-    <div className="cp-app" data-view={view} data-bare={bare} data-device={phone ? 'phone' : undefined}>
+    <div className="cp-app" data-view={view} data-bare={bare} data-device={phone ? 'phone' : undefined} data-panel={panel ? 'true' : undefined}>
       <Sky key={theme} festival={day.festival} />
+      {panel && <SessionList panel />}
       <Header />
       <ConnectionBanner />
       {/* the dashboards show no session: one still selected must not take their place on a narrow screen */}
       <main className="cp-main" data-detail={view !== 'dashboards' && selectedId !== null} data-view={view}>
         <div className="cp-main__content">
-          {view === 'focus' ? <SessionList /> : view === 'dashboards' ? <Dashboards /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
+          {view === 'focus' ? !panel && <SessionList /> : view === 'dashboards' ? <Dashboards /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
         {/* docked mods keep their place in the grid, the launcher beside them; the dashboards are the mods alone */}

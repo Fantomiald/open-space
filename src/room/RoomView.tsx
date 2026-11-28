@@ -292,7 +292,12 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
     const character = scene.characterAt(point);
     if (room === 'automata' && isOrbAt(point, character?.position)) { useSessions.getState().openAutomata(true); return; }
     if (character?.person.automaton) { useSessions.getState().openAutomata(true, character.person.automaton, character.person.automatonAgent); return; }
-    if (character) { show(character.person.sessionId); return; }
+    if (character) {
+      // with the sessions' panel, a click on the one in use closes it, as in the panel
+      const { sessionId } = character.person;
+      useSessions.getState().toggleWindow(sessionId);
+      return;
+    }
     const visitor = scene.visitorAt(point);
     if (visitor) { useSessions.getState().openNewSession({ person: visitor.name }); return; }
     // the dark around the room: like the panel's cross, back to the office without a session open

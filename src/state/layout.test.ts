@@ -174,13 +174,14 @@ describe('how the windows were arranged, read back', () => {
   const box = { left: 0.1, top: 0.2, width: 0.3, height: 0.4 };
   it('nothing saved has every window docked', () => {
     assert.deepEqual(sanitizeWindows(undefined), {
-      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, grids: { room: [], focus: [] }, stackWidth: null,
+      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, grids: { room: [], focus: [] }, stackWidth: null, opened: [],
     });
   });
   it('keeps what is sound and drops the rest', () => {
-    const read = sanitizeWindows({ version: 2, free: { room: { boxes: { a: { left: Number.NaN }, b: box }, order: ['b', 7] } }, stackWidth: 'wide' });
+    const read = sanitizeWindows({ version: 2, free: { room: { boxes: { a: { left: Number.NaN }, b: box }, order: ['b', 7] } }, stackWidth: 'wide', opened: ['b', 7] });
     assert.deepEqual(read.free.room, { boxes: { b: box }, order: ['b'] });
     assert.equal(read.stackWidth, null);
+    assert.deepEqual(read.opened, ['b']);
   });
   it('an arrangement saved in free mode has its open windows floating, one in the grid has them docked', () => {
     const read = sanitizeWindows({ mode: { room: 'free', focus: 'grid' }, free: { room: { boxes: { a: box, gone: box }, order: ['gone', 'a'] }, focus: { boxes: { a: box }, order: ['a'] } } }, ['a', 'b']);

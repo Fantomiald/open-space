@@ -1,5 +1,6 @@
 // What Open Space opens on the user's computer: a terminal window, from the room (a click on the user's own screen),
-// and a web page, in the default browser (an MCP server's sign-in).
+// a web page, in the default browser (an MCP server's sign-in), and a folder or a file in the Finder, the Explorer or
+// the file manager. Always a fixed program with its arguments, never through a shell.
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
@@ -56,9 +57,22 @@ export function openTerminal(folder: string, kind: TerminalKind = 'cmd'): Promis
   });
 }
 
+/** the program that opens an address, a folder or a file as the system does: the Finder, the Explorer, the file manager, the browser */
+const SYSTEM_OPENER = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
+
+/** Opens an address or a folder the way the system does; the caller checked what it is. */
+export function openWithSystem(target: string) {
+  execFile(SYSTEM_OPENER, [target], () => {});
+}
+
+/** Shows a file in the Finder, the Explorer on Windows, or opens its folder elsewhere; the caller checked the file. */
+export function revealWithSystem(file: string) {
+  if (process.platform === 'darwin') execFile('open', ['-R', file], () => {});
+  else if (process.platform === 'win32') execFile('explorer.exe', [`/select,${file}`], () => {});
+  else openWithSystem(path.dirname(file));
+}
+
 /** A web page in the default browser; only an https address (they come from Claude Code, not from the page). */
 export function openWebPage(address: string) {
-  if (!/^https:\/\//.test(address)) return;
-  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-  execFile(opener, [address], () => {});
+  if (/^https:\/\//.test(address)) openWithSystem(address);
 }

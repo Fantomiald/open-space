@@ -5,6 +5,8 @@ interface Window {
   /** Available only in the desktop app, through its isolated preload: the folder picker on Windows alone. */
   openSpaceDesktop?: {
     pickFolder?: () => Promise<string | null>;
+    /** a project's folder in the Finder or the Explorer, brought to the front; false when refused (outside the allowed folders) */
+    openFolder?: (folder: string) => Promise<boolean>;
     /** a window taken out (src/state/out.ts) goes back into Open Space's window, which opens if it was closed */
     putBack: () => Promise<void>;
     /** keeps that window over the other apps or not; without `on`, only says whether it is */
