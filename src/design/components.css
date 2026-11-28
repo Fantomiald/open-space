@@ -2235,6 +2235,26 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-modal[data-look='panel'] { width: min(var(--prefs-width), calc(100vw - 2 * var(--gutter))); height: min(var(--prefs-height), calc(100dvh - 2 * var(--gutter))); max-height: none; overflow: hidden; }
 .cp-modal[data-look='panel'][open] { display: flex; }
 .cp-modal[data-look='panel'] .cp-modal__body { flex: 1; min-height: 0; display: flex; }
+/* the settings, carried by their head and resized by their edges (Modal's movable); on a narrow window they fill it */
+@media (min-width: 60.001rem) {
+  .cp-modal[data-placed] { position: fixed; inset: auto; margin: 0; left: var(--x); top: var(--y); width: var(--w); height: var(--h); max-width: none; max-height: none; }
+  .cp-modal[data-movable] [data-carry] { cursor: grab; touch-action: none; }
+  .cp-modal[data-moving] { user-select: none; }
+  .cp-modal[data-moving] [data-carry] { cursor: grabbing; }
+  /* the handles sit just outside its edges, so the scrollbar at its right stays a scrollbar */
+  .cp-modal[data-movable] { overflow: visible; }
+  .cp-modal[data-movable] .cp-modal__body { overflow: hidden; border-radius: inherit; }
+  .cp-modal[data-movable] .cp-stack__handle { z-index: 3; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='n'] { top: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='s'] { bottom: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='e'] { right: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='w'] { left: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='nw'] { top: -7px; left: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='ne'] { top: -7px; right: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='sw'] { bottom: -7px; left: -7px; }
+  .cp-modal[data-movable] .cp-stack__handle[data-edge='se'] { bottom: -7px; right: -7px; }
+}
+@media (max-width: 60rem) { .cp-modal[data-movable] .cp-stack__handle { display: none; } }
 .cp-prefs { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: var(--prefs-side) minmax(0, 1fr); }
 .cp-prefs__side { min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-3); border-right: var(--border-width) solid var(--color-border); background: var(--color-surface-sunken); }
 .cp-prefs__brand { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2); font-size: var(--text-md); font-weight: var(--weight-bold); }
