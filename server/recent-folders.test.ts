@@ -37,8 +37,13 @@ describe('lastConversationTimes', () => {
     const long = `/work/${'a'.repeat(250)}`;
     const key = path.join(home, '.claude', 'projects', `${projectKey(long).slice(0, 200)}-x1y2z3`);
     conversation(key, 'a.jsonl', 500);
-    conversation(`${key}-other`, 'b.jsonl', 700);
-    assert.equal((await lastConversationTimes([long], home)).get(long), 700_000);
+    assert.equal((await lastConversationTimes([long], home)).get(long), 500_000);
+  }));
+
+  it('matches the key without case on Windows, where a root may be typed in lower case', () => withHome(async (home) => {
+    conversation(projectFolder('D:\\Projets\\App', home), 'a.jsonl', 400);
+    assert.equal((await lastConversationTimes(['d:\\projets\\app'], home, Date.now(), 'win32')).get('d:\\projets\\app'), 400_000);
+    assert.equal((await lastConversationTimes(['d:\\projets\\app'], home, Date.now(), 'linux')).get('d:\\projets\\app'), undefined);
   }));
 
   it('reuses a folder time for 30 seconds, then reads the disk again', () => withHome(async (home) => {

@@ -40,16 +40,18 @@ async function newestIn(key: string, now: number): Promise<number | undefined> {
 
 /**
  * When the newest conversation of each directory was written; a directory with none is absent from the map.
- * ~/.claude/projects is listed once, and only the key folders that exist are read.
+ * ~/.claude/projects is listed once, and only the key folders that exist are read. On Windows, keys are compared
+ * without case: a root typed "d:\projets" gives "d--projets-app" where Claude Code wrote "D--Projets-app".
  */
-export async function lastConversationTimes(directories: readonly string[], home = os.homedir(), now = Date.now()): Promise<Map<string, number>> {
+export async function lastConversationTimes(directories: readonly string[], home = os.homedir(), now = Date.now(), platform = process.platform): Promise<Map<string, number>> {
   const projects = path.join(home, '.claude', 'projects');
+  const fold = (name: string) => (platform === 'win32' ? name.toLowerCase() : name);
   let keys: string[];
   try { keys = await readdir(projects); } catch { return new Map(); }
-  const present = new Set(keys);
   const found = await Promise.all(directories.map(async (directory) => {
-    const key = projectKey(directory);
-    const matches = key.length > KEY_MAX ? keys.filter((name) => name.startsWith(`${key.slice(0, KEY_MAX)}-`)) : present.has(key) ? [key] : [];
+    const key = fold(projectKey(directory));
+    const prefix = `${key.slice(0, KEY_MAX)}-`;
+    const matches = keys.filter((name) => (key.length > KEY_MAX ? fold(name).startsWith(prefix) : fold(name) === key));
     const times = await Promise.all(matches.map((name) => newestIn(path.join(projects, name), now)));
     const newest = times.reduce<number | undefined>((best, time) => (time !== undefined && (best === undefined || time > best) ? time : best), undefined);
     return [directory, newest] as const;
