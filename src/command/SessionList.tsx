@@ -6,19 +6,25 @@
 // Two places: focus mode's list in place of the room (a click opens a session beside the open ones, or goes to it), and
 // with `panel` the sessions' panel down the left of the rooms and focus mode (Preferences.sessionPanel): by project at
 // first, a click opens a session or closes the one in use (toggleWindow), a row switches its session off on hover, and
-// its foot reopens a switched-off conversation and sets how many windows open at most.
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
+// its foot reopens a switched-off conversation and sets how many windows open at most. There, a row says its branch
+// (its worktree's, tinted) and its model, a card beside it under the pointer says where it runs, and a project's mark
+// (ProjectIcon.tsx) opens the dialog that chooses it.
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { focusComposer } from '../lib/focus-composer.ts';
+import { TOOLTIP_DELAY_MS } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
-import { defaultFolder, formatAge, formatAgo } from '../lib/format.ts';
+import { defaultFolder, folderName, formatAge, formatAgo, homeRelative } from '../lib/format.ts';
 import { IS_WINDOWS, MODIFIER, OPTION } from '../lib/platform.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useNow } from '../lib/useNow.ts';
 import { sessionStatus } from '../room/cast.ts';
-import { stateLabel } from '../state/labels.ts';
+import { sessionModel, stateLabel } from '../state/labels.ts';
 import { attentionKind, isWorking, type SeenSequences } from '../state/queue.ts';
 import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../state/list-groups.ts';
 import { usePendingLater } from '../state/pending-later.ts';
-import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
+import { inProject, projectDigit, projectOf, projectsOf } from '../state/projects.ts';
+import { sessionBranch, worktreePlace } from '../state/worktrees.ts';
 import { useSessions } from '../state/sessions.ts';
 import { panelFloats } from '../state/chrome.ts';
 import type { Edge } from '../state/windows.ts';
@@ -27,7 +33,8 @@ import { FreeHandles } from './FreeHandles.tsx';
 import { useProjects } from '../state/useProjects.ts';
 import { MAX_WINDOWS, type SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, FolderOpenIcon, FoldListIcon, PlusIcon, PowerIcon, UnfoldListIcon } from './Icons.tsx';
+import { BranchIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, FolderOpenIcon, FoldListIcon, MachineIcon, ModelIcon, PlusIcon, PowerIcon, UnfoldListIcon, WorktreeIcon } from './Icons.tsx';
+import { ProjectIconDialog, ProjectMark } from './ProjectIcon.tsx';
 import { SwitchOff } from './SwitchOffDialog.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { useMenuBelow } from './useMenuBelow.ts';
@@ -79,6 +86,7 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
     const index = waiting.findIndex((session) => session.id === id);
     setKept(index >= 0 ? { id, index } : null);
     show(id);
+    if (useSessions.getState().openIds.includes(id)) focusComposer(id);
   };
   const titleOf = (group: (typeof groups)[number]) => (group.state ? words.groups[group.state] : (group.label ?? ''));
   const hintOf = (group: (typeof groups)[number]) => {
@@ -89,13 +97,23 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
   const now = useNow(15_000);
   const words = t.session.list;
   // folded down to the faces: the one under the pointer (or focused) says who it is beside the list
-  const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
+  // in the panel, unfolded, the same card after a short rest of the pointer, saying where it runs
+  const [peek, setPeek] = useState<Peeked | null>(null);
+  const peekTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
   const peekAt = (id: string) => (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
-    if (!narrow) return;
+    if (!narrow && !panel) return;
     const box = event.currentTarget.getBoundingClientRect();
-    setPeek({ id, x: box.right + 8, y: box.top + box.height / 2 });
+    // beside the list, or on its other side when the panel floats against the right of the screen
+    const left = box.right + PEEK_ROOM > window.innerWidth;
+    const at = { id, x: left ? box.left - 8 : box.right + 8, y: box.top + box.height / 2, left };
+    window.clearTimeout(peekTimer.current);
+    if (narrow) setPeek(at);
+    else peekTimer.current = window.setTimeout(() => setPeek(at), TOOLTIP_DELAY_MS);
   };
-  const peeked = narrow && peek ? sessions[peek.id] : undefined;
+  const unpeek = () => { window.clearTimeout(peekTimer.current); setPeek(null); };
+  const peeked = peek ? sessions[peek.id] : undefined;
+  const [iconOf, setIconOf] = useState<{ folder: string; name: string } | null>(null);
 
   const foldTitle = `${narrow ? words.unfold : words.fold}${panel ? ` (${MODIFIER}B)` : ''}`;
   // the panel moves and widens like a window (Chrome.tsx): docked, only its right side pulls; folded, it keeps its width
@@ -115,7 +133,8 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
       <div className="cp-list__body">
         {groups.map((group) => (
           <section key={group.key} className="cp-list__group" data-group={group.state ?? 'project'}>
-            <h2 className="cp-list__title">
+            <h2 className="cp-list__title" data-marked={(panel && !!group.folder) || undefined}>
+              {panel && group.folder && <ProjectMarkButton folder={group.folder} label={titleOf(group)} onPick={setIconOf} />}
               <button type="button" aria-expanded={!folded.includes(group.key)} aria-controls={`list-${group.key}`} title={words.collapse(titleOf(group))} onClick={() => fold(group.key)}>
                 <ChevronDownIcon /> <span>{titleOf(group)}</span>
                 <span className="cp-list__hint">{hintOf(group)}</span>
@@ -138,23 +157,26 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
                   <li key={session.id}>
                     <button
                       type="button" className="cp-list__item" data-status={status ?? 'idle'} data-active={session.id === selectedId} aria-current={openIds.includes(session.id)}
-                      title={narrow ? undefined : panel ? words.toggle : words.open} aria-label={narrow ? session.name : undefined}
-                      onClick={() => open(session.id)}
-                      onMouseEnter={peekAt(session.id)} onFocus={peekAt(session.id)} onMouseLeave={() => setPeek(null)} onBlur={() => setPeek(null)}
+                      title={narrow || panel ? undefined : words.open} aria-label={narrow ? session.name : undefined}
+                      onClick={() => { unpeek(); open(session.id); }}
+                      onMouseEnter={peekAt(session.id)} onFocus={peekAt(session.id)} onMouseLeave={unpeek} onBlur={unpeek}
                     >
                       <SessionFace session={session} resting={session.resting === true || group.state === 'resting'} />
                       <span className="cp-list__text">
                         <span className="cp-list__line">
                           <span className="cp-list__name">{session.name}</span>
-                          {session.worktree && <BranchMark branch={session.worktree.branch} />}
+                          {panel && session.tags?.length ? <span className="cp-list__tags"><TagChips tags={session.tags} className="cp-list__tag" /></span> : null}
+                          {!panel && session.worktree && <BranchMark branch={session.worktree.branch} />}
                           {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
                           <span className="cp-list__time">{working ? formatAge(elapsed) : formatAgo(elapsed)}</span>
                         </span>
-                        {/* its tags say what it is about at a glance; without any, its last words */}
-                        <span className="cp-list__line" title={session.lastMessage || undefined}>
-                          {session.tags?.length ? <span className="cp-list__tags"><TagChips tags={session.tags} className="cp-list__tag" /></span>
-                            : <span className="cp-list__last">{session.lastMessage || stateLabel(session, kind)}</span>}
-                        </span>
+                        {/* in the panel, its branch and its model; elsewhere its tags say what it is about at a glance; without any, its last words */}
+                        {panel && (sessionBranch(session) || sessionModel(session)) ? <PlaceLine session={session} /> : (
+                          <span className="cp-list__line" title={session.lastMessage || undefined}>
+                            {!panel && session.tags?.length ? <span className="cp-list__tags"><TagChips tags={session.tags} className="cp-list__tag" /></span>
+                              : <span className="cp-list__last">{session.lastMessage || stateLabel(session, kind)}</span>}
+                          </span>
+                        )}
                       </span>
                     </button>
                     {panel && !narrow && (
@@ -170,7 +192,9 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
         ))}
         {groups.length === 0 && !narrow && <p className="cp-list__empty">{words.empty}</p>}
       </div>
-      {peek && peeked && <Peek session={peeked} seen={seen} now={now} x={peek.x} y={peek.y} />}
+      {/* on the page itself, over everything: the panel is a layer of its own, under the header and the hints */}
+      {peek && peeked && createPortal(<Peek session={peeked} seen={seen} now={now} at={peek} panel={panel} narrow={narrow} />, document.body)}
+      {iconOf && <ProjectIconDialog folder={iconOf.folder} name={iconOf.name} onClose={() => setIconOf(null)} />}
       <button
         type="button" className="cp-button cp-list__new" data-variant={openIds.length ? undefined : 'primary'} aria-label={narrow ? words.new : undefined} title={narrow ? `${words.new} (N)` : undefined}
         onClick={() => openNewSession({})}
@@ -247,23 +271,70 @@ function NewInProject({ folder, label, digit, onOpen }: { folder: string; label:
   );
 }
 
-/** Who a face of the folded list is: name, tag, state and last words, beside it (as the room says what a click does). */
-function Peek({ session, seen, now, x, y }: { session: SessionInfo; seen: SeenSequences; now: number; x: number; y: number }) {
+/** Where the card beside a row goes: its point on the screen, and whether it opens to the left of it. */
+interface Peeked { id: string; x: number; y: number; left: boolean }
+/** The room the card needs beside a row (its widest, and the gap). */
+const PEEK_ROOM = 20 * 16;
+
+/**
+ * Who a row is, beside it (as the room says what a click does): name, tags, state; folded down to the faces, its last
+ * words; in the panel, where it runs: its project, this computer, its branch and worktree, its model.
+ */
+function Peek({ session, seen, now, at, panel, narrow }: { session: SessionInfo; seen: SeenSequences; now: number; at: Peeked; panel: boolean; narrow: boolean }) {
   const working = isWorking(session);
   const elapsed = now - (working ? session.busySince ?? session.stateSince : session.stateSince);
+  const machine = useSessions((s) => s.machine);
+  const words = t.session.list;
+  const branch = sessionBranch(session), place = worktreePlace(session), model = sessionModel(session), project = projectOf(session);
   return (
-    <div className="cp-list__peek" role="tooltip" style={{ '--x': `${x}px`, '--y': `${y}px` } as CSSProperties}>
+    <div className="cp-list__peek" role="tooltip" data-side={at.left ? 'left' : undefined} style={{ '--x': `${at.x}px`, '--y': `${at.y}px` } as CSSProperties}>
       <span className="cp-list__line">
         <span className="cp-list__name">{session.name}</span>
         <TagChips tags={session.tags} className="cp-list__tag" />
-                          {session.worktree && <BranchMark branch={session.worktree.branch} />}
+        {!panel && session.worktree && <BranchMark branch={session.worktree.branch} />}
         {session.subagents.length > 0 && <span className="cp-list__agents">+{session.subagents.length}</span>}
       </span>
       <span className="cp-list__peek-state" data-status={sessionStatus(session, seen) ?? 'idle'}>
         {stateLabel(session, attentionKind(session, seen))} · {working ? formatAge(elapsed) : formatAgo(elapsed)}
       </span>
-      {session.lastMessage && <span className="cp-list__peek-last">{session.lastMessage.replace(/\*\*|`/g, '')}</span>}
+      {panel && (
+        <span className="cp-list__facts">
+          <span className="cp-list__fact"><ProjectMark folder={project} /><span>{folderName(project)}</span></span>
+          {machine && <span className="cp-list__fact"><MachineIcon /><span>{words.machine(machine)}</span></span>}
+          {branch && <span className="cp-list__fact"><BranchIcon /><span>{branch.name}</span></span>}
+          {branch && <span className="cp-list__fact"><WorktreeIcon /><span>{place ? homeRelative(place) : words.mainCheckout}</span></span>}
+          {model && <span className="cp-list__fact"><ModelIcon /><span>{model}</span></span>}
+        </span>
+      )}
+      {panel && !narrow && <span className="cp-list__peek-hint">{words.toggle}</span>}
+      {(narrow || !panel) && session.lastMessage && <span className="cp-list__peek-last">{session.lastMessage.replace(/\*\*|`/g, '')}</span>}
     </div>
+  );
+}
+
+/** A row's second line in the panel: its branch (its worktree's, tinted), then its model, each cut short when long. */
+function PlaceLine({ session }: { session: SessionInfo }) {
+  const words = t.session.list;
+  const branch = sessionBranch(session), model = sessionModel(session);
+  return (
+    <span className="cp-list__line cp-list__chips">
+      {branch && (
+        <span className="cp-list__chip" data-worktree={branch.worktree || undefined} title={branch.worktree ? words.worktree(branch.name) : words.branch(branch.name)}>
+          {branch.worktree ? <WorktreeIcon /> : <BranchIcon />}<span>{branch.name}</span>
+        </span>
+      )}
+      {model && <span className="cp-list__chip" title={words.model(model)}><ModelIcon /><span>{model}</span></span>}
+    </span>
+  );
+}
+
+/** A project's mark left of its name in the panel: a click opens the dialog that chooses it. */
+function ProjectMarkButton({ folder, label, onPick }: { folder: string; label: string; onPick: (project: { folder: string; name: string }) => void }) {
+  const title = t.session.list.projectIcon(label);
+  return (
+    <button type="button" className="cp-list__mark" aria-label={title} title={title} onClick={() => onPick({ folder, name: label })}>
+      <ProjectMark folder={folder} />
+    </button>
   );
 }
 

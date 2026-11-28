@@ -39,7 +39,7 @@ import { Session, newSessionInfo, type SessionDeps, type StoredInfo, type TurnEn
 import { SessionLog, switchedOffFolder } from './session-log.ts';
 import { searchSessions } from './search.ts';
 import {
-  borrowedPlace, branchStatus, canOpenPullRequest, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
+  borrowedPlace, branchStatus, canOpenPullRequest, currentBranch, checkOnBranch, commitWork, copyIncluded, createWorktree, deleteBranch, dropBranch, folderRepo, keptBranchOf, landBranch,
   listBranches, moveConversation, projectOf, recreateWorktree, removeWorktree, setBranchNote,
 } from './worktrees.ts';
 
@@ -108,6 +108,8 @@ export interface SessionManagerDeps {
   secrets?: { store: SecretStore; env: (sessionId: string) => Record<string, string> };
   /** what git says a folder holds that is not committed or not pushed (server/pending-git.ts) */
   readGit?: (cwd: string) => Promise<GitPending | null>;
+  /** the branch a folder is on (worktrees.ts currentBranch) */
+  readBranch?: (cwd: string) => Promise<string | null>;
 }
 
 /** The answer of a side question is sent at most this often while it is written. */
@@ -185,7 +187,7 @@ export class SessionManager {
     this.save();
     this.sweep();
     await this.checkWorktrees();
-    for (const id of this.sessions.keys()) void this.refreshGit(id);
+    for (const id of this.sessions.keys()) this.refreshGit(id);
     void this.fillContexts();
     void this.probeAll();
     // Remote Control was on when the server stopped: back on, on the same session of claude.ai
@@ -723,6 +725,7 @@ export class SessionManager {
     if (started.caps) session.limit(started.caps);
     this.logs.set(info.id, log);
     this.sessions.set(info.id, session);
+    this.refreshHead(info.id);
     if (!options.resumeId) this.awaitingTag.add(info.id);
     this.deps.broadcast({ t: 'session', session: session.snapshot() });
     this.save();
@@ -900,7 +903,7 @@ export class SessionManager {
   private onTurnEnd(id: string, how: TurnEnd) {
     if (how === 'done') this.idleCompactPaused = false;
     if (this.switchingBrowsers.has(id)) this.switchBrowsers(id);
-    void this.refreshGit(id);
+    this.refreshGit(id);
     const session = this.sessions.get(id);
     const worktree = session?.snapshot().worktree;
     if (!session || !worktree) return;
@@ -912,14 +915,25 @@ export class SessionManager {
     void this.refreshBranch(id);
   }
 
-  /** Looks again at what git says the session's folder holds that is not committed or not pushed; never in a folder not trusted, whose git config could run code. */
-  private async refreshGit(id: string) {
+  /** Looks again at what git says of the session's folder: what is not committed or not pushed, and the branch it is on. */
+  private refreshGit(id: string) {
+    void this.readGitOf(id, 'pending', this.deps.readGit ?? readGitPending, (session, git) => session.setGit(git));
+    this.refreshHead(id);
+  }
+
+  private refreshHead(id: string) {
+    void this.readGitOf(id, 'branch', this.deps.readBranch ?? currentBranch, (session, branch) => session.setBranch(branch));
+  }
+
+  /** One read of git in the session's folder, never in a folder not trusted (its git config could run code); an older read that ends after a newer one is dropped. */
+  private async readGitOf<T>(id: string, what: 'pending' | 'branch', read: (cwd: string) => Promise<T>, apply: (session: Session, value: T) => void) {
     const info = this.sessions.get(id)?.snapshot();
     if (!info || info.untrusted) return;
-    const read = (this.gitReads.get(id) ?? 0) + 1;
-    this.gitReads.set(id, read);
-    const git = await (this.deps.readGit ?? readGitPending)(info.cwd);
-    if (this.gitReads.get(id) === read) this.sessions.get(id)?.setGit(git);
+    const key = `${what}:${id}`, count = (this.gitReads.get(key) ?? 0) + 1;
+    this.gitReads.set(key, count);
+    const value = await read(info.cwd);
+    const session = this.sessions.get(id);
+    if (session && this.gitReads.get(key) === count) apply(session, value);
   }
 
   private isBusy(info: SessionInfo) { return info.state === 'starting' || info.state === 'work' || info.state === 'perm' || !!info.background; }

@@ -1,3 +1,6 @@
+/** Every Lucide icon by name, one export each, untyped by lucide-react: see Icons.tsx loadAllIcons. */
+declare module 'lucide-react/dist/esm/icons/index.mjs';
+
 /** Open Space's version (package.json), set by Vite at build time. */
 declare const __APP_VERSION__: string;
 

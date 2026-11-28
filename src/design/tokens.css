@@ -139,6 +139,27 @@
   /* a conversation being compacted */
   --tone-compact: #c9a6ff;
   --tone-compact-soft: #251a3d;
+  /* a session on a worktree of its own, beside its branch in the sessions' panel */
+  --tone-worktree: #b4a7ff;
+  /* the colours a project's icon may wear, by the names kept in the settings (shared/project-icons.ts PROJECT_COLORS) */
+  --project-gray: #6b7280;
+  --project-red: #ef4444;
+  --project-orange: #f97316;
+  --project-amber: #f59e0b;
+  --project-yellow: #eab308;
+  --project-lime: #84cc16;
+  --project-green: #22c55e;
+  --project-emerald: #10b981;
+  --project-teal: #14b8a6;
+  --project-cyan: #06b6d4;
+  --project-sky: #0ea5e9;
+  --project-blue: #3b82f6;
+  --project-indigo: #6366f1;
+  --project-violet: #8b5cf6;
+  --project-purple: #a855f7;
+  --project-fuchsia: #d946ef;
+  --project-pink: #ec4899;
+  --project-rose: #f43f5e;
   --diff-add: #6fdc9b;
   --diff-add-soft: #0f2a1a;
   --diff-remove: #ff8f8a;

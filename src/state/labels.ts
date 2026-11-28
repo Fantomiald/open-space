@@ -3,6 +3,7 @@ import type { BackgroundTask, PermissionMode, SessionInfo } from '../../shared/p
 import { SWITCH_BROWSER_TOOL } from '../../shared/triggers.ts';
 import { t } from '../i18n/index.ts';
 import { clockTime, resetLabel } from '../lib/format.ts';
+import { modelName } from '../../shared/usage.ts';
 import { type AttentionKind, isWorking } from './queue.ts';
 
 /** Drives the colour of badges and cards (see --tone-* in design/tokens.css). */
@@ -54,6 +55,15 @@ export const models = (): readonly (readonly [string, string])[] => [
 ];
 
 /** A permission mode in a word or two (`short`, for a chip), or in a sentence. */
+/**
+ * The model a session runs, as people say it ("Opus 5.5", its context size "[1m]" aside): the one Claude Code reported,
+ * else the one asked for; '' for the default before it starts.
+ */
+export function sessionModel(session: SessionInfo): string {
+  const model = (session.activeModel || session.model).replace(/\[[^\]]*\]$/, '');
+  return model ? modelName(model) : '';
+}
+
 export const modeLabel = (mode: PermissionMode, length: 'short' | 'long' = 'long') => t.session.modes[length][mode];
 
 export function stateLabel(session: SessionInfo, kind: AttentionKind | null): string {

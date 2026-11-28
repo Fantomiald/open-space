@@ -102,9 +102,10 @@ before(async () => {
   hooksPort = await freePort();
   modsPort = await freePort();
   const created = createWebServer({
-    policy: loopbackPolicy([port], SECRET), distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), dev: false, devPort: 5174,
+    policy: loopbackPolicy([port], SECRET), distDir, soundsDir: path.join(base, 'sounds'), attachmentsDir: path.join(base, 'attachments'), uploadsDir: path.join(base, 'uploads'), projectIconsDir: path.join(base, 'project-icons'), dev: false, devPort: 5174,
     onConnection: () => { connections++; }, log: () => {},
     sessionFile: (sessionId, relative) => (sessionId === 's1' ? resolveInside(distDir, relative) : null),
+    projectPicture: (folder) => (folder === '/code/app' ? path.join(distDir, 'logo.svg') : null),
     hooks: async (id, token, body) => {
       if (id !== HOOK_ID || token !== HOOK_TOKEN) return 'unknown';
       hooked.push(body);
@@ -174,6 +175,32 @@ describe('HTTP requests', () => {
     assert.equal(res.headers.get('content-type'), 'image/svg+xml');
     assert.match(res.headers.get('content-security-policy') ?? '', /sandbox/);
     for (const refused of ['s1/index.html', 's2/logo.svg', 's1/..%2Fsecret.txt', 's1/leak.txt', 's1/%E0%A4%A']) assert.equal((await file(refused)).status, 404, refused);
+  });
+
+  it('serves a project’s own picture to a paired browser only, an SVG without scripts', async () => {
+    const picture = (folder: string, cookie = true) => fetch(`http://127.0.0.1:${port}/project-icon?folder=${encodeURIComponent(folder)}`, { headers: cookie ? { Cookie: COOKIE } : {} });
+    assert.equal((await picture('/code/app', false)).status, 401);
+    const res = await picture('/code/app');
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml');
+    assert.match(res.headers.get('content-security-policy') ?? '', /sandbox/);
+    assert.equal((await picture('/code/other')).status, 404);
+  });
+
+  it('keeps a picture picked for a project from Open Space’s own page only, and gives it back to a paired browser', async () => {
+    const own = { Cookie: COOKIE, Origin: `http://127.0.0.1:${port}` };
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('logo')]);
+    const send = (body: Buffer | string, headers: Record<string, string>) => fetch(`http://127.0.0.1:${port}/project-icon`, { method: 'POST', body, headers });
+    assert.equal((await send(png, { Cookie: COOKIE, Origin: 'https://evil.example' })).status, 403);
+    assert.equal((await send(png, { Origin: own.Origin })).status, 403, 'no cookie');
+    assert.equal((await send('<svg onload="alert(1)"/>', own)).status, 415);
+    const { id } = await (await send(png, own)).json() as { id: string };
+    const at = `http://127.0.0.1:${port}/project-icon?id=${id}`;
+    assert.equal((await fetch(at)).status, 401);
+    const res = await fetch(at, { headers: { Cookie: COOKIE } });
+    assert.deepEqual([res.status, res.headers.get('content-type'), res.headers.get('x-content-type-options')], [200, 'image/png', 'nosniff']);
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), png);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/project-icon?id=..%2Fsecret.txt`, { headers: { Cookie: COOKIE } })).status, 404);
   });
 
   it('serves the pictures sent with messages to a paired browser only, by their exact name', async () => {

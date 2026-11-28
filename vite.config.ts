@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
-    proxy: { '/ws': { target: `ws://${bridge}`, ws: true }, '/pair': { target: `http://${bridge}` }, '/sounds': { target: `http://${bridge}` }, '/attachments': { target: `http://${bridge}` }, '/upload': { target: `http://${bridge}` }, '/browser': { target: `http://${bridge}` } },
+    proxy: { '/ws': { target: `ws://${bridge}`, ws: true }, '/pair': { target: `http://${bridge}` }, '/sounds': { target: `http://${bridge}` }, '/attachments': { target: `http://${bridge}` }, '/upload': { target: `http://${bridge}` }, '/project-icon': { target: `http://${bridge}` }, '/browser': { target: `http://${bridge}` } },
   },
   build: { outDir: 'dist', chunkSizeWarningLimit: 1500 },
 });

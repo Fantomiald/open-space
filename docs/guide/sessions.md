@@ -28,11 +28,15 @@ If the session started background work (sub-agents, background tasks, scheduled 
 
 ## Windows and the sessions panel
 
-The panel on the left lists the sessions by project, in the room as in focus mode. A click on a row, or on the character in the room, opens its window. Already open, it comes to the front. The one you are in closes.
+The panel on the left lists the sessions by project, in the room as in focus mode. A click on a row, or on the character in the room, opens its window, the keyboard in its field. Already open, it comes to the front. The one you are in closes.
 
 At the bottom of the panel, **Windows 1 to 6** sets how many session windows stay open at once (6 by default, fewer on a narrow screen). Floating windows count, mods do not. Once the number is reached, the session you open takes the place of the one open the longest. Lowering the number closes the oldest first.
 
 On hover, a row offers **Switch off**, as the session's menu does. A project's title offers its folder icon, which opens the folder in Finder (Explorer on Windows, the file manager elsewhere), and its **+**, a new session in it. **Switched off** opens **Resume** on the project in sight. The button at the top, or ⌘ B (Ctrl B), folds the panel down to the faces. **Settings › Appearance › Sessions panel** turns it off: the room comes back without it, focus mode with its own list.
+
+Under its name, a row shows its branch (tinted when the session works in a worktree) and its model. Leave the pointer on it a moment and a card says where it runs: its project, the computer, its branch, its worktree (or **Main checkout**) and its model.
+
+The mark left of a project's name is its icon. A click opens **Choose the project’s icon**: an icon from a short list in one of 18 colours (the search finds any Lucide icon), an emoji, one or two letters, or a picture. **Automatic** uses the favicon or logo found in the project folder, **Choose a file** takes your own. **Reset to automatic** forgets your choice.
 
 ### Moving the panel and the rest
 

@@ -14,6 +14,7 @@ import { t } from '../i18n/index.ts';
 import { availability } from '../state/availability.ts';
 import { sessionsIn } from '../state/docking.ts';
 import { useSessions } from '../state/sessions.ts';
+import { focusComposer } from '../lib/focus-composer.ts';
 import { useReducedMotion } from '../lib/motion.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
 import { USER_SPEAKER, onSpeech } from '../state/speech.ts';
@@ -296,6 +297,7 @@ export function RoomView({ room, day }: { room: RoomKind; day: FestivalDay }) {
       // with the sessions' panel, a click on the one in use closes it, as in the panel
       const { sessionId } = character.person;
       useSessions.getState().toggleWindow(sessionId);
+      if (useSessions.getState().openIds.includes(sessionId)) focusComposer(sessionId);
       return;
     }
     const visitor = scene.visitorAt(point);

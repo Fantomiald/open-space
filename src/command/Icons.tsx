@@ -6,6 +6,7 @@ import {
   AppWindow, Archive, ShieldCheck, Blend, Cpu, Eraser, FileDiff, GitBranch, GitMerge, GitPullRequest, ArrowLeft, Check, ArrowRight, Bell, BellOff, CalendarHeart, ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, Command, Download, Ellipsis, ExternalLink, File, Link, FileText, Image, Info, LayoutGrid, Maximize2, Minimize2, ListMusic, MessagesSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Paperclip, Pause, Pencil, Palette, Play, Plus, Power, CircleDollarSign, Keyboard, NotebookPen, MessageSquareText, ChartColumn,
   Clock, Folder, FolderOpen, FolderPlus, FilePlus, Save, FileCode, FileBraces, FileImage, FileCog, FileLock, FileArchive, FilePlay, FileMusic, FileSpreadsheet, Copy, Languages, PartyPopper, Activity, Webhook, TrendingUp, CalendarDays, Bot, CornerDownLeft, ArrowUpDown, ScrollText, Coffee, Gauge, Timer, Sparkles, ChevronLeft, ChevronRight, RotateCw, CopyPlus, Brain, Shrink, ListChecks, Workflow, Inbox, Search, Settings, Shuffle, SkipBack, SlidersHorizontal, SkipForward, Smartphone, Sofa, Square, SquareTerminal, Star, Tag, Trash2, UserCheck, Users, Volume2, PawPrint, RotateCcw, VolumeX, X, Zap, Globe, KeyRound, PictureInPicture2, Pin, PinOff, SquareArrowOutUpRight, SquareArrowDownLeft,CodeXml, Eye, FolderSearch, type LucideIcon, List, Puzzle, Coins, ChartLine, Heart,
   Radio, Focus, ListFilter, MousePointer2, LayoutDashboard, LayoutPanelLeft, GripVertical, FastForward, Unplug, ServerOff, FileX, BookX, Lock, Undo2,
+  FolderCode, Terminal, Earth, Server, Database, CloudCog, Package, BookOpen, FlaskConical, Rocket, Gamepad2, Music, ShoppingBag, Wrench, Layers, FolderTree, Laptop,
 } from 'lucide-react';
 
 const icon = (Shape: LucideIcon) => () => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
@@ -178,6 +179,30 @@ export const MergeIcon = icon(GitMerge);
 export const PullRequestIcon = icon(GitPullRequest);
 export const KeepIcon = icon(Archive);
 export const CleanIcon = icon(Eraser);
+/** A session's own worktree (beside its branch in the sessions' panel), the computer it runs on, its model. */
+export const WorktreeIcon = icon(FolderTree);
+export const MachineIcon = icon(Laptop);
+export const ModelIcon = icon(Cpu);
+
+/**
+ * The icons a project may wear in the sessions' panel (shared/project-icons.ts), in the order the dialog offers them;
+ * any other Lucide icon comes from the whole set, loaded only when asked for (loadAllIcons).
+ */
+export const PROJECT_ICONS: Readonly<Record<string, LucideIcon>> = {
+  FolderCode, CodeXml, Terminal, Earth, Server, Database, Bot, Sparkles, Smartphone, Monitor, CloudCog, Package,
+  BookOpen, FlaskConical, ShieldCheck, Rocket, Gamepad2, Music, Image, ShoppingBag, GitBranch, Workflow, Wrench, Layers,
+};
+/** A project without an icon of its own, nor a picture in its folder. */
+export const ProjectFolderIcon = icon(Folder);
+/** One of those icons, drawn as the others are. */
+export const Glyph = ({ shape: Shape }: { shape: LucideIcon }) => <Shape className="cp-icon" size={16} strokeWidth={1.75} aria-hidden="true" />;
+
+let allIcons: Promise<Readonly<Record<string, LucideIcon>>> | null = null;
+/** Every Lucide icon by name, in a part of the page of its own, fetched the first time it is needed (once). */
+export function loadAllIcons(): Promise<Readonly<Record<string, LucideIcon>>> {
+  allIcons ??= import('lucide-react/dist/esm/icons/index.mjs').then((all: Readonly<Record<string, LucideIcon>>) => all, (error: unknown) => { allIcons = null; throw error; });
+  return allIcons;
+}
 
 /** The official marks of the chat apps (Simple Icons, CC0), in a tile of their colour (design/components.css, .cp-brand). */
 const BRAND_PATHS = {

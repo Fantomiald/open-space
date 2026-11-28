@@ -28,6 +28,7 @@ import { parseClientMessage } from './messages.ts';
 import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { findTailscale, readTailscaleName, serveBridge, serveMods, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
+import { findProjectPicture, projectIconsFolder, sweepProjectPictures } from './project-icon.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { pathFinder } from './file-mentions.ts';
 import { windowsKnownFolders } from './system-folders.ts';
@@ -230,6 +231,9 @@ const sessions = new SessionManager({
 });
 await sessions.init();
 browsers.sweepProfiles(new Set(sessions.list().map((session) => session.id))).catch((error: unknown) => log('cannot sweep the browser profiles', error));
+/** Removes the pictures picked for projects that no icon shows any more (project-icon.ts), unless the preferences could not be read (they would all look unused). */
+const sweepPictures = () => { if (settings.loadFailed) return; sweepProjectPictures(projectIconsFolder(config.dataDir), settings.preferences.projectIcons).catch((error: unknown) => log('cannot sweep the project pictures', error)); };
+sweepPictures();
 const usage = new UsageLedger({ home: os.homedir(), cacheFile: path.join(config.dataDir, 'usage-cache.json'), log });
 
 /** Writes, renames and deletes of notes one after the other: a save sent just before a rename lands on the old name first. */
@@ -353,6 +357,7 @@ async function applyPreferences(changes: Partial<typeof settings.preferences>) {
   const before = settings.preferences.claude;
   const accountsBefore = settings.preferences.accountsBrowser;
   await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
+  if (rest.projectIcons) sweepPictures();
   setServerLanguage(settings.preferences.language ?? 'fr');
   applyRoots();
   broadcast(preferencesMessage());
@@ -514,8 +519,9 @@ function browserOf(sessionId: string, shared: boolean) {
   if (shared && !sessions.hasSharedBrowser(sessionId)) throw new Error('this session has no shared browser');
 }
 
-const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), projectIconsDir: projectIconsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
+  projectPicture: (folder) => { const real = resolveAllowedDirectory(folder, allowedRoots(config)); return real ? findProjectPicture(real) : null; },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     socket: (sessionId, lane) => browsers.socket(sessionId, lane), connect: (client, upstream, sessionId, lane) => browsers.connect(client, upstream, browserId(sessionId, lane)),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
@@ -564,7 +570,7 @@ function onConnection(socket: WebSocket) {
     t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
-    browsers: browsers.states(), browserAvailable: browsers.available, mods: mods.list(),
+    browsers: browsers.states(), browserAvailable: browsers.available, mods: mods.list(), machine: os.hostname(),
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });

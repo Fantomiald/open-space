@@ -22,14 +22,7 @@ export const attachmentsFolder = (dataDir: string) => path.join(dataDir, 'attach
 
 /** Writes an image (once: the same picture sent twice is the same file) and returns its name. */
 export function saveAttachment(folder: string, image: ImageUpload): string {
-  const bytes = Buffer.from(image.data, 'base64');
-  const name = `${createHash('sha256').update(bytes).digest('hex')}.${IMAGE_EXTENSIONS[image.mediaType]}`;
-  const file = path.join(folder, name);
-  if (!existsSync(file)) {
-    mkdirSync(folder, { recursive: true, mode: 0o700 });
-    writeFileSync(file, bytes, { mode: 0o600 });
-  }
-  return name;
+  return storeOnce(folder, Buffer.from(image.data, 'base64'), IMAGE_EXTENSIONS[image.mediaType]);
 }
 
 /** Keeps a copy of a file a session sent; returns its stored name, or null when it cannot be read or is too big. */
@@ -37,13 +30,14 @@ export function copyAttachment(folder: string, source: string): string | null {
   try {
     if (!statSync(source).isFile() || statSync(source).size > MAX_SENT_BYTES) return null;
     const extension = path.extname(source).slice(1).toLowerCase();
-    return store(folder, readFileSync(source), /^[a-z0-9]{1,8}$/.test(extension) ? (extension === 'jpeg' ? 'jpg' : extension === 'htm' ? 'html' : extension) : 'bin');
+    return storeOnce(folder, readFileSync(source), /^[a-z0-9]{1,8}$/.test(extension) ? (extension === 'jpeg' ? 'jpg' : extension === 'htm' ? 'html' : extension) : 'bin');
   } catch {
     return null;
   }
 }
 
-function store(folder: string, bytes: Buffer, extension: string): string {
+/** Writes `bytes` once in `folder`, named by their SHA-256 and `extension` (the same bytes twice are the same file); returns the name. */
+export function storeOnce(folder: string, bytes: Buffer, extension: string): string {
   const name = `${createHash('sha256').update(bytes).digest('hex')}.${extension}`;
   const file = path.join(folder, name);
   if (!existsSync(file)) {
@@ -67,7 +61,7 @@ export function bundlePage(folder: string, page: string, sources: Readonly<Recor
     if (stored) files[published] = stored;
   }
   if (!Object.keys(files).length) return null;
-  return store(folder, Buffer.from(JSON.stringify({ page, files } satisfies PageBundle)), BUNDLE_EXTENSION);
+  return storeOnce(folder, Buffer.from(JSON.stringify({ page, files } satisfies PageBundle)), BUNDLE_EXTENSION);
 }
 
 export async function readBundle(folder: string, hash: string): Promise<PageBundle | null> {

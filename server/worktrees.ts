@@ -129,6 +129,18 @@ export function projectOf(folder: string): string {
   }
 }
 
+/**
+ * The branch a folder's checkout is on, its short commit on a detached HEAD ("a1b2c3d"), or null outside a git
+ * repository (or one without a commit yet): one or two quick reads that never take a lock.
+ */
+export async function currentBranch(folder: string): Promise<string | null> {
+  const head = await run(folder, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const name = head.code === 0 ? head.stdout.trim() : '';
+  if (name !== 'HEAD') return name || null;
+  const commit = await run(folder, ['rev-parse', '--short', 'HEAD']);
+  return commit.code === 0 ? commit.stdout.trim() || null : null;
+}
+
 /** Files with changes not committed in a checkout ("M  a.ts", "?? b.ts"), by path. */
 async function uncommitted(cwd: string): Promise<string[]> {
   const out = await git(cwd, ['status', '--porcelain', '-z', '--untracked-files=all']);

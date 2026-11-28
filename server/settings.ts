@@ -11,6 +11,7 @@ import { hooksAddressOf } from '../shared/triggers.ts';
 import { NOTE_NAME } from '../shared/journal.ts';
 import { parseClaudeSettings } from '../shared/claude-settings.ts';
 import { parseDashboards } from '../shared/dashboards.ts';
+import { parseProjectIcons } from '../shared/project-icons.ts';
 import { ACCOUNTS_BROWSERS, DEFAULT_PERMISSION_MODE, EFFORTS, GLASS_OPACITY, IDLE_COMPACT_MINUTES, ISOLATE_MODES, isPermissionMode, MAX_WINDOWS, TIME_FORMATS, WINDOW_STYLES, type Preferences } from '../shared/protocol.ts';
 import { asArray, isJson } from './json.ts';
 import { expandHomePath, isFullPath } from '../shared/paths.ts';
@@ -71,6 +72,8 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (raw.claude !== undefined) found.claude = parseClaudeSettings(raw.claude);
   const dashboards = parseDashboards(raw.dashboards);
   if (dashboards) found.dashboards = dashboards;
+  const projectIcons = parseProjectIcons(raw.projectIcons);
+  if (projectIcons) found.projectIcons = projectIcons;
   if (Array.isArray(raw.roots)) found.roots = [...new Set(asArray(raw.roots).filter((root): root is string => typeof root === 'string' && isFullPath(root)).map((root) => path.resolve(expandHomePath(root, home))))].slice(0, MAX_ROOTS);
   if (typeof raw.defaultFolder === 'string' && (raw.defaultFolder === '' || path.isAbsolute(raw.defaultFolder))) found.defaultFolder = raw.defaultFolder && path.resolve(raw.defaultFolder);
   if (typeof raw.model === 'string' && /^[\w.:[\]-]{0,80}$/.test(raw.model)) found.model = raw.model;
@@ -99,6 +102,8 @@ export class Settings {
   preferences: Preferences = { ...DEFAULT_PREFERENCES };
   /** false until the user went through the first start */
   onboarded = false;
+  /** true when the file exists but could not be read: the preferences are then the defaults, not the user's */
+  loadFailed = false;
   private file: string;
 
   constructor(file: string) {
@@ -110,7 +115,9 @@ export class Settings {
       const raw: unknown = JSON.parse(await readFile(this.file, 'utf8'));
       this.preferences = { ...DEFAULT_PREFERENCES, ...parsePreferences(raw) };
       this.onboarded = isJson(raw) && raw.onboarded === true;
-    } catch { /* missing or unreadable: the defaults, and the onboarding */ }
+    } catch (error) { /* missing or unreadable: the defaults, and the onboarding */
+      this.loadFailed = (error as NodeJS.ErrnoException).code !== 'ENOENT';
+    }
   }
 
   get notifications() { return this.preferences.notifications; }
@@ -118,6 +125,7 @@ export class Settings {
   async update(changes: Partial<Preferences>, onboarded = this.onboarded) {
     this.preferences = { ...this.preferences, ...changes };
     this.onboarded = onboarded;
+    this.loadFailed = false;
     await this.save();
   }
 

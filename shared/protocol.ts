@@ -12,6 +12,7 @@ import type { ClaudeDefaults, ClaudeSettings } from './claude-settings.ts';
 import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
+import type { ProjectIcon } from './project-icons.ts';
 import type { RoomTheme } from './room-themes.ts';
 import type { Look } from './look.ts';
 import type { ModInfo, ModSettings } from './mods.ts';
@@ -398,6 +399,11 @@ export interface SessionInfo {
   /** it works on a branch of its own, in a worktree */
   worktree?: WorktreeInfo;
   /**
+   * the branch its folder is on (server/worktrees.ts currentBranch), a short commit on a detached HEAD: read when it is
+   * made or loaded and after each turn; absent outside a git repository, or for a folder not trusted
+   */
+  branch?: string;
+  /**
    * its folder is in a worktree made outside Open Space (git worktree add): the same place in the repository's main
    * checkout, the project it works for. Worked out from the folder, never stored.
    */
@@ -605,6 +611,8 @@ export interface Preferences {
   maxWindows?: number;
   /** the Alt tip over the room stays up for good, even once used or closed (src/room/ArrangeHint.tsx); absent means off */
   alwaysArrangeHint?: boolean;
+  /** the icon the user chose for a project of the sessions' panel, by its folder (shared/project-icons.ts); absent: the automatic one */
+  projectIcons?: Record<string, ProjectIcon>;
 }
 
 /** The most sessions' windows open at once (Preferences.maxWindows): past six, whoever needs more is better off in a terminal. */
@@ -853,7 +861,7 @@ export type ClientMessage =
   | { t: 'browserInput'; sessionId: string; lane: number; input: BrowserInput };
 
 export type ServerMessage =
-  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null; /** by browserId (shared/browser.ts) */ browsers: Record<string, BrowserState>; browserAvailable: boolean; /** none from a server older than the mods */ mods?: ModInfo[] }
+  | { t: 'hello'; claude: ClaudeInfo; roots: string[]; sessions: SessionInfo[]; commands: SlashCommand[]; folderCommands: Record<string, SlashCommand[]>; models: ModelChoice[]; quota: Quota | null; build: string; crew: CrewMember[]; preferences: Preferences; onboarded: boolean; rootsLocked: boolean; claudeDefaults: ClaudeDefaults; appUpdate: AppUpdate | null; /** by browserId (shared/browser.ts) */ browsers: Record<string, BrowserState>; browserAvailable: boolean; /** none from a server older than the mods */ mods?: ModInfo[]; /** this computer's name (os.hostname), where every session runs */ machine?: string }
   /** a session asked for in a folder that runs code of its own and was never trusted: the user decides (SessionOptions.trust) */
   | { t: 'trustNeeded'; cwd: string; code: FolderCode }
   /** the settings changed (from any tab); `roots`: the folders in effect */

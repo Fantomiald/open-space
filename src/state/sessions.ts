@@ -281,6 +281,8 @@ export interface CommandPostState {
   onboarded: boolean;
   /** the folders are set by OFFICE_ROOTS: the page cannot change them */
   rootsLocked: boolean;
+  /** the computer the server and every session run on ('' from an older server) */
+  machine: string;
   /** what Claude Code runs with where Open Space sets nothing, and its output styles */
   claudeDefaults: ClaudeDefaults;
   /** where the last `claude update` asked from the page is (null: none since the page opened) */
@@ -589,6 +591,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
+  machine: '',
   claudeDefaults: { current: {}, outputStyles: [] },
   claudeUpdate: null,
   claudeAccount: null,
@@ -629,7 +632,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults, appUpdate: message.appUpdate,
-          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false, mods: message.mods ?? null,
+          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false, mods: message.mods ?? null, machine: message.machine ?? '',
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
