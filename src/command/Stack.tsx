@@ -1,27 +1,26 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { canArrange } from '../lib/drag.ts';
 import { readPreference, writePreference } from '../lib/preferences.ts';
-import { dock, dockAt, FLOAT_AWAY, modOfSlot, modSlot, oldestOpen, within } from '../state/docking.ts';
+import { depthOf, dock, dockAt, FLOAT_AWAY, LAUNCHER, modOfSlot, modSlot, oldestOpen, within } from '../state/docking.ts';
 import { MOD_HEAD, modPlacementKey, NOT_PLACED, type ModPlacement } from '../state/mods.ts';
 import { outKey } from '../state/out.ts';
 import type { Box } from '../state/room-frame.ts';
 import { arrangementOf, maxColumnsIn, panelWidth, tilingOf, useSessions, windowCapIn } from '../state/sessions.ts';
 import { addTo, dropAt, moveIn, placement, type Columns, type DropSlot } from '../state/stack.ts';
-import { clampBox, GAP, gridBoxes, resizeBox, snapMove, snapResize, zoneAt, zoneBox, type Edge, type Guide } from '../state/windows.ts';
+import { fitPulledWindow, fitWindow } from '../state/chrome.ts';
+import { GAP, gridBoxes, snapMove, zoneAt, zoneBox, type Edge, type Guide } from '../state/windows.ts';
 import { Detail } from './Detail.tsx';
 import { noteModPlaced, publishSlots, useDock } from './dock.ts';
 import { FreeHandles } from './FreeHandles.tsx';
 import { boxVariables } from './boxes.ts';
 import { GridHandles } from './GridHandles.tsx';
+import { Guides } from './Guides.tsx';
 import { Launcher } from './Launcher.tsx';
+import { pullBox } from './pull.ts';
 import { useWindowDrag, WindowCompactContext, WindowDragContext, type WindowDrag } from './useWindowDrag.ts';
 
-/** The launcher's place in the grid, among the sessions' ids. */
-const LAUNCHER = 'launcher';
 /** A window placed by hand lower than this takes the small layout, so its thread keeps some height. */
 const COMPACT_BELOW = 520;
-/** the floating windows above the docked ones */
-const FLOATING_DEPTH = 10;
 
 type Size = { width: number; height: number };
 
@@ -89,25 +88,32 @@ export function Stack() {
   const free = useSessions((s) => s.free[arrangementOf(s.view)]);
   const placeWindow = useSessions((s) => s.placeWindow);
   const raiseWindow = useSessions((s) => s.raiseWindow);
+  const dockLauncher = useSessions((s) => s.dockLauncher);
   // the one the launcher's session will replace when no other fits: the one opened longest ago
   const oldest = useSessions((s) => { const id = oldestOpen(s.opened, s.openIds); return id ? s.sessions[id]?.name : undefined; });
   // the width the sessions' panel leaves the windows, which changes as it folds
   const panel = useSessions((s) => panelWidth(s, s.view));
   const cap = useSessions((s) => windowCapIn(s.view));
+  // the status card moved by hand leaves the bottom left corner to the windows
+  const statusHome = useSessions((s) => !s.chrome.places.status);
   // the mods floating, which the stack's drag carries too (it may dock them)
   const floatingMods = useSessions((s) => s.openMods.filter((id) => !s.columns.some((column) => column.includes(modSlot(id))) && !s.outKeys.includes(outKey({ kind: 'mod', modId: id }))).map(modSlot).join(' '));
   const tiling = tilingOf(view);
   const [element, area] = useArea(view);
   const placed = area !== null;
   const max = maxColumnsIn(view);
-  // past the cap the launcher covers the windows, like a grid with no room left
-  const withLauncherOf = (grid: Columns) => (launcherOpen && openIds.length < cap ? addTo(grid, LAUNCHER, max, tiling) : null);
+  // the launcher floating (placed by hand like a window), else docked in the place the next session will take
+  const launcherFloats = placed && launcherOpen && free.boxes[LAUNCHER] !== undefined;
+  // past the cap the launcher covers the windows, like a grid with no room left; `docking`: a floating one carried over the grid
+  const roomFor = (grid: Columns) => (launcherOpen && openIds.length < cap ? addTo(grid, LAUNCHER, max, tiling) : null);
+  const withLauncherOf = (grid: Columns, docking = false) => (launcherFloats && !docking ? null : roomFor(grid));
+  const full = launcherOpen && roomFor(columns) === null;
   const docked = columns.flat();
   const floatingSessions = openIds.filter((id) => free.boxes[id] && !docked.includes(id));
-  const isFloating = (id: string) => (modOfSlot(id) !== null ? !docked.includes(id) : floatingSessions.includes(id));
+  const isFloating = (id: string) => (id === LAUNCHER ? launcherFloats : modOfSlot(id) !== null ? !docked.includes(id) : floatingSessions.includes(id));
 
-  // over the room the grid keeps to the right, as wide as its columns or as pulled by hand, clear of the status card
-  const widthRange = (count: number) => ({ min: count * tiling.minColumn + (count - 1) * GAP, max: window.innerWidth - panel - 20 * 16 - 3 * GAP });
+  // over the room the grid keeps to the right, as wide as its columns or as pulled by hand, clear of the status card in its corner
+  const widthRange = (count: number) => ({ min: count * tiling.minColumn + (count - 1) * GAP, max: window.innerWidth - panel - (statusHome ? 20 * 16 + GAP : 0) - 2 * GAP });
   const gridArea = (count: number): Box | null => {
     if (!area) return null;
     if (view === 'focus') return { left: 0, top: 0, width: area.width, height: area.height };
@@ -128,6 +134,11 @@ export function Stack() {
   const before = gridAt(withLauncherOf(columns) ?? columns);
   const landing = (drag: WindowDrag): Landing => {
     const dockArea = gridArea(Math.max(columns.length, 1));
+    // the launcher docks only over the place the next session takes (the whole grid when none is left), in both views
+    if (drag.id === LAUNCHER) {
+      const room = roomFor(columns), spot = room ? gridAt(room)?.[LAUNCHER] : dockArea;
+      return spot && within(spot, drag.pointer, launcherFloats ? 0 : FLOAT_AWAY) ? { dock: true, to: null } : { dock: false };
+    }
     if (!before || !dockArea) return { dock: false };
     const slots = columns.flatMap((ids, column) => ids.map((id, row) => ({ id, column, row, box: before[id] })));
     if (view === 'focus') {
@@ -142,12 +153,12 @@ export function Stack() {
 
   // a window placed by hand stays on the page, clear of the docked sessions' panel on its left: moved, it is pushed
   // back; pulled by its left side, that side stops there
-  const fit = (box: Box) => { const kept = clampBox(box, area!); return panel ? { ...kept, left: Math.max(kept.left, 0) } : kept; };
-  const fitPulled = (box: Box) => { const kept = clampBox(box, area!); return panel && kept.left < 0 ? { ...kept, left: 0, width: kept.width + kept.left } : kept; };
-  // the sessions floating, in pixels
+  const fit = (box: Box) => fitWindow(box, area!, !!panel);
+  const fitPulled = (box: Box) => fitPulledWindow(box, area!, !!panel);
+  // the sessions floating (and the launcher), in pixels
   const floatingAt = () => {
     if (!area) return {};
-    return Object.fromEntries(floatingSessions.map((id) => [id, fit(toPixels(free.boxes[id], area))]));
+    return Object.fromEntries([...floatingSessions, ...(launcherFloats ? [LAUNCHER] : [])].map((id) => [id, fit(toPixels(free.boxes[id], area))]));
   };
   // the status card is something to stick to as well
   const obstacles = (): Box[] => {
@@ -178,7 +189,7 @@ export function Stack() {
   const shownBoxes = useRef<Record<string, Box> | null>(null);
   const takenBoxes = useRef<Record<string, Box>>({});
   const boxOf = (id: string) => shownBoxes.current?.[id] ?? floatingModBox(id);
-  const draggable = [...openIds, ...docked.filter((id) => modOfSlot(id) !== null), ...(floatingMods ? floatingMods.split(' ') : [])];
+  const draggable = [...openIds, ...docked.filter((id) => modOfSlot(id) !== null), ...(floatingMods ? floatingMods.split(' ') : []), ...(launcherOpen ? [LAUNCHER] : [])];
   // the box each window had when it was taken, which it keeps the size of while carried
   const { drag, start } = useWindowDrag(element, (id) => {
     const box = boxOf(id);
@@ -189,6 +200,11 @@ export function Stack() {
     const startBox = takenBoxes.current[id];
     const where = landing(dropped);
     const mod = modOfSlot(id);
+    // the launcher docks in the place of the next session, never kept in the grid
+    if (id === LAUNCHER && where.dock) {
+      if (isFloating(id)) dockLauncher();
+      return;
+    }
     // a floating window over a full grid stays floating where it was let go
     if (where.dock && isFloating(id) && dockWindow(id, where.to)) return;
     if (where.dock && !isFloating(id)) {
@@ -211,13 +227,13 @@ export function Stack() {
   const docking = target?.dock ? target : null;
   // the grid as it would be once the window carried is let go: moved in it, or docked in it
   const preview = (): Columns => {
-    if (!drag || !docking) return columns;
+    if (!drag || !docking || drag.id === LAUNCHER) return columns;
     if (isFloating(drag.id)) return dock(columns, drag.id, docking.to, max, tiling) ?? columns;
     return docking.to ? moveIn(columns, drag.id, docking.to, max, tiling) : columns;
   };
   const shown = preview();
-  const withLauncher = withLauncherOf(shown);
-  const zoomed = launcherOpen && !withLauncher ? LAUNCHER : zoomedId;
+  const withLauncher = withLauncherOf(shown, drag?.id === LAUNCHER && docking !== null);
+  const zoomed = launcherOpen && !launcherFloats && !withLauncher ? LAUNCHER : zoomedId;
   const laidOut = withLauncher ?? shown;
   const { rows, slots } = placement(laidOut, tiling);
   const grid = gridAt(laidOut);
@@ -227,31 +243,15 @@ export function Stack() {
   const [resizing, setResizing] = useState<{ id: string; box: Box; guides: Guide[] } | null>(null);
   const pull = (id: string, edge: Edge, event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || !placedFreely[id] || !area) return;
-    event.preventDefault();
-    event.stopPropagation();
     raiseWindow(id);
-    const handle = event.currentTarget, from = { x: event.clientX, y: event.clientY }, startBox = placedFreely[id], boxes = { ...grid, ...placedFreely };
-    handle.setPointerCapture(event.pointerId);
-    let latest = startBox;
-    const move = (pointer: PointerEvent) => {
-      const pulled = fitPulled(resizeBox(startBox, edge, pointer.clientX - from.x, pointer.clientY - from.y));
-      const result = pointer.metaKey || pointer.ctrlKey ? { box: pulled, guides: [] } : snapResize(pulled, edge, others(boxes, id), area);
-      latest = result.box;
-      setResizing({ id, ...result });
-    };
-    const end = () => {
-      handle.removeEventListener('lostpointercapture', end);
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', end);
-      handle.removeEventListener('pointercancel', end);
-      setResizing(null);
-      if (latest !== startBox) placeWindow(id, toFractions(latest, area));
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', end);
-    handle.addEventListener('pointercancel', end);
-    // the window closed while pulled: its handle is gone with the pointer
-    handle.addEventListener('lostpointercapture', end, { once: true });
+    pullBox(event, {
+      start: placedFreely[id], edge, fit: fitPulled, others: others({ ...grid, ...placedFreely }, id), surface: area,
+      onMove: (pulled) => setResizing({ id, ...pulled }),
+      onEnd: (box) => {
+        setResizing(null);
+        if (box) placeWindow(id, toFractions(box, area));
+      },
+    });
   };
 
   // the window carried to float (or a floating one carried anywhere) follows the pointer as a floating window would
@@ -263,9 +263,10 @@ export function Stack() {
     ...grid, ...placedFreely,
     ...(afloat && drag ? { [drag.id]: afloat.box } : {}), ...(resizing ? { [resizing.id]: resizing.box } : {}),
   };
-  shownBoxes.current = area ? boxes : null;
   const whole = area ? shownArea : null;
-  const boxOfSlot = (id: string) => (zoomed === id ? whole : boxes[id]);
+  // the launcher over the whole grid is taken from there
+  shownBoxes.current = area ? (zoomed === LAUNCHER && whole ? { ...boxes, [LAUNCHER]: whole } : boxes) : null;
+  const boxOfSlot = (id: string) => (zoomed === id && !(afloat && drag?.id === id) ? whole : boxes[id]);
   const guides = afloat?.guides ?? resizing?.guides ?? [];
   // where the window carried docks: the place the grid keeps for it (a docked session shows its own, lifted)
   const dockZone = drag && docking && grid?.[drag.id] && (isFloating(drag.id) || modOfSlot(drag.id) !== null) ? grid[drag.id] : null;
@@ -304,12 +305,16 @@ export function Stack() {
   // the grid places each slot from its data attributes, so the DOM keeps one order whatever the layout: React moving a
   // window to reorder them (focus mode tiles from the other side) would reset where its thread was scrolled to
   const dockedSlots = slots.filter(({ id }) => modOfSlot(id) === null);
-  const floatingOnly = floatingSessions.filter((id) => !laidOut.flat().includes(id)).map((id) => ({ id, column: undefined, row: undefined, span: undefined }));
+  // the launcher out of the grid: floating, or over the whole of it
+  const outOfGrid = [...floatingSessions, ...(launcherOpen ? [LAUNCHER] : [])].filter((id) => !laidOut.flat().includes(id));
+  const floatingOnly = outOfGrid.map((id) => ({ id, column: undefined, row: undefined, span: undefined }));
   const ordered = [...dockedSlots, ...floatingOnly].toSorted((a, b) => a.id.localeCompare(b.id));
   const several = slots.length > 1;
-  const movable = placed && zoomed === null && !launcherOpen;
+  const movable = placed && zoomed === null;
   useEffect(() => { useDock.setState({ start: movable ? start : null }); }, [movable, start]);
-  const front = (id: string) => FLOATING_DEPTH + free.order.indexOf(id) + 1;
+  // the launcher may be carried out of the place it covers the grid in
+  const carries = (id: string) => movable || (placed && id === LAUNCHER);
+  const front = (id: string) => depthOf(free.order, id);
   const compact = (id: string) => zoomed !== id && (isFloating(id) ? (boxOfSlot(id)?.height ?? Number.POSITIVE_INFINITY) < COMPACT_BELOW : several);
   const variables = (id: string) => {
     const box = boxOfSlot(id);
@@ -331,12 +336,14 @@ export function Stack() {
             key={id} className="cp-stack__slot" data-session={id} data-column={column} data-row={row} data-span={span} data-zoomed={zoomed === id}
             data-floating={(placed && isFloating(id)) || undefined} data-afloat={(afloat && drag?.id === id) || undefined}
             data-compact={compact(id)} data-carried={drag?.id === id || undefined} data-resizing={resizing?.id === id || undefined} style={variables(id)}
-            onPointerDownCapture={id === LAUNCHER ? undefined : (event) => {
+            onPointerDownCapture={(event) => {
               if (isFloating(id)) raiseWindow(id);
-              if (movable && event.altKey) start(id, event);
+              if (carries(id) && event.altKey) start(id, event);
             }}
           >
-            {id === LAUNCHER ? <Launcher onClose={openIds.length ? closeLauncher : undefined} /> : <WindowCompactContext value={compact(id)}><Detail sessionId={id} /></WindowCompactContext>}
+            {id === LAUNCHER
+              ? <Launcher onClose={openIds.length ? closeLauncher : undefined} replacing={full ? oldest : undefined} onGrab={carries(id) ? (event) => start(LAUNCHER, event) : undefined} />
+              : <WindowCompactContext value={compact(id)}><Detail sessionId={id} /></WindowCompactContext>}
             {placed && isFloating(id) && zoomed === null && <FreeHandles onPull={(edge, event) => pull(id, edge, event)} />}
           </div>
         ))}
@@ -346,16 +353,7 @@ export function Stack() {
             edge={view === 'focus' ? undefined : { width: shownArea.width, ...edgeRange, onResize: (next) => setStackWidth(next === null ? null : next / window.innerWidth) }}
           />
         )}
-        {zone && <div className="cp-stack__zone" style={boxVariables(zone)} aria-hidden="true" />}
-        {guides.map((guide) => (
-          <div
-            key={`${guide.axis}${guide.at}`} className="cp-stack__guide" data-axis={guide.axis} aria-hidden="true"
-            style={boxVariables(guide.axis === 'x' ? { left: guide.at, top: guide.from, width: 1, height: guide.to - guide.from } : { left: guide.from, top: guide.at, width: guide.to - guide.from, height: 1 })}
-          />
-        ))}
-        {zoomed === LAUNCHER && !withLauncher && (
-          <div key={LAUNCHER} className="cp-stack__slot" data-zoomed="true" style={whole ? boxVariables(whole) : undefined}><Launcher onClose={closeLauncher} replacing={oldest} /></div>
-        )}
+        <Guides guides={guides} zone={zone ?? null} />
       </div>
     </WindowDragContext>
   );

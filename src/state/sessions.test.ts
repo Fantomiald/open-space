@@ -12,7 +12,7 @@ Object.defineProperty(globalThis, 'window', {
   configurable: true,
   value: { innerWidth: 1600, matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) },
 });
-const { useSessions } = await import('./sessions.ts');
+const { maxColumnsIn, useSessions } = await import('./sessions.ts');
 
 const session = (id: string): SessionInfo => ({
   id, name: id, cwd: `/work/${id}`, model: '', activeModel: '', permissionMode: 'auto', state: 'wait', stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
@@ -105,5 +105,46 @@ describe('a click on a session in the panel or the room', () => {
 
     toggleWindow('new');
     assert.deepEqual(useSessions.getState().openIds, ['a', 'new']);
+  });
+
+  it('closes the window in use from the panel floating too', () => {
+    reload([['a', 'b']], 'b');
+    useSessions.getState().placeChrome('panel', { left: 600, top: 40, width: 300, height: 600 });
+
+    useSessions.getState().toggleWindow('b');
+
+    assert.deepEqual(useSessions.getState().openIds, ['a']);
+    useSessions.getState().dockPanel();
+  });
+});
+
+describe('resetting the layout', () => {
+  it('puts the elements moved back, out of the front order, and docks the launcher', () => {
+    reload([['a']], 'a');
+    const launcher = { left: 0.2, top: 0.1, width: 0.4, height: 0.8 };
+    useSessions.setState({ free: { room: { boxes: { launcher }, order: ['launcher'] }, focus: { boxes: {}, order: [] } } });
+    useSessions.getState().placeChrome('radio', { left: 400, top: 300, width: 220, height: 40 });
+    useSessions.getState().raiseWindow('chrome:radio');
+
+    useSessions.getState().resetLayout();
+
+    const { chrome, free } = useSessions.getState();
+    assert.deepEqual({ places: chrome.places, free }, { places: {}, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } } });
+  });
+});
+
+describe('the room the sessions’ panel leaves the windows in focus mode', () => {
+  it('is the whole width once it floats, but not the list’s place when the panel is turned off', () => {
+    const page = window as { innerWidth: number };
+    const width = page.innerWidth;
+    page.innerWidth = 1100;
+    const floating = { places: { panel: { left: 600, top: 40, width: 288, height: 600 } }, panelWidth: null };
+    useSessions.setState({ preferences: { language: 'fr' } as Preferences, chrome: floating });
+    const free = maxColumnsIn('focus');
+    useSessions.setState({ preferences: { language: 'fr', sessionPanel: false } as Preferences });
+    const off = maxColumnsIn('focus');
+    page.innerWidth = width;
+    useSessions.setState({ preferences: { language: 'fr' } as Preferences, chrome: { places: {}, panelWidth: null } });
+    assert.deepEqual({ free, off }, { free: 3, off: 2 });
   });
 });

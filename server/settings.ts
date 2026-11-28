@@ -59,7 +59,7 @@ export function parsePreferences(raw: unknown, home = os.homedir()): Partial<Pre
   if (typeof raw.notifications === 'boolean') found.notifications = raw.notifications;
   if (typeof raw.festivals === 'boolean') found.festivals = raw.festivals;
   if (typeof raw.officeLife === 'boolean') found.officeLife = raw.officeLife;
-  for (const key of ['copyOnSelect', 'autoPip', 'agentCursor', 'timestamps', 'turnDuration', 'detailedActions', 'promptSuggestions', 'reduceMotion', 'autoTag', 'remoteByDefault', 'phoneAccess', 'tagColors', 'radio', 'hideNames', 'sessionPanel'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
+  for (const key of ['copyOnSelect', 'autoPip', 'agentCursor', 'timestamps', 'turnDuration', 'detailedActions', 'promptSuggestions', 'reduceMotion', 'autoTag', 'remoteByDefault', 'phoneAccess', 'tagColors', 'radio', 'hideNames', 'sessionPanel', 'alwaysArrangeHint'] as const) if (typeof raw[key] === 'boolean') found[key] = raw[key];
   if (raw.effort === '' || EFFORTS.some((effort) => effort === raw.effort)) found.effort = raw.effort as Preferences['effort'];
   if (typeof raw.glassOpacity === 'number' && raw.glassOpacity >= GLASS_OPACITY.min && raw.glassOpacity <= GLASS_OPACITY.max) found.glassOpacity = raw.glassOpacity;
   if (Number.isInteger(raw.maxWindows) && (raw.maxWindows as number) >= 1 && (raw.maxWindows as number) <= MAX_WINDOWS) found.maxWindows = raw.maxWindows as number;

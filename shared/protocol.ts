@@ -603,6 +603,8 @@ export interface Preferences {
   sessionPanel?: boolean;
   /** how many sessions' windows are open at most (1 to MAX_WINDOWS); absent in older settings means MAX_WINDOWS */
   maxWindows?: number;
+  /** the Alt tip over the room stays up for good, even once used or closed (src/room/ArrangeHint.tsx); absent means off */
+  alwaysArrangeHint?: boolean;
 }
 
 /** The most sessions' windows open at once (Preferences.maxWindows): past six, whoever needs more is better off in a terminal. */

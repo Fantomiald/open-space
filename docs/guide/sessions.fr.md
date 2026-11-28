@@ -34,6 +34,14 @@ En bas du panneau, **Fenêtres 1 à 6** fixe combien de fenêtres de session res
 
 Au survol d'une ligne, **Éteindre** fait comme le menu de la session. Le titre d'un projet propose son icône de dossier, qui ouvre le dossier dans le Finder (l'Explorateur sous Windows, le gestionnaire de fichiers ailleurs), et son **+**, une nouvelle session dedans. **Éteintes** ouvre **Reprendre** sur le projet en vue. Le bouton du haut, ou ⌘ B (Ctrl B), replie le panneau jusqu'aux visages. **Réglages › Apparence › Panneau des sessions** le coupe : la salle revient sans lui, le mode focus avec sa propre liste.
 
+### Déplacer le panneau et le reste
+
+Sur un écran large, ⌥ + glisser (Alt + glisser) déplace aussi ce qui entoure les fenêtres : le panneau des sessions, la carte **État**, l'astuce ⌥, et l'en-tête en trois morceaux (les pièces avec les projets, la radio, les outils à droite). Ils collent aux bords proches comme les fenêtres ; ⌘ (Ctrl) tenu enlève les aimants. Le panneau se prend aussi par son en-tête, sans ⌥ : tiré loin du bord, il flotte au-dessus de la salle et ne pousse plus rien ; lâché contre le bord gauche, il s'y range à nouveau. Rangé à gauche, son bord droit l'élargit. Flottant, le panneau se redimensionne par ses bords. Un appui sur un élément déplacé le passe devant les fenêtres flottantes, et un appui sur une fenêtre la repasse devant. La place et cet ordre sont gardés dans ce navigateur ; ⌘K **Remettre la disposition par défaut** remet tout à sa place.
+
+Le lanceur bouge comme une fenêtre de session, dans la salle comme en mode focus : tiré par sa barre, il flotte là où tu le lâches et se redimensionne par ses bords ; lâché sur les fenêtres, il reprend la place de la prochaine session. Quand plus aucune fenêtre n'a de place, il les couvre et dit laquelle sa session remplacera.
+
+L'astuce ⌥ s'en va une fois la salle ou une fenêtre déplacée avec ⌥, ou par son bouton de fermeture ; la déplacer elle-même ne compte pas. **Réglages › Apparence › Toujours afficher l'astuce Alt** la garde pour de bon, sans bouton pour la fermer.
+
 ## La limite de sessions actives
 
 `OFFICE_MAX_LIVE` (par défaut `12`) plafonne le nombre de processus `claude` vivants. Chaque processus vivant compte, y compris une session en `wait` qui attend seulement ton prochain message.

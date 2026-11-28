@@ -1,6 +1,7 @@
 // The open sessions' windows as boxes, in pixels of the area they are laid out in: the grid (stack.ts says which window
 // goes where, this file how big each one is) and, later, the windows placed by hand. Pure functions.
 import type { Box } from './room-frame.ts';
+import { isChromeSlot } from './docking.ts';
 import { placement, type Columns, type Tiling } from './stack.ts';
 
 /** --gutter */
@@ -74,7 +75,7 @@ export const CASCADE_STEP = 32;
 /** how close the pointer comes to the edge of the screen for a window to take its half, its quarter or all of it */
 export const EDGE_ZONE = 6;
 
-type Size = { width: number; height: number };
+export type Size = { width: number; height: number };
 export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 /** A line drawn while an edge sticks: across (x) or down (y), at `at`, from `from` to `to` on the other axis. */
 export interface Guide { axis: 'x' | 'y'; at: number; from: number; to: number }
@@ -91,14 +92,14 @@ export function clampBox(box: Box, surface: Size): Box {
   };
 }
 
-/** `start` pulled by `edge` (a side or a corner) by dx, dy; the opposite side stays where it was. */
-export function resizeBox(start: Box, edge: Edge, dx: number, dy: number): Box {
+/** `start` pulled by `edge` (a side or a corner) by dx, dy, no smaller than `min`; the opposite side stays where it was. */
+export function resizeBox(start: Box, edge: Edge, dx: number, dy: number, min: Size = MIN_WINDOW): Box {
   let { left, top, width, height } = start;
   const right = left + width, bottom = top + height;
-  if (edge.includes('w')) { left = Math.min(left + dx, right - MIN_WINDOW.width); width = right - left; }
-  if (edge.includes('e')) width = Math.max(width + dx, MIN_WINDOW.width);
-  if (edge.includes('n')) { top = Math.min(top + dy, bottom - MIN_WINDOW.height); height = bottom - top; }
-  if (edge.includes('s')) height = Math.max(height + dy, MIN_WINDOW.height);
+  if (edge.includes('w')) { left = Math.min(left + dx, right - min.width); width = right - left; }
+  if (edge.includes('e')) width = Math.max(width + dx, min.width);
+  if (edge.includes('n')) { top = Math.min(top + dy, bottom - min.height); height = bottom - top; }
+  if (edge.includes('s')) height = Math.max(height + dy, min.height);
   return { left, top, width, height };
 }
 
@@ -147,8 +148,8 @@ export function snapMove(box: Box, others: readonly Box[], surface: Size): { box
   return { box: placed, guides };
 }
 
-/** A window pulled by `edge`: only the sides being pulled stick. */
-export function snapResize(box: Box, edge: Edge, others: readonly Box[], surface: Size): { box: Box; guides: Guide[] } {
+/** A window pulled by `edge`: only the sides being pulled stick, as long as it stays no smaller than `min`. */
+export function snapResize(box: Box, edge: Edge, others: readonly Box[], surface: Size, min: Size = MIN_WINDOW): { box: Box; guides: Guide[] } {
   let placed = box;
   const guides: Guide[] = [];
   for (const axis of ['x', 'y'] as const) {
@@ -157,14 +158,14 @@ export function snapResize(box: Box, edge: Edge, others: readonly Box[], surface
     const start = axis === 'x' ? placed.left : placed.top, size = axis === 'x' ? placed.width : placed.height;
     if (edge.includes(before)) {
       const best = nearest(start, starts);
-      if (best && size - best.distance >= (axis === 'x' ? MIN_WINDOW.width : MIN_WINDOW.height)) {
+      if (best && size - best.distance >= (axis === 'x' ? min.width : min.height)) {
         placed = axis === 'x' ? { ...placed, left: start + best.distance, width: size - best.distance } : { ...placed, top: start + best.distance, height: size - best.distance };
         guides.push(guideOf(axis, best.line, placed));
       }
     }
     if (edge.includes(after)) {
       const best = nearest(start + size, ends);
-      if (best && size + best.distance >= (axis === 'x' ? MIN_WINDOW.width : MIN_WINDOW.height)) {
+      if (best && size + best.distance >= (axis === 'x' ? min.width : min.height)) {
         placed = axis === 'x' ? { ...placed, width: size + best.distance } : { ...placed, height: size + best.distance };
         guides.push(guideOf(axis, best.line, placed));
       }
@@ -243,7 +244,8 @@ function readFree(raw: unknown): FreeLayout {
     if (isBox(box)) boxes[id] = { left: box.left, top: box.top, width: box.width, height: box.height };
   }
   const order = field(raw, 'order');
-  return { boxes, order: Array.isArray(order) ? order.filter((id): id is string => typeof id === 'string' && id in boxes) : [] };
+  // the page's elements moved by hand share the windows' front order (docking.ts chromeSlot)
+  return { boxes, order: Array.isArray(order) ? order.filter((id): id is string => typeof id === 'string' && (id in boxes || isChromeSlot(id))) : [] };
 }
 
 const readIds = (raw: unknown): string[] => (Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : []);

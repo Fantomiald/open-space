@@ -22,6 +22,7 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { Marquee } from './Marquee.tsx';
 import { TagChips } from './TagChips.tsx';
+import { useChromePlace } from './Chrome.tsx';
 
 const FOLDED_KEY = 'poste:status-folded';
 const readFolded = () => { try { return localStorage.getItem(FOLDED_KEY) === 'true'; } catch { return false; } };
@@ -112,6 +113,8 @@ export function StatusPanel() {
   const openNewSession = useSessions((s) => s.openNewSession);
   // pulled by its top right corner: wider, and taller for its list (a double click gives it back its own size)
   const [size, setSize] = useState(() => readPreference<{ width: number; height: number } | null>('statusSize', null));
+  // moved by hand, it stays where it was let go, by its bottom edge (Chrome.tsx, components.css)
+  const place = useChromePlace('status');
   const resize = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
     const card = event.currentTarget.parentElement!;
@@ -199,8 +202,9 @@ export function StatusPanel() {
     );
   };
   const fold = () => { setFolded(!folded); writeFolded(!folded); };
+  const sized = size ? ({ '--status-width': `${size.width}px`, '--status-height': `${size.height}px` } as CSSProperties) : undefined;
   return (
-    <section className="cp-status" aria-label={words.title} data-folded={folded} style={size ? ({ '--status-width': `${size.width}px`, '--status-height': `${size.height}px` } as CSSProperties) : undefined}>
+    <section className="cp-status" aria-label={words.title} data-folded={folded} {...place} style={{ ...sized, ...place.style }}>
       {!folded && <span className="cp-status__resize" aria-hidden="true" title={words.resize} onPointerDown={resize} onDoubleClick={() => { writePreference('statusSize', null); setSize(null); }} />}
       <button type="button" className="cp-status__head" aria-expanded={!folded} title={folded ? words.unfold : words.fold} onClick={fold}>
         <span className="cp-status__title">{words.title}</span>

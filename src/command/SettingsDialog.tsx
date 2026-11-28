@@ -54,7 +54,7 @@ const LAYOUT: Readonly<Partial<Record<SettingsSection, readonly (readonly [Group
   ],
   folders: [['places', ['roots', 'defaultFolder']], ['files', ['journalFolder']]],
   // what Open Space looks like: the windows, then the room and its people
-  office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'sessionPanel', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
+  office: [['appearance', ['windowStyle', 'glassOpacity', 'tagColors', 'sessionPanel', 'alwaysArrangeHint', 'reduceMotion']], ['life', ['theme', 'festivals', 'officeLife', 'hideNames', 'radio', 'previewFestival', 'previewHour']], ['crew', ['crew']]],
   // what starts sessions without the user at the keyboard, and the chat bots and programs that reach Open Space (body())
   connections: [['automata', ['automata', 'hooksAddress', 'automataFolder']], ['phone', ['phoneAccess']]],
   about: [['appearance', ['version', 'claude', 'account', 'links', 'dockApp']]],
@@ -229,6 +229,11 @@ function SettingsEditor() {
       case 'sessionPanel': return (
         <Row key={id} id={id} flash={flash} icon={<UnfoldListIcon />} title={rows.sessionPanel.title} hint={rows.sessionPanel.hint}>
           <Switch checked={draft.sessionPanel !== false} onChange={(sessionPanel) => change({ sessionPanel })} label={rows.sessionPanel.title} />
+        </Row>
+      );
+      case 'alwaysArrangeHint': return (
+        <Row key={id} id={id} flash={flash} icon={<KeyboardIcon />} title={rows.alwaysArrangeHint.title} hint={rows.alwaysArrangeHint.hint}>
+          <Switch checked={draft.alwaysArrangeHint === true} onChange={(alwaysArrangeHint) => change({ alwaysArrangeHint })} label={rows.alwaysArrangeHint.title} />
         </Row>
       );
       case 'tagColors': return (

@@ -68,12 +68,13 @@ h1, h2, p { margin: 0; }
 .cp-header__signal { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--tone-idle); box-shadow: 0 0 0 3px var(--tone-idle-soft); }
 .cp-header__signal[data-connection='live'] { background: var(--tone-reply); box-shadow: 0 0 0 3px var(--tone-reply-soft), 0 0 8px 1px var(--tone-reply-soft); }
 .cp-header__signal[data-connection='connecting'] { background: var(--tone-permission); box-shadow: 0 0 0 3px var(--tone-permission-soft); }
+.cp-header__start { display: contents; }
 .cp-header__tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
 /* a wide screen keeps one row: the projects shrink first and scroll, then the radio's title, never the tools */
 @media (min-width: 60.001rem) {
   .cp-header { flex-wrap: nowrap; }
-  .cp-header > * { flex-shrink: 0; }
-  .cp-header > .cp-header__projects { flex-shrink: 100; }
+  .cp-header > *, .cp-header__start > * { flex-shrink: 0; }
+  .cp-header__start > .cp-header__projects { flex-shrink: 100; }
   .cp-header > .cp-radio { flex-shrink: 1; min-width: 0; }
   .cp-header .cp-radio__now { min-width: 4rem; }
 }
@@ -172,8 +173,11 @@ h1, h2, p { margin: 0; }
   .cp-main:not([data-view='focus']) > .cp-stack[data-placed='true'] { grid-column: 1 / -1; justify-self: stretch; width: auto; margin: var(--gutter); }
   .cp-main > .cp-stack[data-placed='true'] { pointer-events: none; }
   .cp-main > .cp-stack[data-placed='true'] > * { pointer-events: auto; }
-  /* floating, the windows may cover the status card */
-  .cp-main > .cp-stack[data-placed='true'] { z-index: 4; }
+  /*
+   * measured, the stack is no layer of its own: its windows take their places among the page's (the layers below), so
+   * a window floating and the page's elements moved by hand share one front order
+   */
+  .cp-main > .cp-stack[data-placed='true'] { z-index: auto; }
   .cp-stack[data-columns='2'] { --columns: 2; }
   .cp-stack[data-columns='3'] { --columns: 3; }
   /* focus mode: the session list on the left, the windows (or the launcher) fill the rest */
@@ -315,7 +319,7 @@ input[type='range']:focus-visible { outline-offset: 4px; border-radius: 999px; }
 /* ── Banners and toasts ── */
 .cp-banner { justify-self: center; align-self: center; margin: var(--gutter) auto 0; padding: var(--space-2) var(--space-4); border-radius: 999px; border: var(--border-width) solid var(--glass-edge); font-size: var(--text-sm); background: var(--tone-work-soft); color: var(--tone-work); box-shadow: var(--glass-shadow); }
 .cp-banner[data-tone='error'] { background: var(--tone-error-soft); color: var(--tone-error); }
-.cp-toasts { position: fixed; right: var(--gutter); bottom: var(--gutter); display: grid; gap: var(--space-2); z-index: 20; max-width: 28rem; }
+.cp-toasts { position: fixed; right: var(--gutter); bottom: var(--gutter); display: grid; gap: var(--space-2); z-index: 38; max-width: 28rem; }
 .cp-toast { padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); background: var(--glass-strong); border: var(--border-width) solid var(--glass-edge); box-shadow: var(--glass-shadow); font-size: var(--text-sm); }
 .cp-toast[data-kind='error'] { border-color: var(--tone-error); color: var(--tone-error); }
 
@@ -2123,8 +2127,8 @@ button.cp-tag:hover { border-color: var(--color-accent); }
  * focus mode's own list.
  */
 @media (min-width: 60.01rem) {
-  /* docked (data-panel true) it pushes the page aside */
-  .cp-app[data-panel] { --list-width: 18rem; }
+  /* docked (data-panel true) it pushes the page aside, pulled wider by hand (--panel-width); floating, it pushes nothing */
+  .cp-app[data-panel] { --list-width: var(--panel-width, 18rem); }
   .cp-app[data-panel='true'] { --panel-offset: calc(var(--list-width) + var(--gutter)); }
   .cp-app[data-panel]:has(> .cp-list[data-narrow='true']) { --list-width: 4.75rem; }
   .cp-app > .cp-list[data-panel] {
@@ -2132,9 +2136,50 @@ button.cp-tag:hover { border-color: var(--color-accent); }
     left: calc(var(--gutter) + env(safe-area-inset-left, 0px)); top: calc(var(--gutter) + env(safe-area-inset-top, 0px)); bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
     transition: width 200ms var(--easing);
   }
+  .cp-app > .cp-list[data-panel][data-pulling] { transition: none; }
+  .cp-app > .cp-list[data-panel] .cp-list__head { cursor: grab; }
   .cp-app[data-panel='true'] > :is(.cp-header, .cp-main) { margin-left: var(--panel-offset); }
   .cp-app[data-panel] .cp-main[data-view='focus'] { grid-template-columns: 0 minmax(0, 1fr); }
   .cp-app[data-panel] .cp-main[data-view='focus'] > .cp-main__content { padding: 0; }
+}
+/*
+ * The page's elements moved by hand (Chrome.tsx): where they were let go (--x, --y), at the size pulled for those that
+ * resize (--w, --h); the status card keeps its bottom edge there, as it grows upwards. The header keeps its height when
+ * its groups leave it, so the room and the windows stay put. The lines an element sticks to, over everything.
+ */
+@media (min-width: 60.01rem) {
+  .cp-header { min-height: calc(var(--gutter) + var(--pill-height)); }
+  :is(.cp-status, .cp-room__arrange, .cp-radio, .cp-header__tools)[data-placed] { position: fixed; z-index: var(--z, 11); left: var(--x); top: var(--y); right: auto; bottom: auto; margin: 0; }
+  .cp-header__start[data-placed] { position: fixed; z-index: var(--z, 11); left: var(--x); top: var(--y); display: flex; align-items: center; gap: var(--gutter); }
+  .cp-status[data-placed] { top: auto; bottom: calc(100% - var(--y) - var(--h)); }
+  .cp-app > .cp-list[data-panel][data-placed] { z-index: var(--z, 11); left: var(--x); top: var(--y); bottom: auto; width: var(--w); height: var(--h); }
+  .cp-app > .cp-list[data-panel][data-placed][data-narrow='true'] { width: var(--list-width); }
+  .cp-chrome-guides { position: fixed; inset: 0; z-index: 33; pointer-events: none; }
+}
+/*
+ * The layers of a wide page, one stacking context (.cp-app):
+ *   3      the status card, the docked panel and the Alt tip, where the CSS puts them
+ *   4      the windows docked in the grid; 5 the gutters between them
+ *   10-29  the front order (docking.ts depthOf): the floating windows, the launcher floating, the elements moved by hand;
+ *          10 for one never brought in front in this arrangement
+ *   30     a window zoomed over the grid; 31 the zone a window would take; 32 the window carried; 33 the magnets' guides
+ *   34     the header's pills where the CSS puts them, with the menus they open
+ *   38     the toasts; 40 and up the mods' windows (.cp-mod), the bare hint, the browser picture in picture
+ */
+@media (min-width: 60.01rem) {
+  .cp-header { z-index: auto; }
+  .cp-header > *, .cp-header__start > * { z-index: 34; }
+  .cp-stack[data-placed='true'] > .cp-stack__slot { z-index: 4; }
+  .cp-stack[data-placed='true'] > .cp-stack__gutter { z-index: 5; }
+  .cp-stack[data-placed='true'] > .cp-stack__slot[data-floating] { z-index: var(--z, 11); }
+  .cp-stack[data-placed='true'] > .cp-stack__slot[data-zoomed='true'] { z-index: 30; }
+  .cp-stack[data-placed='true'] > .cp-stack__zone { z-index: 31; }
+  .cp-stack[data-placed='true'] > .cp-stack__slot[data-carried] { z-index: 32; }
+  .cp-stack[data-placed='true'] > .cp-stack__guide { z-index: 33; }
+}
+/* a narrow screen keeps the layout of the CSS: nothing there to pull */
+@media (max-width: 60rem) {
+  [data-chrome] > .cp-stack__handle { display: none; }
 }
 /* a row's switch-off, on hover or focus, where its time was */
 .cp-list[data-panel] .cp-list__items > li { position: relative; }
@@ -3410,7 +3455,7 @@ a.cp-button { text-decoration: none; }
 .cp-main[data-view='dashboards'] > .cp-main__content { overflow: hidden; }
 .cp-dashboards { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: var(--gutter); display: flex; flex-direction: column; gap: var(--space-3); }
 /* the dashboards' bar, a pill of the header in place of the radio and the projects (kept mounted: the music plays on) */
-.cp-app[data-view='dashboards'] .cp-header > :is(.cp-radio, .cp-header__projects) { display: none; }
+.cp-app[data-view='dashboards'] .cp-header :is(.cp-radio, .cp-header__projects) { display: none; }
 .cp-header__dashboards {
   flex: 1 1 auto; min-width: 0; height: var(--pill-height); border-radius: 999px; padding: 0 var(--pill-inset);
   display: flex; align-items: center; gap: var(--space-1);

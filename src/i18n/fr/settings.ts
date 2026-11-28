@@ -186,6 +186,7 @@ export const settings = {
       officeLife: { title: 'Vie au bureau', hint: 'Ton équipe libre passe prendre un café, lire, regarder par la fenêtre.' },
       hideNames: { title: 'Cacher les prénoms', hint: 'Dans la salle, une session avec des tags ne montre qu’eux ; son prénom revient au survol, ou s’il n’y a pas de tag.' },
       sessionPanel: { title: 'Panneau des sessions', hint: 'Les sessions par projet sur la gauche, dans la salle comme en mode focus : un clic ouvre une session, un autre la referme. Coupé, la salle revient sans lui et le mode focus avec sa liste.' },
+      alwaysArrangeHint: { title: 'Toujours afficher l’astuce Alt', hint: 'L’astuce sur ⌥ (Alt) reste sur la salle, même après avoir déplacé la salle ou une fenêtre, et n’a plus de bouton pour la fermer.' },
       radio: { title: 'Radio', hint: 'La radio dans l’en-tête, avec ta musique quand tu en écoutes. Coupée, elle laisse la place au reste.' },
       previewFestival: { title: 'Essayer une fête', hint: 'La salle décorée sans attendre le jour J. Rien n’est gardé au rechargement.' },
       previewHour: { title: 'Essayer une heure', hint: 'Le ciel et la lumière à une autre heure. Rien n’est gardé au rechargement.' },

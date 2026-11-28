@@ -38,6 +38,8 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ sessionPanel: false, maxWindows: 3 }), { sessionPanel: false, maxWindows: 3 });
     assert.deepEqual(parsePreferences({ sessionPanel: 'no', maxWindows: 7 }), {}, 'more windows than fit is left out');
     assert.deepEqual(parsePreferences({ maxWindows: 0 }), {});
+    assert.deepEqual(parsePreferences({ alwaysArrangeHint: true }), { alwaysArrangeHint: true });
+    assert.deepEqual(parsePreferences({ alwaysArrangeHint: 'on' }), {});
     assert.deepEqual(parsePreferences({ maxWindows: 2.5 }), {});
     assert.deepEqual(parsePreferences({ detailedActions: true }), { detailedActions: true });
     assert.deepEqual(parsePreferences({ detailedActions: 'yes' }), {});

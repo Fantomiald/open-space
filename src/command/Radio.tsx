@@ -9,6 +9,7 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { useSessions } from '../state/sessions.ts';
 import { ChevronDownIcon, LibraryIcon, NextIcon, PauseIcon, PlayIcon, PreviousIcon } from './Icons.tsx';
 import { Marquee } from './Marquee.tsx';
+import { useChromePlace } from './Chrome.tsx';
 import { useDismiss } from './useDismiss.ts';
 import { IS_WINDOWS } from '../lib/platform.ts';
 
@@ -60,6 +61,8 @@ function SourcePicker({ source, apps, label, onChoose }: { source: Source; apps:
 }
 
 function Stations({ picker }: { picker: (label: string) => ReactNode }) {
+  // moved by hand on its own, out of the header (Chrome.tsx)
+  const place = useChromePlace('radio');
   const audio = useRef<HTMLAudioElement | null>(null);
   const [station, setStation] = useState(() => Math.min(readPreference('radio-station', 0), STATIONS.length - 1));
   const [volume, setVolume] = useState(() => readPreference('radio-volume', 0.5));
@@ -106,7 +109,7 @@ function Stations({ picker }: { picker: (label: string) => ReactNode }) {
   const playing = status === 'on' || status === 'loading';
   const words = t.common.radio;
   return (
-    <section className="cp-radio" aria-label={words.label} data-playing={status === 'on'}>
+    <section className="cp-radio" aria-label={words.label} data-playing={status === 'on'} {...place}>
       <button type="button" className="cp-icon-button" data-variant="outlined" aria-label={playing ? words.stop : words.listen} onClick={toggle}>
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
@@ -126,6 +129,7 @@ function Stations({ picker }: { picker: (label: string) => ReactNode }) {
 
 /** The remote of a music app: what it plays, play/pause, previous, next, its volume, and Music's library. */
 function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => ReactNode }) {
+  const place = useChromePlace('radio');
   const send = useSessions((s) => s.send);
   const now = useSessions((s) => (s.nowPlaying?.app === app ? s.nowPlaying : null));
   /** the volume being set, shown until the app reports it */
@@ -155,7 +159,7 @@ function Remote({ app, picker }: { app: MusicApp; picker: (label: string) => Rea
   const track = now?.track ?? null;
   const title = state === 'denied' ? words.denied : state === 'closed' ? (IS_WINDOWS ? words.closedWindows(name) : words.closed(name)) : track ? [track.title, track.artist].filter(Boolean).join(' · ') : now ? words.nothing : '';
   return (
-    <section className="cp-radio" aria-label={name} data-playing={state === 'playing'} title={state === 'denied' ? (IS_WINDOWS ? words.deniedWindows(name) : words.deniedHelp(name)) : undefined}>
+    <section className="cp-radio" aria-label={name} data-playing={state === 'playing'} title={state === 'denied' ? (IS_WINDOWS ? words.deniedWindows(name) : words.deniedHelp(name)) : undefined} {...place}>
       <button
         type="button" className="cp-icon-button" data-variant="outlined" aria-label={state === 'playing' ? words.pauseTrack : words.playTrack}
         disabled={state === 'denied' || now?.controls?.toggle === false} onClick={() => act({ kind: 'toggle' })}

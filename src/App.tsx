@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { BoardDialog } from './command/BoardDialog.tsx';
 import { BranchesDialog } from './command/BranchesDialog.tsx';
 import { AutomataDialog } from './command/AutomataDialog.tsx';
@@ -28,6 +28,8 @@ import { setRoomTheme } from './room/themes/index.ts';
 import { Stack } from './command/Stack.tsx';
 import { BareHint } from './command/BareHint.tsx';
 import { StatusPanel } from './command/StatusPanel.tsx';
+import { ChromeArranger } from './command/Chrome.tsx';
+import { panelFloats } from './state/chrome.ts';
 import { TrustDialog } from './command/TrustDialog.tsx';
 import { WhatsNew } from './command/WhatsNewDialog.tsx';
 import { useAltKey, WIDE_SCREEN } from './lib/drag.ts';
@@ -68,6 +70,9 @@ export function App() {
   // the sessions' panel down the left of the rooms and focus mode (focus mode's own list where it is turned off, or on a narrow screen)
   const wide = useMediaQuery(WIDE_SCREEN);
   const panel = useSessions((s) => panelShown(s, view, wide));
+  // the panel floating no longer pushes the page aside; docked, it may have been pulled wider (Chrome.tsx)
+  const floating = useSessions((s) => panelFloats(s.chrome));
+  const pulledWidth = useSessions((s) => s.chrome.panelWidth);
   usePageStyle();
 
   useEffect(() => { document.title = tabTitle(attention); }, [attention]);
@@ -235,7 +240,10 @@ export function App() {
   if (known && !onboarded) return <div className="cp-app"><Onboarding /><Toasts /></div>;
 
   return (
-    <div className="cp-app" data-view={view} data-bare={bare} data-device={phone ? 'phone' : undefined} data-panel={panel ? 'true' : undefined}>
+    <div
+      className="cp-app" data-view={view} data-bare={bare} data-device={phone ? 'phone' : undefined} data-panel={panel ? (floating ? 'floating' : 'true') : undefined}
+      style={pulledWidth === null ? undefined : ({ '--panel-width': `${pulledWidth}px` } as CSSProperties)}
+    >
       <Sky key={theme} festival={day.festival} />
       {panel && <SessionList panel />}
       <Header />
@@ -246,12 +254,14 @@ export function App() {
           {view === 'focus' ? !panel && <SessionList /> : view === 'dashboards' ? <Dashboards /> : <RoomView key={`${room}:${theme}:${day.festival}:${day.guests.join()}`} room={room} day={day}/>}
           {room === 'automata' && view !== 'focus' && <ServerRoomEmpty />}
         </div>
-        {/* docked mods keep their place in the grid, the launcher beside them; the dashboards are the mods alone */}
-        {view === 'dashboards' ? null : openIds.length || docked ? <Stack /> : <Launcher />}
+        {/* docked mods keep their place in the grid, the launcher beside them; the dashboards are the mods alone. On a wide
+            screen the launcher alone is a window of the stack too, which docks or floats (Stack.tsx) */}
+        {view === 'dashboards' ? null : openIds.length || docked || wide ? <Stack /> : <Launcher />}
       </main>
       {view !== 'focus' && view !== 'dashboards' && <StatusPanel />}
       {view !== 'dashboards' && <ModWindows />}
       <BrowserPip />
+      <ChromeArranger />
       {bare && <BareHint />}
       <SearchPalette />
       <CopyOnSelect />

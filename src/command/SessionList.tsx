@@ -20,6 +20,10 @@ import { LIST_GROUPINGS, listGroups, type Kept, type ListGrouping } from '../sta
 import { usePendingLater } from '../state/pending-later.ts';
 import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
+import { panelFloats } from '../state/chrome.ts';
+import type { Edge } from '../state/windows.ts';
+import { pullChrome, useChromePlace } from './Chrome.tsx';
+import { FreeHandles } from './FreeHandles.tsx';
 import { useProjects } from '../state/useProjects.ts';
 import { MAX_WINDOWS, type SessionInfo } from '../../shared/protocol.ts';
 import { BranchMark } from './BranchCard.tsx';
@@ -30,6 +34,10 @@ import { useMenuBelow } from './useMenuBelow.ts';
 import { SessionFace } from './SessionFace.tsx';
 import { TagChips } from './TagChips.tsx';
 
+
+/** the docked panel only widens; folded down to the faces, floating, it only grows taller */
+const DOCKED_EDGES: readonly Edge[] = ['e'];
+const FOLDED_EDGES: readonly Edge[] = ['n', 's'];
 export function SessionList({ panel = false }: { panel?: boolean }) {
   const sessions = useSessions((s) => s.sessions);
   const seen = useSessions((s) => s.seen);
@@ -90,9 +98,13 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
   const peeked = narrow && peek ? sessions[peek.id] : undefined;
 
   const foldTitle = `${narrow ? words.unfold : words.fold}${panel ? ` (${MODIFIER}B)` : ''}`;
+  // the panel moves and widens like a window (Chrome.tsx): docked, only its right side pulls; folded, it keeps its width
+  const place = useChromePlace('panel', panel);
+  const floating = useSessions((s) => panelFloats(s.chrome));
+  const edges = !panel ? null : narrow ? (floating ? FOLDED_EDGES : null) : floating ? undefined : DOCKED_EDGES;
 
   return (
-    <nav className="cp-list" aria-label={words.title} data-narrow={narrow} data-panel={panel || undefined}>
+    <nav className="cp-list" aria-label={words.title} data-narrow={narrow} data-panel={panel || undefined} {...place}>
       <div className="cp-list__head">
         <h2 className="cp-list__heading">{words.title}</h2>
         <GroupingMenu grouping={grouping} onPick={groupBy} />
@@ -167,6 +179,7 @@ export function SessionList({ panel = false }: { panel?: boolean }) {
       </button>
       {panel && !narrow && <PanelFoot />}
       {switchedOff && <SwitchOff session={switchedOff} onClose={() => setSwitchingOff(null)} onDone={() => closeIfOpen(switchedOff.id)} />}
+      {edges !== null && <FreeHandles edges={edges} onPull={(edge, event) => pullChrome('panel', edge, event)} />}
     </nav>
   );
 }

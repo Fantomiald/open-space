@@ -34,8 +34,9 @@ import { appendLive, mergeLog } from './log.ts';
 import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, ROOM_TILING, windowCap, type Columns, type DropSlot } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
 import { GAP, keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowsPreference } from './windows.ts';
-import { dock, float, modOfSlot, modSlot, modsIn, modsOnly, openIn, openOrder, openSessions, sessionsIn, switchArrangement, tidyAll, unfloat } from './docking.ts';
+import { dock, float, isChromeSlot, LAUNCHER, modOfSlot, raise, modSlot, modsIn, modsOnly, openIn, openOrder, openSessions, sessionsIn, switchArrangement, tidyAll, unfloat } from './docking.ts';
 import { canArrange } from '../lib/drag.ts';
+import { dockPanel, panelFloats, placeChrome, resizePanel, sanitizeChrome, DEFAULT_CHROME, PANEL_WIDTHS, type ChromeId, type ChromeLayout } from './chrome.ts';
 import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { projectOf } from './projects.ts';
@@ -63,18 +64,19 @@ const savedWindows = sanitizeWindows(readPreference('windows', null), Array.isAr
 const writeWindows = (state: CommandPostState) =>
   writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, grids: state.grids, stackWidth: state.stackWidth, opened: state.opened } satisfies WindowsPreference);
 
-/** the sessions' panel folded down to the faces, and unfolded (--list-width), in pixels */
+/** the sessions' panel folded down to the faces, in pixels */
 const PANEL_NARROW = 4.75 * 16;
-const PANEL_WIDE = 18 * 16;
 /** The sessions' panel is on the page in `view`: not turned off in the settings, not on the dashboards, on a screen wide enough to lay the windows out (it is focus mode's list there). */
 export const panelShown = (s: Pick<CommandPostState, 'preferences'>, view: View, wide = canArrange()) => s.preferences.sessionPanel !== false && view !== 'dashboards' && wide;
-/** The width the sessions' panel takes down the left of the page in `view`, with the gutter after it: none when not shown. */
-export const panelWidth = (s: Pick<CommandPostState, 'preferences' | 'panelNarrow'>, view: View) =>
-  !panelShown(s, view) ? 0 : (s.panelNarrow ? PANEL_NARROW : PANEL_WIDE) + GAP;
+/** How wide the sessions' panel is docked: folded down to the faces, as pulled by hand, or --list-width. */
+export const dockedPanelWidth = (s: Pick<CommandPostState, 'panelNarrow' | 'chrome'>) => (s.panelNarrow ? PANEL_NARROW : (s.chrome.panelWidth ?? PANEL_WIDTHS.initial));
+/** The width the sessions' panel takes down the left of the page in `view`, with the gutter after it: none when not shown or floating. */
+export const panelWidth = (s: Pick<CommandPostState, 'preferences' | 'panelNarrow' | 'chrome'>, view: View) =>
+  !panelShown(s, view) || panelFloats(s.chrome) ? 0 : dockedPanelWidth(s) + GAP;
 
 /**
- * How many columns of windows fit in `view`, beside the panel: it holds the list in focus mode, and pushes the status
- * card over the room.
+ * How many columns of windows fit in `view`, beside the panel: it holds the list in focus mode (none beside the windows
+ * once it floats), and pushes the status card over the room.
  */
 export const maxColumnsIn = (view: View) => {
   const s = useSessions.getState(), tiling = tilingOf(view), panel = panelWidth(s, view);
@@ -90,6 +92,13 @@ function closeOverCap() {
   const opened = openOrder(s.opened, s.columns, s.free[arrangementOf(s.view)], tilingOf(s.view));
   const over = opened.length - windowCapIn(s.view);
   for (const id of opened.slice(0, Math.max(over, 0))) useSessions.getState().closeOpen(id);
+}
+
+/** The page's elements placed anew: the panel docked, floating or wider may leave room for another number of columns. */
+function setChrome(chrome: ChromeLayout) {
+  writePreference('chrome', chrome);
+  useSessions.setState({ chrome });
+  useSessions.getState().fitOpen();
 }
 
 /** The parts of the settings dialog, in the order of its menu. */
@@ -241,6 +250,8 @@ export interface CommandPostState {
   opened: string[];
   /** the sessions' panel (or focus mode's list) folded down to the faces; kept in this browser */
   panelNarrow: boolean;
+  /** the panel, the status card, the launcher, the header's pills moved by hand (chrome.ts); kept in this browser */
+  chrome: ChromeLayout;
   /** one of several open sessions shown alone for a while, the others kept in their place (as tmux's zoom) */
   zoomedId: string | null;
   /** Tab: everything but the room steps aside (header, status, sessions, launcher, mods), to see and click it */
@@ -322,6 +333,16 @@ export interface CommandPostState {
   toggleWindow: (sessionId: string) => void;
   /** folds the sessions' panel down to the faces, or unfolds it: the windows get the width it leaves */
   foldPanel: (narrow: boolean) => void;
+  /** an element of the page let go where it now stays; the panel floats there */
+  placeChrome: (id: ChromeId, box: Box) => void;
+  /** the panel back down the left of the page */
+  dockPanel: () => void;
+  /** the docked panel pulled to this width */
+  resizePanel: (width: number) => void;
+  /** the launcher floating back in the grid, in the place of the next session */
+  dockLauncher: () => void;
+  /** every element of the page back where the CSS puts it */
+  resetLayout: () => void;
   zoom: (sessionId: string | null) => void;
   /** one of the open sessions takes the keyboard (the user clicked in it) */
   focus: (sessionId: string) => void;
@@ -549,6 +570,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   openIds: [],
   opened: savedWindows.opened ?? [],
   panelNarrow: readPreference('listNarrow', false),
+  chrome: sanitizeChrome(readPreference('chrome', null)),
   zoomedId: null,
   uiHidden: false,
   gridSizes: savedWindows.sizes,
@@ -611,10 +633,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
-        // the floating windows of sessions still there (none when the layout is gone), out of the grid
+        // the floating windows of sessions still there (none when the layout is gone), out of the grid; the launcher's,
+        // and the front order of the page's elements, stay
         const prune = (layout: FreeLayout): FreeLayout => {
-          const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => kept && sessions[id]));
-          return { boxes, order: layout.order.filter((id) => id in boxes) };
+          const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => id === LAUNCHER || (kept && sessions[id])));
+          return { boxes, order: layout.order.filter((id) => id in boxes || isChromeSlot(id)) };
         };
         const free = { room: prune(s.free.room), focus: prune(s.free.focus) };
         const floating = free[arrangementOf(s.view)];
@@ -828,6 +851,18 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     get().fitOpen();
   },
 
+  placeChrome: (id, box) => setChrome(placeChrome(get().chrome, id, box)),
+  dockPanel: () => setChrome(dockPanel(get().chrome)),
+  resizePanel: (width) => setChrome(resizePanel(get().chrome, width)),
+  resetLayout: () => {
+    // the launcher floating docks again too, and the elements of the page leave the front order with their places
+    const { room, focus } = withoutWindow(get().free, LAUNCHER);
+    const unplaced = (free: FreeLayout) => ({ boxes: free.boxes, order: free.order.filter((id) => !isChromeSlot(id)) });
+    set({ free: { room: unplaced(room), focus: unplaced(focus) } });
+    get().arrange(get().columns);
+    setChrome(DEFAULT_CHROME);
+  },
+
   zoom: (sessionId) => set({ zoomedId: sessionId && get().openIds.length > 1 ? sessionId : null }),
 
   focus: (sessionId) => {
@@ -911,6 +946,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     return true;
   },
 
+  dockLauncher: () => {
+    const s = get();
+    s.arrange(s.columns, unfloat(s.free[arrangementOf(s.view)], LAUNCHER));
+  },
+
   undockMod: (id) => {
     const s = get();
     if (s.columns.flat().includes(modSlot(id))) s.arrange(removeFrom(s.columns, modSlot(id), tilingOf(s.view)));
@@ -927,10 +967,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   },
 
   raiseWindow: (sessionId) => {
-    const arrangement = arrangementOf(get().view);
-    const { boxes, order } = get().free[arrangement];
-    if (order.at(-1) === sessionId || !boxes[sessionId]) return;
-    set((state) => ({ free: { ...state.free, [arrangement]: { boxes, order: [...order.filter((id) => id !== sessionId), sessionId] } } }));
+    const arrangement = arrangementOf(get().view), layout = get().free[arrangement];
+    const raised = raise(layout, sessionId);
+    if (raised === layout) return;
+    set((state) => ({ free: { ...state.free, [arrangement]: raised } }));
     writeWindows(get());
   },
 
