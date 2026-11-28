@@ -45,6 +45,7 @@ describe('settings', () => {
     assert.deepEqual(parsePreferences({ glassOpacity: 5 }), {}, 'too see-through to read is left out');
     assert.deepEqual(parsePreferences({ isolate: 'always' }), { isolate: 'always' });
     assert.deepEqual(parsePreferences({ isolate: 'sometimes' }), {}, 'an unknown way to isolate is left out');
+    assert.deepEqual(parsePreferences({ shortcuts: { search: 'Mod+p', hide: 'Escape' } }), { shortcuts: { search: 'Mod+p' } }, 'the shortcuts the user changed, the invalid ones left out');
     assert.deepEqual(parsePreferences({ claude: { enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis', workflowSizeGuideline: 'huge', ultracode: true, env: { A: '1' } } }).claude, {
       enableWorkflows: false, crossSessionInbound: 'hold', outputStyle: 'Concis',
     }, 'only the keys Open Space offers, with known values');

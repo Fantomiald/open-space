@@ -18,6 +18,7 @@ import { inProject, projectDigit, projectsOf } from '../state/projects.ts';
 import { useSessions } from '../state/sessions.ts';
 import { useProjects } from '../state/useProjects.ts';
 import type { SessionInfo } from '../../shared/protocol.ts';
+import { useShortcutText } from './useShortcut.ts';
 import { BranchMark } from './BranchCard.tsx';
 import { CheckIcon, ChevronDownIcon, FilterIcon, FoldListIcon, PlusIcon, UnfoldListIcon } from './Icons.tsx';
 import { useDismiss } from './useDismiss.ts';
@@ -73,6 +74,7 @@ export function SessionList() {
   // the times go on by the second while someone works, by the minute otherwise
   const now = useNow(15_000);
   const words = t.session.list;
+  const newKeys = useShortcutText('newSession');
   // folded down to the faces: the one under the pointer (or focused) says who it is beside the list
   const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
   const peekAt = (id: string) => (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
@@ -141,10 +143,10 @@ export function SessionList() {
       </div>
       {peek && peeked && <Peek session={peeked} seen={seen} now={now} x={peek.x} y={peek.y} />}
       <button
-        type="button" className="cp-button cp-list__new" data-variant={openIds.length ? undefined : 'primary'} aria-label={narrow ? words.new : undefined} title={narrow ? `${words.new} (N)` : undefined}
+        type="button" className="cp-button cp-list__new" data-variant={openIds.length ? undefined : 'primary'} aria-label={narrow ? words.new : undefined} title={narrow ? `${words.new} (${newKeys})` : undefined}
         onClick={() => openNewSession({})}
       >
-        <PlusIcon /> <span className="cp-list__new-label">{words.new}</span> <kbd className="cp-kbd">N</kbd>
+        <PlusIcon /> <span className="cp-list__new-label">{words.new}</span> <kbd className="cp-kbd">{newKeys}</kbd>
       </button>
     </nav>
   );

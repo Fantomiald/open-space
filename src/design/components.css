@@ -2332,7 +2332,17 @@ button.cp-tag:hover { border-color: var(--color-accent); }
 .cp-keys__row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); font-size: var(--text-sm); }
 .cp-keys__row + .cp-keys__row { border-top: var(--border-width) solid var(--color-border); }
 .cp-keys__row dt { flex: 1; min-width: 0; }
-.cp-keys__row dd { margin: 0; display: flex; gap: var(--space-1); }
+.cp-keys__row dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-1); }
+/* a shortcut the user can change: its keys are a button, which listens for the next ones once clicked */
+.cp-keys__combo {
+  display: inline-flex; align-items: center; gap: var(--space-1); min-height: 1.75rem; padding: 0 var(--space-1);
+  border: var(--border-width) dashed transparent; border-radius: var(--radius-sm); background: none; color: var(--color-text-muted); font: inherit; cursor: pointer;
+  transition: border-color var(--duration) var(--easing), background var(--duration) var(--easing);
+}
+.cp-keys__combo:hover { border-color: var(--color-border-strong); }
+.cp-keys__combo[data-listening] { padding: 0 var(--space-2); border-color: var(--color-accent); background: var(--color-accent-soft); color: var(--color-text); font-size: var(--text-xs); }
+.cp-keys__problem { font-size: var(--text-xs); color: var(--tone-permission); }
+.cp-keys__reset-all { justify-self: end; }
 .cp-segmented[data-size='small'] { padding: 2px; }
 .cp-segmented[data-size='small'] button { padding: 2px var(--space-3); font-size: var(--text-xs); }
 

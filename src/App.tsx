@@ -37,6 +37,7 @@ import { isRunning } from './state/labels.ts';
 import { selectAttentionCount, useSessions } from './state/sessions.ts';
 import { tabTitle } from './state/queue.ts';
 import { usePhone } from './lib/phone.ts';
+import { actionOf, comboOf, resolveShortcuts, type ShortcutAction } from '../shared/shortcuts.ts';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -130,18 +131,59 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const state = useSessions.getState();
-      // by position of the key: Option changes what `e.key` says on a Mac
-      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyT') { e.preventDefault(); state.openTerminal(state.selectedId); return; }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); state.openPalette(!state.paletteOpen); return; }
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); state.openSettings(!state.settingsOpen); return; }
-      if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return; }
-      // Cmd+F with a session open searches its thread (the browser's own search does not see folded actions)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && state.selectedId && !document.querySelector('dialog[open]')) {
-        e.preventDefault();
-        state.openSearch(true);
-        document.getElementById('feed-search')?.focus();
-        return;
-      }
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      const dialogOpen = () => !!document.querySelector('dialog[open]');
+      // the shortcuts as the user set them (Settings > Shortcuts, shared/shortcuts.ts)
+      const combo = comboOf(e);
+      const action = combo ? actionOf(combo, resolveShortcuts(state.preferences.shortcuts)) : undefined;
+      // one without Cmd or Ctrl types in a field or acts in a dialog: it only works outside them, after Escape
+      const plain = !!combo && !combo.startsWith('Mod+');
+      // what a shortcut does; false when it does nothing here, and the key goes on
+      const run = (what: ShortcutAction): boolean => {
+        // everything but the room steps aside to see and click it, and comes back. In the message field Tab does
+        // nothing, so a Tab pressed while writing neither hides the sessions nor leaves the field; other fields, a
+        // dialog or the command suggestions keep it. Focus mode and the dashboards have no room to see.
+        if (what === 'hide') {
+          if (state.view === 'focus' || state.view === 'dashboards' || e.defaultPrevented || dialogOpen()) return false;
+          if (e.key === 'Tab' && target?.matches('.cp-composer textarea')) { e.preventDefault(); return true; }
+          if (isTyping(target)) return false;
+          e.preventDefault();
+          if (state.uiHidden) {
+            state.hideUi(false);
+            if (state.selectedId && state.openIds.length) document.getElementById(`composer-field-${state.selectedId}`)?.focus({ preventScroll: true });
+          } else {
+            target?.blur();
+            state.hideUi(true);
+          }
+          return true;
+        }
+        if ((plain || what === 'newSession' || what === 'quickSession') && (isTyping(target) || dialogOpen())) return false;
+        switch (what) {
+          case 'terminal': e.preventDefault(); state.openTerminal(state.selectedId); return true;
+          case 'search': e.preventDefault(); state.openPalette(!state.paletteOpen); return true;
+          case 'settings': e.preventDefault(); state.openSettings(!state.settingsOpen); return true;
+          case 'focus': e.preventDefault(); state.setView(state.view === 'focus' ? 'salle' : 'focus'); return true;
+          // with a session open, its thread (the browser's own search does not see folded actions)
+          case 'threadSearch':
+            if (!state.selectedId || dialogOpen()) return false;
+            e.preventDefault();
+            state.openSearch(true);
+            document.getElementById('feed-search')?.focus();
+            return true;
+          // quickSession: a session at once, in the project picked in the header (else the default folder) with the
+          // default model and mode, opened to write to it; newSession: the launcher's field
+          case 'newSession': case 'quickSession': {
+            e.preventDefault();
+            const { preferences } = state;
+            // the dashboards hold no session: back to the office to write it
+            if (state.view === 'dashboards') state.setView('salle');
+            if (what === 'quickSession') state.createSession({ cwd: defaultFolder(state.roots, activeProject(projectsOf(Object.values(state.sessions), state.seen), state.project) || preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
+            else state.openNewSession({});
+            return true;
+          }
+        }
+      };
+      if (action && !plain && run(action)) return;
       // Escape, as in Claude Code: interrupts the open session while it works and stops its "!" commands (even from the
       // message field); otherwise, outside a field, it hides the panel. A dialog, or the command suggestions of a field,
       // take it first.
@@ -162,45 +204,16 @@ export function App() {
           return;
         }
         if (state.zoomedId) { e.preventDefault(); state.zoom(null); return; }
-        if (session && !isTyping(e.target)) { state.closeOpen(session.id); return; }
+        if (session && !isTyping(target)) { state.closeOpen(session.id); return; }
       }
-      // Tab, outside a field: everything but the room steps aside to see and click it, and comes back (Shift+Tab still
-      // moves the focus). In the message field it does nothing, so a Tab pressed while writing neither hides the
-      // sessions nor leaves the field; other fields, a dialog or the command suggestions keep it. Focus mode and the dashboards have no room to see.
-      if (e.key === 'Tab' && state.view !== 'focus' && state.view !== 'dashboards' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !document.querySelector('dialog[open]')) {
-        const target = e.target instanceof HTMLElement ? e.target : null;
-        if (target?.matches('.cp-composer textarea')) {
-          e.preventDefault();
-          return;
-        }
-        if (!isTyping(target)) {
-          e.preventDefault();
-          if (state.uiHidden) {
-            state.hideUi(false);
-            if (state.selectedId && state.openIds.length) document.getElementById(`composer-field-${state.selectedId}`)?.focus({ preventScroll: true });
-          } else {
-            target?.blur();
-            state.hideUi(true);
-          }
-          return;
-        }
-      }
+      if (action && plain && run(action)) return;
       // Alt+1…9 (by the key's place, whatever the layout): a new request in the header's first, second… project.
       // Not while typing: on a Mac, Alt+digit types characters ({ on a French keyboard).
       const digit = /^Digit([1-9])$/.exec(e.code);
-      if (digit && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
-        const target = projectsOf(Object.values(state.sessions), state.seen)[Number(digit[1]) - 1];
-        if (target) { e.preventDefault(); state.openNewSession({ folder: target.folder }); }
+      if (digit && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !isTyping(target) && !dialogOpen()) {
+        const project = projectsOf(Object.values(state.sessions), state.seen)[Number(digit[1]) - 1];
+        if (project) { e.preventDefault(); state.openNewSession({ folder: project.folder }); }
         return;
-      }
-      if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target) && !document.querySelector('dialog[open]')) {
-        e.preventDefault();
-        // Shift+N: a session at once, in the project picked in the header (else the default folder) with the default model and mode, opened to write to it; N: the launcher's field
-        const { preferences } = state;
-        // the dashboards hold no session: back to the office to write it
-        if (state.view === 'dashboards') state.setView('salle');
-        if (e.shiftKey) state.createSession({ cwd: defaultFolder(state.roots, activeProject(projectsOf(Object.values(state.sessions), state.seen), state.project) || preferences.defaultFolder), model: preferences.model, ...(preferences.effort ? { effort: preferences.effort } : {}), permissionMode: preferences.permissionMode });
-        else state.openNewSession({});
       }
     };
     window.addEventListener('keydown', onKey);

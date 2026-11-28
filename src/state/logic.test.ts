@@ -421,10 +421,10 @@ describe('slash commands', () => {
   });
 
   it('offers its own commands before Claude Code’s, which they replace, and only those needing no session without one', () => {
-    const named = withOwnCommands([{ name: 'rename' }, { name: 'focus' }, { name: 'compact' }], false).map((c) => c.name);
+    const named = withOwnCommands([{ name: 'rename' }, { name: 'focus' }, { name: 'compact' }], false, '⌘K').map((c) => c.name);
     assert.ok(named.includes('focus') && named.includes('compact') && !named.includes('rename') && !named.includes('tag'));
     assert.equal(named.filter((name) => name === 'focus').length, 1);
-    assert.ok(withOwnCommands([], true).some((c) => c.name === 'tag'));
+    assert.ok(withOwnCommands([], true, '⌘K').some((c) => c.name === 'tag'));
   });
 
   it('opens a view of its own for /mcp, /context and /usage typed alone', () => {
@@ -519,8 +519,8 @@ describe('side questions', () => {
     assert.equal(asideQuestion('/btw'), '');
     assert.equal(asideQuestion('/btwx'), null);
     assert.equal(asideQuestion('dis /btw'), null);
-    assert.deepEqual(commandSuggestions(withOwnCommands([], true), '/bt').map((command) => command.name), ['btw']);
-    assert.deepEqual(commandSuggestions(withOwnCommands([{ name: 'btw' }], true), '/btw').length, 1, 'not twice when Claude Code lists it too');
+    assert.deepEqual(commandSuggestions(withOwnCommands([], true, '⌘K'), '/bt').map((command) => command.name), ['btw']);
+    assert.deepEqual(commandSuggestions(withOwnCommands([{ name: 'btw' }], true, '⌘K'), '/btw').length, 1, 'not twice when Claude Code lists it too');
   });
 });
 

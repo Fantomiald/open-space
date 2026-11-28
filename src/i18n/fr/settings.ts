@@ -102,7 +102,7 @@ export const settings = {
       connections: 'Ce qui lance des sessions tout seul, tes bots de messagerie et les programmes qui pilotent Open Space.',
       keys: 'Collées une fois, données aux agents par leur nom. Personne ne voit leur valeur, toi compris.',
       usage: 'Ce que Claude Code a consommé sur cet ordinateur.',
-      shortcuts: 'Tout se fait aussi au clavier.',
+      shortcuts: 'Tout se fait aussi au clavier. Clique sur un raccourci pour le changer.',
       about: 'La version d’Open Space et de Claude Code.',
     },
     groups: {
@@ -247,6 +247,14 @@ export const settings = {
       magnets: 'Sans les aimants, en déplaçant',
       groups: { everywhere: 'Partout', sessions: 'Sessions', windows: 'Salle et fenêtres' },
       drag: 'glisser', wheel: 'molette',
+      change: (label: string, keys: string) => `${label} : ${keys}. Changer`,
+      changeHint: 'Clique, puis appuie sur les touches voulues (Échap annule)',
+      listening: 'Appuie sur les touches…',
+      listeningFor: (label: string) => `Appuie sur les touches pour « ${label} », ou Échap pour annuler`,
+      reserved: 'Réservé, choisis-en un autre',
+      taken: (label: string) => `Déjà pris par « ${label} »`,
+      reset: (label: string) => `Remettre « ${label} » par défaut`,
+      resetAll: 'Tout remettre par défaut',
     },
   },
   folders: {

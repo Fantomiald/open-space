@@ -13,6 +13,7 @@ import { AttachButton, AttachmentStrip, DropOverlay } from './Attachments.tsx';
 import { CommandField, useMentionable } from './CommandField.tsx';
 import { t } from '../i18n/index.ts';
 import { useAttachments } from './useAttachments.ts';
+import { useShortcutText } from './useShortcut.ts';
 import { BranchIcon, CleanIcon, CloseIcon, KeepIcon, SendIcon, TagIcon } from './Icons.tsx';
 import { sessionTagHues } from '../design/tag-colors.ts';
 import { FolderPicker } from './FolderPicker.tsx';
@@ -136,6 +137,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
 
   const words = t.composer.launcher;
   const phone = usePhone();
+  const newKeys = useShortcutText('newSession');
+  const quickKeys = useShortcutText('quickSession');
   const branchWords = t.branches.launcher;
   // the branch it will get: with someone asked for, the name the server will give; else the work's part only
   const slug = workSlug(text);
@@ -158,8 +161,8 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
             <h2>{words.title}</h2>
             <p>{replacing ? words.replaces(replacing) : words.intro}</p>
             <ul className="cp-launcher__keys">
-              <li><kbd className="cp-kbd">N</kbd> {words.newRequest}</li>
-              <li><kbd className="cp-kbd">{words.shiftN}</kbd> {words.startNow(homeRelative(startFolder))}</li>
+              <li><kbd className="cp-kbd">{newKeys}</kbd> {words.newRequest}</li>
+              <li><kbd className="cp-kbd">{quickKeys}</kbd> {words.startNow(homeRelative(startFolder))}</li>
               <li><kbd className="cp-kbd">/</kbd> {words.commandKey}</li>
             </ul>
           </div>

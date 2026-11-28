@@ -69,7 +69,6 @@ export const composer: Dictionary['composer'] = {
     title: 'What are we starting?',
     intro: 'Write your request below: a session starts in the chosen folder, with a first name from your crew, and opens here.',
     newRequest: 'write a new request',
-    shiftN: 'Shift N',
     startNow: (folder: string) => `start a session right away in ${folder}`,
     commandKey: 'at the start of a message for a command',
     searching: (folder: string) => `Looking for conversations in ${folder}…`,

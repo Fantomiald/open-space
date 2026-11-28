@@ -18,6 +18,7 @@ import { SessionFace } from './SessionFace.tsx';
 import { Snippet } from './Snippet.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { TagChips } from './TagChips.tsx';
+import { useShortcutText } from './useShortcut.ts';
 
 const NO_MODS: ModInfo[] = [];
 /** The id of the action that opens a mod: this, then the mod's id. */
@@ -63,7 +64,8 @@ function PaletteContent() {
   const [target, setTarget] = useState<'selected' | 'new'>(selected ? 'selected' : 'new');
   const folderCommands = useSessions((s) => commandsIn(s, target === 'selected' ? selected?.cwd : undefined));
   const forSession = target === 'selected' && selected ? selected : undefined;
-  const commands = useMemo(() => withOwnCommands(folderCommands, !!forSession), [folderCommands, forSession]);
+  const searchKeys = useShortcutText('search');
+  const commands = useMemo(() => withOwnCommands(folderCommands, !!forSession, searchKeys), [folderCommands, forSession, searchKeys]);
   const [active, setActive] = useState(0);
   const list = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);

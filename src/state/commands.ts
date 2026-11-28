@@ -117,11 +117,17 @@ export type OwnName = keyof typeof OWN_COMMANDS;
 
 const isOwnName = (name: string): name is OwnName => Object.hasOwn(OWN_COMMANDS, name);
 
-/** Open Space's commands (only those that need none when there is no session) before Claude Code's, which they replace. */
-export function withOwnCommands(commands: readonly SlashCommand[], inSession: boolean): SlashCommand[] {
+/**
+ * Open Space's commands (only those that need none when there is no session) before Claude Code's, which they replace.
+ * `searchKeys`: the search's shortcut as shown, which /help tells.
+ */
+export function withOwnCommands(commands: readonly SlashCommand[], inSession: boolean, searchKeys: string): SlashCommand[] {
   const words = t.common.ownCommands;
   const own = Object.entries(OWN_COMMANDS).filter(([, command]) => inSession || !command.session)
-    .map(([name, command]): SlashCommand => ({ name, ...words[name as OwnName], ...('aliases' in command ? { aliases: command.aliases } : {}) }));
+    .map(([name, command]): SlashCommand => {
+      const { description, ...more } = words[name as OwnName];
+      return { name, ...more, description: typeof description === 'function' ? description(searchKeys) : description, ...('aliases' in command ? { aliases: command.aliases } : {}) };
+    });
   return [...own, ...commands.filter((command) => !isOwnName(command.name))];
 }
 
