@@ -17,7 +17,7 @@ import type { MusicApp } from '../shared/music.ts';
 import type { PhoneProblem } from '../shared/triggers.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
-import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
+import { createCatalogProbe, createProcessFactory, createUsageProbe, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
 import { loadConfig } from './config.ts';
 import { Crew } from './crew.ts';
 import { changedSettings } from '../shared/claude-settings.ts';
@@ -200,6 +200,7 @@ const sessions = new SessionManager({
   config,
   spawnProcess: claude ? createProcessFactory(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   probeCatalog: claude ? createCatalogProbe(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
+  probeUsage: claude ? createUsageProbe(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   askAside: claude ? createAsideRunner(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   tagger: claude ? createTagger(claude, buildClaudeEnvironment(process.env, config.passthrough)) : null,
   autoTag: () => settings.preferences.autoTag,

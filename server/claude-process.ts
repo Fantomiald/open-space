@@ -8,10 +8,11 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import type { ClaudeSettings } from '../shared/claude-settings.ts';
-import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type WorktreeInfo } from '../shared/protocol.ts';
+import { type ClaudeAccount, EFFORTS, type Effort, type ImageUpload, type ModelChoice, type PermissionMode, type SlashCommand, type UsageReport, type WorktreeInfo } from '../shared/protocol.ts';
 import { ALL_PLUGINS, MCP_SERVER_NAME, SWITCH_BROWSER_TOOL, type TriggerRestrict } from '../shared/triggers.ts';
 import { userPlugins } from './claude-settings.ts';
 import { st } from './i18n/index.ts';
+import { parseUsageReport } from './inspect.ts';
 import { asArray, asJson, asString, isJson, type Json } from './json.ts';
 import { signalTree } from './process-tree.ts';
 import { hasSharedBrowser } from './browser.ts';
@@ -299,30 +300,54 @@ const PROBE_TIMEOUT_MS = 20000;
 const MAX_PROBED_DESCRIPTION = 200;
 
 /**
- * Asks Claude Code for a folder's commands and models before any message is sent: a process that only gets the
- * `initialize` control request, then stops (checked with 2.1.303: about 0.6 s, no API call, no conversation written).
- * Without MCP servers (--strict-mcp-config): their prompts are not offered anyway (see isOffered), and starting them is slow.
+ * Starts a bare claude process (no MCP servers: --strict-mcp-config, they are slow to start and not offered anyway, see
+ * isOffered), writes it these control requests at once, and resolves with the answer to `answerId`, then stops the process.
+ * `untrusted`: only the user's own settings apply (the folder's may run code).
  */
-export function createCatalogProbe(binary: ClaudeBinary, environment: NodeJS.ProcessEnv): CatalogProbe {
-  return (cwd, untrusted) => new Promise((resolve, reject) => {
+function probeControl(binary: ClaudeBinary, environment: NodeJS.ProcessEnv, cwd: string, untrusted: boolean, requests: { id: string; request: Json }[], answerId: string): Promise<Json> {
+  return new Promise((resolve, reject) => {
     const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--permission-prompt-tool', 'stdio', '--strict-mcp-config'];
     if (untrusted) args.push('--setting-sources', 'user');
     const child = spawn(...claudeCommand(binary.path, args), { cwd, env: environment, stdio: ['pipe', 'pipe', 'ignore'], detached: process.platform !== 'win32', windowsHide: true });
     const end = () => signalTree(child.pid, 'SIGTERM');
-    const timer = setTimeout(() => { end(); reject(new Error('no answer to initialize')); }, PROBE_TIMEOUT_MS);
+    const timer = setTimeout(() => { end(); reject(new Error(`no answer to ${answerId}`)); }, PROBE_TIMEOUT_MS);
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       let message: unknown;
       try { message = JSON.parse(line); } catch { return; }
       if (!isJson(message) || message.type !== 'control_response') return;
+      const answer = asJson(message.response);
+      if (asString(answer.request_id) !== answerId) return;
       clearTimeout(timer);
       end();
-      resolve(parseCatalog(asJson(asJson(message.response).response)));
+      // signed out, or an API key with no usage limits: an error, not an empty answer
+      if (answer.subtype === 'error') reject(new Error(asString(answer.error) || `${answerId} failed`));
+      else resolve(asJson(answer.response));
     });
     child.on('error', (error) => { clearTimeout(timer); reject(error); });
-    child.on('close', () => { clearTimeout(timer); reject(new Error('claude ended before answering initialize')); });
+    child.on('close', () => { clearTimeout(timer); reject(new Error(`claude ended before answering ${answerId}`)); });
     child.stdin.on('error', () => { /* gone: "close" reports it */ });
-    child.stdin.write(`${JSON.stringify({ type: 'control_request', request_id: 'catalog', request: { subtype: 'initialize' } })}\n`);
+    for (const { id, request } of requests) child.stdin.write(`${JSON.stringify({ type: 'control_request', request_id: id, request })}\n`);
   });
+}
+
+/**
+ * Asks Claude Code for a folder's commands and models before any message is sent: a process that only gets the
+ * `initialize` control request, then stops (checked with 2.1.303: about 0.6 s, no API call, no conversation written).
+ */
+export function createCatalogProbe(binary: ClaudeBinary, environment: NodeJS.ProcessEnv): CatalogProbe {
+  return async (cwd, untrusted) => parseCatalog(await probeControl(binary, environment, cwd, untrusted, [{ id: 'catalog', request: { subtype: 'initialize' } }], 'catalog'));
+}
+
+export type UsageProbe = () => Promise<UsageReport>;
+
+/**
+ * Asks Claude Code for the account's usage limits with no session running: `initialize` then `get_usage` on a bare
+ * process (about 1.7 s, no tokens, no conversation; Claude Code asks claude.ai, as for /usage). From the home folder with the user's settings only, like the
+ * global catalog probe: the limits belong to the account, not to a folder.
+ */
+export function createUsageProbe(binary: ClaudeBinary, environment: NodeJS.ProcessEnv): UsageProbe {
+  return async () => parseUsageReport(await probeControl(binary, environment, os.homedir(), true,
+    [{ id: 'init', request: { subtype: 'initialize' } }, { id: 'usage', request: { subtype: 'get_usage' } }], 'usage'));
 }
 
 const isEffort = (value: unknown): value is Effort => (EFFORTS as readonly unknown[]).includes(value);

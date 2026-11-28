@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it, mock } from 'node:test';
-import type { AccountsBrowser, GitPending, ServerMessage, SessionInfo } from '../shared/protocol.ts';
+import type { AccountsBrowser, GitPending, ServerMessage, SessionInfo, UsageReport } from '../shared/protocol.ts';
 import type { CatalogProbe, ElicitationAnswer, LaunchOptions, PermissionAnswer, ProcessFactory, ProcessHandle, ProcessHandlers } from './claude-process.ts';
 import type { Config } from './config.ts';
 import { asJson } from './json.ts';
@@ -262,6 +262,93 @@ describe('usage', () => {
     await second.manager.init();
     assert.deepEqual(second.manager.getQuota(), reported);
     await second.manager.shutdown();
+  });
+
+  describe('read with no session working (probeUsage)', () => {
+    const FIVE_MINUTES = 5 * 60_000;
+    const usage = (percent: number): UsageReport => ({
+      plan: 'max', limits: [{ kind: 'session', percent, resetsAt: 1792149600_000 }], session: { costUsd: 0, durationMs: 0, apiMs: 0, linesAdded: 0, linesRemoved: 0 }, week: null,
+    });
+
+    it('shows the usage from startup, before any session ran, and asks again once it is old', async () => {
+      mock.timers.enable({ apis: ['setInterval'] });
+      try {
+        let clock = 1792149600_000 - 3_600_000;
+        let percent = 40;
+        let asked = 0;
+        const { manager, messages } = setup({}, undefined, () => clock, undefined, undefined, { probeUsage: () => { asked++; return Promise.resolve(usage(percent)); } });
+        await manager.init();
+        await until(() => manager.getQuota() !== null);
+        assert.equal(manager.getQuota()?.fiveHour, 0.4);
+        assert.ok(messages.some((message) => message.t === 'quota'), 'the header is told');
+        clock += FIVE_MINUTES - 1_000;
+        mock.timers.tick(FIVE_MINUTES - 1_000);
+        assert.equal(asked, 1, 'not again while the last usage is fresh');
+        percent = 55;
+        clock += 1_000;
+        mock.timers.tick(1_000);
+        await until(() => manager.getQuota()?.fiveHour === 0.55);
+        assert.equal(asked, 2);
+        await manager.shutdown();
+      } finally {
+        mock.timers.reset();
+      }
+    });
+
+    it('keeps the usage it had when the probe fails', async () => {
+      const dataDir = path.join(base, `data-quota-${++counter}`);
+      const clock = () => 1792149600_000 - 3_600_000;
+      const first = setup({}, dataDir, clock, undefined, undefined, { probeUsage: () => Promise.resolve(usage(40)) });
+      await first.manager.init();
+      await until(() => first.manager.getQuota() !== null);
+      await first.manager.shutdown();
+      const logged: string[] = [];
+      const second = setup({}, dataDir, clock, undefined, undefined, { probeUsage: () => Promise.reject(new Error('no answer')), log: (message) => logged.push(message) });
+      await second.manager.init();
+      await until(() => logged.length > 0);
+      assert.equal(second.manager.getQuota()?.fiveHour, 0.4);
+      await second.manager.shutdown();
+    });
+
+    it('asks a running session rather than starting claude, on the same five minutes', async () => {
+      let clock = 1792149600_000 - 3_600_000;
+      let asked = 0;
+      const { manager, processes } = setup({}, undefined, () => clock, undefined, undefined, { probeUsage: () => { asked++; return Promise.resolve(usage(40)); } });
+      await manager.init();
+      await until(() => manager.getQuota() !== null);
+      await manager.create({ cwd: projectA(), text: 'ping' });
+      const getUsage = () => processes[0].controls.filter((request) => request.subtype === 'get_usage').length;
+      processes[0].feed('simple-turn');
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(getUsage(), 0, 'the probe asked less than five minutes ago');
+      clock += FIVE_MINUTES;
+      manager.send(manager.list()[0].id, 'again');
+      processes[0].feed('simple-turn');
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(getUsage(), 1);
+      assert.equal(asked, 1, 'no claude started while a session runs');
+      await manager.shutdown();
+    });
+
+    it('does not start claude again every minute when the probe fails (signed out, offline)', async () => {
+      mock.timers.enable({ apis: ['setInterval'] });
+      try {
+        let clock = 1792149600_000 - 3_600_000;
+        let asked = 0;
+        const { manager } = setup({}, undefined, () => clock, undefined, undefined, { probeUsage: () => { asked++; return Promise.reject(new Error('signed out')); }, log: () => {} });
+        await manager.init();
+        await until(() => asked === 1);
+        clock += FIVE_MINUTES - 1_000;
+        mock.timers.tick(FIVE_MINUTES - 1_000);
+        assert.equal(asked, 1);
+        clock += 1_000;
+        mock.timers.tick(1_000);
+        assert.equal(asked, 2);
+        await manager.shutdown();
+      } finally {
+        mock.timers.reset();
+      }
+    });
   });
 });
 

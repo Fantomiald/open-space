@@ -116,8 +116,6 @@ const LAST_MESSAGE_LENGTH = 400;
 const GRACE_MS = 3000;
 /** The text being written is sent at most this often: one message per chunk would flood the clients. */
 const PARTIAL_EVERY_MS = 80;
-/** get_usage calls claude.ai: asked at most this often per session (see askUsage) */
-const USAGE_EVERY_MS = 5 * 60_000;
 /** How long a session stopped by a limit whose reset is unknown is paused at most. */
 const UNKNOWN_RESET_PAUSE_MS = 5 * 60 * 60_000;
 /** The pause when the reset given is already past while the limit still holds. */
@@ -160,8 +158,6 @@ export class Session {
   /** the text being written not sent yet, by who writes it */
   private partials = new Map<string, string>();
   private partialTimer: NodeJS.Timeout | null = null;
-  /** when get_usage was last asked for the header's usage (see askUsage) */
-  private usageAskedAt = Number.NEGATIVE_INFINITY;
   /** where other Claude Code sessions reach the current process (see InitInfo), '' before its init */
   private socket = '';
   /** the commands run with "!" since the last message, with what they wrote, in Claude Code's own format: they go with the next one */
@@ -536,7 +532,7 @@ export class Session {
       emit: (ev) => this.onEvent(ev),
       onInit: (init) => this.onInit(init),
       onCommands: (commands) => this.deps.onCommandDetails(commands),
-      onQuota: (quota) => { this.deps.onQuota(quota); this.askUsage(); },
+      onQuota: (quota) => this.deps.onQuota(quota),
       onSpend: (dollars) => this.onSpend(dollars),
       onCompacting: () => { this.info.compacting ??= 'auto'; this.publish(); },
       onResult: (result) => this.onResult(result),
@@ -747,15 +743,10 @@ export class Session {
     }
   }
 
-  /**
-   * rate_limit_event only carries the five-hour and weekly windows; a model's own weekly limit (Fable) is only in the
-   * get_usage answer, so it is asked when the usage moves, at most every USAGE_EVERY_MS.
-   */
-  private askUsage() {
-    if (this.now() - this.usageAskedAt < USAGE_EVERY_MS) return;
-    this.usageAskedAt = this.now();
-    // ponytail: best effort, the header keeps the windows it has; the Usage panel shows the error when asked
-    this.process?.control({ subtype: 'get_usage' }).then((response) => this.reportUsage(parseUsageReport(response)), () => {});
+  /** The account's usage, asked through this session's running process (the header's, see SessionManager.refreshUsage). */
+  async usage(): Promise<UsageReport> {
+    if (!this.process?.alive) throw new Error('no process running');
+    return parseUsageReport(await this.process.control({ subtype: 'get_usage' }));
   }
 
   private reportUsage(report: UsageReport) {

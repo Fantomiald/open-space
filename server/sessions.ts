@@ -22,12 +22,13 @@ import { findMentions, isNamedBy, mentionNames } from '../shared/mentions.ts';
 import type { AccountsBrowser, Aside, BranchRow, CleanedBranch, FolderCode, FolderRepo, GitPending, InspectView, McpAction, MergeProblem, PendingItem, SessionChanges, WorktreeInfo } from '../shared/protocol.ts';
 import type { AsideRunner } from './aside.ts';
 import type { Tagger } from './auto-tag.ts';
-import type { CatalogProbe, LaunchOptions, ProcessFactory } from './claude-process.ts';
+import type { CatalogProbe, LaunchOptions, ProcessFactory, UsageProbe } from './claude-process.ts';
 import { desktopArchived, desktopSourceBranch } from './claude-desktop.ts';
 import type { Config } from './config.ts';
 import { importConversation, lastContextUse, lastExchanges, lastName, listConversations, searchConversations, worktreeTranscript } from './conversations.ts';
 import { st } from './i18n/index.ts';
 import { asArray, asJson, asNumber, asString, isJson } from './json.ts';
+import { quotaFromUsage } from './inspect.ts';
 import { MAX_NAME } from './messages.ts';
 import { storedTags } from '../shared/tags.ts';
 import { cleanPending, MAX_DISMISSED } from '../shared/pending.ts';
@@ -54,6 +55,10 @@ const REMOTE_FREE_SLOTS = 2;
 const MAX_COMMAND_DESCRIPTION = 200;
 /** a shorter conversation is not worth compacting while idle (Preferences.idleCompact): Claude Code alone starts near 45k */
 const IDLE_COMPACT_MIN_TOKENS = 100_000;
+/** get_usage calls claude.ai: asked at most this often, whoever answers it (see refreshUsage) */
+const USAGE_EVERY_MS = 5 * 60 * 1000;
+/** how often refreshUsage looks whether it is time: the header is never much older than USAGE_EVERY_MS */
+const USAGE_CHECK_EVERY_MS = 60 * 1000;
 /** how long the thread of a switched off session is kept to come back with it (see forget) */
 const SWITCHED_OFF_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -93,6 +98,8 @@ export interface SessionManagerDeps {
   runShell?: ShellRunner;
   /** asks Claude Code for a folder's commands and the models (see createCatalogProbe); without it, the commands come from the sessions' init */
   probeCatalog?: CatalogProbe | null;
+  /** asks Claude Code for the account's usage limits with no session running (see createUsageProbe), so the header shows them before any session works */
+  probeUsage?: UsageProbe | null;
   /**
    * the --mcp-config and --agents that give a session and its testers the browsers Open Space shows (see server/browser.ts),
    * and --chrome when the user's own Chrome is the browser of their accounts (Preferences.accountsBrowser)
@@ -130,6 +137,10 @@ export class SessionManager {
   private probes = new Map<string, Promise<void>>();
   private commands: SlashCommand[] = [];
   private quota: Quota | null = null;
+  /** when get_usage was last asked, by a session's process or the probe (see refreshUsage) */
+  private usageAskedAt = Number.NEGATIVE_INFINITY;
+  private usageAsking = false;
+  private usageTimer: NodeJS.Timeout | null = null;
   /** an idle compaction failed (the session limit, most often): none is tried again until a turn ends well */
   private idleCompactPaused = false;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -193,6 +204,9 @@ export class SessionManager {
       if (session.snapshot().remoteSession) session.setRemote(true).catch((error) => this.deps.log(`cannot turn Remote Control back on for ${session.snapshot().name}`, error));
     }
     this.resumeDue();
+    void this.refreshUsage();
+    this.usageTimer = setInterval(() => void this.refreshUsage(), USAGE_CHECK_EVERY_MS);
+    this.usageTimer.unref();
   }
 
   /** The sessions the usage limit paused whose reset is a minute past resume; the timer is set for the next one. */
@@ -411,7 +425,7 @@ export class SessionManager {
       // a process started: the folder's commands may have changed since they were probed (a skill added)
       onInitCommands: (names) => (this.deps.probeCatalog ? void this.probeFolder(info.cwd, !!info.untrusted) : this.setCommandNames(names)),
       onCommandDetails: (details) => { if (!this.deps.probeCatalog) this.setCommandDetails(details); },
-      onQuota: (quota) => this.setQuota(quota),
+      onQuota: (quota) => { this.setQuota(quota); void this.refreshUsage(); },
       knownReset: () => this.knownReset(),
       onPauseChanged: () => this.armLimitTimer(),
       onCleared: () => this.awaitingTag.add(info.id),
@@ -516,6 +530,29 @@ export class SessionManager {
     this.quota = { ...quota, windows: [...windows, ...kept] };
     this.deps.broadcast({ t: 'quota', quota: this.quota });
     this.save();
+  }
+
+  /**
+   * The header's usage from get_usage, the one place it is asked: rate_limit_event (sent while a session works) lacks a
+   * model's own weekly limit (Fable), and with no session working nothing sends any. Looked at on startup, at each
+   * rate_limit_event and every minute, asked at most every USAGE_EVERY_MS: through a running session's process, else a
+   * bare one (probeUsage). Best effort, the header keeps what it shows; a failure also waits USAGE_EVERY_MS.
+   */
+  private async refreshUsage() {
+    if (this.usageAsking || this.stopping || this.now() - this.usageAskedAt < USAGE_EVERY_MS) return;
+    const running = [...this.sessions.values()].find((session) => session.alive);
+    const asked = running ? running.usage() : this.deps.probeUsage?.();
+    if (!asked) return;
+    this.usageAskedAt = this.now();
+    this.usageAsking = true;
+    try {
+      const quota = quotaFromUsage(await asked);
+      if (quota && !this.stopping) this.setQuota(quota);
+    } catch (error) {
+      this.deps.log('cannot read the usage', error);
+    } finally {
+      this.usageAsking = false;
+    }
   }
 
   /**
@@ -1322,6 +1359,8 @@ export class SessionManager {
     this.saveTimer = null;
     if (this.limitTimer) clearTimeout(this.limitTimer);
     this.limitTimer = null;
+    if (this.usageTimer) clearInterval(this.usageTimer);
+    this.usageTimer = null;
     await Promise.all([...this.sessions.values()].map((session) => session.shutdown()));
     await this.saveNow();
     await Promise.all([...this.logs.values()].map((log) => log.close()));
