@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { isAbsolutePath } from '../../shared/paths.ts';
-import { folderName, homeRelative, splitPath } from './format.ts';
+import { folderName, homeRelative, splitPath, withoutTrailingSeparator } from './format.ts';
 import { matchFolders } from '../state/folders.ts';
 
 it('accepts drive and UNC roots, including a drive root, and rejects relative Windows paths', () => {
@@ -17,4 +17,12 @@ it('shows and searches Windows folders with spaces and either separator', () => 
   assert.equal(homeRelative('\\\\server\\share\\notes'), '\\\\server\\share\\notes');
   assert.equal(homeRelative('/Users/Ada/Journal'), '~/Journal');
   assert.deepEqual(matchFolders(['D:\\code\\garden', 'D:\\code\\garden-web'], 'd:/code/garden'), ['D:\\code\\garden', 'D:\\code\\garden-web']);
+});
+
+it('drops the separator ending a parent folder, except for a root', () => {
+  assert.equal(withoutTrailingSeparator('D:\\Projets\\'), 'D:\\Projets');
+  assert.equal(withoutTrailingSeparator('~/code/'), '~/code');
+  assert.equal(withoutTrailingSeparator('~/'), '~');
+  assert.equal(withoutTrailingSeparator('C:\\'), 'C:\\');
+  assert.equal(withoutTrailingSeparator('/'), '/');
 });

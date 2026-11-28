@@ -42,6 +42,9 @@ export function splitPath(path: string) {
   return { folder: path.slice(0, cut), name: path.slice(cut) };
 }
 
+/** A folder path without its trailing separator ("D:\Projets\\" -> "D:\Projets", "~/" -> "~"), except for a drive or filesystem root. */
+export const withoutTrailingSeparator = (folder: string) => (/^[a-z]:[\\/]?$|^[\\/]+$/i.test(folder) ? folder : folder.replace(/[\\/]+$/, ''));
+
 /** Native full paths on Windows; familiar home-relative paths on Unix. */
 export const homeRelative = (path: string) => /^[a-z]:[\\/]|^(?:\\\\|\/\/)/i.test(path)
   ? path.replace(/\//g, '\\') : path.replace(/^\/(?:Users|home)\/[^/]+/, '~');

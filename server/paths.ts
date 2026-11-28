@@ -69,13 +69,16 @@ export function resolveAllowedDirectory(directory: string, roots: readonly strin
   }
 }
 
-/** Folders never offered for a new session: dependencies, hidden folders, and "_" ones (templates, archives). */
-const isOffered = (name: string) => name !== 'node_modules' && !name.startsWith('.') && !name.startsWith('_');
+/** Build output folders: hidden, unless the folder is itself a project (a real project can be named `build`). */
+const BUILD_FOLDERS = new Set(['bin', 'obj', 'dist', 'build', 'out', 'target', 'packages', 'venv', '__pycache__']);
+/** Folders never offered for a new session: dependencies, hidden folders, "_" ones (templates, archives), and build folders that are no project. */
+const isOffered = (parent: string, name: string) =>
+  name !== 'node_modules' && !name.startsWith('.') && !name.startsWith('_') && (!BUILD_FOLDERS.has(name) || isProject(path.join(parent, name)));
 
 function offeredChildren(directory: string, root: string): string[] {
   let names: string[];
   try {
-    names = readdirSync(directory, { withFileTypes: true }).filter((entry) => isOffered(entry.name) && (entry.isDirectory() || entry.isSymbolicLink())).map((entry) => entry.name).sort();
+    names = readdirSync(directory, { withFileTypes: true }).filter((entry) => isOffered(directory, entry.name) && (entry.isDirectory() || entry.isSymbolicLink())).map((entry) => entry.name).sort();
   } catch {
     return [];
   }
@@ -83,14 +86,21 @@ function offeredChildren(directory: string, root: string): string[] {
 }
 
 /** What makes a folder a project. */
-const PROJECT_MARKERS = ['.git', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json', 'pubspec.yaml', 'pom.xml', 'build.gradle', 'Package.swift'];
+const PROJECT_MARKERS = ['.git', 'package.json', 'pyproject.toml', 'requirements.txt', 'Cargo.toml', 'go.mod', 'Gemfile', 'composer.json', 'pubspec.yaml', 'pom.xml', 'build.gradle', 'Package.swift', 'CMakeLists.txt', 'docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', 'deno.json'];
+/** File extensions that make a folder a project (.NET, Unreal, Xcode). */
+const PROJECT_SUFFIXES = ['.xcodeproj', '.sln', '.csproj', '.fsproj', '.vbproj', '.vcxproj', '.uproject'];
 /** Folders of a home that hold no code, or that the system keeps for itself. */
 const NOT_FOR_CODE = new Set(['Applications', 'Library', 'Movies', 'Music', 'Pictures', 'Public', 'Downloads', 'Applications (Parallels)', 'AppData', 'Contacts', 'Links', 'Saved Games', 'Searches']);
 /** Folders macOS asks the user's permission to read: offered without looking inside (`projects` -1), so no dialog pops up. On Windows, the system's own Desktop and Documents take their place, wherever they were moved. */
 const PROTECTED = new Set(['Desktop', 'Documents']);
 
 const isProject = (directory: string) => {
-  try { return readdirSync(directory).some((name) => PROJECT_MARKERS.includes(name) || name.endsWith('.xcodeproj')); } catch { return false; }
+  try { return readdirSync(directory).some((name) => PROJECT_MARKERS.includes(name) || PROJECT_SUFFIXES.some((suffix) => name.endsWith(suffix))); } catch { return false; }
+};
+
+/** A Visual Studio solution groups several projects, each in its own sub-folder. */
+const hasSolution = (directory: string) => {
+  try { return readdirSync(directory).some((name) => name.endsWith('.sln')); } catch { return false; }
 };
 
 /**
@@ -104,7 +114,8 @@ const isLinkedWorktree = (directory: string) => {
 /**
  * The choices for a new session, as real paths: the sub-folders of each root and, for those that are not projects
  * themselves, their own sub-folders (many first-level folders hold several projects, e.g. atlas/mobile). The roots
- * themselves are not offered, nor linked worktrees: they belong to their repository.
+ * themselves are not offered, nor linked worktrees: they belong to their repository. A solution (.sln) keeps the
+ * sub-folders that are projects.
  */
 export function listProjectDirectories(roots: readonly string[], limit = 1000): string[] {
   const found: string[] = [];
@@ -112,7 +123,8 @@ export function listProjectDirectories(roots: readonly string[], limit = 1000): 
     let realRoot: string;
     try { realRoot = realpathSync(root); } catch { continue; }
     const offered = (directory: string) => offeredChildren(directory, realRoot).filter((child) => !isLinkedWorktree(child));
-    for (const child of offered(realRoot)) found.push(child, ...(isProject(child) ? [] : offered(child)));
+    const inside = (child: string) => (hasSolution(child) ? offered(child).filter(isProject) : isProject(child) ? [] : offered(child));
+    for (const child of offered(realRoot)) found.push(child, ...inside(child));
   }
   return [...new Set(found)].slice(0, limit);
 }
@@ -123,7 +135,7 @@ export function listProjectDirectories(roots: readonly string[], limit = 1000): 
  */
 export function suggestRoots(home: string, knownFolders?: readonly string[]): { path: string; projects: number }[] {
   let names: string[];
-  try { names = readdirSync(home, { withFileTypes: true }).filter((entry) => entry.isDirectory() && isOffered(entry.name) && !NOT_FOR_CODE.has(entry.name)).map((entry) => entry.name); } catch { return []; }
+  try { names = readdirSync(home, { withFileTypes: true }).filter((entry) => entry.isDirectory() && isOffered(home, entry.name) && !NOT_FOR_CODE.has(entry.name)).map((entry) => entry.name); } catch { return []; }
   const offered = names.flatMap((name) => {
     const folder = path.join(home, name);
     if (PROTECTED.has(name)) return knownFolders ? [] : [{ path: folder, projects: -1 }];

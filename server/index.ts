@@ -685,7 +685,7 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       break;
     }
     case 'log': send({ t: 'log', sessionId: message.sessionId, ...sessions.logSince(message.sessionId, message.after) }); break;
-    case 'directories': send({ t: 'directories', directories: sessions.directories() }); break;
+    case 'directories': send({ t: 'directories', directories: await sessions.directories() }); break;
     case 'duplicate': {
       const taken = new Set(sessions.list().map((session) => session.name));
       await sessions.duplicate(message.sessionId, crew.freeNameFor('', taken));
