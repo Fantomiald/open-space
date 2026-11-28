@@ -553,10 +553,10 @@ function SettingsEditor() {
 
   const SectionIcon = SECTION_ICONS[section];
   return (
-    <Modal title={t.settings.dialog.title} onClose={close} look="panel">
+    <Modal title={t.settings.dialog.title} onClose={close} look="panel" movable="settings-frame">
       <div className="cp-prefs">
         <aside className="cp-prefs__side">
-          <div className="cp-prefs__brand"><SettingsIcon /><span>{t.settings.dialog.title}</span></div>
+          <div className="cp-prefs__brand" data-carry><SettingsIcon /><span>{t.settings.dialog.title}</span></div>
           <label className="cp-prefs__search">
             <SearchIcon />
             <span className="cp-sr-only">{words.search}</span>
@@ -578,7 +578,7 @@ function SettingsEditor() {
           </div>
         </aside>
         <div className="cp-prefs__main">
-          <header className="cp-prefs__head">
+          <header className="cp-prefs__head" data-carry>
             {matches ? (
               <div><h3>{words.search}</h3></div>
             ) : (

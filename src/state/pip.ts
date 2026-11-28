@@ -18,7 +18,8 @@ const OPENING = { desktop: 480, mobile: 680 } as const;
 /** it opens at the top left, under the header: the sessions' windows and their message fields are on the right */
 const OPENING_TOP = 72;
 
-const within = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
+/** `value` between `min` and `max`; `min` when they cross */
+export const within = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
 const topOf = (surface: Surface) => surface.top ?? PIP_MARGIN;
 /** the picture's height per pixel of width */
 const ratio = (format: BrowserFormat) => FORMATS[format].height / FORMATS[format].width;
