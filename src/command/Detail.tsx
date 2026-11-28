@@ -3,7 +3,6 @@ import type { SessionInfo } from '../../shared/protocol.ts';
 import { MAX_TAG, MAX_TAGS, parseTags, withoutTag } from '../../shared/tags.ts';
 import { Tooltip } from '../design/Tooltip.tsx';
 import { t } from '../i18n/index.ts';
-import { shortcut } from '../lib/platform.ts';
 import { drivesBrowser } from '../state/browser.ts';
 import { buildFeed, publishedPages } from '../state/feed.ts';
 import { backgroundWork, isRunning } from '../state/labels.ts';
@@ -28,6 +27,7 @@ import { Modal } from './Modal.tsx';
 import { PermissionPrompt } from './PermissionPrompt.tsx';
 import { PublishedPages } from './PublishedPages.tsx';
 import { QuestionPrompt } from './QuestionPrompt.tsx';
+import { useShortcutText } from './useShortcut.ts';
 import { SecretPrompt, SecretsDialog } from './SecretPrompt.tsx';
 import { StateBadge } from './StateBadge.tsx';
 import { SwitchOffDialog } from './SwitchOffDialog.tsx';
@@ -52,6 +52,7 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
   useDismiss(open, box, close);
   useMenuBelow(open, box, menu);
   const words = t.session.detail;
+  const searchKeys = useShortcutText('threadSearch');
   const pick = (action: () => void) => () => { action(); close(); };
   return (
     <div className="cp-detail__more" ref={box}>
@@ -63,7 +64,7 @@ function SessionMenu({ session, searchOpen, onSearch, onKeys, onRest, onSwitchOf
           <button type="button" role="menuitem" title={t.session.detail.renameHint} onClick={pick(onRename)}><PencilIcon />{t.session.detail.rename}</button>
           {zoom && <button type="button" role="menuitem" title={zoom.zoomed ? t.session.detail.unzoomTitle : t.session.detail.zoomTitle} onClick={pick(zoom.toggle)}>{zoom.zoomed ? <MinimizeIcon /> : <MaximizeIcon />}{zoom.zoomed ? t.session.detail.unzoom : t.session.detail.zoom}</button>}
           {popOut && <button type="button" role="menuitem" title={t.common.out.popOutTitle} onClick={pick(popOut)}><PopOutIcon />{t.common.out.popOut}</button>}
-          <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">{shortcut('F')}</kbd></button>
+          <button type="button" role="menuitem" onClick={pick(onSearch)}><SearchIcon />{searchOpen ? words.searchClose : words.search}<kbd className="cp-kbd">{searchKeys}</kbd></button>
           {!session.remote && (
             <button type="button" role="menuitem" title={t.session.remote.off} onClick={pick(() => send({ t: 'remoteControl', sessionId: session.id, enabled: true }))}><PhoneIcon />{words.remote}</button>
           )}

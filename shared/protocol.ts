@@ -13,6 +13,7 @@ import type { Language } from './i18n.ts';
 import type { Job } from './jobs.ts';
 import type { PetChoice } from './pets.ts';
 import type { RoomTheme } from './room-themes.ts';
+import type { ShortcutAction } from './shortcuts.ts';
 import type { Look } from './look.ts';
 import type { ModInfo, ModSettings } from './mods.ts';
 import type { MusicAction, MusicApp, MusicTrack, NowPlaying } from './music.ts';
@@ -599,6 +600,8 @@ export interface Preferences {
   accountsBrowser: AccountsBrowser;
   /** the dashboards of mods (shared/dashboards.ts); absent until the first one is made */
   dashboards?: Dashboard[];
+  /** the keyboard shortcuts the user changed, by action (shared/shortcuts.ts); absent or left out: the defaults */
+  shortcuts?: Partial<Record<ShortcutAction, string>>;
 }
 
 /**

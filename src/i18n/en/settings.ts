@@ -98,7 +98,7 @@ export const settings: Dictionary['settings'] = {
       connections: 'What starts sessions on its own, your chat bots and the programs that drive Open Space.',
       keys: 'Pasted once, handed to the agents by name. Nobody sees their value, you included.',
       usage: 'What Claude Code used on this computer.',
-      shortcuts: 'Everything works from the keyboard too.',
+      shortcuts: 'Everything works from the keyboard too. Click a shortcut to change it.',
       about: 'The versions of Open Space and Claude Code.',
     },
     groups: {
@@ -244,6 +244,14 @@ export const settings: Dictionary['settings'] = {
       magnets: 'Without magnets, while moving',
       groups: { everywhere: 'Everywhere', sessions: 'Sessions', windows: 'Room and windows' },
       drag: 'drag', wheel: 'wheel',
+      change: (label: string, keys: string) => `${label}: ${keys}. Change`,
+      changeHint: 'Click, then press the keys you want (Escape cancels)',
+      listening: 'Press the keys…',
+      listeningFor: (label: string) => `Press the keys for “${label}”, or Escape to cancel`,
+      reserved: 'Reserved, pick another one',
+      taken: (label: string) => `Already used by “${label}”`,
+      reset: (label: string) => `Reset “${label}” to default`,
+      resetAll: 'Reset all to defaults',
     },
   },
   folders: {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef } from 'react';
 import { hasNews, unreadMods } from '../../shared/dashboards.ts';
 import { Tooltip } from '../design/Tooltip.tsx';
 import { plural, t } from '../i18n/index.ts';
-import { MODIFIER } from '../lib/platform.ts';
 import { roomSessions, type RoomKind } from '../room/cast.ts';
 import { seatedRuns } from '../state/automata.ts';
 import { selectOutdatedCount, useSessions, type View } from '../state/sessions.ts';
@@ -11,14 +10,11 @@ import { AutomatonIcon, DashboardIcon, DeskIcon, FocusIcon, SearchIcon, Settings
 import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
+import { useShortcutText } from './useShortcut.ts';
 import { usePhone } from '../lib/phone.ts';
 
 /** The rooms; the server room is always there, as the triggers are made from it (ServerRoomEmpty when it is empty, its orb after). */
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['automates', AutomatonIcon, 'automata']] as const satisfies readonly (readonly [View, () => unknown, RoomKind])[];
-/** The search opens with Cmd+K on a Mac, Ctrl+K elsewhere (App.tsx listens to both); focus mode, with Cmd+. or Ctrl+. */
-const PALETTE_KEYS = `${MODIFIER} K`;
-const FOCUS_KEYS = `${MODIFIER} .`;
-const SETTINGS_KEYS = `${MODIFIER} ,`;
 export const DASHBOARDS_BAR = 'cp-dashboards-bar';
 
 export function Header() {
@@ -48,6 +44,11 @@ export function Header() {
     return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: roomSessions(list, seen, 'automata').flat().length + seatedRuns(automata).length };
   }, [sessions, seen, automata]);
 
+  // the user's own shortcuts (Settings > Shortcuts), as App.tsx listens to them
+  const paletteKeys = useShortcutText('search');
+  const focusKeys = useShortcutText('focus');
+  const settingsKeys = useShortcutText('settings');
+
   const words = t.common.header;
   return (
     <header className="cp-header">
@@ -69,7 +70,7 @@ export function Header() {
             </button>
           </Tooltip>
           {!phone && <span className="cp-header__divider" aria-hidden="true" />}
-          <Tooltip text={words.focusTitle(FOCUS_KEYS)}>
+          <Tooltip text={words.focusTitle(focusKeys)}>
             <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} onClick={() => setView('focus')}>
               <FocusIcon />
             </button>
@@ -85,10 +86,10 @@ export function Header() {
         <ModsButton />
         <Tooltip text={words.searchTitle}>
           <button type="button" className="cp-button cp-header__search" data-variant="quiet" onClick={() => openPalette(true)} aria-label={words.search}>
-            <SearchIcon /><kbd className="cp-kbd">{PALETTE_KEYS}</kbd>
+            <SearchIcon /><kbd className="cp-kbd">{paletteKeys}</kbd>
           </button>
         </Tooltip>
-        <Tooltip text={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settingsTitle(SETTINGS_KEYS)}>
+        <Tooltip text={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settingsTitle(settingsKeys)}>
           <button
             type="button" className="cp-icon-button cp-header__settings" data-alert={appReady || outdated > 0} onClick={() => openSettings(true)}
             aria-label={appReady ? words.settingsAppUpdate : outdated ? words.settingsUpdate : words.settings}

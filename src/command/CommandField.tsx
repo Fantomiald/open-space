@@ -12,6 +12,7 @@ import { commandsIn, useSessions } from '../state/sessions.ts';
 import { FileIcon, FolderIcon } from './Icons.tsx';
 import { SessionFace } from './SessionFace.tsx';
 import { usePathMentions } from './usePathMentions.ts';
+import { useShortcutText } from './useShortcut.ts';
 
 const MAX_SUGGESTIONS = 8;
 
@@ -105,7 +106,8 @@ export const CommandField = forwardRef<HTMLTextAreaElement, Props>(function Comm
   /** where the caret is in the value, as the user moves it */
   const [caret, setCaret] = useState(value.length);
   const folderCommands = useSessions((s) => commandsIn(s, cwd));
-  const commands = useMemo(() => (own ? withOwnCommands(folderCommands, true) : folderCommands), [folderCommands, own]);
+  const searchKeys = useShortcutText('search');
+  const commands = useMemo(() => (own ? withOwnCommands(folderCommands, true, searchKeys) : folderCommands), [folderCommands, own, searchKeys]);
   const mentioning = shellMode || (!people?.length && !paths) ? null : mentionAt(value, Math.min(caret, value.length));
   const typing: { start: number; typed: string; end?: number } | null = mentioning ? { start: mentioning.start, end: mentioning.end, typed: `@${mentioning.typed}` }
     : shellMode ? null : commandAt(value, Math.min(caret, value.length));

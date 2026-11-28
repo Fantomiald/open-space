@@ -71,7 +71,6 @@ export const composer = {
     title: 'Qu’est-ce qu’on lance ?',
     intro: 'Écris ta demande en bas : une session démarre dans le dossier choisi, avec un prénom de ton équipe, et s’ouvre ici.',
     newRequest: 'écrire une nouvelle demande',
-    shiftN: 'Maj N',
     startNow: (folder: string) => `lancer tout de suite une session dans ${folder}`,
     commandKey: 'en début de message pour une commande',
     searching: (folder: string) => `Recherche des conversations de ${folder}…`,
