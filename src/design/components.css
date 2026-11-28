@@ -149,7 +149,8 @@ h1, h2, p { margin: 0; }
   .cp-header__tools { position: relative; }
   .cp-quota { position: static; }
   .cp-quota__details { right: 0; width: min(18rem, calc(100vw - 2 * var(--gutter))); }
-  .cp-kbd { display: none; }
+  /* the shortcuts' own list keeps its keys: they are what it shows */
+  .cp-kbd:not(.cp-keys__row .cp-kbd) { display: none; }
 }
 /* the right column always holds something: the open session, or the launcher to start one */
 .cp-main { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--detail-width); }

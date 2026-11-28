@@ -29,7 +29,7 @@ export function Shortcuts() {
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (e.key === 'Escape') { setListening(null); return; }
+      if (e.key === 'Escape') { setProblem(null); setListening(null); return; }
       const combo = comboOf(e);
       if (!combo) return;
       const trouble = shortcutProblem(listening, combo, shortcuts);
@@ -86,7 +86,7 @@ export function Shortcuts() {
           {trouble && <span className="cp-keys__problem">{trouble}</span>}
           <button
             type="button" className="cp-keys__combo" data-listening={on || undefined} aria-pressed={on} title={words.changeHint}
-            aria-label={words.change(label, shortcutText(keys))} onClick={listen(action)} onBlur={() => { if (on) setListening(null); }}
+            aria-label={words.change(label, shortcutText(keys))} onClick={listen(action)} onBlur={() => { if (on) { setProblem(null); setListening(null); } }}
           >
             {on ? words.listening : kbds(keys)}
           </button>
