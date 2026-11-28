@@ -62,7 +62,7 @@ export const composer: Dictionary['composer'] = {
   launcher: {
     label: 'New session',
     close: 'Close, without starting a session (Esc)',
-    replaces: (name) => `Six windows open: the new session will take the place of ${name}.`,
+    replaces: (name) => `No room left: the new session will take the place of ${name}, open the longest.`,
     conversation: 'Conversation',
     newConversation: 'New conversation',
     resume: 'Resume',

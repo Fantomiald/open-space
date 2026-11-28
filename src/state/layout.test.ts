@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import { startsDrag } from '../lib/drag.ts';
 import { dropAt, FOCUS_TILING, moveIn, ROOM_TILING } from './stack.ts';
 import { cascade, clampBox, GAP, gridBoxes, keepSizes, resizeBox, resizeTrack, snapMove, sanitizeWindows, snapResize, withoutWindow, zoneAt, zoneBox } from './windows.ts';
+import { chromeSlot, depthOf, float, LAUNCHER, openSessions, raise, unfloat } from './docking.ts';
+import { carryChrome, DEFAULT_CHROME, dockPanel, docksPanel, fitPulledWindow, fitWindow, keepOnPage, MIN_CHROME, PANEL_WIDTHS, placeChrome, sanitizeChrome, trimToPage } from './chrome.ts';
 import { clampRoom, DEFAULT_ROOM_FRAME, MIN_ROOM_SCALE, panRoom, roomBox, sanitizeRoomFrames, zoomRoom } from './room-frame.ts';
 
 describe('room frame', () => {
@@ -174,13 +176,14 @@ describe('how the windows were arranged, read back', () => {
   const box = { left: 0.1, top: 0.2, width: 0.3, height: 0.4 };
   it('nothing saved has every window docked', () => {
     assert.deepEqual(sanitizeWindows(undefined), {
-      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, grids: { room: [], focus: [] }, stackWidth: null,
+      version: 2, free: { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } }, sizes: { room: null, focus: null }, grids: { room: [], focus: [] }, stackWidth: null, opened: [],
     });
   });
   it('keeps what is sound and drops the rest', () => {
-    const read = sanitizeWindows({ version: 2, free: { room: { boxes: { a: { left: Number.NaN }, b: box }, order: ['b', 7] } }, stackWidth: 'wide' });
+    const read = sanitizeWindows({ version: 2, free: { room: { boxes: { a: { left: Number.NaN }, b: box }, order: ['b', 7] } }, stackWidth: 'wide', opened: ['b', 7] });
     assert.deepEqual(read.free.room, { boxes: { b: box }, order: ['b'] });
     assert.equal(read.stackWidth, null);
+    assert.deepEqual(read.opened, ['b']);
   });
   it('an arrangement saved in free mode has its open windows floating, one in the grid has them docked', () => {
     const read = sanitizeWindows({ mode: { room: 'free', focus: 'grid' }, free: { room: { boxes: { a: box, gone: box }, order: ['gone', 'a'] }, focus: { boxes: { a: box }, order: ['a'] } } }, ['a', 'b']);
@@ -203,5 +206,96 @@ describe('how the windows were arranged, read back', () => {
   it('a window closed floats nowhere any more', () => {
     const free = { room: { boxes: { a: { left: 0, top: 0, width: 0.5, height: 0.5 } }, order: ['a'] }, focus: { boxes: {}, order: [] } };
     assert.deepEqual(withoutWindow(free, 'a'), { room: { boxes: {}, order: [] }, focus: { boxes: {}, order: [] } });
+  });
+});
+
+describe('the page placed by hand', () => {
+  const page = { width: 1200, height: 800 };
+  it('reads a missing or broken value as the layout of the CSS', () => {
+    for (const raw of [null, 'chrome', { places: 3 }, { places: { status: { left: 'a' } }, panelWidth: 'wide' }]) assert.deepEqual(sanitizeChrome(raw), DEFAULT_CHROME);
+  });
+  it('keeps the places saved and a docked width within its range', () => {
+    const status = { left: 400, top: 500, width: 320, height: 200 };
+    assert.deepEqual(sanitizeChrome({ places: { status, gone: status }, panelWidth: 5000 }), { places: { status }, panelWidth: PANEL_WIDTHS.max });
+  });
+  it('keeps the radio where it was moved, and in its own place for a layout saved when it moved with the rooms', () => {
+    const rooms = { left: 300, top: 400, width: 480, height: 40 }, radio = { left: 900, top: 12, width: 230, height: 40 };
+    assert.deepEqual(sanitizeChrome({ places: { headerStart: rooms } }).places, { headerStart: rooms });
+    assert.deepEqual(sanitizeChrome({ places: { headerStart: rooms, radio } }).places, { headerStart: rooms, radio });
+  });
+  it('brings a stored 1x1 panel back to a usable size, and leaves the other elements as saved', () => {
+    const tiny = { left: 10, top: 20, width: 1, height: 1 };
+    const { places } = sanitizeChrome({ places: { panel: tiny, status: tiny } });
+    assert.deepEqual(places, { panel: { ...tiny, ...MIN_CHROME }, status: tiny });
+  });
+  it('places the panel let go while folded down to the faces at a width it can unfold to', () => {
+    const folded = { left: 400, top: 40, width: 76, height: 600 };
+    assert.deepEqual(placeChrome(DEFAULT_CHROME, 'panel', folded).places.panel, { ...folded, width: MIN_CHROME.width });
+  });
+  it('brings an element left past the edge of a smaller page back wholly on it', () => {
+    assert.deepEqual(keepOnPage({ left: 1100, top: 760, width: 300, height: 100 }, page), { left: 900, top: 700, width: 300, height: 100 });
+    assert.deepEqual(keepOnPage({ left: -40, top: 10, width: 1500, height: 100 }, page), { left: 0, top: 10, width: 1200, height: 100 });
+  });
+  it('stops a side pulled past the page at its edge, the opposite side staying put', () => {
+    assert.deepEqual(trimToPage({ left: -100, top: 50, width: 500, height: 900 }, page), { left: 0, top: 50, width: 400, height: 750 });
+  });
+  it('keeps an element carried past the page on it', () => {
+    assert.deepEqual(carryChrome({ left: -200, top: 300, width: 300, height: 100 }, [], page, true).box, { left: 0, top: 300, width: 300, height: 100 });
+  });
+  it('docks the panel let go near the left edge, at the width it had there', () => {
+    const floating = placeChrome({ places: {}, panelWidth: 300 }, 'panel', { left: 500, top: 40, width: 280, height: 600 });
+    assert.equal(docksPanel({ left: 20, top: 40, width: 280, height: 600 }), true);
+    assert.equal(docksPanel({ left: 120, top: 40, width: 280, height: 600 }), false);
+    assert.deepEqual(dockPanel(floating), { places: {}, panelWidth: 300 });
+  });
+});
+
+describe('windows placed by hand beside the docked panel', () => {
+  const area = { width: 1200, height: 800 };
+  const clear = { left: 300, top: 100, width: 400, height: 300 };
+  it('shrinks a window pulled by its left side past 0, its right side staying put', () => {
+    const pulled = { left: -60, top: 100, width: 460, height: 300 };
+    assert.deepEqual(fitPulledWindow(pulled, area, true), { left: 0, top: 100, width: 400, height: 300 });
+  });
+  it('pushes a window moved past 0 back to 0 beside the panel, and leaves it be without one', () => {
+    const moved = { ...clear, left: -100 };
+    assert.equal(fitWindow(moved, area, true).left, 0);
+    assert.equal(fitWindow(moved, area, false).left, -100);
+  });
+  it('leaves a window already clear of the panel unchanged', () => {
+    assert.deepEqual(fitWindow(clear, area, true), clear);
+    assert.deepEqual(fitPulledWindow(clear, area, true), clear);
+  });
+});
+
+describe('the launcher placed by hand', () => {
+  const columns = [['a', 'b']], free = { boxes: { c: { left: 0.1, top: 0.1, width: 0.3, height: 0.5 } }, order: ['c'] };
+  it('floats and docks again without touching the grid or the sessions open', () => {
+    const floating = float(columns, free, LAUNCHER, { left: 0.5, top: 0.2, width: 0.3, height: 0.6 }, ROOM_TILING);
+    assert.deepEqual(floating.columns, columns);
+    assert.deepEqual(openSessions(floating.columns, floating.free), ['a', 'b', 'c']);
+    assert.deepEqual(unfloat(floating.free, LAUNCHER), free);
+  });
+});
+
+describe('the front order', () => {
+  const free = { boxes: { a: { left: 0, top: 0, width: 0.3, height: 0.3 }, b: { left: 0.5, top: 0, width: 0.3, height: 0.3 } }, order: ['a', 'b'] };
+  it('brings an element of the page pressed in front of the floating windows, and a window pressed after it in front of it', () => {
+    const status = chromeSlot('status');
+    const raised = raise(free, status);
+    assert.ok(depthOf(raised.order, status) > depthOf(raised.order, 'b'));
+    const after = raise(raised, 'a');
+    assert.ok(depthOf(after.order, 'a') > depthOf(after.order, status));
+  });
+  it('keeps the elements of the page in it across a reload, never counting them as sessions', () => {
+    const saved = sanitizeWindows({ version: 2, free: { room: raise(free, chromeSlot('radio')) } });
+    assert.deepEqual(saved.free.room.order, ['a', 'b', chromeSlot('radio')]);
+    assert.deepEqual(openSessions([], saved.free.room), ['a', 'b']);
+  });
+  it('leaves a window that does not float where it is', () => {
+    assert.equal(raise(free, 'gone'), free);
+  });
+  it('draws an element never brought in front in this arrangement behind every floating window', () => {
+    assert.ok(depthOf(free.order, chromeSlot('radio')) < depthOf(free.order, 'a'));
   });
 });

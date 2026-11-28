@@ -26,6 +26,26 @@ Le menu de la session propose trois façons d'arrêter.
 
 Si la session a lancé du travail en fond (sous-agents, tâches en arrière-plan, réveils programmés), Repos demande d'abord : ce qu'elle a lancé s'arrête avec elle.
 
+## Les fenêtres et le panneau des sessions
+
+Le panneau à gauche liste les sessions par projet, dans la salle comme en mode focus. Un clic sur une ligne, ou sur le personnage dans la salle, ouvre sa fenêtre, le clavier dans son champ. Si elle est déjà ouverte, elle passe devant. Si c'est celle où tu es, elle se ferme.
+
+En bas du panneau, **Fenêtres 1 à 6** fixe combien de fenêtres de session restent ouvertes à la fois (6 par défaut, moins si l'écran est étroit). Les fenêtres flottantes comptent, les mods non. Une fois le nombre atteint, la session que tu ouvres prend la place de celle ouverte depuis le plus longtemps. Baisser le nombre ferme d'abord les plus anciennes.
+
+Au survol d'une ligne, **Éteindre** fait comme le menu de la session. Le titre d'un projet propose son icône de dossier, qui ouvre le dossier dans le Finder (l'Explorateur sous Windows, le gestionnaire de fichiers ailleurs), et son **+**, une nouvelle session dedans. **Éteintes** ouvre **Reprendre** sur le projet en vue. Le bouton du haut, ou ⌘ B (Ctrl B), replie le panneau jusqu'aux visages. **Réglages › Apparence › Panneau des sessions** le coupe : la salle revient sans lui, le mode focus avec sa propre liste.
+
+Sous son nom, une ligne montre sa branche (teintée quand la session travaille dans un worktree) et son modèle. Laisse le pointeur dessus un instant : une carte dit où elle tourne, son projet, l'ordinateur, sa branche, son worktree (ou **Dossier principal**) et son modèle.
+
+La marque à gauche du nom d'un projet est son icône. Un clic ouvre **Choisir l'icône du projet** : une icône d'une courte liste dans l'une des 18 couleurs (la recherche trouve toutes les icônes Lucide), un emoji, une ou deux lettres, ou une image. **Automatique** prend le favicon ou le logo trouvé dans le dossier du projet, **Choisir un fichier** la tienne. **Remettre l'automatique** oublie ton choix.
+
+### Déplacer le panneau et le reste
+
+Sur un écran large, ⌥ + glisser (Alt + glisser) déplace aussi ce qui entoure les fenêtres : le panneau des sessions, la carte **État**, l'astuce ⌥, et l'en-tête en trois morceaux (les pièces avec les projets, la radio, les outils à droite). Ils collent aux bords proches comme les fenêtres ; ⌘ (Ctrl) tenu enlève les aimants. Le panneau se prend aussi par son en-tête, sans ⌥ : tiré loin du bord, il flotte au-dessus de la salle et ne pousse plus rien ; lâché contre le bord gauche, il s'y range à nouveau. Rangé à gauche, son bord droit l'élargit. Flottant, le panneau se redimensionne par ses bords. Un appui sur un élément déplacé le passe devant les fenêtres flottantes, et un appui sur une fenêtre la repasse devant. La place et cet ordre sont gardés dans ce navigateur ; ⌘K **Remettre la disposition par défaut** remet tout à sa place.
+
+Le lanceur bouge comme une fenêtre de session, dans la salle comme en mode focus : tiré par sa barre, il flotte là où tu le lâches et se redimensionne par ses bords ; lâché sur les fenêtres, il reprend la place de la prochaine session. Quand plus aucune fenêtre n'a de place, il les couvre et dit laquelle sa session remplacera.
+
+L'astuce ⌥ s'en va une fois la salle ou une fenêtre déplacée avec ⌥, ou par son bouton de fermeture ; la déplacer elle-même ne compte pas. **Réglages › Apparence › Toujours afficher l'astuce Alt** la garde pour de bon, sans bouton pour la fermer.
+
 ## La limite de sessions actives
 
 `OFFICE_MAX_LIVE` (par défaut `12`) plafonne le nombre de processus `claude` vivants. Chaque processus vivant compte, y compris une session en `wait` qui attend seulement ton prochain message.

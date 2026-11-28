@@ -11,6 +11,8 @@ import { SPOTIFY_ARTWORK } from '../shared/music.ts';
 import { relativePath } from './messages.ts';
 import { resolveInside } from './paths.ts';
 import { MAX_UPLOAD_BYTES, saveUpload, uploadPath } from './uploads.ts';
+import { saveProjectPicture, storedProjectPicture } from './project-icon.ts';
+import { MAX_ICON_IMAGE } from '../shared/project-icons.ts';
 import { checkUpgrade, hasSessionCookie, hostAllowed, parseRequestUrl, phoneModsHost, secretsMatch, sessionCookie, type AccessPolicy } from './security.ts';
 import { browserId } from '../shared/browser.ts';
 import { isModId, PHONE_MODS_PORT } from '../shared/mods.ts';
@@ -35,12 +37,16 @@ export interface WebServerOptions {
   attachmentsDir: string;
   /** files of any kind the user sends with a message (see uploads.ts), received on POST /upload */
   uploadsDir: string;
+  /** the pictures picked for projects (see project-icon.ts), received on POST /project-icon, served under /project-icon?id= */
+  projectIconsDir?: string;
   /** dev mode: the UI is served by Vite, the bridge only answers /ws */
   dev: boolean;
   devPort: number;
   onConnection: (socket: WebSocket) => void;
   /** the real path of a file of a session's folder (see files.ts), previewed by its explorer under /files/ */
   sessionFile?: (sessionId: string, relative: string) => string | null;
+  /** the real path of a project's own picture (see project-icon.ts), for a folder sessions may run in only; null: none */
+  projectPicture?: (folder: string) => string | null;
   log: (message: string, error?: unknown) => void;
   /** the sessions' browsers (see browser.ts) */
   /** what a session's os-secret asks for (server/secrets.ts), behind its key */
@@ -146,7 +152,7 @@ function mcpCaller(mcp: McpOptions, parts: readonly string[]): Caller | null {
 }
 
 export function createWebServer(options: WebServerOptions) {
-  const { policy, distDir, soundsDir, attachmentsDir, uploadsDir, dev, devPort, log } = options;
+  const { policy, distDir, soundsDir, attachmentsDir, uploadsDir, projectIconsDir, dev, devPort, log } = options;
   // the WebSocket under each name the page may be opened by (wss for the phone's https): Safari does not count it as 'self'
   const appCsp = () => [
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${SPOTIFY_ARTWORK}`,
@@ -191,25 +197,42 @@ export function createWebServer(options: WebServerOptions) {
   }
 
   /**
-   * A file the user sends with a message (POST, the file as the body, its name in ?name=): kept in uploads/, answered
-   * with its id, which the message then names. Like the WebSocket, only from Open Space's own page (Origin) with the
-   * session cookie: another site cannot drop files here.
+   * A file POSTed by the page, as the body, up to `max` bytes; null once refused (answered). Like the WebSocket, only from
+   * Open Space's own page (Origin) with the session cookie: another site cannot drop files here.
    */
-  async function upload(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
-    if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); return; }
+  async function received(req: http.IncomingMessage, res: http.ServerResponse, max: number): Promise<Buffer | null> {
+    if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }).end(); return null; }
     const origin = req.headers.origin;
-    if (typeof origin !== 'string' || !policy.allowedOrigins.has(origin) || !hasSessionCookie(policy, req)) { res.writeHead(403).end(); return; }
+    if (typeof origin !== 'string' || !policy.allowedOrigins.has(origin) || !hasSessionCookie(policy, req)) { res.writeHead(403).end(); return null; }
     const declared = Number(req.headers['content-length']);
-    if (!Number.isFinite(declared) || declared > MAX_UPLOAD_BYTES) { res.writeHead(413).end(); req.resume(); return; }
+    if (!Number.isFinite(declared) || declared > max) { res.writeHead(413).end(); req.resume(); return null; }
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const chunk of req as AsyncIterable<Buffer>) {
       size += chunk.length;
-      if (size > MAX_UPLOAD_BYTES) { res.writeHead(413).end(); req.destroy(); return; }
+      if (size > max) { res.writeHead(413).end(); req.destroy(); return null; }
       chunks.push(chunk);
     }
-    const id = saveUpload(uploadsDir, url.searchParams.get('name') ?? '', Buffer.concat(chunks));
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ id, size }));
+    return Buffer.concat(chunks);
+  }
+
+  const sendJson = (res: http.ServerResponse, answer: Record<string, unknown>) =>
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(answer));
+
+  /** A file the user sends with a message (its name in ?name=): kept in uploads/, answered with its id, which the message then names. */
+  async function upload(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const bytes = await received(req, res, MAX_UPLOAD_BYTES);
+    if (bytes) sendJson(res, { id: saveUpload(uploadsDir, url.searchParams.get('name') ?? '', bytes), size: bytes.length });
+  }
+
+  /** A picture picked for a project: kept in project-icons/, answered with its id, which the preferences then name. */
+  async function uploadProjectPicture(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (!projectIconsDir) { res.writeHead(404).end(); req.resume(); return; }
+    const bytes = await received(req, res, MAX_ICON_IMAGE);
+    if (!bytes) return;
+    const id = saveProjectPicture(projectIconsDir, bytes);
+    if (!id) { res.writeHead(415).end(); return; }
+    sendJson(res, { id });
   }
 
   function sendPage(res: http.ServerResponse, page: string, csp: string) {
@@ -454,6 +477,25 @@ export function createWebServer(options: WebServerOptions) {
       if (!file || !type) { res.writeHead(404).end(); return; }
       // the file changes as the session works: asked again each time; an SVG never runs anything (see SVG_CSP)
       serveRanges(file, req, res, { 'Content-Type': type, 'Cache-Control': 'no-cache', ...(type === 'image/svg+xml' ? { 'Content-Security-Policy': SVG_CSP } : {}) });
+      return;
+    }
+    if (url.pathname === '/project-icon' && req.method === 'POST') { await uploadProjectPicture(req, res); return; }
+    if (url.pathname === '/project-icon') {
+      // a project's mark in the sessions' panel: the picture picked for it, /project-icon?id=<its id>, named by content so
+      // cached for good; else its favicon or logo, /project-icon?folder=<its folder>
+      if (!hasSessionCookie(policy, req)) { res.writeHead(401).end(); return; }
+      const id = url.searchParams.get('id');
+      if (id !== null) {
+        const stored = projectIconsDir ? storedProjectPicture(projectIconsDir, id) : null;
+        if (!stored) { res.writeHead(404).end(); return; }
+        await serveFile(stored, res, { 'Cache-Control': 'private, max-age=31536000, immutable' });
+        return;
+      }
+      const file = options.projectPicture?.(url.searchParams.get('folder') ?? '') ?? null;
+      const type = file ? PREVIEW_TYPES[path.extname(file).slice(1).toLowerCase()] : undefined;
+      if (!file || !type?.startsWith('image/')) { res.writeHead(404).end(); return; }
+      // the project may change it: asked again each time; an SVG never runs anything (see SVG_CSP)
+      await serveFile(file, res, { 'Content-Type': type, 'Cache-Control': 'no-cache', ...(type === 'image/svg+xml' ? { 'Content-Security-Policy': SVG_CSP } : {}) });
       return;
     }
     if (url.pathname.startsWith('/pages/')) { await servePage(req, res, url); return; }

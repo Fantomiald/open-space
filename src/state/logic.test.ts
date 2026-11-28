@@ -5,7 +5,8 @@ import { availability, stillFree } from './availability.ts';
 import { backgroundLabel, backgroundWork, contextLevel, pauseLabel, stateLabel, toneOf } from './labels.ts';
 import { asideQuestion, commandSuggestions, findCommands, ownCommand, withOwnCommands, hintValues, nativeView, tuning, commandAt, typedName } from './commands.ts';
 import { diffRows } from './diff.ts';
-import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, isFull, maxColumns, nextFocus, placement, removeFrom, replaceIn, retile, ROOM_TILING, windowCap } from './stack.ts';
+import { oldestOpen, openIn, openOrder } from './docking.ts';
 import { answerFromEnd, buildFeed, conversationMarkdown, publishedPages, threadOf, toolSummary, currentTurn, turnPhase, turnWord, runningShells, type FeedItem } from './feed.ts';
 import { matchFolders } from './folders.ts';
 import { appendLive, CLIENT_LOG_LIMIT, mergeLog } from './log.ts';
@@ -543,8 +544,35 @@ describe('sessions open side by side', () => {
     assert.deepEqual(addTo([['b', 'c'], ['d', 'e']], 'x', 2), [['b', 'c', 'x'], ['d', 'e']], 'the hole is filled first');
   });
 
-  it('shows a clicked session in the place of the one in use', () => {
-    assert.deepEqual(replaceIn([['a', 'b'], ['c']], 'b', 'x'), [['a', 'x'], ['c']]);
+  it('when no other fits, a session takes the place of the one opened longest ago: its slot, or its box when it floats', () => {
+    const none = { boxes: {}, order: [] };
+    const full = [['a', 'b', 'c'], ['d', 'e', 'f']];
+    assert.deepEqual(openIn(full, none, ['c', 'a', 'b', 'd', 'e', 'f'], 'x', 2, 6, ROOM_TILING), { columns: [['a', 'b', 'x'], ['d', 'e', 'f']], free: none, closed: 'c' });
+    const box = { left: 0.1, top: 0.1, width: 0.3, height: 0.3 };
+    const floated = openIn([['b']], { boxes: { a: box }, order: ['a'] }, ['a', 'b'], 'x', 2, 2, ROOM_TILING);
+    assert.deepEqual(floated, { columns: [['b']], free: { boxes: { x: box }, order: ['x'] }, closed: 'a' }, 'a floating window counts');
+    assert.equal(openIn([['a']], none, ['a'], 'x', 2, 2, ROOM_TILING)?.closed, null, 'under the cap, beside the others');
+    assert.equal(openIn([['mod:m', 'mod:n', 'mod:o']], none, [], 'x', 1, 6, ROOM_TILING), null, 'a grid full of mods, and no session to give its place');
+  });
+
+  it('names as the one replaced the oldest open here, not one opened longest ago but open only in the other arrangement', () => {
+    assert.equal(oldestOpen(['elsewhere', 'b', 'a'], ['a', 'b']), 'b');
+  });
+
+  it('keeps the order the sessions were opened in, and finds it again in a grid saved without it', () => {
+    const none = { boxes: {}, order: [] };
+    assert.deepEqual(openOrder(['b', 'a'], [['a', 'b', 'c']], none, ROOM_TILING), ['b', 'a', 'c'], 'the newcomer last');
+    assert.deepEqual(openOrder(['gone', 'a'], [['a']], none, ROOM_TILING), ['a']);
+    assert.deepEqual(openOrder([], [['a', 'b'], ['c']], none, ROOM_TILING), ['a', 'b', 'c'], 'over the room, the grid in the order of opening');
+    assert.deepEqual(openOrder([], [['c', 'b'], ['a']], none, FOCUS_TILING), ['a', 'b', 'c'], 'in focus mode, the newest first');
+  });
+
+  it('opens as many windows as the setting says, no more than fit, six without one', () => {
+    assert.equal(windowCap(undefined, 2, ROOM_TILING, 6), 6);
+    assert.equal(windowCap(2, 2, ROOM_TILING, 6), 2);
+    assert.equal(windowCap(6, 1, ROOM_TILING, 6), 3, 'one column over the room holds three');
+    assert.equal(windowCap(9, 3, FOCUS_TILING, 6), 6);
+    assert.equal(windowCap(0, 3, FOCUS_TILING, 6), 1);
   });
 
   it('gives the keyboard to the window under the one closed, else above, else the other column', () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { loadConfig } from './config.ts';
+import { loadConfig, sessionRoots } from './config.ts';
 
 describe('loadConfig', () => {
   it('has safe defaults: no root until the user chooses some, data outside Documents', () => {
@@ -28,4 +28,14 @@ describe('loadConfig', () => {
     assert.deepEqual([config.port, config.maxLive, config.idleMs], [4848, 12, 30 * 60_000]);
   });
 
+});
+
+describe('sessionRoots', () => {
+  const there = (folder: string) => folder !== '/gone';
+  it('takes the user’s chosen folders still there, when OFFICE_ROOTS is not set', () => {
+    assert.deepEqual(sessionRoots({ roots: [], rootsLocked: false }, ['/work', '/gone'], there), ['/work']);
+  });
+  it('keeps OFFICE_ROOTS over the settings when it is set', () => {
+    assert.deepEqual(sessionRoots({ roots: ['/locked'], rootsLocked: true }, ['/work'], there), ['/locked']);
+  });
 });

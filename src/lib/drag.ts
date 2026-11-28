@@ -47,8 +47,9 @@ export function useAltKey(): boolean {
   return held;
 }
 
-/** Whether the screen is wide enough for windows and the room to be moved by hand (the small-screen layout shows one). */
-export const canArrange = () => window.matchMedia('(min-width: 60.01rem)').matches;
+/** A screen wide enough for windows and the room to be moved by hand, and for the sessions' panel (the small-screen layout shows one). */
+export const WIDE_SCREEN = '(min-width: 60.01rem)';
+export const canArrange = () => window.matchMedia(WIDE_SCREEN).matches;
 
 /** Fired once the room or a window was moved with Alt: the hint about it has done its job (ArrangeHint.tsx). */
 export const ARRANGED_EVENT = 'cp:arranged';

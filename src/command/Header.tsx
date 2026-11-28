@@ -12,6 +12,7 @@ import { ModsButton } from './ModsPanel.tsx';
 import { QuotaMeter } from './QuotaMeter.tsx';
 import { Radio } from './Radio.tsx';
 import { usePhone } from '../lib/phone.ts';
+import { useChromePlace } from './Chrome.tsx';
 
 /** The rooms; the server room is always there, as the triggers are made from it (ServerRoomEmpty when it is empty, its orb after). */
 const VIEWS = [['salle', DeskIcon, 'office'], ['repos', SofaIcon, 'lounge'], ['automates', AutomatonIcon, 'automata']] as const satisfies readonly (readonly [View, () => unknown, RoomKind])[];
@@ -48,39 +49,43 @@ export function Header() {
     return { office: roomSessions(list, seen, 'office').flat().length, lounge: roomSessions(list, seen, 'lounge').flat().length, automata: roomSessions(list, seen, 'automata').flat().length + seatedRuns(automata).length };
   }, [sessions, seen, automata]);
 
+  const start = useChromePlace('headerStart'), end = useChromePlace('headerEnd');
   const words = t.common.header;
   return (
     <header className="cp-header">
-      <div className="cp-header__where">
-        {/* only when something is wrong: a live connection is the normal state */}
-        {connection !== 'live' && <span className="cp-header__signal" data-connection={connection} title={words.disconnected} />}
-        <h1 className="cp-sr-only">Open Space</h1>
-        <nav className="cp-segmented" data-icons aria-label={words.rooms}>
-          {!phone && VIEWS.map(([id, ViewIcon, room]) => (
-            <Tooltip key={id} text={words[room]}>
-              <button type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} onClick={() => setView(id)}>
-                <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
+      {/* the rooms and the projects move together, as the radio and the tools each do (Chrome.tsx); laid out by the header until then */}
+      <div className="cp-header__start" {...start}>
+        <div className="cp-header__where">
+          {/* only when something is wrong: a live connection is the normal state */}
+          {connection !== 'live' && <span className="cp-header__signal" data-connection={connection} title={words.disconnected} />}
+          <h1 className="cp-sr-only">Open Space</h1>
+          <nav className="cp-segmented" data-icons aria-label={words.rooms}>
+            {!phone && VIEWS.map(([id, ViewIcon, room]) => (
+              <Tooltip key={id} text={words[room]}>
+                <button type="button" aria-pressed={view === id} aria-label={words.roomSessions(words[room], room === 'automata' ? plural(counts[room], words.automaton, words.automatons) : plural(counts[room], words.session, words.sessions))} onClick={() => setView(id)}>
+                  <ViewIcon />{counts[room] > 0 && <span className="cp-header__room-count" aria-hidden="true">{counts[room]}</span>}
+                </button>
+              </Tooltip>
+            ))}
+            <Tooltip text={dashboardsNews ? words.dashboardsNews : words.dashboardsTitle}>
+              <button type="button" aria-pressed={view === 'dashboards'} aria-label={dashboardsNews ? words.dashboardsNews : words.dashboards} data-news={dashboardsNews || undefined} onClick={() => setView('dashboards')}>
+                <DashboardIcon />
               </button>
             </Tooltip>
-          ))}
-          <Tooltip text={dashboardsNews ? words.dashboardsNews : words.dashboardsTitle}>
-            <button type="button" aria-pressed={view === 'dashboards'} aria-label={dashboardsNews ? words.dashboardsNews : words.dashboards} data-news={dashboardsNews || undefined} onClick={() => setView('dashboards')}>
-              <DashboardIcon />
-            </button>
-          </Tooltip>
-          {!phone && <span className="cp-header__divider" aria-hidden="true" />}
-          <Tooltip text={words.focusTitle(FOCUS_KEYS)}>
-            <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} onClick={() => setView('focus')}>
-              <FocusIcon />
-            </button>
-          </Tooltip>
-        </nav>
+            {!phone && <span className="cp-header__divider" aria-hidden="true" />}
+            <Tooltip text={words.focusTitle(FOCUS_KEYS)}>
+              <button type="button" aria-pressed={view === 'focus'} aria-label={words.focus} onClick={() => setView('focus')}>
+                <FocusIcon />
+              </button>
+            </Tooltip>
+          </nav>
+        </div>
+        <ProjectFilter />
       </div>
-      <ProjectFilter />
       {radio && !phone && <Radio />}
       {/* the dashboards' tabs and buttons, put here by Dashboards.tsx: the grid keeps the whole page under the header */}
       {view === 'dashboards' && <div className="cp-header__dashboards" id={DASHBOARDS_BAR} />}
-      <div className="cp-header__tools">
+      <div className="cp-header__tools" {...end}>
         {quota && <QuotaMeter quota={quota} />}
         <ModsButton />
         <Tooltip text={words.searchTitle}>

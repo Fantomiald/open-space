@@ -1,13 +1,23 @@
 // Each window, a session's or a mod's, is either docked (a slot in the grid of the current arrangement, see stack.ts) or
 // floating (a box of its own over the rest, see windows.ts). The grid holds the sessions' ids and `mod:<id>` for the
-// mods docked in it; the floating sessions are the boxes of the arrangement's FreeLayout. Pure functions.
+// mods docked in it; the floating sessions are the boxes of the arrangement's FreeLayout. The launcher floats the same
+// way (its box is LAUNCHER's), docked it takes the place the next session will (Stack.tsx), never kept in the grid. The
+// FreeLayout's order is the front order of everything placed by hand: the floating windows, and the page's elements moved
+// (`chrome:<id>`, state/chrome.ts), the front one last. Pure functions.
 import type { Box } from './room-frame.ts';
-import { addTo, dropAt, moveIn, removeFrom, retile, type Columns, type DropSlot, type Tiling } from './stack.ts';
+import { addTo, dropAt, moveIn, removeFrom, replaceIn, retile, type Columns, type DropSlot, type Tiling } from './stack.ts';
 import type { FreeLayout } from './windows.ts';
 
 const MOD_SLOT = 'mod:';
 /** how far from the top or the bottom of a docked window, in focus mode, a floating one is dropped to dock there */
 export const DOCK_BAND = 56;
+
+/** the launcher's id among the windows: its box when it floats */
+export const LAUNCHER = 'launcher';
+const CHROME_SLOT = 'chrome:';
+/** An element of the page moved by hand, in the front order (FreeLayout.order) beside the floating windows. */
+export const chromeSlot = (id: string) => `${CHROME_SLOT}${id}`;
+export const isChromeSlot = (id: string) => id.startsWith(CHROME_SLOT);
 
 export const modSlot = (id: string) => `${MOD_SLOT}${id}`;
 /** The mod docked in this slot, null for a session. */
@@ -16,12 +26,46 @@ export const sessionsIn = (columns: Columns) => columns.flat().filter((id) => mo
 export const modsIn = (columns: Columns) => columns.flat().map(modOfSlot).filter((id): id is string => id !== null);
 
 const copy = (columns: Columns) => columns.map((column) => [...column]);
-const floatingIds = (free: FreeLayout) => [...free.order.filter((id) => free.boxes[id]), ...Object.keys(free.boxes).filter((id) => !free.order.includes(id))];
+/** The sessions floating, from back to front: the launcher's box is not a session's. */
+const floatingIds = (free: FreeLayout) =>
+  [...free.order.filter((id) => free.boxes[id]), ...Object.keys(free.boxes).filter((id) => !free.order.includes(id))].filter((id) => id !== LAUNCHER);
 
 /** The sessions open in an arrangement: the docked ones in the grid's order, then the floating ones from back to front. */
 export function openSessions(columns: Columns, free: FreeLayout): string[] {
   const docked = sessionsIn(columns);
   return [...docked, ...floatingIds(free).filter((id) => !docked.includes(id))];
+}
+
+/**
+ * The open sessions, the one opened longest ago first. Those of `previous` still open keep its order; the others join
+ * at the end, the docked ones in the order they were opened (the grid's over the room, the other way round in focus
+ * mode, where the newest opens first), then the floating ones. A layout saved before this order was kept finds it so.
+ * The ids of `elsewhere` (open in the other arrangement) keep their place in it, though they are not open here.
+ */
+export function openOrder(previous: readonly string[], columns: Columns, free: FreeLayout, tiling: Tiling, elsewhere: readonly string[] = []): string[] {
+  const open = openSessions(columns, free), docked = sessionsIn(columns);
+  const kept = previous.filter((id, index) => (open.includes(id) || elsewhere.includes(id)) && previous.indexOf(id) === index);
+  const arriving = [...(tiling.spread ? [...docked].reverse() : docked), ...open.filter((id) => !docked.includes(id))];
+  return [...kept, ...arriving.filter((id) => !kept.includes(id))];
+}
+
+/** The one opened longest ago (`opened`, oldest first) among those `open` here; the first open when none is in `opened`. */
+export const oldestOpen = (opened: readonly string[], open: readonly string[]): string | undefined => opened.find((each) => open.includes(each)) ?? open[0];
+
+/**
+ * `id`, not open yet, opened: beside the others while fewer than `cap` sessions are open (docked or floating) and the
+ * grid has room, else in the place of the one opened longest ago (`opened`, oldest first): its place in the grid, or
+ * its box when it floats. `closed` says which one gave its place; null when none is open to give it (a grid full of mods).
+ */
+export function openIn(columns: Columns, free: FreeLayout, opened: readonly string[], id: string, max: number, cap: number, tiling: Tiling): { columns: string[][]; free: FreeLayout; closed: string | null } | null {
+  const open = openSessions(columns, free);
+  const beside = open.length < cap ? addTo(columns, id, max, tiling) : null;
+  if (beside) return { columns: beside, free, closed: null };
+  const oldest = oldestOpen(opened, open);
+  if (!oldest) return null;
+  if (sessionsIn(columns).includes(oldest)) return { columns: replaceIn(columns, oldest, id), free, closed: oldest };
+  const { [oldest]: box, ...boxes } = free.boxes;
+  return { columns: copy(columns), free: { boxes: { ...boxes, [id]: box }, order: free.order.map((each) => (each === oldest ? id : each)) }, closed: oldest };
 }
 
 /**
@@ -51,6 +95,23 @@ export function float(columns: Columns, free: FreeLayout, id: string, box: Box, 
     columns: columns.some((column) => column.includes(id)) ? removeFrom(columns, id, tiling) : copy(columns),
     free: { boxes: { ...free.boxes, [id]: box }, order: [...free.order.filter((other) => other !== id), id] },
   };
+}
+
+/** how deep the first of the front order is drawn (components.css), and the deepest any of them is: under the header's pills */
+export const FRONT_DEPTH = { first: 11, last: 29 };
+/**
+ * How deep `id` is drawn in the front order: the later in it, the nearer the front. One not in it (an element placed in
+ * the other arrangement, or before this order was kept) was never brought in front here: behind all of those that were.
+ */
+export const depthOf = (order: readonly string[], id: string) => {
+  const index = order.indexOf(id);
+  return index < 0 ? FRONT_DEPTH.first - 1 : Math.min(FRONT_DEPTH.first + index, FRONT_DEPTH.last);
+};
+
+/** `id` brought in front: a floating window (it must have a box) or an element of the page moved by hand. */
+export function raise(free: FreeLayout, id: string): FreeLayout {
+  if (free.order.at(-1) === id || (!free.boxes[id] && !isChromeSlot(id))) return free;
+  return { boxes: free.boxes, order: [...free.order.filter((other) => other !== id), id] };
 }
 
 /** `id` no longer floating. */

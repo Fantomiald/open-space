@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { BRANCH_PREFIX, workSlug } from '../../shared/worktrees.ts';
 import type { Effort, PermissionMode, TuneChange } from '../../shared/protocol.ts';
 import { defaultFolder, folderName, formatAgo, homeRelative } from '../lib/format.ts';
@@ -20,6 +20,7 @@ import { Snippet } from './Snippet.tsx';
 import { PersonPicker } from './PersonPicker.tsx';
 import { TuneMenu } from './TuneMenu.tsx';
 import { usePhone } from '../lib/phone.ts';
+import { INTERACTIVE } from './useWindowDrag.ts';
 
 
 /**
@@ -27,9 +28,9 @@ import { usePhone } from '../lib/phone.ts';
  * model, effort, permissions, ultracode and fast mode; above it, the folder's Claude Code conversations when resuming one. Enter starts the session,
  * which opens in its place. N puts the focus here; Shift+N starts a session at once (see App.tsx). `onClose`: shown as
  * a window beside the open sessions (focus mode), it can be closed; `replacing`: the session the new one will take the
- * place of, when no room is left.
+ * place of, when no room is left; `onGrab`: its bar carries it, as a window's does (Stack.tsx).
  */
-export function Launcher({ onClose, replacing }: { onClose?: () => void; replacing?: string }) {
+export function Launcher({ onClose, replacing, onGrab }: { onClose?: () => void; replacing?: string; onGrab?: (event: ReactPointerEvent) => void }) {
   const roots = useSessions((s) => s.roots);
   const directories = useSessions((s) => s.directories);
   const found = useSessions((s) => s.conversations);
@@ -144,7 +145,7 @@ export function Launcher({ onClose, replacing }: { onClose?: () => void; replaci
   return (
     <aside className="cp-launcher" aria-label={words.label} {...attachments.dropTarget}>
       <DropOverlay attachments={attachments} />
-      <div className="cp-launcher__head">
+      <div className="cp-launcher__head" onPointerDown={onGrab && ((event) => { if (!(event.target as Element).closest(INTERACTIVE)) onGrab(event); })}>
         <div className="cp-segmented" role="group" aria-label={words.conversation}>
           <button type="button" aria-pressed={!resuming} onClick={() => setResuming(false)}>{words.newConversation}</button>
           <button type="button" aria-pressed={resuming} onClick={() => setResuming(true)}>{words.resume}</button>

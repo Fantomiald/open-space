@@ -23,7 +23,7 @@ import { DEFAULT_PET } from '../../shared/pets.ts';
 import { startTrip, type PetTrip } from '../room/pet-trip.ts';
 import type { Look } from '../../shared/look.ts';
 import type { MusicApp, MusicTrack, NowPlaying } from '../../shared/music.ts';
-import { GLASS_OPACITY } from '../../shared/protocol.ts';
+import { GLASS_OPACITY, MAX_WINDOWS } from '../../shared/protocol.ts';
 import type { AppUpdate, Aside, BranchRow, FolderRepo, ClaudeAccount, ClaudeInfo, ClaudeUpdate, ClientMessage, Note, NoteFile, NoteMatch, Preferences, RootSuggestion, Conversation, CrewMember, FolderCode, ImageUpload, ContextUsage, InspectView, LoggedEvent, McpServer, UsageReport, PermissionDecision, SearchHit, Quota, ServerMessage, SessionChanges, SessionInfo, SessionOptions, SlashCommand, ModelChoice } from '../../shared/protocol.ts';
 import type { CostReport } from '../../shared/usage.ts';
 import { chime, errorChime, sampleChime } from '../lib/chime.ts';
@@ -31,10 +31,12 @@ import { readPreference, writePreference } from '../lib/preferences.ts';
 import { keepDrafts, writeDraft } from './drafts.ts';
 import { language as initialLanguage, setLanguage } from '../i18n/index.ts';
 import { appendLive, mergeLog } from './log.ts';
-import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, replaceIn, ROOM_TILING, type Columns, type DropSlot } from './stack.ts';
+import { addTo, fitColumns, FOCUS_TILING, maxColumns, moveIn, nextFocus, removeFrom, ROOM_TILING, windowCap, type Columns, type DropSlot } from './stack.ts';
 import { afterEvent, withPartial, type Partials } from './partials.ts';
-import { keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowsPreference } from './windows.ts';
-import { dock, float, modOfSlot, modSlot, modsIn, modsOnly, openSessions, sessionsIn, switchArrangement, tidyAll, unfloat } from './docking.ts';
+import { GAP, keepSizes, sanitizeWindows, withoutWindow, type Arrangement, type FreeLayout, type GridSizes, type WindowsPreference } from './windows.ts';
+import { dock, float, isChromeSlot, LAUNCHER, modOfSlot, raise, modSlot, modsIn, modsOnly, openIn, openOrder, openSessions, sessionsIn, switchArrangement, tidyAll, unfloat } from './docking.ts';
+import { canArrange } from '../lib/drag.ts';
+import { dockPanel, panelFloats, placeChrome, resizePanel, sanitizeChrome, DEFAULT_CHROME, PANEL_WIDTHS, type ChromeId, type ChromeLayout } from './chrome.ts';
 import type { Box } from './room-frame.ts';
 import { attentionQueue, newlyWaiting, type SeenSequences } from './queue.ts';
 import { projectOf } from './projects.ts';
@@ -60,8 +62,44 @@ export type { Arrangement };
 const savedLayout = readLayout();
 const savedWindows = sanitizeWindows(readPreference('windows', null), Array.isArray(savedLayout?.columns) ? savedLayout.columns.flat() : []);
 const writeWindows = (state: CommandPostState) =>
-  writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, grids: state.grids, stackWidth: state.stackWidth } satisfies WindowsPreference);
-export const maxColumnsIn = (view: View) => maxColumns(window.innerWidth, tilingOf(view));
+  writePreference('windows', { version: 2, free: state.free, sizes: state.gridSizes, grids: state.grids, stackWidth: state.stackWidth, opened: state.opened } satisfies WindowsPreference);
+
+/** the sessions' panel folded down to the faces, in pixels */
+const PANEL_NARROW = 4.75 * 16;
+/** The sessions' panel is on the page in `view`: not turned off in the settings, not on the dashboards, on a screen wide enough to lay the windows out (it is focus mode's list there). */
+export const panelShown = (s: Pick<CommandPostState, 'preferences'>, view: View, wide = canArrange()) => s.preferences.sessionPanel !== false && view !== 'dashboards' && wide;
+/** How wide the sessions' panel is docked: folded down to the faces, as pulled by hand, or --list-width. */
+export const dockedPanelWidth = (s: Pick<CommandPostState, 'panelNarrow' | 'chrome'>) => (s.panelNarrow ? PANEL_NARROW : (s.chrome.panelWidth ?? PANEL_WIDTHS.initial));
+/** The width the sessions' panel takes down the left of the page in `view`, with the gutter after it: none when not shown or floating. */
+export const panelWidth = (s: Pick<CommandPostState, 'preferences' | 'panelNarrow' | 'chrome'>, view: View) =>
+  !panelShown(s, view) || panelFloats(s.chrome) ? 0 : dockedPanelWidth(s) + GAP;
+
+/**
+ * How many columns of windows fit in `view`, beside the panel: it holds the list in focus mode (none beside the windows
+ * once it floats), and pushes the status card over the room.
+ */
+export const maxColumnsIn = (view: View) => {
+  const s = useSessions.getState(), tiling = tilingOf(view), panel = panelWidth(s, view);
+  return maxColumns(window.innerWidth, panelShown(s, view) ? { ...tiling, aside: tiling.spread ? panel : tiling.aside + panel } : tiling);
+};
+/** How many sessions' windows may be open in `view`: the user's setting, no more than fit (stack.ts windowCap). */
+export const windowCapIn = (view: View) => windowCap(useSessions.getState().preferences.maxWindows, maxColumnsIn(view), tilingOf(view), MAX_WINDOWS);
+
+/** The windows past the cap (windowCapIn) close, the ones opened longest ago first. */
+function closeOverCap() {
+  const s = useSessions.getState();
+  // the saved order may hold ids no longer open, or miss some that are
+  const opened = openOrder(s.opened, s.columns, s.free[arrangementOf(s.view)], tilingOf(s.view));
+  const over = opened.length - windowCapIn(s.view);
+  for (const id of opened.slice(0, Math.max(over, 0))) useSessions.getState().closeOpen(id);
+}
+
+/** The page's elements placed anew: the panel docked, floating or wider may leave room for another number of columns. */
+function setChrome(chrome: ChromeLayout) {
+  writePreference('chrome', chrome);
+  useSessions.setState({ chrome });
+  useSessions.getState().fitOpen();
+}
 
 /** The parts of the settings dialog, in the order of its menu. */
 export const SETTINGS_SECTIONS = ['general', 'office', 'sessions', 'claude', 'folders', 'connections', 'keys', 'usage', 'shortcuts', 'about'] as const;
@@ -208,6 +246,12 @@ export interface CommandPostState {
   columns: Columns;
   /** the sessions open: the docked ones, then the ones floating in the current arrangement */
   openIds: string[];
+  /** the same, the one opened longest ago first: it gives its place when no other fits (docking.ts openIn) */
+  opened: string[];
+  /** the sessions' panel (or focus mode's list) folded down to the faces; kept in this browser */
+  panelNarrow: boolean;
+  /** the panel, the status card, the launcher, the header's pills moved by hand (chrome.ts); kept in this browser */
+  chrome: ChromeLayout;
   /** one of several open sessions shown alone for a while, the others kept in their place (as tmux's zoom) */
   zoomedId: string | null;
   /** Tab: everything but the room steps aside (header, status, sessions, launcher, mods), to see and click it */
@@ -237,6 +281,8 @@ export interface CommandPostState {
   onboarded: boolean;
   /** the folders are set by OFFICE_ROOTS: the page cannot change them */
   rootsLocked: boolean;
+  /** the computer the server and every session run on ('' from an older server) */
+  machine: string;
   /** what Claude Code runs with where Open Space sets nothing, and its output styles */
   claudeDefaults: ClaudeDefaults;
   /** where the last `claude update` asked from the page is (null: none since the page opened) */
@@ -281,12 +327,24 @@ export interface CommandPostState {
   /** a click on the background: what is docked in the grid closes, conversations and mods; what floats stays */
   clearDesk: () => void;
   /**
-   * a click on a session: brought forward if it is open, else shown in place of the one the keyboard is in (in focus
-   * mode, beside the open ones while there is room)
+   * goes to a session: brought forward if it is open, else opened beside the others while there is room (windowCapIn),
+   * else in the place of the one opened longest ago
    */
   show: (sessionId: string) => void;
-  /** Adds the session beside the open ones (nothing when there is no room left), or takes it out */
-  toggleOpen: (sessionId: string) => void;
+  /** a click on a session in the panel or the room: the one the keyboard is in closes, any other is shown (`show`) */
+  toggleWindow: (sessionId: string) => void;
+  /** folds the sessions' panel down to the faces, or unfolds it: the windows get the width it leaves */
+  foldPanel: (narrow: boolean) => void;
+  /** an element of the page let go where it now stays; the panel floats there */
+  placeChrome: (id: ChromeId, box: Box) => void;
+  /** the panel back down the left of the page */
+  dockPanel: () => void;
+  /** the docked panel pulled to this width */
+  resizePanel: (width: number) => void;
+  /** the launcher floating back in the grid, in the place of the next session */
+  dockLauncher: () => void;
+  /** every element of the page back where the CSS puts it */
+  resetLayout: () => void;
   zoom: (sessionId: string | null) => void;
   /** one of the open sessions takes the keyboard (the user clicked in it) */
   focus: (sessionId: string) => void;
@@ -314,7 +372,7 @@ export interface CommandPostState {
   tidyWindows: () => void;
   raiseWindow: (sessionId: string) => void;
   hideUi: (hidden: boolean) => void;
-  /** after the window shrank: the column that no longer fits closes */
+  /** after the window shrank or the panel unfolded: the columns that no longer fit close, then the windows past the cap (the oldest first) */
   fitOpen: () => void;
   /** shows a view in the open session's panel; one of Claude Code's is asked for at once */
   showPanel: (view: PanelView) => void;
@@ -512,6 +570,9 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   selectedId: null,
   columns: [],
   openIds: [],
+  opened: savedWindows.opened ?? [],
+  panelNarrow: readPreference('listNarrow', false),
+  chrome: sanitizeChrome(readPreference('chrome', null)),
   zoomedId: null,
   uiHidden: false,
   gridSizes: savedWindows.sizes,
@@ -530,6 +591,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   onboarded: true,
   language: initialLanguage,
   rootsLocked: false,
+  machine: '',
   claudeDefaults: { current: {}, outputStyles: [] },
   claudeUpdate: null,
   claudeAccount: null,
@@ -570,14 +632,15 @@ export const useSessions = create<CommandPostState>((set, get) => ({
           claude: message.claude, roots: message.roots, crew: message.crew, sessions, commands: message.commands, // a server started before these existed does not send them
           folderCommands: message.folderCommands ?? {}, models: message.models ?? [], quota: message.quota,
           preferences: message.preferences, onboarded: message.onboarded, rootsLocked: message.rootsLocked, claudeDefaults: message.claudeDefaults, appUpdate: message.appUpdate,
-          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false, mods: message.mods ?? null,
+          browsers: message.browsers ?? {}, browserAvailable: message.browserAvailable ?? false, mods: message.mods ?? null, machine: message.machine ?? '',
         });
         // after a reconnection the windows stay; after a reload they come back as they were
         const kept = s.selectedId && sessions[s.selectedId] ? { columns: s.columns, selectedId: s.selectedId } : s.selectedId ? null : readLayout();
-        // the floating windows of sessions still there (none when the layout is gone), out of the grid
+        // the floating windows of sessions still there (none when the layout is gone), out of the grid; the launcher's,
+        // and the front order of the page's elements, stay
         const prune = (layout: FreeLayout): FreeLayout => {
-          const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => kept && sessions[id]));
-          return { boxes, order: layout.order.filter((id) => id in boxes) };
+          const boxes = Object.fromEntries(Object.entries(layout.boxes).filter(([id]) => id === LAUNCHER || (kept && sessions[id])));
+          return { boxes, order: layout.order.filter((id) => id in boxes || isChromeSlot(id)) };
         };
         const free = { room: prune(s.free.room), focus: prune(s.free.focus) };
         const floating = free[arrangementOf(s.view)];
@@ -589,6 +652,8 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const focused = kept?.selectedId && open.includes(kept.selectedId) ? kept.selectedId : open[0];
         if (focused) get().focus(focused);
         else set({ selectedId: null });
+        // once one has the keyboard: closing the oldest hands it on rather than clearing the desk
+        closeOverCap();
         // resynchronise the followed sessions: ask for what was missed while disconnected
         for (const id of Object.keys(s.logs)) {
           if (sessions[id]) s.send({ t: 'log', sessionId: id, after: s.logs[id].at(-1)?.seq ?? 0 });
@@ -601,15 +666,13 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         const paused = pauseSpeech(previous[message.session.id], message.session, new Date());
         if (paused) announceSpeech(paused);
         if (s.awaitingNew && !previous[message.session.id]) {
-          // a new session with several open joins them when there is room, else takes the place of the one in use
+          // a new session joins the open ones when there is room, else takes the place of the one opened longest ago
           // in focus mode it opens where the launcher's window was (the same place in the grid) and that window closes
           set({ awaitingNew: false, launcherOpen: false });
           // started in another project than the one in sight: the filter follows it, so it does not arrive as a ghost
           const project = projectOf(message.session);
           if (s.project && s.project !== project) get().setProject(project);
-          const fits = s.openIds.length > 1 && addTo(s.columns, message.session.id, maxColumnsIn(s.view), tilingOf(s.view));
-          if (fits) get().toggleOpen(message.session.id);
-          else get().show(message.session.id);
+          get().show(message.session.id);
         }
         // only the window the user is in: another open one that finishes still rings and waits to be seen
         if (s.selectedId === message.session.id && isVisible()) get().markSeen(message.session.id);
@@ -618,7 +681,13 @@ export const useSessions = create<CommandPostState>((set, get) => ({
         if (s.sound && previous[message.session.id] && previous[message.session.id].state !== 'error' && message.session.state === 'error') errorChime();
         break;
       }
-      case 'preferences': set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded, claudeDefaults: message.claudeDefaults }); break;
+      case 'preferences': {
+        set({ ...languageState(message.preferences), preferences: message.preferences, roots: message.roots, onboarded: message.onboarded, claudeDefaults: message.claudeDefaults });
+        // the panel back or gone: the columns that no longer fit close; fewer windows asked for: the ones opened longest ago
+        if (message.preferences.sessionPanel !== s.preferences.sessionPanel) get().fitOpen();
+        else if (message.preferences.maxWindows !== s.preferences.maxWindows) closeOverCap();
+        break;
+      }
       case 'rootSuggestions': set({ rootSuggestions: message.suggestions }); break;
       case 'terminals': set({ terminals: message.choices }); break;
       case 'trustNeeded': if (lastCreate) set({ trustRequest: { cwd: message.cwd, code: message.code, options: lastCreate } }); break;
@@ -757,31 +826,44 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const s = get();
     if (s.outKeys.includes(outKey({ kind: 'session', sessionId }))) { s.popOut({ kind: 'session', sessionId }); return; }
     set({ uiHidden: false });
-    if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.focus(sessionId); return; }
-    const beside = s.selectedId && addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
-    if (beside) { set({ zoomedId: null }); s.arrange(beside); s.focus(sessionId); return; }
-    // no room left: it takes the place of the window in use, or of the first docked session when that one floats
-    const replaced = s.selectedId && s.columns.flat().includes(s.selectedId) ? s.selectedId : sessionsIn(s.columns)[0];
-    if (s.openIds.length < 2 || !replaced) { s.select(sessionId); return; }
+    if (s.openIds.includes(sessionId)) { if (s.zoomedId && s.zoomedId !== sessionId) s.zoom(null); s.raiseWindow(sessionId); s.focus(sessionId); return; }
+    // beside the others while there is room, else in the place of the one opened longest ago, docked or floating
+    const arrangement = arrangementOf(s.view);
+    const placed = openIn(s.columns, s.free[arrangement], s.opened, sessionId, maxColumnsIn(s.view), windowCapIn(s.view), tilingOf(s.view));
+    if (!placed) { s.select(sessionId); return; }
     set({ zoomedId: null });
-    s.arrange(replaceIn(s.columns, replaced, sessionId));
+    if (placed.closed) {
+      const { [placed.closed]: _closed, ...keptViews } = s.keptViews;
+      set({ keptViews, free: withoutWindow(s.free, placed.closed) });
+    }
+    s.arrange(placed.columns, placed.free);
     s.focus(sessionId);
   },
 
-  toggleOpen: (sessionId) => {
+  toggleWindow: (sessionId) => {
     const s = get();
-    if (s.outKeys.includes(outKey({ kind: 'session', sessionId }))) { s.popOut({ kind: 'session', sessionId }); return; }
-    if (!s.selectedId) { s.select(sessionId); return; }
-    set({ uiHidden: false });
-    if (s.openIds.includes(sessionId)) {
-      if (s.openIds.length > 1) s.closeOpen(sessionId);
-      return;
-    }
-    const columns = addTo(s.columns, sessionId, maxColumnsIn(s.view), tilingOf(s.view));
-    if (!columns) return;
-    set({ zoomedId: null });
-    s.arrange(columns);
-    s.focus(sessionId);
+    // without the sessions' panel there is no list to close from: a click only goes to the session
+    if (panelShown(s, s.view) && s.selectedId === sessionId && s.openIds.includes(sessionId)) s.closeOpen(sessionId);
+    else s.show(sessionId);
+  },
+
+  foldPanel: (narrow) => {
+    writePreference('listNarrow', narrow);
+    set({ panelNarrow: narrow });
+    // unfolded, it may leave room for one column less
+    get().fitOpen();
+  },
+
+  placeChrome: (id, box) => setChrome(placeChrome(get().chrome, id, box)),
+  dockPanel: () => setChrome(dockPanel(get().chrome)),
+  resizePanel: (width) => setChrome(resizePanel(get().chrome, width)),
+  resetLayout: () => {
+    // the launcher floating docks again too, and the elements of the page leave the front order with their places
+    const { room, focus } = withoutWindow(get().free, LAUNCHER);
+    const unplaced = (free: FreeLayout) => ({ boxes: free.boxes, order: free.order.filter((id) => !isChromeSlot(id)) });
+    set({ free: { room: unplaced(room), focus: unplaced(focus) } });
+    get().arrange(get().columns);
+    setChrome(DEFAULT_CHROME);
   },
 
   zoom: (sessionId) => set({ zoomedId: sessionId && get().openIds.length > 1 ? sessionId : null }),
@@ -823,7 +905,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const arrangement = arrangementOf(get().view);
     const floating = free ?? get().free[arrangement];
     const openIds = openSessions(columns, floating);
+    const other = arrangement === 'focus' ? 'room' : 'focus';
+    const opened = openOrder(get().opened, columns, floating, tilingOf(get().view), openSessions(get().grids[other], get().free[other]));
     set((state) => ({
+      opened,
       gridSizes: { ...state.gridSizes, [arrangement]: keepSizes(state.columns, columns, state.gridSizes[arrangement]) },
       free: { ...state.free, [arrangement]: floating },
       grids: { ...state.grids, [arrangement]: columns },
@@ -864,6 +949,11 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     return true;
   },
 
+  dockLauncher: () => {
+    const s = get();
+    s.arrange(s.columns, unfloat(s.free[arrangementOf(s.view)], LAUNCHER));
+  },
+
   undockMod: (id) => {
     const s = get();
     if (s.columns.flat().includes(modSlot(id))) s.arrange(removeFrom(s.columns, modSlot(id), tilingOf(s.view)));
@@ -880,10 +970,10 @@ export const useSessions = create<CommandPostState>((set, get) => ({
   },
 
   raiseWindow: (sessionId) => {
-    const arrangement = arrangementOf(get().view);
-    const { boxes, order } = get().free[arrangement];
-    if (order.at(-1) === sessionId || !boxes[sessionId]) return;
-    set((state) => ({ free: { ...state.free, [arrangement]: { boxes, order: [...order.filter((id) => id !== sessionId), sessionId] } } }));
+    const arrangement = arrangementOf(get().view), layout = get().free[arrangement];
+    const raised = raise(layout, sessionId);
+    if (raised === layout) return;
+    set((state) => ({ free: { ...state.free, [arrangement]: raised } }));
     writeWindows(get());
   },
 
@@ -893,10 +983,12 @@ export const useSessions = create<CommandPostState>((set, get) => ({
     const s = get();
     const max = maxColumnsIn(s.view), tiling = tilingOf(s.view);
     const columns = fitColumns(s.columns, max, tiling);
-    if (JSON.stringify(columns) === JSON.stringify(s.columns)) return;
-    // the sessions with no room left close; the mods float instead
-    for (const id of sessionsIn(s.columns).filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
-    get().arrange(fitColumns(get().columns, max, tiling));
+    if (JSON.stringify(columns) !== JSON.stringify(s.columns)) {
+      // the sessions with no room left close; the mods float instead
+      for (const id of sessionsIn(s.columns).filter((id) => !columns.flat().includes(id))) s.closeOpen(id);
+      get().arrange(fitColumns(get().columns, max, tiling));
+    }
+    closeOverCap();
   },
 
   showPanel: (view) => {
@@ -1047,6 +1139,7 @@ export const useSessions = create<CommandPostState>((set, get) => ({
       if (open[0]) s.focus(open[0]);
       else s.select(null);
     }
+    closeOverCap();
   },
 
   toggleSound: () => {

@@ -26,6 +26,26 @@ The session menu offers three ways to stop.
 
 If the session started background work (sub-agents, background tasks, scheduled wake-ups), Rest asks first: what they started stops with them.
 
+## Windows and the sessions panel
+
+The panel on the left lists the sessions by project, in the room as in focus mode. A click on a row, or on the character in the room, opens its window, the keyboard in its field. Already open, it comes to the front. The one you are in closes.
+
+At the bottom of the panel, **Windows 1 to 6** sets how many session windows stay open at once (6 by default, fewer on a narrow screen). Floating windows count, mods do not. Once the number is reached, the session you open takes the place of the one open the longest. Lowering the number closes the oldest first.
+
+On hover, a row offers **Switch off**, as the session's menu does. A project's title offers its folder icon, which opens the folder in Finder (Explorer on Windows, the file manager elsewhere), and its **+**, a new session in it. **Switched off** opens **Resume** on the project in sight. The button at the top, or ⌘ B (Ctrl B), folds the panel down to the faces. **Settings › Appearance › Sessions panel** turns it off: the room comes back without it, focus mode with its own list.
+
+Under its name, a row shows its branch (tinted when the session works in a worktree) and its model. Leave the pointer on it a moment and a card says where it runs: its project, the computer, its branch, its worktree (or **Main checkout**) and its model.
+
+The mark left of a project's name is its icon. A click opens **Choose the project’s icon**: an icon from a short list in one of 18 colours (the search finds any Lucide icon), an emoji, one or two letters, or a picture. **Automatic** uses the favicon or logo found in the project folder, **Choose a file** takes your own. **Reset to automatic** forgets your choice.
+
+### Moving the panel and the rest
+
+On a wide screen, ⌥ + drag (Alt + drag) also moves what surrounds the windows: the sessions panel, the **Status** card, the ⌥ tip, and the header in three pieces (the rooms with the projects, the radio, the tools on the right). They stick to the edges near them as windows do; holding ⌘ (Ctrl) turns the magnets off. The panel can also be taken by its header, without ⌥: pulled away from the edge, it floats over the room and no longer pushes anything aside; let go against the left edge, it docks there again. Docked, its right edge widens it. Floating, the panel resizes by its edges. A press on a piece moved by hand brings it in front of the floating windows, and a press on a window brings that one back in front. Places and that order are kept in this browser; ⌘K **Reset the layout** puts everything back.
+
+The launcher moves like a session window, over the room as in focus mode: pulled by its bar, it floats where you let it go and resizes by its edges; let go over the windows, it takes back the place the next session will. When no window has room left, it covers them and says which one its session will replace.
+
+The ⌥ tip goes away once you have moved the room or a window with ⌥, or with its close button; moving the tip itself does not count. **Settings › Appearance › Always show the Alt tip** keeps it up for good, without its close button.
+
 ## The limit on active sessions
 
 `OFFICE_MAX_LIVE` (default `12`) caps the number of live `claude` processes. Every live process counts, including a session in `wait` that is only waiting for your next message.

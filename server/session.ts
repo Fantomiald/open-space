@@ -1260,6 +1260,14 @@ export class Session {
     this.publish();
   }
 
+  /** The branch its folder is on (worktrees.ts currentBranch), null: none; published only when it changes. */
+  setBranch(branch: string | null) {
+    const next = branch ?? undefined;
+    if (next === this.info.branch) return;
+    this.info.branch = next;
+    this.publish();
+  }
+
   /** Puts these labels on the session (shared/tags.ts), or takes them all off (none). */
   setTags(tags: readonly string[]) {
     this.info.tags = tags.length ? [...tags] : undefined;

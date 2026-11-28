@@ -18,7 +18,7 @@ import type { PhoneProblem } from '../shared/triggers.ts';
 import { createAsideRunner } from './aside.ts';
 import { createTagger } from './auto-tag.ts';
 import { createCatalogProbe, createProcessFactory, findClaude, readAccount, readVersion, runAuth, runUpdate } from './claude-process.ts';
-import { loadConfig } from './config.ts';
+import { allowedRoots, loadConfig, sessionRoots } from './config.ts';
 import { Crew } from './crew.ts';
 import { changedSettings } from '../shared/claude-settings.ts';
 import { readClaudeDefaults } from './claude-settings.ts';
@@ -28,6 +28,7 @@ import { parseClientMessage } from './messages.ts';
 import { allowPhone, forgetPhone, loopbackPolicy, readOrCreateSecret } from './security.ts';
 import { findTailscale, readTailscaleName, serveBridge, serveMods, stopServing } from './tailscale.ts';
 import { listProjectDirectories, resolveAllowedDirectory, resolveInside, suggestRoots } from './paths.ts';
+import { findProjectPicture, projectIconsFolder, sweepProjectPictures } from './project-icon.ts';
 import { changeFiles, fileAt, listFolder, readSessionFile, revealFile, writeSessionFile } from './files.ts';
 import { pathFinder } from './file-mentions.ts';
 import { windowsKnownFolders } from './system-folders.ts';
@@ -41,7 +42,7 @@ import { createMessengerAgent } from './messenger-agent.ts';
 import { notify } from './notifier.ts';
 import { setServerLanguage, st } from './i18n/index.ts';
 import { Settings } from './settings.ts';
-import { findTerminals, openTerminal, openWebPage } from './desktop.ts';
+import { findTerminals, openTerminal, openWebPage, openWithSystem } from './desktop.ts';
 import { createShellRunner } from './shell.ts';
 import { deleteNote, listNotes, readNote, renameNote, searchNotes, writeNote } from './journal.ts';
 import { AutomataWatch } from './automata-watch.ts';
@@ -95,7 +96,7 @@ const settings = new Settings(path.join(config.dataDir, 'settings.json'));
 await settings.load();
 setServerLanguage(settings.preferences.language ?? 'fr');
 // the folders sessions may run in: OFFICE_ROOTS when set, else the user's choice (the session manager reads config.roots)
-const applyRoots = () => { if (!config.rootsLocked) config.roots = settings.preferences.roots.filter((root) => existsSync(root)); };
+const applyRoots = () => { config.roots = sessionRoots(config, settings.preferences.roots); };
 applyRoots();
 // the mods' folder, where sessions run too (server/mods.ts), by its real path: what a session running there has as its own
 mkdirSync(modsFolder(config.dataDir), { recursive: true, mode: 0o700 });
@@ -230,6 +231,9 @@ const sessions = new SessionManager({
 });
 await sessions.init();
 browsers.sweepProfiles(new Set(sessions.list().map((session) => session.id))).catch((error: unknown) => log('cannot sweep the browser profiles', error));
+/** Removes the pictures picked for projects that no icon shows any more (project-icon.ts), unless the preferences could not be read (they would all look unused). */
+const sweepPictures = () => { if (settings.loadFailed) return; sweepProjectPictures(projectIconsFolder(config.dataDir), settings.preferences.projectIcons).catch((error: unknown) => log('cannot sweep the project pictures', error)); };
+sweepPictures();
 const usage = new UsageLedger({ home: os.homedir(), cacheFile: path.join(config.dataDir, 'usage-cache.json'), log });
 
 /** Writes, renames and deletes of notes one after the other: a save sent just before a rename lands on the old name first. */
@@ -353,6 +357,7 @@ async function applyPreferences(changes: Partial<typeof settings.preferences>) {
   const before = settings.preferences.claude;
   const accountsBefore = settings.preferences.accountsBrowser;
   await settings.update({ ...rest, ...(roots && !config.rootsLocked ? { roots } : {}) });
+  if (rest.projectIcons) sweepPictures();
   setServerLanguage(settings.preferences.language ?? 'fr');
   applyRoots();
   broadcast(preferencesMessage());
@@ -514,8 +519,9 @@ function browserOf(sessionId: string, shared: boolean) {
   if (shared && !sessions.hasSharedBrowser(sessionId)) throw new Error('this session has no shared browser');
 }
 
-const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
+const { server, hooksServer, modsServer } = createWebServer({ policy, distDir: DIST, soundsDir: soundsFolder(config.dataDir), attachmentsDir: attachmentsFolder(config.dataDir), uploadsDir: uploadsFolder(config.dataDir), projectIconsDir: projectIconsFolder(config.dataDir), dev: DEV, devPort: DEV_PORT, log, onConnection,
   sessionFile: (sessionId, relative) => { try { return fileAt(filesRoot(sessionId), relative); } catch { return null; } },
+  projectPicture: (folder) => { const real = resolveAllowedDirectory(folder, allowedRoots(config)); return real ? findProjectPicture(real) : null; },
   browser: { watch: (sessionId, lane, res) => browsers.watch(browserId(sessionId, lane), res), version: (sessionId, lane) => browsers.version(sessionId, lane), key: (sessionId) => browserKey(secret, sessionId), known: (sessionId) => sessions.list().some((session) => session.id === sessionId),
     socket: (sessionId, lane) => browsers.socket(sessionId, lane), connect: (client, upstream, sessionId, lane) => browsers.connect(client, upstream, browserId(sessionId, lane)),
     shared: { key: sharedKey, version: () => browsers.sharedVersion(), socket: () => browsers.sharedSocket(), connect: (client, upstream, owner) => browsers.relay(client, upstream, owner) } },
@@ -564,7 +570,7 @@ function onConnection(socket: WebSocket) {
     t: 'hello', claude: claudeInfo(), roots: config.roots,
     sessions: sessions.list(), commands: sessions.getCommands(), folderCommands: sessions.getFolderCommands(), models: sessions.getModels(), quota: sessions.getQuota(), build: BUILD, crew: crew.list(),
     preferences: settings.preferences, onboarded: settings.onboarded, rootsLocked: config.rootsLocked, claudeDefaults, appUpdate,
-    browsers: browsers.states(), browserAvailable: browsers.available, mods: mods.list(),
+    browsers: browsers.states(), browserAvailable: browsers.available, mods: mods.list(), machine: os.hostname(),
   });
   checkClaudeVersion().catch((error: unknown) => log('cannot read the Claude Code version', error));
   if (account) send({ t: 'claudeAccount', account });
@@ -605,7 +611,7 @@ function mentionRoot(message: { sessionId: string } | { cwd: string }): string |
 function filesRoot(sessionId: string): string {
   const cwd = sessions.folderOf(sessionId);
   if (!cwd) throw new Error(st.sessions.notFound);
-  const root = resolveAllowedDirectory(cwd, [...config.roots, ...(config.ownRoots ?? [])]);
+  const root = resolveAllowedDirectory(cwd, allowedRoots(config));
   if (!root) throw new Error(st.files.outside);
   return root;
 }
@@ -873,6 +879,13 @@ async function handle(message: ClientMessage, send: (message: ServerMessage) => 
       await openTerminal(folder, settings.preferences.terminal);
       break;
     }
+    case 'openFolder': {
+      // a path from the page: only a real folder among those sessions may run in
+      const folder = resolveAllowedDirectory(message.path, allowedRoots(config));
+      if (!folder) throw new Error(st.sessions.outsideRoots);
+      openWithSystem(folder);
+      break;
+    }
   }
 }
 
@@ -953,10 +966,7 @@ server.listen(config.port, HOST, () => {
  * macOS asks once to let the server control Arc); otherwise, or if that fails, in the default browser.
  */
 function openPage(link: string) {
-  const inBrowser = () => {
-    const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
-    execFile(opener, [link], () => {});
-  };
+  const inBrowser = () => openWithSystem(link);
   if (process.platform !== 'darwin' || !existsSync(ARC)) { inBrowser(); return; }
   execFile('/usr/bin/osascript', [path.join(ROOT, 'scripts', 'open-in-arc.applescript'), link, `http://127.0.0.1:${config.port}`], (error) => { if (error) inBrowser(); });
 }

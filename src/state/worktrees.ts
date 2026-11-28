@@ -5,6 +5,23 @@ import type { BranchRow, BranchStatus, FolderRepo, IsolateMode, SessionInfo } fr
 import { isInside, worktreeNames } from '../../shared/worktrees.ts';
 import { isWorking } from './queue.ts';
 
+/** The branch a session's row shows: its own in a worktree, else the one its folder is on; none outside git. */
+export function sessionBranch(session: SessionInfo): { name: string; worktree: boolean } | null {
+  if (session.worktree) return { name: session.worktree.branch, worktree: true };
+  return session.branch ? { name: session.branch, worktree: false } : null;
+}
+
+/**
+ * Where a session works in its repository: its worktree's folder from the repository's root (".claude/worktrees/x"),
+ * the whole path of a worktree made elsewhere, or null in the main checkout.
+ */
+export function worktreePlace(session: SessionInfo): string | null {
+  const worktree = session.worktree;
+  if (!worktree) return session.checkout ? session.cwd : null;
+  if (!isInside(worktree.root, worktree.mainRoot) || worktree.root.length <= worktree.mainRoot.length) return worktree.root;
+  return worktree.root.slice(worktree.mainRoot.length).replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
 /** The sessions that work in a repository's main checkout (resting ones too: their folder is the same), the latest first. */
 export function occupants(sessions: readonly SessionInfo[], repo: Pick<FolderRepo, 'root'>, except?: string): SessionInfo[] {
   return sessions

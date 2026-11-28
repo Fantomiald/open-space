@@ -5,6 +5,8 @@ import { markArranged, startsDrag, swallowAltRelease } from '../lib/drag.ts';
 import type { Box } from '../state/room-frame.ts';
 
 type Point = { x: number; y: number };
+/** the press that takes it: React's, or the page's own (the elements of the page, Chrome.tsx) */
+type Press = Pick<PointerEvent, 'button' | 'altKey' | 'clientX' | 'clientY' | 'preventDefault'>;
 
 /**
  * `grab`: where the window was taken, from its top left corner; `pointer`: where the pointer is, in the stack; `loose`:
@@ -21,14 +23,15 @@ export const WindowCompactContext = createContext(false);
 /** In the title bar, these keep their click. */
 export const INTERACTIVE = 'button, input, textarea, select, form, a, [role="menu"], [role="menuitem"]';
 
-export function useWindowDrag(stack: RefObject<HTMLElement | null>, boxOf: (id: string) => Box | undefined, openIds: readonly string[], onDrop: (drag: WindowDrag) => void) {
+/** `arranges`: an Alt drop counts as having learnt Alt (the tip about it goes, ArrangeHint.tsx); the windows' does, the page's elements' does not. */
+export function useWindowDrag(stack: RefObject<HTMLElement | null>, boxOf: (id: string) => Box | undefined, openIds: readonly string[], onDrop: (drag: WindowDrag) => void, arranges = true) {
   const [drag, setDrag] = useState<WindowDrag | null>(null);
   const latest = useRef({ boxOf, onDrop });
   latest.current = { boxOf, onDrop };
   const stop = useRef<(() => void) | null>(null);
 
   // stable, so the windows reading it from the context are not drawn again on each move
-  const start = useCallback((id: string, event: ReactPointerEvent) => {
+  const start = useCallback((id: string, event: Press) => {
     const box = latest.current.boxOf(id);
     if (event.button !== 0 || !box || !stack.current) return;
     if (event.altKey) event.preventDefault();
@@ -51,7 +54,10 @@ export function useWindowDrag(stack: RefObject<HTMLElement | null>, boxOf: (id: 
       const dropped = current;
       finish();
       if (!dropped) return;
-      if (event.altKey) { swallowAltRelease(); markArranged(); }
+      if (event.altKey) {
+        swallowAltRelease();
+        if (arranges) markArranged();
+      }
       latest.current.onDrop(dropped);
       // the click that ends a drag is not a click on what is under the pointer
       const swallow = (click: MouseEvent) => click.stopPropagation();
@@ -78,7 +84,7 @@ export function useWindowDrag(stack: RefObject<HTMLElement | null>, boxOf: (id: 
     window.addEventListener('pointercancel', finish);
     window.addEventListener('keydown', onKey, { capture: true });
     stop.current = finish;
-  }, [stack]);
+  }, [stack, arranges]);
 
   // a session closed or put away while it was carried: the drag ends there
   useEffect(() => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { BranchRow, BranchStatus, FolderRepo, SessionInfo, SessionState, WorktreeInfo } from '../../shared/protocol.ts';
-import { asksBeforeSwitchingOff, branchCard, branchLines, branchPreview, branchSignature, checkedByDefault, isolationOffer, keyOf, loss, occupants, shownFolder } from './worktrees.ts';
+import { asksBeforeSwitchingOff, branchCard, branchLines, branchPreview, branchSignature, checkedByDefault, isolationOffer, keyOf, loss, occupants, sessionBranch, shownFolder, worktreePlace } from './worktrees.ts';
 
 const session = (id: string, state: SessionState, extra: Partial<SessionInfo> = {}): SessionInfo => ({
   id, name: id, cwd: '/work/garden', model: '', activeModel: '', permissionMode: 'auto', state, stateSince: 1000, createdAt: 0, turns: 1, permissions: [],
@@ -13,6 +13,22 @@ const worktree = (extra: Partial<WorktreeInfo> = {}): WorktreeInfo => ({
   branch: 'os/lina-pay', base: 'main', root: '/work/garden/.claude/worktrees/os-lina-pay', mainRoot: '/work/garden', home: '/work/garden', ...extra,
 });
 const row = (branch: string, extra: Partial<BranchRow> = {}): BranchRow => ({ branch, folder: null, base: 'main', head: 'a'.repeat(40), at: 1, ahead: 0, dirty: 0, merged: true, claude: false, ...extra });
+
+describe('where a session of the panel works', () => {
+  it('shows its own branch in a worktree, else the one of its folder, none outside git', () => {
+    assert.deepEqual(sessionBranch(session('Lina', 'wait', { worktree: worktree(), branch: 'main' })), { name: 'os/lina-pay', worktree: true });
+    assert.deepEqual(sessionBranch(session('Hugo', 'wait', { branch: 'main' })), { name: 'main', worktree: false });
+    assert.equal(sessionBranch(session('Zoe', 'wait')), null);
+  });
+
+  it('says its worktree from the repository’s root, on Windows too, and nothing in the main checkout', () => {
+    assert.equal(worktreePlace(session('Lina', 'wait', { worktree: worktree() })), '.claude/worktrees/os-lina-pay');
+    const windows = worktree({ root: 'D:\\code\\garden\\.claude\\worktrees\\os-lina-pay', mainRoot: 'D:\\code\\garden', home: 'D:\\code\\garden' });
+    assert.equal(worktreePlace(session('Lina', 'wait', { worktree: windows })), '.claude/worktrees/os-lina-pay');
+    assert.equal(worktreePlace(session('Ada', 'wait', { worktree: worktree({ root: '/tmp/elsewhere' }) })), '/tmp/elsewhere');
+    assert.equal(worktreePlace(session('Hugo', 'wait')), null);
+  });
+});
 
 describe('isolating a new session', () => {
   it('counts the sessions of the main checkout, resting ones included, not the isolated ones nor those elsewhere', () => {

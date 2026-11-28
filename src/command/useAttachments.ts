@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type Dra
 import type { ImageUpload } from '../../shared/protocol.ts';
 import { t } from '../i18n/index.ts';
 import { MAX_IMAGES, isPicture, prepareImage } from '../lib/images.ts';
+import { upload } from '../lib/upload.ts';
 import { previewOf } from '../state/files.ts';
 import { useSessions } from '../state/sessions.ts';
 
@@ -23,12 +24,8 @@ const fileOf = (file: File, id: number) => uploadFile(file).then((uploadId): Att
 });
 const hasFiles = (event: DragEvent) => [...event.dataTransfer.types].includes('Files');
 
-/** Sends a file to the server (POST /upload, with the page's cookie); its upload id. */
-async function uploadFile(file: File): Promise<string> {
-  const response = await fetch(`/upload?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file, credentials: 'same-origin' });
-  if (!response.ok) throw new Error(String(response.status));
-  return ((await response.json()) as { id: string }).id;
-}
+/** Sends a file to the server (POST /upload); its upload id. */
+const uploadFile = (file: File) => upload(`/upload?name=${encodeURIComponent(file.name)}`, file);
 
 /**
  * The files waiting to go with the next message: added by pasting into the field, dropping on `dropTarget`'s element,
