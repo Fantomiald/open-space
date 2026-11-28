@@ -19,7 +19,8 @@ Mets **http://127.0.0.1:4848** en favori. Cette adresse ne change jamais et ne c
 | `index.ts` | câblage : config, secret, serveur, WebSocket, refus des messages pendant l'arrêt, arrêt propre (SIGINT/TERM/HUP), filets `unhandledRejection`/`uncaughtException` |
 | `http.ts` | fichiers statiques (realpath), `/pair`, upgrade `/ws` ; contrôle du Host, puis de l'Origin, puis du cookie |
 | `security.ts` | secret persistant, cookie, comparaison à temps constant, parseur d'URL qui ne lève jamais, politique Host/Origin |
-| `paths.ts` | `resolveInside`, `resolveAllowedDirectory` (realpath), liste des dossiers proposés |
+| `paths.ts` | `resolveInside`, `resolveAllowedDirectory` (realpath), liste des dossiers proposés (projets reconnus à leurs marqueurs, `.sln` compris, dont une solution garde ses sous-projets ; dossiers de build cachés sauf s'ils sont eux-mêmes un projet) |
+| `recent-folders.ts` | dossiers proposés, les plus récemment utilisés d'abord : dernier `.jsonl` de leur dossier `~/.claude/projects/<clé>` (clé de plus de 200 caractères reconnue à son début, sans casse sous Windows), gardé 30 s |
 | `environment.ts` | liste blanche des variables transmises à `claude`, PATH nettoyé |
 | `config.ts` | variables `OFFICE_*`, `PORT` |
 | `messages.ts` | validation stricte des messages du client |
